@@ -8,16 +8,8 @@ import unicodedata
 from .player import Player
 from .user import User
 
-
 # load the logging configuration
 logging.config.fileConfig('logging.ini')
-# logger = logging.getLogger(__name__)
-
-
-def strip_accents(s):
-    """Strip accents from a given string and replace with letters without accents."""
-    return ''.join(c for c in unicodedata.normalize('NFD', s)
-                   if unicodedata.category(c) != 'Mn')
 
 
 class Results(object):
@@ -28,8 +20,7 @@ class Results(object):
 
         self.sport = sport
         self.contest_id = contest_id
-        self.players = []
-        self.complete_players = []
+        self.players = {}
         self.users = []
 
         # if there's no salary file specified, use the sport/day for the filename
@@ -37,28 +28,63 @@ class Results(object):
             salary_csv_fn = "DKSalaries_{}_{}.csv".format(
                 self.sport, datetime.datetime.now().strftime('%A'))
 
-        self.read_salary_csv(salary_csv_fn)
-        self.logger.debug(self.players)
+        self.parse_salary_csv(salary_csv_fn)
 
         self.vips = ['aplewandowski', 'FlyntCoal', 'Cubbiesftw23', 'Mcoleman1902',
                      'cglenn91', 'Notorious', 'Bra3105', 'ChipotleAddict']
         self.vip_list = []
 
-        contest_fn = 'contest-standings-73165360.csv'
+        contest_fn = 'contest-standings-73990354.csv'
 
         # this pulls the DK users and updates the players stats
-        self.parse_contest_standings(contest_fn)
+        self.parse_contest_standings_csv(contest_fn)
 
-        for player in self.complete_players:
-            self.logger.debug(player)
+        # for player in self.complete_players:
+        #     self.logger.debug(player)
 
         for vip in self.vip_list:
             self.logger.debug("VIP: {}".format(vip))
+            temp = self.parse_lineup_string(vip.lineup_str)
+            self.logger.debug(temp)
 
-        for p in self.complete_players[:5]:
-            self.logger.info(p)
+        # for k, v in self.players_dict.items():
+        #     self.logger.debug("{}: {}".format(k, v))
 
-    def read_salary_csv(self, fn):
+    def parse_lineup_string(self, lineup_str):
+        lineup_list_of_players = []
+        splt = lineup_str.split(' ')
+        positions = ['G']
+        # list comp for indicies of positions in splt
+        indices = [i for i, pos in enumerate(splt) if pos in positions]
+        # list comp for ending indices in splt. for splicing, the second argument is exclusive
+        end_indices = [indices[i] for i in range(1, len(indices))]
+        # append size of splt as last index
+        end_indices.append(len(splt))
+        self.logger.debug("indices: {}".format(indices))
+        self.logger.debug("end_indices: {}".format(end_indices))
+        for i, index in enumerate(indices):
+            pos = splt[index]
+
+            s = slice(index + 1, end_indices[i])
+            name = splt[s]
+            if name != 'LOCKED':
+                name = ' '.join(name)
+
+                # ensure name doesn't have any weird characters
+                name = self.strip_accents(name)
+
+                if name in self.players:
+                    lineup_list_of_players.append(self.players[name])
+
+        return lineup_list_of_players
+
+    def strip_accents(self, name):
+        """Strip accents from a given string and replace with letters without accents."""
+        return ''.join(c for c in unicodedata.normalize('NFD', name)
+                       if unicodedata.category(c) != 'Mn')
+
+    def parse_salary_csv(self, fn):
+        """Parse CSV containing players and salary information."""
         with open(fn, mode='r') as f:
             cr = csv.reader(f, delimiter=',')
             slate_list = list(cr)
@@ -68,12 +94,14 @@ class Results(object):
                     continue
                 # TODO: might use roster_pos in the future
                 pos, _, name, _, roster_pos, salary, game_info, team_abbv, appg = row
-                self.players.append(Player(name, pos, salary, game_info, team_abbv))
+                # self.players.append(Player(name, pos, salary, game_info, team_abbv))
+                self.players[name] = Player(name, pos, salary, game_info, team_abbv)
 
-    def parse_contest_standings(self, fn):
+    def parse_contest_standings_csv(self, fn):
+        """Parse CSV containing contest standings and player ownership."""
         list = self.load_standings(fn)
         # create a copy of player list
-        player_list = self.players
+        # player_list = self.players
         for row in list[1:]:
             rank, id, name, pmr, points, lineup = row[:6]
 
@@ -94,35 +122,24 @@ class Results(object):
                     continue
 
                 name, pos, perc, fpts = player_stats
-                name = strip_accents(name)
+                name = self.strip_accents(name)
 
-                for i, player in enumerate(player_list):
-                    if name == player.name:
-                        self.logger.debug(
-                            "name {} MATCHES player.name {}!".format(name, player.name))
-                        player.update_stats(pos, perc, fpts)
-                        # update player list
-                        self.complete_players.append(player)
-                        del(player_list[i])
-                        break
-                    # else:
-                    #     self.logger.debug(
-                    #         "name {} DOES NOT MATCH player.name {}!".format(name, player.name))
+                self.players[name].update_stats(pos, perc, fpts)
 
-                # for i, player in enumerate(self.players):
+                # for i, player in enumerate(player_list):
                 #     if name == player.name:
                 #         self.logger.debug(
                 #             "name {} MATCHES player.name {}!".format(name, player.name))
+                #         # update stats for player
                 #         player.update_stats(pos, perc, fpts)
-                #         # update player list
-                #         self.players[i] = player
-                #         self.logger.info(self.players[i])
+                #         # update complete_players list
+                #         self.complete_players.append(player)
+                #         # delete player from copy of list to speed up search
+                #         del(player_list[i])
                 #         break
-                #     else:
-                #         self.logger.debug(
-                #             "name {} DOES NOT MATCH player.name {}!".format(name, player.name))
 
     def load_standings(self, fn):
+        """Load standings CSV and return list."""
         with open(fn, 'rb') as csvfile:
             lines = io.TextIOWrapper(csvfile, encoding='utf-8', newline='\r\n')
             rdr = csv.reader(lines, delimiter=',')

@@ -40,6 +40,7 @@ class Player(object):
     def get_matchup_info(self):
         # wth is this?
         # logger.debug(game_info)
+
         # this should take care of golf
         if '@' not in self.game_info:
             return

@@ -1,5 +1,6 @@
 # package-specific
 DKSalaries_*.csv
+contest-standings-*.csv
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

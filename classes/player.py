@@ -6,6 +6,8 @@ logging.config.fileConfig('logging.ini')
 
 
 class Player(object):
+    """Create a Player object to represent an athlete for a given sport."""
+
     def __init__(self, name, pos, salary, game_info, team_abbv, logger=None):
         self.logger = logger or logging.getLogger(__name__)
 
@@ -38,6 +40,7 @@ class Player(object):
         self.get_matchup_info()
 
     def get_matchup_info(self):
+        """Format matchup_info if there's a home and away team."""
         # wth is this?
         # logger.debug(game_info)
         # this should take care of golf

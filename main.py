@@ -1,7 +1,11 @@
+from classes.results import Results
 import argparse
 import datetime
+import logging
+import logging.config
 
-from classes.results import Results
+# load the logging configuration
+logging.config.fileConfig('logging.ini')
 
 # if __name__ == "__main__":
 """Use contest ID to update Google Sheet with DFS results.
@@ -28,4 +32,12 @@ args = parser.parse_args()
 
 now = datetime.datetime.now()
 
-Results(args.sport, args.id, args.csv)
+logger = logging.getLogger(__name__)
+
+r = Results(args.sport, args.id, args.csv)
+
+# for u in r.vip_list:
+#     logger.info("User: {}".format(u.name))
+#     logger.info("Lineup:")
+#     logger.info(u.lineup_str)
+#     logger.debug(u)
