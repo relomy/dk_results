@@ -20,8 +20,8 @@ class Results(object):
 
         self.sport = sport
         self.contest_id = contest_id
-        self.players = {}
-        self.users = []
+        self.players = {}  # dict for players found in salary and standings CSV
+        self.users = []  # list of Users found in standings CSV
 
         # if there's no salary file specified, use the sport/day for the filename
         if not salary_csv_fn:
@@ -32,55 +32,69 @@ class Results(object):
 
         self.vips = ['aplewandowski', 'FlyntCoal', 'Cubbiesftw23', 'Mcoleman1902',
                      'cglenn91', 'Notorious', 'Bra3105', 'ChipotleAddict']
-        self.vip_list = []
+        self.vip_list = []  # list of VIPs found in standings CSV
 
-        contest_fn = 'contest-standings-73990354.csv'
+        # contest_fn = 'contest-standings-73990354.csv'
+        contest_fn = "contest-standings-{}.csv".format(self.contest_id)
 
         # this pulls the DK users and updates the players stats
         self.parse_contest_standings_csv(contest_fn)
 
-        # for player in self.complete_players:
-        #     self.logger.debug(player)
-
         for vip in self.vip_list:
             self.logger.debug("VIP: {}".format(vip))
-            temp = self.parse_lineup_string(vip.lineup_str)
-            self.logger.debug(temp)
+            # vip.lineup = self.parse_lineup_string(vip.lineup_str)
+            vip.set_lineup(self.parse_lineup_string(vip.lineup_str))
 
         # for k, v in self.players_dict.items():
         #     self.logger.debug("{}: {}".format(k, v))
 
     def parse_lineup_string(self, lineup_str):
-        lineup_list_of_players = []
+        """Parse VIP's lineup_str and return list of Players."""
+        player_list = []
+        # dict of positions for each sport
+        positions = {
+            'CFL': ['QB', 'RB', 'WR', 'TE', 'FLEX', 'S-FLEX'],
+            'MLB': ['P', 'C', '1B', '2B', '3B', 'SS', 'OF'],
+            'NBA': ['PG', 'SG', 'SF', 'PF', 'C', 'G', 'F', 'UTIL'],
+            'NFL': ['QB', 'RB', 'WR', 'TE', 'FLEX', 'DST'],
+            'NHL': ['C', 'W', 'D', 'G', 'UTIL'],
+            'PGAMain': ['G'],
+            'PGAWeekend': ['WG'],
+            'PGAShowdown': ['G'],
+            'TEN': ['P']
+        }
         splt = lineup_str.split(' ')
-        positions = ['G']
+
         # list comp for indicies of positions in splt
-        indices = [i for i, pos in enumerate(splt) if pos in positions]
+        indices = [i for i, pos in enumerate(splt) if pos in positions[self.sport]]
         # list comp for ending indices in splt. for splicing, the second argument is exclusive
         end_indices = [indices[i] for i in range(1, len(indices))]
         # append size of splt as last index
         end_indices.append(len(splt))
-        self.logger.debug("indices: {}".format(indices))
-        self.logger.debug("end_indices: {}".format(end_indices))
+        # self.logger.debug("indices: {}".format(indices))
+        # self.logger.debug("end_indices: {}".format(end_indices))
         for i, index in enumerate(indices):
-            pos = splt[index]
-
             s = slice(index + 1, end_indices[i])
             name = splt[s]
             if name != 'LOCKED':
+                # self.logger.debug(name)
                 name = ' '.join(name)
 
                 # ensure name doesn't have any weird characters
-                name = self.strip_accents(name)
+                name = self.strip_accents_and_periods(name)
 
                 if name in self.players:
-                    lineup_list_of_players.append(self.players[name])
+                    player_list.append(self.players[name])
 
-        return lineup_list_of_players
+            if 'LOCKED' in name:
+                name = 'LOCKED 🔒'
 
-    def strip_accents(self, name):
+        return player_list
+
+    def strip_accents_and_periods(self, name):
         """Strip accents from a given string and replace with letters without accents."""
-        return ''.join(c for c in unicodedata.normalize('NFD', name)
+        # TODO might not want to remove periods for the actual sheet
+        return ''.join(c.replace('.', '') for c in unicodedata.normalize('NFD', name)
                        if unicodedata.category(c) != 'Mn')
 
     def parse_salary_csv(self, fn):
@@ -94,7 +108,10 @@ class Results(object):
                     continue
                 # TODO: might use roster_pos in the future
                 pos, _, name, _, roster_pos, salary, game_info, team_abbv, appg = row
-                # self.players.append(Player(name, pos, salary, game_info, team_abbv))
+
+                # ensure name doesn't have any weird characters
+                name = self.strip_accents_and_periods(name)
+
                 self.players[name] = Player(name, pos, salary, game_info, team_abbv)
 
     def parse_contest_standings_csv(self, fn):
@@ -122,21 +139,12 @@ class Results(object):
                     continue
 
                 name, pos, perc, fpts = player_stats
-                name = self.strip_accents(name)
+                name = self.strip_accents_and_periods(name)
+
+                # if 'Jr.' in name:
+                #     name = name.replace('Jr.', 'Jr')
 
                 self.players[name].update_stats(pos, perc, fpts)
-
-                # for i, player in enumerate(player_list):
-                #     if name == player.name:
-                #         self.logger.debug(
-                #             "name {} MATCHES player.name {}!".format(name, player.name))
-                #         # update stats for player
-                #         player.update_stats(pos, perc, fpts)
-                #         # update complete_players list
-                #         self.complete_players.append(player)
-                #         # delete player from copy of list to speed up search
-                #         del(player_list[i])
-                #         break
 
     def load_standings(self, fn):
         """Load standings CSV and return list."""

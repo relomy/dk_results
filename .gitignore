@@ -1,6 +1,15 @@
 # package-specific
 DKSalaries_*.csv
 contest-standings-*.csv
+.remote-sync.json
+
+# vscode-specific
+.vscode/
+.vscode-test/**
+.vscode test/**
+.vscode-smoke/**
+**/.vscode/.ropeproject/**
+**/testFiles/**/.cache/**
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

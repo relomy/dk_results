@@ -2,7 +2,7 @@ import logging
 import logging.config
 
 # load the logging configuration
-logging.config.fileConfig('logging.ini')
+logging.config.fileConfig("logging.ini")
 
 
 class Player(object):
@@ -18,17 +18,17 @@ class Player(object):
         self.team_abbv = team_abbv
 
         # to be updated - update_stats
-        self.standings_pos = ''
+        self.standings_pos = ""
         self.perc = 0.0
         self.fpts = 0.0
 
         # to be updated - get_matchup_info
-        self.matchup_info = ''
+        self.matchup_info = ""
 
     def update_stats(self, pos, perc, fpts):
         """Update class variables from contest standings file (contest-standings-nnnnnnnn.csv)."""
         self.standings_pos = pos
-        self.perc = float(perc.replace('%', '')) / 100
+        self.perc = float(perc.replace("%", "")) / 100
         self.fpts = float(fpts)
 
         # calculate value
@@ -44,18 +44,25 @@ class Player(object):
         # wth is this?
         # logger.debug(game_info)
         # this should take care of golf
-        if '@' not in self.game_info:
+        if "@" not in self.game_info:
             return
 
-        if self.game_info in ['In Progress', 'Final', 'Postponed', 'UNKNOWN', 'Suspended', 'Delayed']:
+        if self.game_info in [
+            "In Progress",
+            "Final",
+            "Postponed",
+            "UNKNOWN",
+            "Suspended",
+            "Delayed",
+        ]:
             return
 
         # split game info into matchup_info
-        home_team, a = self.game_info.split('@')
-        away_team, match_time = a.split(' ', 1)
+        home_team, a = self.game_info.split("@")
+        away_team, match_time = a.split(" ", 1)
         # self.logger.debug("home_team: {} away_team: {} t: {}".format(
         #     home_team, away_team, match_time))
-        home_team, away_team = self.game_info.split(' ', 1)[0].split('@')
+        # home_team, away_team = self.game_info.split(' ', 1)[0].split('@')
         if self.team_abbv == home_team:
             matchup_info = "vs. {}".format(away_team)
         else:
@@ -64,8 +71,16 @@ class Player(object):
 
     def __str__(self):
         return "[Player] {} {} Sal: ${} - {:.4f} - {} pts Game_Info: {} Team_Abbv: {}".format(
-            self.pos, self.name, self.salary, self.perc, self.fpts, self.game_info, self.team_abbv
+            self.pos,
+            self.name,
+            self.salary,
+            self.perc,
+            self.fpts,
+            self.game_info,
+            self.team_abbv,
         )
 
     def __repr__(self):
-        return "Player({}, {}, {}, {}, {})".format(self.name, self.pos, self.salary, self.game_info, self.team_abbv)
+        return "Player({}, {}, {}, {}, {})".format(
+            self.name, self.pos, self.salary, self.game_info, self.team_abbv
+        )
