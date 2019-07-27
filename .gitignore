@@ -1,15 +1,12 @@
 # package-specific
-DKSalaries_*.csv
-contest-standings-*.csv
+.vscode/
 .remote-sync.json
 
-# vscode-specific
-.vscode/
-.vscode-test/**
-.vscode test/**
-.vscode-smoke/**
-**/.vscode/.ropeproject/**
-**/testFiles/**/.cache/**
+Pipfile.lock
+
+DKSalaries_*.csv
+contest-standings-*.csv
+
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

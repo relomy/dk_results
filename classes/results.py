@@ -1,5 +1,5 @@
 import csv
-import datetime
+from datetime import datetime
 import io
 import logging
 import logging.config
@@ -9,7 +9,7 @@ from .player import Player
 from .user import User
 
 # load the logging configuration
-logging.config.fileConfig('logging.ini')
+logging.config.fileConfig("logging.ini")
 
 
 class Results(object):
@@ -25,13 +25,20 @@ class Results(object):
 
         # if there's no salary file specified, use the sport/day for the filename
         if not salary_csv_fn:
-            salary_csv_fn = "DKSalaries_{}_{}.csv".format(
-                self.sport, datetime.datetime.now().strftime('%A'))
+            salary_csv_fn = f"DKSalaries_{self.sport}_{datetime.now():%A}.csv"
 
         self.parse_salary_csv(salary_csv_fn)
 
-        self.vips = ['aplewandowski', 'FlyntCoal', 'Cubbiesftw23', 'Mcoleman1902',
-                     'cglenn91', 'Notorious', 'Bra3105', 'ChipotleAddict']
+        self.vips = [
+            "aplewandowski",
+            "FlyntCoal",
+            "Cubbiesftw23",
+            "Mcoleman1902",
+            "cglenn91",
+            "Notorious",
+            "Bra3105",
+            "ChipotleAddict",
+        ]
         self.vip_list = []  # list of VIPs found in standings CSV
 
         # contest_fn = 'contest-standings-73990354.csv'
@@ -53,17 +60,17 @@ class Results(object):
         player_list = []
         # dict of positions for each sport
         positions = {
-            'CFL': ['QB', 'RB', 'WR', 'TE', 'FLEX', 'S-FLEX'],
-            'MLB': ['P', 'C', '1B', '2B', '3B', 'SS', 'OF'],
-            'NBA': ['PG', 'SG', 'SF', 'PF', 'C', 'G', 'F', 'UTIL'],
-            'NFL': ['QB', 'RB', 'WR', 'TE', 'FLEX', 'DST'],
-            'NHL': ['C', 'W', 'D', 'G', 'UTIL'],
-            'PGAMain': ['G'],
-            'PGAWeekend': ['WG'],
-            'PGAShowdown': ['G'],
-            'TEN': ['P']
+            "CFL": ["QB", "RB", "WR", "TE", "FLEX", "S-FLEX"],
+            "MLB": ["P", "C", "1B", "2B", "3B", "SS", "OF"],
+            "NBA": ["PG", "SG", "SF", "PF", "C", "G", "F", "UTIL"],
+            "NFL": ["QB", "RB", "WR", "TE", "FLEX", "DST"],
+            "NHL": ["C", "W", "D", "G", "UTIL"],
+            "PGAMain": ["G"],
+            "PGAWeekend": ["WG"],
+            "PGAShowdown": ["G"],
+            "TEN": ["P"],
         }
-        splt = lineup_str.split(' ')
+        splt = lineup_str.split(" ")
 
         # list comp for indicies of positions in splt
         indices = [i for i, pos in enumerate(splt) if pos in positions[self.sport]]
@@ -76,9 +83,9 @@ class Results(object):
         for i, index in enumerate(indices):
             s = slice(index + 1, end_indices[i])
             name = splt[s]
-            if name != 'LOCKED':
+            if name != "LOCKED":
                 # self.logger.debug(name)
-                name = ' '.join(name)
+                name = " ".join(name)
 
                 # ensure name doesn't have any weird characters
                 name = self.strip_accents_and_periods(name)
@@ -86,21 +93,24 @@ class Results(object):
                 if name in self.players:
                     player_list.append(self.players[name])
 
-            if 'LOCKED' in name:
-                name = 'LOCKED 🔒'
+            if "LOCKED" in name:
+                name = "LOCKED 🔒"
 
         return player_list
 
     def strip_accents_and_periods(self, name):
         """Strip accents from a given string and replace with letters without accents."""
         # TODO might not want to remove periods for the actual sheet
-        return ''.join(c.replace('.', '') for c in unicodedata.normalize('NFD', name)
-                       if unicodedata.category(c) != 'Mn')
+        return "".join(
+            c.replace(".", "")
+            for c in unicodedata.normalize("NFD", name)
+            if unicodedata.category(c) != "Mn"
+        )
 
     def parse_salary_csv(self, fn):
         """Parse CSV containing players and salary information."""
-        with open(fn, mode='r') as f:
-            cr = csv.reader(f, delimiter=',')
+        with open(fn, mode="r") as f:
+            cr = csv.reader(f, delimiter=",")
             slate_list = list(cr)
 
             for row in slate_list[1:]:  # [1:] to skip header
@@ -135,7 +145,7 @@ class Results(object):
             player_stats = row[7:]
             if player_stats:
                 # continue if empty (sometimes happens on the player columns in the standings)
-                if all('' == s or s.isspace() for s in player_stats):
+                if all("" == s or s.isspace() for s in player_stats):
                     continue
 
                 name, pos, perc, fpts = player_stats
@@ -148,7 +158,7 @@ class Results(object):
 
     def load_standings(self, fn):
         """Load standings CSV and return list."""
-        with open(fn, 'rb') as csvfile:
-            lines = io.TextIOWrapper(csvfile, encoding='utf-8', newline='\r\n')
-            rdr = csv.reader(lines, delimiter=',')
+        with open(fn, "rb") as csvfile:
+            lines = io.TextIOWrapper(csvfile, encoding="utf-8", newline="\r\n")
+            rdr = csv.reader(lines, delimiter=",")
             return list(rdr)

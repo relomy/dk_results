@@ -2,7 +2,7 @@ import logging
 import logging.config
 
 # load the logging configuration
-logging.config.fileConfig('logging.ini')
+logging.config.fileConfig("logging.ini")
 
 
 class User(object):
@@ -27,7 +27,11 @@ class User(object):
         self.lineup = lineup
 
     def __str__(self):
-        return "[User]: Name: {} Rank: {} PMR: {} Pts: {} Salary: {} LU: {}".format(self.name, self.rank, self.pmr, self.pts, self.salary, self.lineup_str)
+        return "[User]: Name: {} Rank: {} PMR: {} Pts: {} Salary: {} LU: {}".format(
+            self.name, self.rank, self.pmr, self.pts, self.salary, self.lineup_str
+        )
 
     def __repr__(self):
-        return "User({}, {}, {}, {}, {})".format(self.name, self.rank, self.pmr, self.pts, self.lineup_str)
+        return "User({}, {}, {}, {}, {})".format(
+            self.name, self.rank, self.pmr, self.pts, self.lineup_str
+        )

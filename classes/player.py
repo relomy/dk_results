@@ -62,7 +62,7 @@ class Player(object):
         away_team, match_time = a.split(" ", 1)
         # self.logger.debug("home_team: {} away_team: {} t: {}".format(
         #     home_team, away_team, match_time))
-        # home_team, away_team = self.game_info.split(' ', 1)[0].split('@')
+        home_team, away_team = self.game_info.split(" ", 1)[0].split("@")
         if self.team_abbv == home_team:
             matchup_info = "vs. {}".format(away_team)
         else:
@@ -71,13 +71,7 @@ class Player(object):
 
     def __str__(self):
         return "[Player] {} {} Sal: ${} - {:.4f} - {} pts Game_Info: {} Team_Abbv: {}".format(
-            self.pos,
-            self.name,
-            self.salary,
-            self.perc,
-            self.fpts,
-            self.game_info,
-            self.team_abbv,
+            self.pos, self.name, self.salary, self.perc, self.fpts, self.game_info, self.team_abbv
         )
 
     def __repr__(self):
