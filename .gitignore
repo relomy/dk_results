@@ -1,11 +1,10 @@
 # package-specific
 .vscode/
 .remote-sync.json
-
 Pipfile.lock
-
 DKSalaries_*.csv
 contest-standings-*.csv
+token.json
 
 
 # Byte-compiled / optimized / DLL files

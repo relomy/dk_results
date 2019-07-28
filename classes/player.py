@@ -19,8 +19,9 @@ class Player(object):
 
         # to be updated - update_stats
         self.standings_pos = ""
-        self.perc = 0.0
+        self.ownership = 0.0
         self.fpts = 0.0
+        self.value = 0.0
 
         # to be updated - get_matchup_info
         self.matchup_info = ""
@@ -28,7 +29,7 @@ class Player(object):
     def update_stats(self, pos, perc, fpts):
         """Update class variables from contest standings file (contest-standings-nnnnnnnn.csv)."""
         self.standings_pos = pos
-        self.perc = float(perc.replace("%", "")) / 100
+        self.ownership = float(perc.replace("%", "")) / 100
         self.fpts = float(fpts)
 
         # calculate value
@@ -37,7 +38,7 @@ class Player(object):
         else:
             self.value = 0
 
-        self.get_matchup_info()
+        self.matchup_info = self.get_matchup_info()
 
     def get_matchup_info(self):
         """Format matchup_info if there's a home and away team."""
@@ -45,7 +46,7 @@ class Player(object):
         # logger.debug(game_info)
         # this should take care of golf
         if "@" not in self.game_info:
-            return
+            return self.game_info
 
         if self.game_info in [
             "In Progress",
@@ -55,7 +56,7 @@ class Player(object):
             "Suspended",
             "Delayed",
         ]:
-            return
+            return self.game_info
 
         # split game info into matchup_info
         home_team, a = self.game_info.split("@")
@@ -71,10 +72,28 @@ class Player(object):
 
     def __str__(self):
         return "[Player] {} {} Sal: ${} - {:.4f} - {} pts Game_Info: {} Team_Abbv: {}".format(
-            self.pos, self.name, self.salary, self.perc, self.fpts, self.game_info, self.team_abbv
+            self.pos,
+            self.name,
+            self.salary,
+            self.ownership,
+            self.fpts,
+            self.game_info,
+            self.team_abbv,
         )
 
     def __repr__(self):
         return "Player({}, {}, {}, {}, {})".format(
             self.name, self.pos, self.salary, self.game_info, self.team_abbv
         )
+
+    def writeable(self):
+        return [
+            self.pos,
+            self.name,
+            self.team_abbv,
+            self.matchup_info,
+            self.salary,
+            self.ownership,
+            self.fpts,
+            self.value,
+        ]

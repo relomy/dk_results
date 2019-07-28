@@ -48,7 +48,7 @@ class Results(object):
         self.parse_contest_standings_csv(contest_fn)
 
         for vip in self.vip_list:
-            self.logger.debug("VIP: {}".format(vip))
+            self.logger.debug(f"VIP: {vip}")
             # vip.lineup = self.parse_lineup_string(vip.lineup_str)
             vip.set_lineup(self.parse_lineup_string(vip.lineup_str))
 
@@ -126,10 +126,10 @@ class Results(object):
 
     def parse_contest_standings_csv(self, fn):
         """Parse CSV containing contest standings and player ownership."""
-        list = self.load_standings(fn)
+        standings = self.load_standings(fn)
         # create a copy of player list
         # player_list = self.players
-        for row in list[1:]:
+        for row in standings[1:]:
             rank, id, name, pmr, points, lineup = row[:6]
 
             # create User object and append to users list
@@ -148,13 +148,13 @@ class Results(object):
                 if all("" == s or s.isspace() for s in player_stats):
                     continue
 
-                name, pos, perc, fpts = player_stats
+                name, pos, ownership, fpts = player_stats
                 name = self.strip_accents_and_periods(name)
 
                 # if 'Jr.' in name:
                 #     name = name.replace('Jr.', 'Jr')
 
-                self.players[name].update_stats(pos, perc, fpts)
+                self.players[name].update_stats(pos, ownership, fpts)
 
     def load_standings(self, fn):
         """Load standings CSV and return list."""
@@ -162,3 +162,14 @@ class Results(object):
             lines = io.TextIOWrapper(csvfile, encoding="utf-8", newline="\r\n")
             rdr = csv.reader(lines, delimiter=",")
             return list(rdr)
+
+    def players_to_values(self):
+        # sort players by ownership
+        sorted_players = sorted(self.players, key=lambda x: self.players[x].ownership, reverse=True)
+        # for p in self.players.values():
+        #     print(p.perc)
+        #     print()
+        return [
+            self.players[p].writeable() for p in sorted_players if self.players[p].ownership > 0
+        ]
+
