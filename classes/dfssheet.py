@@ -1,26 +1,20 @@
+import logging
 from os import path
 
 from googleapiclient.discovery import build
 from httplib2 import Http
 from oauth2client import client, file, tools
 
+logger = logging.getLogger(__name__)
+
 
 class Sheet(object):
     def __init__(self):
-
         # authorize class to use sheets API
         self.service = self.setup_service()
 
         # unique ID for DFS Ownership/Value spreadsheet
         self.SPREADSHEET_ID = "1Jv5nT-yUoEarkzY5wa7RW0_y0Dqoj8_zDrjeDs-pHL4"
-
-        # self.values = self.get_values_from_range(self.cell_range)
-
-        # if self.values:
-        #     self.max_rows = len(self.values)
-        #     self.max_columns = len(self.values[0])
-        # else:
-        #     raise f"No values from self.get_values_from_range({self.cell_range})"
 
     def setup_service(self):
         SCOPES = "https://www.googleapis.com/auth/spreadsheets"
@@ -57,7 +51,7 @@ class Sheet(object):
             )
             .execute()
         )
-        print("{0} cells updated.".format(result.get("updatedCells")))
+        logger.info("{0} cells updated.".format(result.get("updatedCells")))
 
     def get_values_from_self_range(self):
         result = (
@@ -98,15 +92,15 @@ class DFSSheet(Sheet):
     def __init__(self, sport):
         self.sport = sport
 
+        # set ranges based on sport
         self.start_col = "A"
         if "PGA" in self.sport:
             self.end_col = "I"
         else:
             self.end_col = "H"
-
         self.data_range = "{0}2:{1}".format(self.start_col, self.end_col)
 
-        # init Sheet class
+        # init Sheet (super) class
         super().__init__()
 
         # get columns from first row
@@ -114,8 +108,17 @@ class DFSSheet(Sheet):
             "{0}!{1}1:{2}1".format(self.sport, self.start_col, self.end_col)
         )[0]
 
+        # self.values = self.get_values_from_range(self.cell_range)
+
+        # if self.values:
+        #     self.max_rows = len(self.values)
+        #     self.max_columns = len(self.values[0])
+        # else:
+        #     raise f"No values from self.get_values_from_range({self.cell_range})"
+
     def write_players(self, values):
-        cell_range = f"{self.sport}!{self.cell_range}"
+        """Write players (from standings) to DFSsheet."""
+        cell_range = f"{self.sport}!{self.data_range}"
         self.write_values_to_sheet_range(values, cell_range)
 
     def write_column(self, column, values):
@@ -214,4 +217,3 @@ class DFSSheet(Sheet):
 #         ]
 
 #         DFSsheet.__init__(self, "PGAMain", "A2:I", columns)
-

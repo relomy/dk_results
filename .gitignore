@@ -6,6 +6,8 @@ DKSalaries_*.csv
 contest-standings-*.csv
 token.json
 
+*.txt
+
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

@@ -9,12 +9,12 @@ black = "*"
 pylint = "*"
 
 [packages]
-# requests = "*"
-# "bs4" = "*"
-# selenium = "*"
+browsercookie = {hg = "https://bitbucket.org/richardpenman/browsercookie/"}
 google-api-python-client = "*"
 oauth2client = "*"
 pytz = "*"
+requests = "*"
+selenium = "*"
 
 [requires]
 python_version = "3.7"
