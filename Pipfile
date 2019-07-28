@@ -14,6 +14,7 @@ pylint = "*"
 # selenium = "*"
 google-api-python-client = "*"
 oauth2client = "*"
+pytz = "*"
 
 [requires]
 python_version = "3.7"

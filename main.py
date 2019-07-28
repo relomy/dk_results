@@ -2,6 +2,7 @@ import argparse
 import logging
 import logging.config
 from datetime import datetime
+from pytz import timezone
 
 from classes.dfssheet import DFSSheet
 from classes.results import Results
@@ -36,16 +37,14 @@ def main():
     parser.add_argument("-v", "--verbose", help="Increase verbosity")
     args = parser.parse_args()
 
-    now = datetime.now()
+    now = datetime.now(timezone("US/Eastern"))
 
-    # ten_sheet = DFSsheet_TEN()
-    # z = ten_sheet.get_players()
-
-    sheet = DFSSheet(args.sport, "A2:H")
+    sheet = DFSSheet(args.sport)
 
     r = Results(args.sport, args.id, args.csv)
     z = r.players_to_values()
-    # sheet.write_players(z)
+    sheet.write_players(z)
+    sheet.add_last_updated(now)
 
     if r.vip_list:
         sheet.write_vip_lineups(r.vip_list)

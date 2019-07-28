@@ -88,18 +88,31 @@ class Sheet(object):
 
 class DFSSheet(Sheet):
     LINEUP_RANGES = {
-        "PGA": ["L3:Q11", "L13:Q21", "L23:Q31", "L33:Q41"],
-        # "TEN": ["J3:O11", "J13:O21", "J23:O31", "J33:O41"],
-        "TEN": "J3:V41",
+        "PGAMain": "L3:Q41",
+        "PGAWeekend": "L3:Q41",
+        "PGAShowdown": "L3:Q41",
+        "TEN": "J3:V42",
+        "MLB": "J3:V58",
     }
 
-    def __init__(self, sport, cell_range):
+    def __init__(self, sport):
         self.sport = sport
-        self.cell_range = cell_range
 
+        self.start_col = "A"
+        if "PGA" in self.sport:
+            self.end_col = "I"
+        else:
+            self.end_col = "H"
+
+        self.data_range = "{0}2:{1}".format(self.start_col, self.end_col)
+
+        # init Sheet class
         super().__init__()
 
-        # self.zzz = self.get_values_from_range(cell_range)
+        # get columns from first row
+        self.columns = self.get_values_from_range(
+            "{0}!{1}1:{2}1".format(self.sport, self.start_col, self.end_col)
+        )[0]
 
     def write_players(self, values):
         cell_range = f"{self.sport}!{self.cell_range}"
@@ -110,6 +123,11 @@ class DFSSheet(Sheet):
         # set range based on column e.g. PGAMain!I2:I
         cell_range = f"{self.sport}!{column}2:{column}"
         return super().write_values_to_sheet_range(cell_range, values)
+
+    def add_last_updated(self, dt):
+        cell_range = f"{self.sport}!L1:Q1"
+        values = [["Last Updated", "", dt.strftime("%Y-%m-%d %H:%M:%S")]]
+        self.write_values_to_sheet_range(values, cell_range)
 
     def build_values_for_vip_lineup(self, vip):
         values = [
@@ -128,13 +146,13 @@ class DFSSheet(Sheet):
                 ]
             )
         values.append(["rank", vip.rank, "", vip.pts, "", ""])
-        values.append(["", "", "", "", ""])
         return values
 
     def write_vip_lineups(self, vips):
         cell_range = self.LINEUP_RANGES[self.sport]
         lineup_mod = 2
-        sport_mod = 9
+        # add size of lineup + 3 for extra rows
+        sport_mod = len(vips[0].lineup) + 3
         all_lineup_values = []
         for i, vip in enumerate(vips):
             values = self.build_values_for_vip_lineup(vip)
@@ -142,18 +160,13 @@ class DFSSheet(Sheet):
             if i < lineup_mod:
                 all_lineup_values.extend(values)
             elif i >= lineup_mod:
-                # mod = (i % 4) + ((i % 4) * 10) + j
                 for j, z in enumerate(values):
                     mod = (i % lineup_mod) + ((i % lineup_mod) * sport_mod) + j
                     all_lineup_values[mod].extend([""] + z)
-            # all_lineup_values.extend(self.build_values_for_vip_lineup(vip))
-            # values = []
-            # values.append([vip.name, "", "PMR", vip.pmr, "", ""])
-            # values.append(["Pos", "Name", "Salary", "Pts", "Value", "Own"])
-            # for p in vip.lineup:
-            #     values.append([p.pos, p.name, p.salary, p.fpts, p.value, p.ownership])
 
-            # values.append(["rank", vip.rank, "", vip.pts, "", ""])
+            # add extra row to values for spacing if needed
+            if i != lineup_mod:
+                all_lineup_values.append([])
         self.write_values_to_sheet_range(all_lineup_values, f"{self.sport}!{cell_range}")
 
     def get_players(self):
