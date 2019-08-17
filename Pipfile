@@ -10,6 +10,7 @@ pylint = "*"
 
 [packages]
 browsercookie = {hg = "https://bitbucket.org/richardpenman/browsercookie/"}
+pywin32 = {version = "*", sys_platform = "== 'win32'"}
 google-api-python-client = "*"
 oauth2client = "*"
 pytz = "*"
