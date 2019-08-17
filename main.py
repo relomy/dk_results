@@ -36,12 +36,11 @@ logger = logging.getLogger(__name__)
 
 def pull_contest_zip(contest_id):
     """Pull contest file (so far can be .zip or .csv file)."""
-    url_contest_csv = f"https://www.draftkings.com/contest/exportfullstandingscsv/{contest_id}"
 
     # try pickle cookies method
     cookies = cj_from_pickle("pickled_cookies_works.txt")
     if cookies:
-        result = setup_session(url_contest_csv, cookies)
+        result = setup_session(contest_id, cookies)
 
         logger.debug("type(result): {}".format(type(result)))
         if result is False:
@@ -62,14 +61,14 @@ def pull_contest_zip(contest_id):
                 new_expiry -= 11644473600
                 c.expires = new_expiry
 
-    result = setup_session(url_contest_csv, cookies)
+    result = setup_session(contest_id, cookies)
     logger.debug("type(result): {}".format(type(result)))
 
     if result:
         return result
 
     # use selenium to refresh cookies
-    use_selenium(url_contest_csv)
+    use_selenium(contest_id)
 
     # try browsercookie method again
     cookies = browsercookie.chrome()
@@ -87,7 +86,7 @@ def pull_contest_zip(contest_id):
                 new_expiry -= 11644473600
                 c.expires = new_expiry
 
-    result = setup_session(url_contest_csv, cookies)
+    result = setup_session(contest_id, cookies)
     logger.debug("type(result): {}".format(type(result)))
 
     if result is False:
@@ -97,7 +96,8 @@ def pull_contest_zip(contest_id):
         return result
 
 
-def use_selenium(contest_csv_url):
+def use_selenium(contest_id):
+    url_contest_csv = f"https://www.draftkings.com/contest/exportfullstandingscsv/{contest_id}"
     bin_chromedriver = getenv("CHROMEDRIVER")
     if not getenv("CHROMEDRIVER"):
         exit("Could not find CHROMEDRIVER in env variable")
@@ -113,8 +113,8 @@ def use_selenium(contest_csv_url):
     # options.add_argument("--profile-directory=Default")
     driver = webdriver.Remote(service.service_url, desired_capabilities=options.to_capabilities())
 
-    logger.debug("Performing get on {}".format(contest_csv_url))
-    driver.get(contest_csv_url)
+    logger.debug("Performing get on {}".format(url_contest_csv))
+    driver.get(url_contest_csv)
     logger.debug(driver.current_url)
     logger.debug("Letting DK load ...")
     time.sleep(5)  # Let DK Load!
@@ -126,7 +126,8 @@ def use_selenium(contest_csv_url):
     driver.quit()
 
 
-def setup_session(contest_csv_url, cookies):
+def setup_session(contest_id, cookies):
+
     s = requests.Session()
     now = datetime.datetime.now()
 
@@ -171,12 +172,13 @@ def setup_session(contest_csv_url, cookies):
     # print(cookies)
     s.cookies.update(cookies)
 
-    return request_contest_url(s, contest_csv_url)
+    return request_contest_url(s, contest_id)
 
 
-def request_contest_url(s, contest_csv_url):
+def request_contest_url(s, contest_id):
     # attempt to GET contest_csv_url
-    r = s.get(contest_csv_url)
+    url_contest_csv = f"https://www.draftkings.com/contest/exportfullstandingscsv/{contest_id}"
+    r = s.get(url_contest_csv)
     logger.debug(r.status_code)
     logger.debug(r.url)
     logger.debug(r.headers["Content-Type"])
@@ -186,21 +188,11 @@ def request_contest_url(s, contest_csv_url):
         return False
     # if headers say file is a CSV file
     elif r.headers["Content-Type"] == "text/csv":
-
-        # write working cookies
-        with open("pickled_cookies_works.txt", "wb") as f:
-            pickle.dump(s.cookies, f)
         # decode bytes into string
         csvfile = r.content.decode("utf-8")
         # open reader object on csvfile
         rdr = csv.reader(csvfile.splitlines(), delimiter=",")
-        # return list
-        return list(rdr)
     else:
-        # write working cookies
-        with open("pickled_cookies_works.txt", "wb") as f:
-            pickle.dump(s.cookies, f)
-
         # request will be a zip file
         z = zipfile.ZipFile(io.BytesIO(r.content))
         for name in z.namelist():
@@ -212,7 +204,18 @@ def request_contest_url(s, contest_csv_url):
                 lines = io.TextIOWrapper(csvfile, encoding="utf-8", newline="\r\n")
                 # open reader object on csvfile within zip file
                 rdr = csv.reader(lines, delimiter=",")
-                return list(rdr)
+
+    # write working cookies
+    with open("pickled_cookies_works.txt", "wb") as f:
+        pickle.dump(s.cookies, f)
+
+    # save csv to file
+    with open(f"contest-standings-{contest_id}.csv", "w", newline="") as write_file:
+        writer = csv.writer(write_file)
+        for line in rdr:
+            writer.writerow(line)
+
+    return list(rdr)
 
 
 def cj_from_pickle(filename):
@@ -249,18 +252,20 @@ def main():
 
     logger.debug(args)
 
-    # pull contest standings
-    # fn2 = "contest-standings-{}.csv".format(args.id)
+    # pull contest standings from draftkings
     contest_list = pull_contest_zip(args.id)
 
     sheet = DFSSheet(args.sport)
 
+    logger.debug(f"Creating Results object Results({args.sport}, {args.id}, {args.csv})")
     r = Results(args.sport, args.id, args.csv)
     z = r.players_to_values()
     sheet.write_players(z)
+    logger.info("Writing players to sheet")
     sheet.add_last_updated(now)
 
     if r.vip_list:
+        logger.info("Writing vip_lineups to sheet")
         sheet.write_vip_lineups(r.vip_list)
 
     for u in r.vip_list:
