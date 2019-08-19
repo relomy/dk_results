@@ -63,7 +63,7 @@ class Player(object):
         away_team, match_time = a.split(" ", 1)
         # self.logger.debug("home_team: {} away_team: {} t: {}".format(
         #     home_team, away_team, match_time))
-        home_team, away_team = self.game_info.split(" ", 1)[0].split("@")
+        # home_team, away_team = self.game_info.split(" ", 1)[0].split("@")
         if self.team_abbv == home_team:
             matchup_info = "vs. {}".format(away_team)
         else:
