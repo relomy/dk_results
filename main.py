@@ -97,7 +97,9 @@ def pull_contest_zip(contest_id):
 
 
 def use_selenium(contest_id):
-    url_contest_csv = f"https://www.draftkings.com/contest/exportfullstandingscsv/{contest_id}"
+    url_contest_csv = (
+        f"https://www.draftkings.com/contest/exportfullstandingscsv/{contest_id}"
+    )
     bin_chromedriver = getenv("CHROMEDRIVER")
     if not getenv("CHROMEDRIVER"):
         exit("Could not find CHROMEDRIVER in env variable")
@@ -110,8 +112,11 @@ def use_selenium(contest_id):
     options = webdriver.ChromeOptions()
     options.add_argument("--no-sandbox")
     # options.add_argument("--user-data-dir=/Users/Adam/Library/Application Support/Google/Chrome")
-    # options.add_argument("--profile-directory=Default")
-    driver = webdriver.Remote(service.service_url, desired_capabilities=options.to_capabilities())
+    options.add_argument("--user-data-dir=/home/pi/.config/chromium")
+    options.add_argument(r"--profile-directory=Profile 1")
+    driver = webdriver.Remote(
+        service.service_url, desired_capabilities=options.to_capabilities()
+    )
 
     logger.debug("Performing get on {}".format(url_contest_csv))
     driver.get(url_contest_csv)
@@ -165,7 +170,9 @@ def setup_session(contest_id, cookies):
                         )
             # some cookies have unnecessarily long expiration times which produce overflow errors
             except OverflowError as e:
-                logger.debug("Overflow on {} {} [error: {}]".format(c.name, c.expires, e))
+                logger.debug(
+                    "Overflow on {} {} [error: {}]".format(c.name, c.expires, e)
+                )
 
     # exit()
     logger.debug("adding all missing cookies to session.cookies")
@@ -177,7 +184,9 @@ def setup_session(contest_id, cookies):
 
 def request_contest_url(s, contest_id):
     # attempt to GET contest_csv_url
-    url_contest_csv = f"https://www.draftkings.com/contest/exportfullstandingscsv/{contest_id}"
+    url_contest_csv = (
+        f"https://www.draftkings.com/contest/exportfullstandingscsv/{contest_id}"
+    )
     r = s.get(url_contest_csv)
     logger.debug(r.status_code)
     logger.debug(r.url)
@@ -185,37 +194,35 @@ def request_contest_url(s, contest_id):
     # print(r.headers)
     if "text/html" in r.headers["Content-Type"]:
         logger.info("We cannot do anything with html!")
-        return False
+        return None
     # if headers say file is a CSV file
     elif r.headers["Content-Type"] == "text/csv":
+        # write working cookies
+        with open("pickled_cookies_works.txt", "wb") as f:
+            pickle.dump(s.cookies, f)
         # decode bytes into string
         csvfile = r.content.decode("utf-8")
+        print(csvfile, file=open(f"contest-standings-{contest_id}.csv", "w"))
         # open reader object on csvfile
-        rdr = csv.reader(csvfile.splitlines(), delimiter=",")
+        # rdr = csv.reader(csvfile.splitlines(), delimiter=",")
+        return list(csv.reader(csvfile.splitlines(), delimiter=","))
     else:
+        # write working cookies
+        with open("pickled_cookies_works.txt", "wb") as f:
+            pickle.dump(s.cookies, f)
         # request will be a zip file
         z = zipfile.ZipFile(io.BytesIO(r.content))
         for name in z.namelist():
             # extract file - it seems easier this way
-            z.extract(name)
+            path = z.extract(name)
+            logger.debug(f"path: {path}")
             with z.open(name) as csvfile:
                 logger.debug("name within zipfile: {}".format(name))
                 # convert to TextIOWrapper object
                 lines = io.TextIOWrapper(csvfile, encoding="utf-8", newline="\r\n")
                 # open reader object on csvfile within zip file
-                rdr = csv.reader(lines, delimiter=",")
-
-    # write working cookies
-    with open("pickled_cookies_works.txt", "wb") as f:
-        pickle.dump(s.cookies, f)
-
-    # save csv to file
-    with open(f"contest-standings-{contest_id}.csv", "w", newline="") as write_file:
-        writer = csv.writer(write_file)
-        for line in rdr:
-            writer.writerow(line)
-
-    return list(rdr)
+                # rdr = csv.reader(lines, delimiter=",")
+                return list(csv.reader(lines, delimiter=","))
 
 
 def cj_from_pickle(filename):
@@ -230,8 +237,20 @@ def cj_from_pickle(filename):
 def main():
     # parse arguments
     parser = argparse.ArgumentParser()
-    choices = ["NBA", "NFL", "CFB", "PGAMain", "PGAWeekend", "PGAShowdown", "NHL", "MLB", "TEN"]
-    parser.add_argument("-i", "--id", type=int, required=True, help="Contest ID from DraftKings")
+    choices = [
+        "NBA",
+        "NFL",
+        "CFB",
+        "PGAMain",
+        "PGAWeekend",
+        "PGAShowdown",
+        "NHL",
+        "MLB",
+        "TEN",
+    ]
+    parser.add_argument(
+        "-i", "--id", type=int, required=True, help="Contest ID from DraftKings"
+    )
     parser.add_argument("-c", "--csv", help="Slate CSV from DraftKings")
     parser.add_argument(
         "-s",
@@ -257,8 +276,8 @@ def main():
 
     sheet = DFSSheet(args.sport)
 
-    logger.debug(f"Creating Results object Results({args.sport}, {args.id}, {args.csv})")
-    r = Results(args.sport, args.id, args.csv)
+    logger.debug(f"Creating Results object Results({args.sport}, {args.id}, fn)")
+    r = Results(args.sport, args.id, fn)
     z = r.players_to_values()
     sheet.write_players(z)
     logger.info("Writing players to sheet")
