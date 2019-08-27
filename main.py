@@ -43,11 +43,11 @@ def pull_contest_zip(contest_id):
         result = setup_session(contest_id, cookies)
 
         logger.debug("type(result): {}".format(type(result)))
-        if result is False:
-            logger.debug("Broken from pickle method")
-        else:
+        if result:
             logger.debug("pickle method worked!!")
             return result
+        else:
+            logger.debug("Broken from pickle method")
 
     # try browsercookie method
     cookies = browsercookie.chrome()
@@ -89,11 +89,12 @@ def pull_contest_zip(contest_id):
     result = setup_session(contest_id, cookies)
     logger.debug("type(result): {}".format(type(result)))
 
-    if result is False:
-        logger.debug("Broken from SECOND browsercookie method")
-    else:
+    if result:
         logger.debug("SECOND browsercookie method worked!!")
         return result
+
+    else:
+        logger.debug("Broken from SECOND browsercookie method")
 
 
 def use_selenium(contest_id):
@@ -147,11 +148,12 @@ def setup_session(contest_id, cookies):
 
             try:
                 if c.expires <= now.timestamp():
-                    logger.debug(
-                        "c.name {} has EXPIRED!!! (c.expires: {} now: {})".format(
-                            c.name, datetime.datetime.fromtimestamp(c.expires), now
-                        )
-                    )
+                    pass
+                    # logger.debug(
+                    #     "c.name {} has EXPIRED!!! (c.expires: {} now: {})".format(
+                    #         c.name, datetime.datetime.fromtimestamp(c.expires), now
+                    #     )
+                    # )
                 else:  # check if
                     delta_hours = 5
                     d = datetime.datetime.fromtimestamp(c.expires) - datetime.timedelta(
@@ -159,20 +161,22 @@ def setup_session(contest_id, cookies):
                     )
                     # within 5 hours
                     if d <= now:
-                        logger.debug(
-                            "c.name {} expires within {} hours!! difference: {} (c.expires: {} now: {})".format(
-                                c.name,
-                                delta_hours,
-                                datetime.datetime.fromtimestamp(c.expires) - now,
-                                datetime.datetime.fromtimestamp(c.expires),
-                                now,
-                            )
-                        )
+                        pass
+                        # logger.debug(
+                        #     "c.name {} expires within {} hours!! difference: {} (c.expires: {} now: {})".format(
+                        #         c.name,
+                        #         delta_hours,
+                        #         datetime.datetime.fromtimestamp(c.expires) - now,
+                        #         datetime.datetime.fromtimestamp(c.expires),
+                        #         now,
+                        #     )
+                        # )
             # some cookies have unnecessarily long expiration times which produce overflow errors
             except OverflowError as e:
-                logger.debug(
-                    "Overflow on {} {} [error: {}]".format(c.name, c.expires, e)
-                )
+                pass
+                # logger.debug(
+                #     "Overflow on {} {} [error: {}]".format(c.name, c.expires, e)
+                # )
 
     # exit()
     logger.debug("adding all missing cookies to session.cookies")
@@ -273,6 +277,9 @@ def main():
 
     # pull contest standings from draftkings
     contest_list = pull_contest_zip(args.id)
+
+    if not contest_list:
+        raise Exception("There was an issue with pull_contest_zip()")
 
     sheet = DFSSheet(args.sport)
 
