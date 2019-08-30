@@ -1,3 +1,4 @@
+import copy
 import csv
 from datetime import datetime
 import io
@@ -97,23 +98,19 @@ class Results(object):
                 name = self.strip_accents_and_periods(name)
 
                 if name in self.players:
-                    self.players[name].pos = position
-                    player_list.append(self.players[name])
+                    # check if position is different (FLEX, etc.)
+                    if position != self.players[name].pos:
+                        # create copy of local Player to update player's position for the spreadsheet
+                        p = copy.deepcopy(self.players[name])
+                        p.pos = position
+                        player_list.append(p)
+                    else:
+                        player_list.append(self.players[name])
 
-        # TODO
-        # sort by DraftKings roster order (RB, RB, WR, WR, etc.)
-        sorted_list = []
-        for position in positions[self.sport]:
-            # player = [p for p in player_list if p.pos == position]
-            for i in range(len(player_list)):
-                if player_list[i].pos == position:
-                    player = player_list.pop(i)
-                    break
-            # index = [
-            #     i for i in range(len(player_list)) if player_list[i].pos == position
-            # ]
-            # player = player_list.pop(index)
-            sorted_list.append(player)
+        # sort by DraftKings roster order (RB, RB, WR, WR, etc.), then name
+        sorted_list = sorted(
+            player_list, key=lambda x: (positions["CFB"].index(x.pos), x.name)
+        )
 
         return sorted_list
 

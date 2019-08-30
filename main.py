@@ -294,12 +294,12 @@ def main():
         logger.info("Writing vip_lineups to sheet")
         sheet.write_vip_lineups(r.vip_list)
 
-    for u in r.vip_list:
-        # logger.info("User: {}".format(u.name))
-        logger.info("User: {}".format(u))
-        # logger.info("Lineup:")
-        # for p in u.lineup:
-        #     logger.debug(p)
+    # for u in r.vip_list:
+    # logger.info("User: {}".format(u.name))
+    # logger.info("User: {}".format(u))
+    # logger.info("Lineup:")
+    # for p in u.lineup:
+    #     logger.debug(p)
 
     # sheet = DFSsheet("TEN")
 
