@@ -109,7 +109,7 @@ class Results(object):
 
         # sort by DraftKings roster order (RB, RB, WR, WR, etc.), then name
         sorted_list = sorted(
-            player_list, key=lambda x: (positions["CFB"].index(x.pos), x.name)
+            player_list, key=lambda x: (positions[self.sport].index(x.pos), x.name)
         )
 
         return sorted_list
@@ -146,6 +146,10 @@ class Results(object):
         # create a copy of player list
         # player_list = self.players
         for row in standings[1:]:
+            # catch empty rows
+            if not row:
+                continue
+
             rank, id, name, pmr, points, lineup = row[:6]
 
             # create User object and append to users list
