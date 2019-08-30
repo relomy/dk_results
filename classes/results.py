@@ -60,7 +60,7 @@ class Results(object):
         player_list = []
         # dict of positions for each sport
         positions = {
-            "CFB": ["QB", "RB", "WR", "TE", "FLEX", "S-FLEX"],
+            "CFB": ["QB", "RB", "RB", "WR", "WR", "WR", "FLEX", "S-FLEX"],
             "MLB": ["P", "C", "1B", "2B", "3B", "SS", "OF"],
             "NBA": ["PG", "SG", "SF", "PF", "C", "G", "F", "UTIL"],
             "NFL": ["QB", "RB", "WR", "TE", "FLEX", "DST"],
@@ -102,7 +102,20 @@ class Results(object):
 
         # TODO
         # sort by DraftKings roster order (RB, RB, WR, WR, etc.)
-        return player_list
+        sorted_list = []
+        for position in positions[self.sport]:
+            # player = [p for p in player_list if p.pos == position]
+            for i in range(len(player_list)):
+                if player_list[i].pos == position:
+                    player = player_list.pop(i)
+                    break
+            # index = [
+            #     i for i in range(len(player_list)) if player_list[i].pos == position
+            # ]
+            # player = player_list.pop(index)
+            sorted_list.append(player)
+
+        return sorted_list
 
     def strip_accents_and_periods(self, name):
         """Strip accents from a given string and replace with letters without accents."""
