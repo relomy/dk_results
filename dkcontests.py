@@ -225,7 +225,7 @@ def set_cron_interval(contest, sport_length):
 def print_cron_job(contest, sport):
     print(contest)
     home_dir = "/home/pi/Desktop"
-    pipenv_path = "/home/pi/.local/bin/pipenv"
+    pipenv_path = "/usr/local/bin/pipenv"
 
     # set interval and length depending on sport
     if sport == "NBA":

@@ -51,15 +51,15 @@ def pull_contest_zip(contest_id):
 
     # try browsercookie method
     cookies = browsercookie.chrome()
-    for c in cookies:
-        if "draft" not in c.domain:
-            cookies.clear(c.domain, c.path, c.name)
-        else:
-            if c.expires:
-                # chrome is ridiculous - this math is required
-                new_expiry = c.expires / 1000000
-                new_expiry -= 11644473600
-                c.expires = new_expiry
+    # for c in cookies:
+    #     if "draft" not in c.domain:
+    #         cookies.clear(c.domain, c.path, c.name)
+    #     else:
+    #         if c.expires:
+    #             # chrome is ridiculous - this math is required
+    #             new_expiry = c.expires / 1000000
+    #             new_expiry -= 11644473600
+    #             c.expires = new_expiry
 
     result = setup_session(contest_id, cookies)
     logger.debug("type(result): {}".format(type(result)))
@@ -73,18 +73,18 @@ def pull_contest_zip(contest_id):
     # try browsercookie method again
     cookies = browsercookie.chrome()
 
-    for c in cookies:
-        if "draft" not in c.domain:
-            cookies.clear(c.domain, c.path, c.name)
-        else:
-            if c.expires:
-                # chrome is ridiculous - this math is required
-                # Devide the actual timestamp (in my case it's expires_utc column in cookies table) by 1000000 // And someone should explain my why.
-                # Subtract 11644473600
-                # DONE! Now you got UNIX timestamp
-                new_expiry = c.expires / 1000000
-                new_expiry -= 11644473600
-                c.expires = new_expiry
+    # for c in cookies:
+    #     if "draft" not in c.domain:
+    #         cookies.clear(c.domain, c.path, c.name)
+    #     else:
+    #         if c.expires:
+    #             # chrome is ridiculous - this math is required
+    #             # Devide the actual timestamp (in my case it's expires_utc column in cookies table) by 1000000 // And someone should explain my why.
+    #             # Subtract 11644473600
+    #             # DONE! Now you got UNIX timestamp
+    #             new_expiry = c.expires / 1000000
+    #             new_expiry -= 11644473600
+    #             c.expires = new_expiry
 
     result = setup_session(contest_id, cookies)
     logger.debug("type(result): {}".format(type(result)))
@@ -146,37 +146,37 @@ def setup_session(contest_id, cookies):
             if not c.expires:
                 continue
 
-            try:
-                if c.expires <= now.timestamp():
-                    pass
-                    # logger.debug(
-                    #     "c.name {} has EXPIRED!!! (c.expires: {} now: {})".format(
-                    #         c.name, datetime.datetime.fromtimestamp(c.expires), now
-                    #     )
-                    # )
-                else:  # check if
-                    delta_hours = 5
-                    d = datetime.datetime.fromtimestamp(c.expires) - datetime.timedelta(
-                        hours=delta_hours
-                    )
-                    # within 5 hours
-                    if d <= now:
-                        pass
-                        # logger.debug(
-                        #     "c.name {} expires within {} hours!! difference: {} (c.expires: {} now: {})".format(
-                        #         c.name,
-                        #         delta_hours,
-                        #         datetime.datetime.fromtimestamp(c.expires) - now,
-                        #         datetime.datetime.fromtimestamp(c.expires),
-                        #         now,
-                        #     )
-                        # )
+            # try:
+            # if c.expires <= now.timestamp():
+            #     pass
+            # logger.debug(
+            #     "c.name {} has EXPIRED!!! (c.expires: {} now: {})".format(
+            #         c.name, datetime.datetime.fromtimestamp(c.expires), now
+            #     )
+            # )
+            # else:  # check if
+            # delta_hours = 5
+            # d = datetime.datetime.fromtimestamp(c.expires) - datetime.timedelta(
+            #     hours=delta_hours
+            # )
+            # within 5 hours
+            # if d <= now:
+            #     pass
+            # logger.debug(
+            #     "c.name {} expires within {} hours!! difference: {} (c.expires: {} now: {})".format(
+            #         c.name,
+            #         delta_hours,
+            #         datetime.datetime.fromtimestamp(c.expires) - now,
+            #         datetime.datetime.fromtimestamp(c.expires),
+            #         now,
+            #     )
+            # )
             # some cookies have unnecessarily long expiration times which produce overflow errors
-            except OverflowError as e:
-                pass
-                # logger.debug(
-                #     "Overflow on {} {} [error: {}]".format(c.name, c.expires, e)
-                # )
+            # except OverflowError as e:
+            #     pass
+            # logger.debug(
+            #     "Overflow on {} {} [error: {}]".format(c.name, c.expires, e)
+            # )
 
     # exit()
     logger.debug("adding all missing cookies to session.cookies")

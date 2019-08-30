@@ -82,6 +82,8 @@ class Sheet(object):
 
 class DFSSheet(Sheet):
     LINEUP_RANGES = {
+        "NBA": "J3:V58",
+        "CFB": "J3:V58",
         "PGAMain": "L3:Q41",
         "PGAWeekend": "L3:Q41",
         "PGAShowdown": "L3:Q41",

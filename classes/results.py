@@ -60,7 +60,7 @@ class Results(object):
         player_list = []
         # dict of positions for each sport
         positions = {
-            "CFL": ["QB", "RB", "WR", "TE", "FLEX", "S-FLEX"],
+            "CFB": ["QB", "RB", "WR", "TE", "FLEX", "S-FLEX"],
             "MLB": ["P", "C", "1B", "2B", "3B", "SS", "OF"],
             "NBA": ["PG", "SG", "SF", "PF", "C", "G", "F", "UTIL"],
             "NFL": ["QB", "RB", "WR", "TE", "FLEX", "DST"],
@@ -81,9 +81,15 @@ class Results(object):
         # self.logger.debug("indices: {}".format(indices))
         # self.logger.debug("end_indices: {}".format(end_indices))
         for i, index in enumerate(indices):
-            s = slice(index + 1, end_indices[i])
-            name = splt[s]
-            if name != "LOCKED":
+            name_slice = slice(index + 1, end_indices[i])
+            pos_slice = slice(index, index + 1)
+            name = splt[name_slice]
+            position = splt[pos_slice][0]
+
+            if "LOCKED" in name:
+                name = "LOCKED 🔒"
+                player_list.append(Player(name, position, 0, None, None))
+            else:
                 # self.logger.debug(name)
                 name = " ".join(name)
 
@@ -91,11 +97,11 @@ class Results(object):
                 name = self.strip_accents_and_periods(name)
 
                 if name in self.players:
+                    self.players[name].pos = position
                     player_list.append(self.players[name])
 
-            if "LOCKED" in name:
-                name = "LOCKED 🔒"
-
+        # TODO
+        # sort by DraftKings roster order (RB, RB, WR, WR, etc.)
         return player_list
 
     def strip_accents_and_periods(self, name):
@@ -165,11 +171,14 @@ class Results(object):
 
     def players_to_values(self):
         # sort players by ownership
-        sorted_players = sorted(self.players, key=lambda x: self.players[x].ownership, reverse=True)
+        sorted_players = sorted(
+            self.players, key=lambda x: self.players[x].ownership, reverse=True
+        )
         # for p in self.players.values():
         #     print(p.perc)
         #     print()
         return [
-            self.players[p].writeable() for p in sorted_players if self.players[p].ownership > 0
+            self.players[p].writeable()
+            for p in sorted_players
+            if self.players[p].ownership > 0
         ]
-

@@ -24,6 +24,7 @@ class User(object):
     def set_lineup(self, lineup):
         for p in lineup:
             self.salary -= p.salary
+
         self.lineup = lineup
 
     def __str__(self):
