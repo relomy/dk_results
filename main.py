@@ -43,7 +43,8 @@ def pull_contest_zip(contest_id):
         result = setup_session(contest_id, cookies)
 
         logger.debug("type(result): {}".format(type(result)))
-        if result:
+
+        if result is not None:
             logger.debug("pickle method worked!!")
             return result
         else:
@@ -89,10 +90,9 @@ def pull_contest_zip(contest_id):
     result = setup_session(contest_id, cookies)
     logger.debug("type(result): {}".format(type(result)))
 
-    if result:
+    if result is not None:
         logger.debug("SECOND browsercookie method worked!!")
         return result
-
     else:
         logger.debug("Broken from SECOND browsercookie method")
 
@@ -278,8 +278,10 @@ def main():
     # pull contest standings from draftkings
     contest_list = pull_contest_zip(args.id)
 
-    if not contest_list:
-        raise Exception("There was an issue with pull_contest_zip()")
+    if contest_list is None:
+        raise Exception("pull_contest_zip() - contest_list is None.")
+    elif not contest_list:  # contest_list is empty
+        raise Exception("pull_contest_zip() - contest_list is empty.")
 
     sheet = DFSSheet(args.sport)
 

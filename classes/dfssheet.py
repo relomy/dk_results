@@ -24,7 +24,9 @@ class Sheet(object):
         if not creds or creds.invalid:
             flow = client.flow_from_clientsecrets(path.join(dir, "token.json"), SCOPES)
             creds = tools.run_flow(flow, store)
-        return build("sheets", "v4", http=creds.authorize(Http()), cache_discovery=False)
+        return build(
+            "sheets", "v4", http=creds.authorize(Http()), cache_discovery=False
+        )
 
     def find_sheet_id(self, title):
         sheet_metadata = (
@@ -84,6 +86,7 @@ class DFSSheet(Sheet):
     LINEUP_RANGES = {
         "NBA": "J3:V58",
         "CFB": "J3:V58",
+        "NFL": "J3:V58",
         "PGAMain": "L3:Q41",
         "PGAWeekend": "L3:Q41",
         "PGAShowdown": "L3:Q41",
@@ -155,7 +158,7 @@ class DFSSheet(Sheet):
 
     def write_vip_lineups(self, vips):
         cell_range = self.LINEUP_RANGES[self.sport]
-        lineup_mod = 2
+        lineup_mod = 4
         # add size of lineup + 3 for extra rows
         sport_mod = len(vips[0].lineup) + 3
         all_lineup_values = []
@@ -172,7 +175,9 @@ class DFSSheet(Sheet):
             # add extra row to values for spacing if needed
             if i != lineup_mod:
                 all_lineup_values.append([])
-        self.write_values_to_sheet_range(all_lineup_values, f"{self.sport}!{cell_range}")
+        self.write_values_to_sheet_range(
+            all_lineup_values, f"{self.sport}!{cell_range}"
+        )
 
     def get_players(self):
         return [row[self.columns.index("Name")] for row in self.values]
