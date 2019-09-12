@@ -86,7 +86,10 @@ class Player(object):
             self.name, self.pos, self.salary, self.game_info, self.team_abbv
         )
 
-    def writeable(self):
+    def writeable(self, sport):
+        if "PGA" in sport:
+            return [self.pos, self.name, self.salary, self.ownership, self.fpts]
+
         return [
             self.pos,
             self.name,

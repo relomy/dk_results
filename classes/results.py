@@ -118,7 +118,8 @@ class Results(object):
         """Strip accents from a given string and replace with letters without accents."""
         # TODO might not want to remove periods for the actual sheet
         return "".join(
-            c.replace(".", "")
+            # c.replace(".", "")
+            c
             for c in unicodedata.normalize("NFD", name)
             if unicodedata.category(c) != "Mn"
         )
@@ -183,7 +184,7 @@ class Results(object):
             rdr = csv.reader(lines, delimiter=",")
             return list(rdr)
 
-    def players_to_values(self):
+    def players_to_values(self, sport):
         # sort players by ownership
         sorted_players = sorted(
             self.players, key=lambda x: self.players[x].ownership, reverse=True
@@ -192,7 +193,7 @@ class Results(object):
         #     print(p.perc)
         #     print()
         return [
-            self.players[p].writeable()
+            self.players[p].writeable(sport)
             for p in sorted_players
             if self.players[p].ownership > 0
         ]

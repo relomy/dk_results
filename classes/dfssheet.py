@@ -87,7 +87,7 @@ class DFSSheet(Sheet):
         "NBA": "J3:V58",
         "CFB": "J3:V58",
         "NFL": "J3:V58",
-        "PGAMain": "L3:Q41",
+        "PGAMain": "L8:X46",
         "PGAWeekend": "L3:Q41",
         "PGAShowdown": "L3:Q41",
         "TEN": "J3:V42",

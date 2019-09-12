@@ -263,6 +263,12 @@ def main():
         required=True,
         help="Type of contest (NBA, NFL, PGAMain, PGAWeekend, PGAShowdown, CFB, NHL, or MLB)",
     )
+    parser.add_argument(
+        "--nolineups",
+        dest="nolineups",
+        action="store_false",
+        help="If true, will not print VIP lineups",
+    )
     parser.add_argument("-v", "--verbose", help="Increase verbosity")
     args = parser.parse_args()
 
@@ -287,12 +293,12 @@ def main():
 
     logger.debug(f"Creating Results object Results({args.sport}, {args.id}, fn)")
     r = Results(args.sport, args.id, fn)
-    z = r.players_to_values()
+    z = r.players_to_values(args.sport)
     sheet.write_players(z)
     logger.info("Writing players to sheet")
     sheet.add_last_updated(now)
 
-    if r.vip_list:
+    if args.nolineups and r.vip_list:
         logger.info("Writing vip_lineups to sheet")
         sheet.write_vip_lineups(r.vip_list)
 
