@@ -174,8 +174,10 @@ class Results(object):
 
                 # if 'Jr.' in name:
                 #     name = name.replace('Jr.', 'Jr')
-
-                self.players[name].update_stats(pos, ownership, fpts)
+                try:
+                    self.players[name].update_stats(pos, ownership, fpts)
+                except KeyError as ex:
+                    self.logger.error("Player {} not found in players[] dict")
 
     def load_standings(self, fn):
         """Load standings CSV and return list."""
