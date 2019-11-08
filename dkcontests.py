@@ -229,7 +229,7 @@ def print_cron_job(contest, sport):
 
     # set interval and length depending on sport
     if sport == "NBA":
-        sport_length = 5
+        sport_length = 6
         dl_interval = "*/10"
         get_interval = "*/5"
     elif sport == "NFL":
