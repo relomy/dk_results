@@ -177,7 +177,7 @@ class Results(object):
                 try:
                     self.players[name].update_stats(pos, ownership, fpts)
                 except KeyError as ex:
-                    self.logger.error("Player {} not found in players[] dict")
+                    self.logger.error("Player {} not found in players[] dict".format(name))
 
     def load_standings(self, fn):
         """Load standings CSV and return list."""
