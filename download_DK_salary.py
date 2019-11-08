@@ -13,11 +13,10 @@ def download_salary_csv(filename, csv_url):
 
     # send GET request
     r = requests.get(csv_url, cookies=cookies)
-    status = r.status_code
 
     # if not successful, raise an exception
-    if status != 200:
-        raise Exception("Requests status != 200. It is: {0}".format(status))
+    if r.status_code != 200:
+        raise Exception("Requests status != 200. It is: {0}".format(r.status_code))
 
     # dump html to file to avoid multiple requests
     with open(filename, "w") as outfile:
