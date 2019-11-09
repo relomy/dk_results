@@ -41,7 +41,7 @@ class Draftkings(object):
         }
 
         if sport in CONTEST_TYPES:
-            print("contest_type_id [{}]: {}".format(sport, CONTEST_TYPES[sport]))
+            self.logger.debug("CONTEST_TYPES [%s]: %s" % (sport, CONTEST_TYPES[sport]))
 
         csv_url = "https://www.draftkings.com/lineup/getavailableplayerscsv?contestTypeId={0}&draftGroupId={1}".format(
             CONTEST_TYPES[sport], draft_group
@@ -55,7 +55,7 @@ class Draftkings(object):
 
         # dump html to file to avoid multiple requests
         with open(filename, "w") as outfile:
-            print("Writing r.text to {}".format(filename))
+            self.logger.debug("Writing r.text to %s" % filename)
             print(r.text, file=outfile)
 
     # def setup_session(self, contest_id, cookies):
