@@ -292,7 +292,7 @@ def main():
     dk = Draftkings()
 
     if args.draft_group:
-        logger.info("Downloading salary file (draft_group: %d)" % args.draft_group)
+        logger.info("Downloading salary file (draft_group: %d)", args.draft_group)
         dk.download_salary_csv(args.sport, args.draft_group, fn)
 
     # pull contest standings from draftkings
