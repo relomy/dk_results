@@ -260,11 +260,12 @@ def print_cron_job(contest, sport):
     cron_str = set_cron_interval(contest, sport_length)
     out_str = f"{home_dir}/{sport}_results.log 2>&1"
 
+    # print(
+    #     f"{dl_interval} {cron_str} {dl_str} -s {sport} -dg {contest.draft_group} >> {out_str}"
+    # )
+    print(f"Download CSV for slate: {dl_str} -s {sport} -dg {contest.draft_group}\n")
     print(
-        f"{dl_interval} {cron_str} {dl_str} -s {sport} -dg {contest.draft_group} >> {out_str}"
-    )
-    print(
-        f"{get_interval} {cron_str} {get_str} -s {sport} -i {contest.id} >> {out_str}"
+        f"{get_interval} {cron_str} {get_str} -s {sport} -i {contest.id} -dg {contest.draft_group} >> {out_str}"
     )
 
 
