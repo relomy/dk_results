@@ -17,16 +17,6 @@ class Draftkings(object):
        and salary files for contests (unauthenticated).
     """
 
-    CONTEST_TYPES = {
-        "PGA": 9,
-        "SOC": 10,
-        "MLB": 12,
-        "NFL": 21,
-        "NBA": 70,
-        "CFB": 94,
-        "TEN": 106,
-    }
-
     def __init__(self, logger=None):
         self.logger = logger or logging.getLogger(__name__)
 
@@ -36,11 +26,26 @@ class Draftkings(object):
         cookies = browsercookie.chrome()
 
         # update session with cookies
-        s.cookies.update(cookies)
+        self.s.cookies.update(cookies)
 
-    def download_salary_csv(self, filename, csv_url):
+    def download_salary_csv(self, sport, draft_group, filename):
         """Given a filename and CSV URL, request download of CSV file and save to filename."""
+        CONTEST_TYPES = {
+            "PGA": 9,
+            "SOC": 10,
+            "MLB": 12,
+            "NFL": 21,
+            "NBA": 70,
+            "CFB": 94,
+            "TEN": 106,
+        }
 
+        if sport in CONTEST_TYPES:
+            print("contest_type_id [{}]: {}".format(sport, CONTEST_TYPES[sport]))
+
+        csv_url = "https://www.draftkings.com/lineup/getavailableplayerscsv?contestTypeId={0}&draftGroupId={1}".format(
+            CONTEST_TYPES[sport], draft_group
+        )
         # send GET request
         r = self.s.get(csv_url)
 
