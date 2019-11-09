@@ -27,6 +27,7 @@ from selenium import webdriver
 
 from classes.dfssheet import DFSSheet
 from classes.results import Results
+from classes.draftkings import Draftkings
 
 # load the logging configuration
 logging.config.fileConfig("logging.ini")
@@ -280,6 +281,8 @@ def main():
         fn = f"DKSalaries_{args.sport}_{now:%A}.csv"
 
     logger.debug(args)
+
+    dk = Draftkings()
 
     # pull contest standings from draftkings
     contest_list = pull_contest_zip(args.id)
