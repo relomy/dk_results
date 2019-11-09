@@ -27,6 +27,7 @@ from selenium import webdriver
 
 from classes.dfssheet import DFSSheet
 from classes.results import Results
+from classes.draftkings import Draftkings
 
 # load the logging configuration
 logging.config.fileConfig("logging.ini")
@@ -269,6 +270,13 @@ def main():
         action="store_false",
         help="If true, will not print VIP lineups",
     )
+    parser.add_argument(
+        "-dg",
+        "--draftgroup",
+        dest="draft_group",
+        type=int,
+        help="If a draftgroup is given, constantly download salary CSV",
+    )
     parser.add_argument("-v", "--verbose", help="Increase verbosity")
     args = parser.parse_args()
 
@@ -280,6 +288,12 @@ def main():
         fn = f"DKSalaries_{args.sport}_{now:%A}.csv"
 
     logger.debug(args)
+
+    dk = Draftkings()
+
+    if args.draft_group:
+        logger.info("Downloading salary file (draft_group: %d)" % args.draft_group)
+        dk.download_salary_csv(args.sport, args.draft_group, fn)
 
     # pull contest standings from draftkings
     contest_list = pull_contest_zip(args.id)
