@@ -207,11 +207,11 @@ def set_cron_interval(contest, sport_length):
 
     # if dates are the same, we don't add days or hours
     if contest.start_dt.date() == end_dt.date():
-        print("dates are the same")
+        # print("dates are the same")
         hours = f"{contest.start_dt:%H}-{end_dt:%H}"
         days = f"{contest.start_dt:%d}"
     else:
-        print("dates are not the same - that means end_dt extends into the next day")
+        # print("dates are not the same - that means end_dt extends into the next day")
         # don't double print 00s
         if end_dt.strftime("%H") == "00":
             hours = f"{end_dt:%H},{contest.start_dt:%H}-23"
@@ -259,11 +259,14 @@ def print_cron_job(contest, sport):
     get_str = f"export DISPLAY=:1 && {py_str} main.py"
     cron_str = set_cron_interval(contest, sport_length)
     out_str = f"{home_dir}/{sport}_results.log 2>&1"
+    file_str = f"DKSalaries_{sport}_{contest.start_dt:%A}.csv"
 
     # print(
     #     f"{dl_interval} {cron_str} {dl_str} -s {sport} -dg {contest.draft_group} >> {out_str}"
     # )
-    print(f"Download CSV for slate: {dl_str} -s {sport} -dg {contest.draft_group}\n")
+    print(
+        f"Download CSV for this slate:\n{dl_str} -s {sport} -dg {contest.draft_group} -f {file_str}\n"
+    )
     print(
         f"{get_interval} {cron_str} {get_str} -s {sport} -i {contest.id} -dg {contest.draft_group} >> {out_str}"
     )
