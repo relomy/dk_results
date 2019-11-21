@@ -38,6 +38,7 @@ Response format: {
 import argparse
 import datetime
 import re
+import sqlite3
 
 import browsercookie
 import requests
@@ -112,7 +113,7 @@ def get_contests(url):
     return response_contests
 
 
-def get_largest_contest(contests, dt, entry_fee=25, query=None, exclude=None):
+def get_contest(contests, dt, entry_fee=25, query=None, exclude=None, largest=True):
     """Return largest contest from a list of Contests.
 
     Parameters
@@ -146,12 +147,17 @@ def get_largest_contest(contests, dt, entry_fee=25, query=None, exclude=None):
 
     # sorted_list = sorted(contest_list, key=lambda x: x.entries, reverse=True)
     if contest_list:
-        return max(contest_list, key=lambda x: x.entries)
+        if largest:
+            return max(contest_list, key=lambda x: x.entries)
+        else:
+            return contest_list
 
     return None
 
 
-def match_contest_criteria(contest, dt, entry_fee=25, query=None, exclude=None):
+def match_contest_criteria(
+    contest, dt, entry_fee=25, min_entries=229, query=None, exclude=None
+):
     """Use arguments to filter contest criteria.
 
     Parameters
@@ -180,6 +186,10 @@ def match_contest_criteria(contest, dt, entry_fee=25, query=None, exclude=None):
         and contest.is_double_up
         and contest.is_guaranteed
     ):
+        # if contest entries does not meet minimum entry count, return false
+        if contest.entries < min_entries:
+            return False
+
         # if exclude is in the name, return false
         if exclude and exclude in contest.name:
             return False
@@ -335,6 +345,23 @@ def print_stats(contests):
                     print(f"     ${entry_fee}: {count} contest(s)")
 
 
+def create_connection(db_file):
+    """ create a database connection to a SQLite database """
+    conn = None
+    try:
+        conn = sqlite3.connect(db_file)
+        print(sqlite3.sqlite_version)
+    except sqlite3.Error as e:
+        print(e)
+    finally:
+        if conn:
+            conn.close()
+
+
+def upsert_contest():
+    pass
+
+
 def main():
     """"""
     # parse arguments
@@ -368,6 +395,8 @@ def main():
     if args.live:
         live = "live"
 
+    create_connection("contests.db")
+
     # get contests from url
     url = f"https://www.draftkings.com/lobby/get{live}contests?sport={args.sport}"
     response_contests = get_contests(url)
@@ -378,10 +407,30 @@ def main():
     # print stats for contests
     print_stats(contests)
 
-    # parse contest and return single contest which matches argument criteria
-    contest = get_largest_contest(
-        contests, args.date, args.entry, args.query, args.exclude
+    # create_connection("contests.db")
+    # conn = sqlite3.connect("contests.db")
+    # c = conn.cursor()
+
+    c.execute(
+        """ CREATE TABLE IF NOT EXISTS contests (
+        dk_id INTEGER PRIMARY KEY,
+        name varchar(50) NOT NULL,
+        start_date datetime NOT NULL,
+        draft_group INTEGER NOT NULL,
+        total_prizes INTEGER NOT NULL,
+        entries INTEGER NOT NULL,
+        positions_paid INTEGER,
+        entry_fee INTEGER NOT NULL,
+        entry_count INTEGER NOT NULL,
+        max_entry_count INTEGER
+    )"""
     )
+
+    # insert new contests
+    contests = get_contest(contests, args.date, largest=False)
+
+    # parse contest and return single contest which matches argument criteria
+    contest = get_contest(contests, args.date, args.entry, args.query, args.exclude)
 
     # check if contest is empty
     if not contest:
