@@ -42,6 +42,7 @@ import sqlite3
 
 import browsercookie
 import requests
+import json
 
 COOKIES = browsercookie.chrome()
 HEADERS = {
@@ -155,9 +156,7 @@ def get_contest(contests, dt, entry_fee=25, query=None, exclude=None, largest=Tr
     return None
 
 
-def match_contest_criteria(
-    contest, dt, entry_fee=25, min_entries=229, query=None, exclude=None
-):
+def match_contest_criteria(contest, dt, entry_fee=25, query=None, exclude=None):
     """Use arguments to filter contest criteria.
 
     Parameters
@@ -186,10 +185,6 @@ def match_contest_criteria(
         and contest.is_double_up
         and contest.is_guaranteed
     ):
-        # if contest entries does not meet minimum entry count, return false
-        if contest.entries < min_entries:
-            return False
-
         # if exclude is in the name, return false
         if exclude and exclude in contest.name:
             return False
@@ -358,8 +353,59 @@ def create_connection(db_file):
             conn.close()
 
 
-def upsert_contest():
-    pass
+def create_table(conn):
+    c = conn.cursor()
+
+    c.execute(
+        """ CREATE TABLE IF NOT EXISTS contests (
+        dk_id INTEGER PRIMARY KEY,
+        name varchar(50) NOT NULL,
+        start_date datetime NOT NULL,
+        draft_group INTEGER NOT NULL,
+        total_prizes INTEGER NOT NULL,
+        entries INTEGER NOT NULL,
+        positions_paid INTEGER,
+        entry_fee INTEGER NOT NULL,
+        entry_count INTEGER NOT NULL,
+        max_entry_count INTEGER
+    )"""
+    )
+
+
+def upsert_contest(conn, contests):
+    # create SQL command
+    sql = (
+        "INSERT INTO contests(dk_id, name, start_date, draft_group, total_prizes,"
+        + "entries, entry_fee, entry_count, max_entry_count)"
+        + "VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)"
+    )
+
+    cur = conn.cursor()
+
+    # create tuple for SQL command
+    for contest in contests:
+        c = (
+            contest.id,
+            contest.name,
+            contest.start_dt,
+            contest.draft_group,
+            contest.total_prizes,
+            contest.entries,
+            contest.entry_fee,
+            contest.entry_count,
+            contest.max_entry_count,
+        )
+
+        try:
+            # execute SQL command
+            cur.execute(sql, c)
+        except sqlite3.Error as e:
+            print("sqlite error: ", e.args[0])
+
+    # commit database
+    conn.commit()
+
+    return cur.lastrowid
 
 
 def main():
@@ -398,36 +444,47 @@ def main():
     create_connection("contests.db")
 
     # get contests from url
-    url = f"https://www.draftkings.com/lobby/get{live}contests?sport={args.sport}"
-    response_contests = get_contests(url)
+    # url = f"https://www.draftkings.com/lobby/get{live}contests?sport={args.sport}"
+    # response_contests = get_contests(url)
+    contests = []
+    with open("getcontests.json", "r") as fp:
+        response = json.loads(fp.read())
+        response_contests = {}
+        if isinstance(response, list):
+            print("response is a list")
+            response_contests = response
+        elif "Contests" in response:
+            print("response is a dict")
+        response_contests = response["Contests"]
+        contests = [Contest(c) for c in response_contests]
 
     # create list of Contest objects
-    contests = [Contest(c) for c in response_contests]
+    # contests = [Contest(c) for c in response_contests]
 
     # print stats for contests
     print_stats(contests)
 
     # create_connection("contests.db")
-    # conn = sqlite3.connect("contests.db")
-    # c = conn.cursor()
+    conn = sqlite3.connect("contests.db")
 
-    c.execute(
-        """ CREATE TABLE IF NOT EXISTS contests (
-        dk_id INTEGER PRIMARY KEY,
-        name varchar(50) NOT NULL,
-        start_date datetime NOT NULL,
-        draft_group INTEGER NOT NULL,
-        total_prizes INTEGER NOT NULL,
-        entries INTEGER NOT NULL,
-        positions_paid INTEGER,
-        entry_fee INTEGER NOT NULL,
-        entry_count INTEGER NOT NULL,
-        max_entry_count INTEGER
-    )"""
-    )
+    test = 81358543
+    curr = conn.cursor()
+    curr.execute("SELECT dk_id FROM contests WHERE dk_id = ?", (test,))
+    data = curr.fetchone()
+    if len(data) == 0:
+        print("There is no contest with dk_id {}".format(test))
+    else:
+        print("Contest {} found with rowids {}".format(test, data[0]))
 
-    # insert new contests
+    # get new double ups
+    create_table(conn)
     contests = get_contest(contests, args.date, largest=False)
+
+    # compare new double ups to DB
+    last_row_id = upsert_contest(conn, contests)
+    print("last_row_id: {}".format(last_row_id))
+
+    # insert new double ups into DB
 
     # parse contest and return single contest which matches argument criteria
     contest = get_contest(contests, args.date, args.entry, args.query, args.exclude)
