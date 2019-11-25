@@ -266,9 +266,9 @@ def compare_contests_with_db(conn, contests):
         rows = cur.fetchall()
 
         # return None if nothing found
-        if not rows:
-            print("All contest IDs are accounted for in database")
-            return None
+        # if not rows:
+        #     print("All contest IDs are accounted for in database")
+        #     return None
 
         # if there are rows, remove found id from ids list
         if rows and len(rows) >= 1:
@@ -330,21 +330,21 @@ def main():
         required=True,
         help="Type of contest (NBA, NFL, GOLF, CFB, NHL, MLB, or TEN)",
     )
-    parser.add_argument(
-        "-l", "--live", action="store_true", default="", help="Get live contests"
-    )
-    parser.add_argument(
-        "-e", "--entry", type=int, default=25, help="Entry fee (25 for $25)"
-    )
-    parser.add_argument("-q", "--query", help="Search contest name")
-    parser.add_argument("-x", "--exclude", help="Exclude from search")
-    parser.add_argument(
-        "-d",
-        "--date",
-        help="The Start Date - format YYYY-MM-DD",
-        default=datetime.datetime.today(),
-        type=valid_date,
-    )
+    # parser.add_argument(
+    #     "-l", "--live", action="store_true", default="", help="Get live contests"
+    # )
+    # parser.add_argument(
+    #     "-e", "--entry", type=int, default=25, help="Entry fee (25 for $25)"
+    # )
+    # parser.add_argument("-q", "--query", help="Search contest name")
+    # parser.add_argument("-x", "--exclude", help="Exclude from search")
+    # parser.add_argument(
+    #     "-d",
+    #     "--date",
+    #     help="The Start Date - format YYYY-MM-DD",
+    #     default=datetime.datetime.today(),
+    #     type=valid_date,
+    # )
     args = parser.parse_args()
     print(args)
 
@@ -352,7 +352,7 @@ def main():
     if args.live:
         live = "live"
 
-    create_connection("contests.db")
+    # create_connection("contests.db")
 
     # get contests from url
     url = f"https://www.draftkings.com/lobby/get{live}contests?sport={args.sport}"
