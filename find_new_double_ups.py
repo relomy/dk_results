@@ -182,7 +182,7 @@ def print_stats(contests):
 
 
 def get_double_ups(
-    contests, draft_groups, min_entry_fee=1, max_entry_fee=50, entries=100
+    contests, draft_groups, min_entry_fee=1, max_entry_fee=50, entries=200
 ):
     """Find $1-$10 contests with atleast n entries"""
     contest_list = []
@@ -411,8 +411,12 @@ def main():
 
         for contest in matching_contests:
             print(
-                "New double up found! Name: {0} ID: {1} Entry Fee: {2} Entries: {3}".format(
-                    contest.name, contest.id, contest.entry_fee, contest.entries
+                "New double up found! [{0:%Y-%m-%d}] Name: {1} ID: {2} Entry Fee: {3} Entries: {4}".format(
+                    contest.start_dt,
+                    contest.name,
+                    contest.id,
+                    contest.entry_fee,
+                    contest.entries,
                 )
             )
             print(contest)
