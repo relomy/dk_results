@@ -181,7 +181,9 @@ def print_stats(contests):
                     print(f"     ${entry_fee}: {count} contest(s)")
 
 
-def get_double_ups(contests, draft_groups, entries=100):
+def get_double_ups(
+    contests, draft_groups, min_entry_fee=1, max_entry_fee=50, entries=100
+):
     """Find $1-$10 contests with atleast n entries"""
     contest_list = []
     for contest in contests:
@@ -192,8 +194,8 @@ def get_double_ups(contests, draft_groups, entries=100):
         # keep track of single-entry double-ups
         if (
             contest.entries >= entries
-            and contest.entry_fee >= 1
-            and contest.entry_fee <= 10
+            and contest.entry_fee >= min_entry_fee
+            and contest.entry_fee <= max_entry_fee
             and contest.max_entry_count == 1
             and contest.is_guaranteed
             and contest.is_double_up
