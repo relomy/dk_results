@@ -355,7 +355,7 @@ def main():
     # create_connection("contests.db")
 
     # get contests from url
-    url = f"https://www.draftkings.com/lobby/get{live}contests?sport={args.sport}"
+    url = f"https://www.draftkings.com/lobby/getcontests?sport={args.sport}"
     response_contests = get_contests(url)
 
     draft_groups = get_draft_groups(url)
