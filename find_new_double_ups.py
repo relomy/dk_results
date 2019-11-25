@@ -348,9 +348,9 @@ def main():
     args = parser.parse_args()
     print(args)
 
-    live = ""
-    if args.live:
-        live = "live"
+    # live = ""
+    # if args.live:
+    #     live = "live"
 
     # create_connection("contests.db")
 
