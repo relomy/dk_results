@@ -31,7 +31,8 @@ HEADERS = {
 class Contest:
     """Object representing a DraftKings contest from json."""
 
-    def __init__(self, contest):
+    def __init__(self, contest, sport):
+        self.sport = sport
         self.start_date = contest["sd"]
         self.name = contest["n"]
         self.id = contest["id"]
@@ -61,6 +62,70 @@ class Contest:
 
     def __str__(self):
         return f"{vars(self)}"
+
+
+def get_dk_lobby(url):
+    """Get contests from the DraftKings lobby. Returns a list."""
+    # set cookies based on Chrome session
+    print(url)
+
+    response = requests.get(url, headers=HEADERS, cookies=COOKIES).json()
+
+    contests = get_contests_from_response(response)
+    draft_groups = get_draft_groups_from_response(response)
+
+    return contests, draft_groups
+
+
+def get_contests_from_response(response):
+    """Get contests from the DraftKings lobby. Returns a list."""
+    if isinstance(response, list):
+        response_contests = response
+    elif "Contests" in response:
+        response_contests = response["Contests"]
+    else:
+        print("response isn't a dict or a list??? exiting")
+        exit()
+
+    return response_contests
+
+
+def get_draft_groups_from_response(response):
+    """Get draft groups from lobby/json."""
+
+    response_draft_groups = []
+    for draft_group in response["DraftGroups"]:
+        # dg['StartDateEst'] should be mostly the same for draft groups, (might
+        # not be the same for the rare long-running contest) and should be the
+        # date we're looking for (game date in US time).
+        # date = get_salary_date(response["DraftGroups"])
+        date = get_salary_date(draft_group)
+        tag = draft_group["DraftGroupTag"]
+        suffix = draft_group["ContestStartTimeSuffix"]
+        draft_group_id = draft_group["DraftGroupId"]
+        contest_type_id = draft_group["ContestTypeId"]
+
+        # only care about featured draftgroups and those with no suffix
+        if tag != "Featured" or suffix is not None:
+            print(
+                "Skipping [{0}]: draft group {1} contest type {2} [suffix: {3}]".format(
+                    date, draft_group_id, contest_type_id, suffix
+                )
+            )
+            continue
+
+        print(
+            "Adding draft_group for [{0}]: draft group {1} contest type {2} [suffix: {3}]".format(
+                date, draft_group_id, contest_type_id, suffix
+            )
+        )
+        response_draft_groups.append(draft_group_id)
+        # row = get_salary_csv(sport, draft_group_id, contest_type_id, date)
+        # if date not in rows_by_date:
+        #     rows_by_date[date] = []
+        # rows_by_date[date] += row
+
+    return response_draft_groups
 
 
 def get_contests(url):
@@ -233,6 +298,7 @@ def create_table(conn):
     cur.execute(
         """ CREATE TABLE IF NOT EXISTS contests (
         dk_id INTEGER PRIMARY KEY,
+        sport varchar(10) NOT NULL,
         name varchar(50) NOT NULL,
         start_date datetime NOT NULL,
         draft_group INTEGER NOT NULL,
@@ -286,9 +352,9 @@ def insert_contests(conn, contests):
     """Insert given contests in database"""
     # create SQL command
     sql = (
-        "INSERT INTO contests(dk_id, name, start_date, draft_group, total_prizes,"
+        "INSERT INTO contests(sport, dk_id, name, start_date, draft_group, total_prizes,"
         + "entries, entry_fee, entry_count, max_entry_count)"
-        + "VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)"
+        + "VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
     )
 
     cur = conn.cursor()
@@ -296,6 +362,7 @@ def insert_contests(conn, contests):
     # create tuple for SQL command
     for contest in contests:
         tpl_contest = (
+            contest.sport,
             contest.id,
             contest.name,
             contest.start_dt,
@@ -323,12 +390,20 @@ def main():
     """"""
     # parse arguments
     parser = argparse.ArgumentParser()
+    # parser.add_argument(
+    #     "-s",
+    #     "--sport",
+    #     choices=["NBA", "NFL", "CFB", "GOLF", "NHL", "MLB", "TEN"],
+    #     required=True,
+    #     help="Type of contest (NBA, NFL, GOLF, CFB, NHL, MLB, or TEN)",
+    # )
     parser.add_argument(
         "-s",
         "--sport",
         choices=["NBA", "NFL", "CFB", "GOLF", "NHL", "MLB", "TEN"],
         required=True,
         help="Type of contest (NBA, NFL, GOLF, CFB, NHL, MLB, or TEN)",
+        nargs="+",
     )
     # parser.add_argument(
     #     "-l", "--live", action="store_true", default="", help="Get live contests"
@@ -354,76 +429,78 @@ def main():
 
     # create_connection("contests.db")
 
-    # get contests from url
-    url = f"https://www.draftkings.com/lobby/getcontests?sport={args.sport}"
-    response_contests = get_contests(url)
-
-    draft_groups = get_draft_groups(url)
-
-    # create list of Contest objects
-    contests = [Contest(c) for c in response_contests]
-
-    # temp
-    # contests = []
-    # with open("getcontests.json", "r") as fp:
-    #     response = json.loads(fp.read())
-    #     response_contests = {}
-    #     if isinstance(response, list):
-    #         print("response is a list")
-    #         response_contests = response
-    #     elif "Contests" in response:
-    #         print("response is a dict")
-    #     response_contests = response["Contests"]
-    #     contests = [Contest(c) for c in response_contests]
-
-    # print stats for contests
-    print_stats(contests)
-
-    # get double ups from list of Contests
-    double_ups = get_double_ups(contests, draft_groups)
-
     # create connection to database file
     # create_connection("contests.db")
     conn = sqlite3.connect("contests.db")
 
-    # create table if it doesn't exist
-    create_table(conn)
+    for sport in args.sport:
+        # get contests from url
+        url = f"https://www.draftkings.com/lobby/getcontests?sport={sport}"
+
+        response_contests, draft_groups = get_dk_lobby(url)
+        # response_contests = get_contests(url)
+        # draft_groups = get_draft_groups(url)
+
+        # create list of Contest objects
+        contests = [Contest(c, sport) for c in response_contests]
+
+        # temp
+        # contests = []
+        # with open("getcontests.json", "r") as fp:
+        #     response = json.loads(fp.read())
+        #     response_contests = {}
+        #     if isinstance(response, list):
+        #         print("response is a list")
+        #         response_contests = response
+        #     elif "Contests" in response:
+        #         print("response is a dict")
+        #     response_contests = response["Contests"]
+        #     contests = [Contest(c) for c in response_contests]
+
+        # print stats for contests
+        # print_stats(contests)
+
+        # get double ups from list of Contests
+        double_ups = get_double_ups(contests, draft_groups)
+
+        # create table if it doesn't exist
+        create_table(conn)
+
+        # compare new double ups to DB
+        new_contests = compare_contests_with_db(conn, double_ups)
+
+        if new_contests:
+            # find contests matching the new contest IDs
+            matching_contests = [c for c in contests if c.id in new_contests]
+
+            for contest in matching_contests:
+                print(
+                    "New double up found! [{0:%Y-%m-%d}] Name: {1} ID: {2} Entry Fee: {3} Entries: {4}".format(
+                        contest.start_dt,
+                        contest.name,
+                        contest.id,
+                        contest.entry_fee,
+                        contest.entries,
+                    )
+                )
+                print(contest)
+
+            # insert new double ups into DB
+            last_row_id = insert_contests(conn, matching_contests)
+            print("last_row_id: {}".format(last_row_id))
 
     # test stuff
-    test = 81358543
-    curr = conn.cursor()
-    curr.execute("SELECT dk_id FROM contests WHERE dk_id = ?", (test,))
-    data = curr.fetchone()
-    if data and len(data) >= 1:
-        print("Contest {} found with rowids {}".format(test, data[0]))
-    else:
-        print("There is no contest with dk_id {}".format(test))
+    # test = 81358543
+    # curr = conn.cursor()
+    # curr.execute("SELECT dk_id FROM contests WHERE dk_id = ?", (test,))
+    # data = curr.fetchone()
+    # if data and len(data) >= 1:
+    #     print("Contest {} found with rowids {}".format(test, data[0]))
+    # else:
+    #     print("There is no contest with dk_id {}".format(test))
 
     # get new double ups
     # contests = get_contest(contests, args.date, largest=False)
-
-    # compare new double ups to DB
-    new_contests = compare_contests_with_db(conn, double_ups)
-
-    if new_contests:
-        # find contests matching the new contest IDs
-        matching_contests = [c for c in contests if c.id in new_contests]
-
-        for contest in matching_contests:
-            print(
-                "New double up found! [{0:%Y-%m-%d}] Name: {1} ID: {2} Entry Fee: {3} Entries: {4}".format(
-                    contest.start_dt,
-                    contest.name,
-                    contest.id,
-                    contest.entry_fee,
-                    contest.entries,
-                )
-            )
-            print(contest)
-
-        # insert new double ups into DB
-        last_row_id = insert_contests(conn, matching_contests)
-        print("last_row_id: {}".format(last_row_id))
 
 
 if __name__ == "__main__":
