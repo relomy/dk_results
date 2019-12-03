@@ -253,8 +253,8 @@ def get_double_ups(
     contest_list = []
     for contest in contests:
         # skip contests not for today
-        if contest.start_dt.date() != datetime.datetime.today().date():
-            continue
+        # if contest.start_dt.date() != datetime.datetime.today().date():
+        #     continue
 
         # keep track of single-entry double-ups
         if (
