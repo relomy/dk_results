@@ -67,7 +67,7 @@ class Contest:
 def get_dk_lobby(url):
     """Get contests from the DraftKings lobby. Returns a list."""
     # set cookies based on Chrome session
-    print(url)
+    # print(url)
 
     response = requests.get(url, headers=HEADERS, cookies=COOKIES).json()
 
@@ -107,81 +107,18 @@ def get_draft_groups_from_response(response):
 
         # only care about featured draftgroups and those with no suffix
         if tag != "Featured" or suffix is not None:
-            print(
-                "Skipping [{0}]: draft group {1} contest type {2} [suffix: {3}]".format(
-                    date, draft_group_id, contest_type_id, suffix
-                )
-            )
+            # print(
+            #     "Skipping [{0}]: draft group {1} contest type {2} [suffix: {3}]".format(
+            #         date, draft_group_id, contest_type_id, suffix
+            #     )
+            # )
             continue
 
-        print(
-            "Adding draft_group for [{0}]: draft group {1} contest type {2} [suffix: {3}]".format(
-                date, draft_group_id, contest_type_id, suffix
-            )
-        )
-        response_draft_groups.append(draft_group_id)
-        # row = get_salary_csv(sport, draft_group_id, contest_type_id, date)
-        # if date not in rows_by_date:
-        #     rows_by_date[date] = []
-        # rows_by_date[date] += row
-
-    return response_draft_groups
-
-
-def get_contests(url):
-    """Get contests from the DraftKings lobby. Returns a list."""
-    # set cookies based on Chrome session
-    print(url)
-
-    response = requests.get(url, headers=HEADERS, cookies=COOKIES).json()
-    response_contests = {}
-    if isinstance(response, list):
-        print("response is a list")
-        response_contests = response
-    elif "Contests" in response:
-        print("response is a dict")
-        response_contests = response["Contests"]
-    else:
-        print("response isn't a dict or a list??? exiting")
-        exit()
-
-    return response_contests
-
-
-def get_draft_groups(url):
-    """Get draft groups from lobby/json."""
-
-    # set cookies based on Chrome session
-    print(url)
-
-    response = requests.get(url, headers=HEADERS, cookies=COOKIES).json()
-
-    response_draft_groups = []
-    for draft_group in response["DraftGroups"]:
-        # dg['StartDateEst'] should be mostly the same for draft groups, (might
-        # not be the same for the rare long-running contest) and should be the
-        # date we're looking for (game date in US time).
-        # date = get_salary_date(response["DraftGroups"])
-        date = get_salary_date(draft_group)
-        tag = draft_group["DraftGroupTag"]
-        suffix = draft_group["ContestStartTimeSuffix"]
-        draft_group_id = draft_group["DraftGroupId"]
-        contest_type_id = draft_group["ContestTypeId"]
-
-        # only care about featured draftgroups and those with no suffix
-        if tag != "Featured" or suffix is not None:
-            print(
-                "Skipping [{0}]: draft group {1} contest type {2} [suffix: {3}]".format(
-                    date, draft_group_id, contest_type_id, suffix
-                )
-            )
-            continue
-
-        print(
-            "Adding draft_group for [{0}]: draft group {1} contest type {2} [suffix: {3}]".format(
-                date, draft_group_id, contest_type_id, suffix
-            )
-        )
+        # print(
+        #     "Adding draft_group for [{0}]: draft group {1} contest type {2} [suffix: {3}]".format(
+        #         date, draft_group_id, contest_type_id, suffix
+        #     )
+        # )
         response_draft_groups.append(draft_group_id)
         # row = get_salary_csv(sport, draft_group_id, contest_type_id, date)
         # if date not in rows_by_date:
@@ -390,13 +327,6 @@ def main():
     """"""
     # parse arguments
     parser = argparse.ArgumentParser()
-    # parser.add_argument(
-    #     "-s",
-    #     "--sport",
-    #     choices=["NBA", "NFL", "CFB", "GOLF", "NHL", "MLB", "TEN"],
-    #     required=True,
-    #     help="Type of contest (NBA, NFL, GOLF, CFB, NHL, MLB, or TEN)",
-    # )
     parser.add_argument(
         "-s",
         "--sport",
@@ -405,29 +335,8 @@ def main():
         help="Type of contest (NBA, NFL, GOLF, CFB, NHL, MLB, or TEN)",
         nargs="+",
     )
-    # parser.add_argument(
-    #     "-l", "--live", action="store_true", default="", help="Get live contests"
-    # )
-    # parser.add_argument(
-    #     "-e", "--entry", type=int, default=25, help="Entry fee (25 for $25)"
-    # )
-    # parser.add_argument("-q", "--query", help="Search contest name")
-    # parser.add_argument("-x", "--exclude", help="Exclude from search")
-    # parser.add_argument(
-    #     "-d",
-    #     "--date",
-    #     help="The Start Date - format YYYY-MM-DD",
-    #     default=datetime.datetime.today(),
-    #     type=valid_date,
-    # )
+    parser.add_argument("-v", "--verbose", help="Increase verbosity")
     args = parser.parse_args()
-    print(args)
-
-    # live = ""
-    # if args.live:
-    #     live = "live"
-
-    # create_connection("contests.db")
 
     # create connection to database file
     # create_connection("contests.db")
@@ -483,11 +392,11 @@ def main():
                         contest.entries,
                     )
                 )
-                print(contest)
+                # print(contest)
 
             # insert new double ups into DB
             last_row_id = insert_contests(conn, matching_contests)
-            print("last_row_id: {}".format(last_row_id))
+            # print("last_row_id: {}".format(last_row_id))
 
     # test stuff
     # test = 81358543
