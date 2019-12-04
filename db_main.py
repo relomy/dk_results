@@ -179,14 +179,26 @@ def get_live_contest(conn, sport, entry_fee=25):
     # get cursor
     cur = conn.cursor()
 
+    now = datetime.datetime.now()
+
     try:
         # execute SQL command
-        sql = "SELECT dk_id, draft_group FROM contests WHERE sport = ? AND entry_fee = ? ORDER BY start_date DESC LIMIT 1"
+        sql = "SELECT dk_id, draft_group, start_date FROM contests WHERE sport = ? AND entry_fee = ? ORDER BY start_date DESC LIMIT 1"
 
         cur.execute(sql, (sport, entry_fee))
 
         # fetch rows
         row = cur.fetchone()
+
+        if row[2]:
+            start_date = datetime.datetime.strptime(row[2], "%Y-%m-%d %H:%M:%S")
+            if now < start_date:
+                logger.debug(
+                    "Contest {} has not started yet start_date: {}".format(
+                        row[0], start_date
+                    )
+                )
+                return None
 
         # return
         return row
@@ -254,7 +266,7 @@ def main():
         # store dk_id and draft_group from database result
         dk_id, draft_group = result
 
-        fn = f"DKSalaries_{args.sport}_{now:%A}.csv"
+        fn = f"DKSalaries_sport_{now:%A}.csv"
 
         logger.debug(args)
 
