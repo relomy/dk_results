@@ -323,6 +323,95 @@ def insert_contests(conn, contests):
     return cur.lastrowid
 
 
+def check_db_contests_for_completion(conn):
+    # get cursor
+    cur = conn.cursor()
+
+    try:
+        # execute SQL command
+        sql = "SELECT dk_id, draft_group FROM contests WHERE positions_paid IS NULL"
+
+        cur.execute(sql)
+
+        # fetch rows
+        rows = cur.fetchall()
+
+        for row in rows:
+            get_contest_data(row[0])
+
+    except sqlite3.Error as err:
+        print("sqlite error: ", err.args[0])
+
+
+def get_contest_data(contest_id):
+    url = f"https://www.draftkings.com/contest/gamecenter/{contest_id}"
+
+    response = requests.get(url, headers=HEADERS, cookies=COOKIES)
+    soup = BeautifulSoup(response.text, "html5lib")
+
+    try:
+        header = soup.find_all(class_="top")[0].find_all("h4")
+        info_header = (
+            soup.find_all(class_="top")[0]
+            .find_all(class_="info-header")[0]
+            .find_all("span")
+        )
+        completed = info_header[3].string
+        print("Positions paid: %s", int(info_header[4].string))
+        if completed.strip().upper() == "COMPLETED":
+            print("contest %s is completed", contest_id)
+            print(
+                "name: {} total_prizes: {} date: {} entries: {} positions_paid: {}".format(
+                    header[1].string,
+                    info_header[0].string,
+                    info_header[2].string,
+                    info_header[4].string,
+                )
+            )
+            # DKContest.objects.update_or_create(
+            #     dk_id=contest_id,
+            #     defaults={
+            #         "name": header[0].string,
+            #         "total_prizes": dollars_to_decimal(header[1].string),
+            #         "date": datestr_to_date(info_header[0].string),
+            #         "entries": int(info_header[2].string),
+            #         "positions_paid": int(info_header[4].string),
+            #     },
+            # )
+        else:
+            print("Contest %s is still in progress", contest_id)
+    except IndexError:
+        # This error occurs for old contests whose pages no longer are
+        # being served.
+        # Traceback:
+        # header = soup.find_all(class_='top')[0].find_all('h4')
+        # IndexError: list index out of range
+        print("Couldn't find DK contest with id %s", contest_id)
+
+
+def get_contest_prize_data(contest_id):
+    url = "https://www.draftkings.com/contest/detailspop"
+    params = {
+        "contestId": contest_id,
+        "showDraftButton": False,
+        "defaultToDetails": True,
+        "layoutType": "legacy",
+    }
+    response = requests.get(url, headers=HEADERS, cookies=COOKIES, params=params)
+    soup = BeautifulSoup(response.text, "html5lib")
+
+    try:
+        payouts = soup.find_all(id="payouts-table")[0].find_all("tr")
+        entry_fee = soup.find_all("h2")[0].text.split("|")[2].strip()
+        for payout in payouts:
+            places, payout = [x.string for x in payout.find_all("td")]
+            places = [place_to_number(x.strip()) for x in places.split("-")]
+            top, bottom = (places[0], places[0]) if len(places) == 1 else places
+    except IndexError as ex:
+        # See comment in get_contest_data()
+        print("Couldn't find DK contest with id %s: %s", contest_id, ex)
+
+
 def main():
     """"""
     # parse arguments
@@ -343,6 +432,9 @@ def main():
     conn = sqlite3.connect("contests.db")
 
     for sport in args.sport:
+        # update old contests
+        check_db_contests_for_completion(conn)
+
         # get contests from url
         url = f"https://www.draftkings.com/lobby/getcontests?sport={sport}"
 
