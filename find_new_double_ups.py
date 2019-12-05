@@ -5,6 +5,7 @@ import datetime
 import json
 import re
 import sqlite3
+from bs4 import BeautifulSoup
 
 import browsercookie
 import requests
@@ -329,7 +330,11 @@ def check_db_contests_for_completion(conn):
 
     try:
         # execute SQL command
-        sql = "SELECT dk_id, draft_group FROM contests WHERE positions_paid IS NULL"
+        sql = (
+            "SELECT dk_id, draft_group FROM contests "
+        + "WHERE start_date <= date('now') "
+        + "AND positions_paid IS NOT NULL"
+        )
 
         cur.execute(sql)
 
@@ -337,7 +342,7 @@ def check_db_contests_for_completion(conn):
         rows = cur.fetchall()
 
         for row in rows:
-            get_contest_data(row[0])
+            get_contest_prize_data(row[0])
 
     except sqlite3.Error as err:
         print("sqlite error: ", err.args[0])
@@ -347,7 +352,7 @@ def get_contest_data(contest_id):
     url = f"https://www.draftkings.com/contest/gamecenter/{contest_id}"
 
     response = requests.get(url, headers=HEADERS, cookies=COOKIES)
-    soup = BeautifulSoup(response.text, "html5lib")
+    soup = BeautifulSoup(response.text, "html.parser")
 
     try:
         header = soup.find_all(class_="top")[0].find_all("h4")
@@ -362,6 +367,7 @@ def get_contest_data(contest_id):
             print("contest %s is completed", contest_id)
             print(
                 "name: {} total_prizes: {} date: {} entries: {} positions_paid: {}".format(
+                    header[0].string,
                     header[1].string,
                     info_header[0].string,
                     info_header[2].string,
@@ -398,7 +404,7 @@ def get_contest_prize_data(contest_id):
         "layoutType": "legacy",
     }
     response = requests.get(url, headers=HEADERS, cookies=COOKIES, params=params)
-    soup = BeautifulSoup(response.text, "html5lib")
+    soup = BeautifulSoup(response.text, "html.parser")
 
     try:
         payouts = soup.find_all(id="payouts-table")[0].find_all("tr")
