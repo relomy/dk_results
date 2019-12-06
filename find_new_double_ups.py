@@ -324,6 +324,19 @@ def insert_contests(conn, contests):
     return cur.lastrowid
 
 
+def update_positions_paid_for_contests(conn, contests_to_update):
+    cur = conn.cursor()
+
+    sql = "UPDATE contests SET positions_paid=?" + "WHERE dk_id=?"
+
+    try:
+        cur.executemany(sql, contests_to_update)
+        conn.commit()
+        print(f"Total {cur.rowcount} records updated successfully!")
+    except sqlite3.Error as err:
+        print("sqlite error: ", err.args[0])
+
+
 def check_db_contests_for_completion(conn):
     # get cursor
     cur = conn.cursor()
@@ -332,8 +345,8 @@ def check_db_contests_for_completion(conn):
         # execute SQL command
         sql = (
             "SELECT dk_id, draft_group FROM contests "
-        + "WHERE start_date <= date('now') "
-        + "AND positions_paid IS NOT NULL"
+            + "WHERE start_date <= date('now') "
+            + "AND positions_paid IS NULL"
         )
 
         cur.execute(sql)
@@ -341,8 +354,16 @@ def check_db_contests_for_completion(conn):
         # fetch rows
         rows = cur.fetchall()
 
+        contests_to_update = []
+
         for row in rows:
-            get_contest_prize_data(row[0])
+            data = get_contest_data(row[0])
+
+            if "positions_paid" in data:
+                contests_to_update.append((data["positions_paid"], row[0]))
+
+        if contests_to_update:
+            update_positions_paid_for_contests(conn, contests_to_update)
 
     except sqlite3.Error as err:
         print("sqlite error: ", err.args[0])
@@ -364,7 +385,7 @@ def get_contest_data(contest_id):
         completed = info_header[3].string
         print("Positions paid: %s", int(info_header[4].string))
         if completed.strip().upper() == "COMPLETED":
-            print("contest %s is completed", contest_id)
+            print("contest {} is completed".format(contest_id))
             print(
                 "name: {} total_prizes: {} date: {} entries: {} positions_paid: {}".format(
                     header[0].string,
@@ -374,6 +395,13 @@ def get_contest_data(contest_id):
                     info_header[4].string,
                 )
             )
+            return {
+                "name": header[0].string,
+                "total_prizes": header[1].string,
+                "date": info_header[0].string,
+                "entries": int(info_header[2].string),
+                "positions_paid": int(info_header[4].string),
+            }
             # DKContest.objects.update_or_create(
             #     dk_id=contest_id,
             #     defaults={
@@ -385,14 +413,14 @@ def get_contest_data(contest_id):
             #     },
             # )
         else:
-            print("Contest %s is still in progress", contest_id)
+            print("Contest {} is still in progress".format(contest_id))
     except IndexError:
         # This error occurs for old contests whose pages no longer are
         # being served.
         # Traceback:
         # header = soup.find_all(class_='top')[0].find_all('h4')
         # IndexError: list index out of range
-        print("Couldn't find DK contest with id %s", contest_id)
+        print("Couldn't find DK contest with id {}".format(contest_id))
 
 
 def get_contest_prize_data(contest_id):
