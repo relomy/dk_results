@@ -183,12 +183,17 @@ def get_live_contest(conn, sport, entry_fee=25):
 
     try:
         # execute SQL command
-        sql = "SELECT dk_id, draft_group, start_date FROM contests WHERE sport = ? AND entry_fee = ? ORDER BY start_date DESC LIMIT 1"
+        sql = (
+            "SELECT dk_id, draft_group, start_date FROM contests "
+            + "WHERE sport=? AND entry_fee=? "
+            + "    AND start_date >= date('now')"
+            + "ORDER BY start_date"
+        )
 
         cur.execute(sql, (sport, entry_fee))
 
         # fetch rows
-        row = cur.fetchone()
+        row = cur.fetchall()
 
         if row[2]:
             start_date = datetime.datetime.strptime(row[2], "%Y-%m-%d %H:%M:%S")
