@@ -486,13 +486,15 @@ def temp_add_column(conn):
         sql = "ALTER TABLE contests ADD COLUMN completed INTEGER"
         cur.execute(sql)
     except sqlite3.Error as err:
-        print("sqlite error: ", err.args[0])
+        pass
+        # print("sqlite error: ", err.args[0])
 
     try:
         sql = "ALTER TABLE contests ADD COLUMN status TEXT"
         cur.execute(sql)
     except sqlite3.Error as err:
-        print("sqlite error: ", err.args[0])
+        pass
+        # print("sqlite error: ", err.args[0])
 
 
 def main():
