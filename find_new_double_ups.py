@@ -401,7 +401,7 @@ def check_db_contests_for_completion(conn):
         sql = (
             "SELECT dk_id, draft_group, positions_paid, status, completed "
             "FROM contests "
-            "WHERE start_date <= date('now') "
+            "WHERE start_date <= datetime('now', 'localtime') "
             "  AND (positions_paid IS NULL OR completed = 0)"
         )
         cur.execute(sql)
