@@ -294,14 +294,17 @@ def main():
         sheet = DFSSheet(sport)
 
         logger.debug("Creating Results object Results(%s, %s, %s)", sport, dk_id, fn)
+
         results = Results(sport, dk_id, fn)
         players_to_values = results.players_to_values(sport)
+        sheet.clear_standings()
         sheet.write_players(players_to_values)
         logger.info("Writing players to sheet")
         sheet.add_last_updated(now)
 
         if args.nolineups and results.vip_list:
             logger.info("Writing vip_lineups to sheet")
+            sheet.clear_lineups()
             sheet.write_vip_lineups(results.vip_list)
 
 

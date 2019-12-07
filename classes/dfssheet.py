@@ -63,6 +63,20 @@ class Sheet:
         )
         logger.info("%s cells updated.", result.get("updatedCells"))
 
+    def clear_sheet_range(self, cell_range):
+        """Clears (values only) a given cell_range."""
+        result = (
+            self.service.spreadsheets()
+            .values()
+            .clear(
+                spreadsheetId=self.spreadsheet_id,
+                range=cell_range,
+                body={},  # must be empty
+            )
+            .execute()
+        )
+        logger.info("Range %s cleared.", result.get("clearedRange"))
+
     # def get_values_from_self_range(self):
     #     result = (
     #         self.service.spreadsheets()
@@ -130,6 +144,15 @@ class DFSSheet(Sheet):
         #     self.max_columns = len(self.values[0])
         # else:
         #     raise f"No values from self.get_values_from_range({self.cell_range})"
+
+    def clear_standings(self):
+        """Write players (from standings) to DFSsheet."""
+        standings_range = f"{self.sport}!{self.data_range}"
+        self.clear_sheet_range(standings_range)
+
+    def clear_lineups(self):
+        lineups_range = self.LINEUP_RANGES[self.sport]
+        self.clear_sheet_range(lineups_range)
 
     def write_players(self, values):
         """Write players (from standings) to DFSsheet."""
