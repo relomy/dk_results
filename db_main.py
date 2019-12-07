@@ -187,8 +187,9 @@ def get_live_contest(conn, sport, entry_fee=25):
             "SELECT dk_id, draft_group, start_date FROM contests "
             "WHERE sport=? "
             "  AND entry_fee=? "
-            "  AND start_date <= date('now') "
-            "  AND status='LIVE' "
+            "  AND start_date <= datetime('now', 'localtime') "
+            # "  AND status='LIVE' "
+            "  AND completed=0 "
             "ORDER BY entries DESC "
             "LIMIT 1"
         )
