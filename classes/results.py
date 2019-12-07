@@ -1,3 +1,5 @@
+"""Create a Results object which contains the results for a given DraftKings contest."""
+
 import copy
 import csv
 from datetime import datetime
@@ -13,7 +15,7 @@ from .user import User
 logging.config.fileConfig("logging.ini")
 
 
-class Results(object):
+class Results:
     """Create a Results object which contains the results for a given DraftKings contest."""
 
     def __init__(self, sport, contest_id, salary_csv_fn, logger=None):
@@ -49,7 +51,7 @@ class Results(object):
         self.parse_contest_standings_csv(contest_fn)
 
         for vip in self.vip_list:
-            self.logger.debug(f"VIP: {vip}")
+            self.logger.debug("VIP: %s", vip)
             # vip.lineup = self.parse_lineup_string(vip.lineup_str)
             vip.set_lineup(self.parse_lineup_string(vip.lineup_str))
 
@@ -100,10 +102,10 @@ class Results(object):
                 if name in self.players:
                     # check if position is different (FLEX, etc.)
                     if position != self.players[name].pos:
-                        # create copy of local Player to update player's position for the spreadsheet
-                        p = copy.deepcopy(self.players[name])
-                        p.pos = position
-                        player_list.append(p)
+                        # create copy of local Player to update player's position for the sheet
+                        player_copy = copy.deepcopy(self.players[name])
+                        player_copy.pos = position
+                        player_list.append(player_copy)
                     else:
                         player_list.append(self.players[name])
 
@@ -116,7 +118,6 @@ class Results(object):
 
     def strip_accents_and_periods(self, name):
         """Strip accents from a given string and replace with letters without accents."""
-        # TODO might not want to remove periods for the actual sheet
         return "".join(
             # c.replace(".", "")
             c
@@ -141,9 +142,9 @@ class Results(object):
 
                 self.players[name] = Player(name, pos, salary, game_info, team_abbv)
 
-    def parse_contest_standings_csv(self, fn):
+    def parse_contest_standings_csv(self, filename):
         """Parse CSV containing contest standings and player ownership."""
-        standings = self.load_standings(fn)
+        standings = self.load_standings(filename)
         # create a copy of player list
         # player_list = self.players
         for row in standings[1:]:
@@ -151,22 +152,22 @@ class Results(object):
             if not row:
                 continue
 
-            rank, id, name, pmr, points, lineup = row[:6]
+            rank, player_id, name, pmr, points, lineup = row[:6]
 
             # create User object and append to users list
-            u = User(rank, id, name, pmr, points, lineup)
-            self.users.append(u)
+            user = User(rank, player_id, name, pmr, points, lineup)
+            self.users.append(user)
 
             # find lineup for friends
             if name in self.vips:
                 # if we found a VIP, add them to the VIP list
                 self.logger.info("found VIP {}".format(name))
-                self.vip_list.append(u)
+                self.vip_list.append(user)
 
             player_stats = row[7:]
             if player_stats:
                 # continue if empty (sometimes happens on the player columns in the standings)
-                if all("" == s or s.isspace() for s in player_stats):
+                if all(s == "" or s.isspace() for s in player_stats):
                     continue
 
                 name, pos, ownership, fpts = player_stats
@@ -176,17 +177,18 @@ class Results(object):
                 #     name = name.replace('Jr.', 'Jr')
                 try:
                     self.players[name].update_stats(pos, ownership, fpts)
-                except KeyError as ex:
-                    self.logger.error("Player {} not found in players[] dict".format(name))
+                except KeyError:
+                    self.logger.error("Player %s not found in players[] dict", name)
 
-    def load_standings(self, fn):
+    def load_standings(self, filename):
         """Load standings CSV and return list."""
-        with open(fn, "rb") as csvfile:
+        with open(filename, "rb") as csvfile:
             lines = io.TextIOWrapper(csvfile, encoding="utf-8", newline="\r\n")
             rdr = csv.reader(lines, delimiter=",")
             return list(rdr)
 
     def players_to_values(self, sport):
+        """Return list for DFSSheet values."""
         # sort players by ownership
         sorted_players = sorted(
             self.players, key=lambda x: self.players[x].ownership, reverse=True

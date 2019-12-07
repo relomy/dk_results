@@ -1,3 +1,5 @@
+"""Object to represent Google Sheet."""
+
 import logging
 from os import path
 
@@ -8,7 +10,9 @@ from oauth2client import client, file, tools
 logger = logging.getLogger(__name__)
 
 
-class Sheet(object):
+class Sheet:
+    """Object to represent Google Sheet."""
+
     def __init__(self):
         # authorize class to use sheets API
         self.service = self.setup_service()
@@ -38,7 +42,7 @@ class Sheet(object):
                 # logger.debug("Sheet ID for {} is {}".format(title, sheet["properties"]["sheetId"]))
                 return sheet["properties"]["sheetId"]
 
-    def write_values_to_sheet_range(self, values, range):
+    def write_values_to_sheet_range(self, values, cell_range):
         """Write a set of values to a column in a spreadsheet."""
         body = {"values": values}
         value_input_option = "USER_ENTERED"
@@ -47,7 +51,7 @@ class Sheet(object):
             .values()
             .update(
                 spreadsheetId=self.SPREADSHEET_ID,
-                range=range,
+                range=cell_range,
                 valueInputOption=value_input_option,
                 body=body,
             )
@@ -83,6 +87,8 @@ class Sheet(object):
 
 
 class DFSSheet(Sheet):
+    """Methods and ranges specific to my "DFS" sheet object."""
+
     LINEUP_RANGES = {
         "NBA": "J3:V58",
         "CFB": "J3:V58",
@@ -132,9 +138,10 @@ class DFSSheet(Sheet):
         cell_range = f"{self.sport}!{column}2:{column}"
         return super().write_values_to_sheet_range(cell_range, values)
 
-    def add_last_updated(self, dt):
+    def add_last_updated(self, dt_updated):
+        """Update timestamp for sheet."""
         cell_range = f"{self.sport}!L1:Q1"
-        values = [["Last Updated", "", dt.strftime("%Y-%m-%d %H:%M:%S")]]
+        values = [["Last Updated", "", dt_updated.strftime("%Y-%m-%d %H:%M:%S")]]
         self.write_values_to_sheet_range(values, cell_range)
 
     def build_values_for_vip_lineup(self, vip):

@@ -1,3 +1,5 @@
+"""Create a User object to represent a DraftKings user."""
+
 import logging
 import logging.config
 
@@ -5,12 +7,12 @@ import logging.config
 logging.config.fileConfig("logging.ini")
 
 
-class User(object):
+class User:
     """Create a User object to represent a DraftKings user."""
 
-    def __init__(self, rank, id, name, pmr, pts, lineup_str):
+    def __init__(self, rank, player_id, name, pmr, pts, lineup_str):
         self.rank = rank
-        self.id = id
+        self.player_id = player_id
         self.name = name
         self.pmr = pmr
         self.pts = pts
@@ -22,8 +24,9 @@ class User(object):
         # self.lineup = lineup_str.split()
 
     def set_lineup(self, lineup):
-        for p in lineup:
-            self.salary -= p.salary
+        """Set lineup for User object."""
+        for player in lineup:
+            self.salary -= player.salary
 
         self.lineup = lineup
 

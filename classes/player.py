@@ -1,3 +1,5 @@
+"""Create a Player object to represent an athlete for a given sport."""
+
 import logging
 import logging.config
 
@@ -5,7 +7,7 @@ import logging.config
 logging.config.fileConfig("logging.ini")
 
 
-class Player(object):
+class Player:
     """Create a Player object to represent an athlete for a given sport."""
 
     def __init__(self, name, pos, salary, game_info, team_abbv, logger=None):
