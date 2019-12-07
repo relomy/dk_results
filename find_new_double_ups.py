@@ -228,7 +228,7 @@ def create_connection(db_file):
             conn.close()
 
 
-def create_table(conn):
+def db_create_table(conn):
     """Create table if it does not exist."""
     cur = conn.cursor()
 
@@ -251,21 +251,21 @@ def create_table(conn):
     cur.execute(sql)
 
 
-def compare_contests_with_db(conn, contests):
+def db_compare_contests(conn, contests):
     """Check contest ids with dk_id in database"""
 
     # get cursor
     cur = conn.cursor()
 
     # get all rows with matching dk_ids
-    ids = [c.id for c in contests]
+    dk_ids = [c.id for c in contests]
 
     try:
         # execute SQL command
         sql = "SELECT dk_id FROM contests WHERE dk_id IN ({0})".format(
-            ", ".join("?" for _ in ids)
+            ", ".join("?" for _ in dk_ids)
         )
-        cur.execute(sql, ids)
+        cur.execute(sql, dk_ids)
 
         # fetch rows
         rows = cur.fetchall()
@@ -278,16 +278,16 @@ def compare_contests_with_db(conn, contests):
         # if there are rows, remove found id from ids list
         if rows and len(rows) >= 1:
             for row in rows:
-                if row[0] in ids:
-                    ids.remove(row[0])
+                if row[0] in dk_ids:
+                    dk_ids.remove(row[0])
 
-        return ids
+        return dk_ids
 
     except sqlite3.Error as err:
         print("sqlite error: ", err.args[0])
 
 
-def insert_contests(conn, contests):
+def db_insert_contests(conn, contests):
     """Insert given contests in database"""
     # create SQL command
     columns = [
@@ -335,7 +335,7 @@ def insert_contests(conn, contests):
     return cur.lastrowid
 
 
-def update_positions_paid_for_contests(conn, contests_to_update):
+def db_update_positions_paid_for_contests(conn, contests_to_update):
     """Update contest fields based on get_contest_data()."""
     cur = conn.cursor()
 
@@ -351,6 +351,55 @@ def update_positions_paid_for_contests(conn, contests_to_update):
         print(f"Total {cur.rowcount} records updated successfully!")
     except sqlite3.Error as err:
         print("sqlite error: ", err.args[0])
+
+
+def db_check_contests_for_update(conn, contests_to_update):
+    """Check if contests need to be updated."""
+    cur = conn.cursor()
+
+    # store count of current list
+    contests_count = len(contests_to_update)
+
+    try:
+        # execute SQL command
+        dk_ids = [c[3] for c in contests_to_update]
+        # find all contests which supposedly need to be updated
+        sql = (
+            "SELECT positions_paid, status, completed, dk_id "
+            "FROM contests "
+            "WHERE dk_id IN ({0})"
+        ).format(", ".join("?" for _ in dk_ids))
+        cur.execute(sql, dk_ids)
+
+        # fetch rows
+        rows = cur.fetchall()
+
+        for row in rows:
+            # loop through each contest and see if anything is different
+            for contest in contests_to_update:
+                # if we find the right contest
+                if row[3] == contest[3]:
+                    # and everything matches
+                    if (
+                        row[0] == contest[0]
+                        and row[1] == contest[1]
+                        and row[2] == contest[2]
+                    ):
+                        # remove it from needing an update
+                        contests_to_update.remove(contest)
+                        break
+
+        print(
+            "There were {} contests to update, but now there are {}".format(
+                contests_count, len(contests_to_update)
+            )
+        )
+        # if there are any contests left to update, update them
+        if contests_to_update:
+            db_update_positions_paid_for_contests(conn, contests_to_update)
+
+    except sqlite3.Error as err:
+        print("sqlite error in check_db_contests_for_update(): ", err.args[0])
 
 
 def check_db_contests_for_completion(conn):
@@ -386,7 +435,8 @@ def check_db_contests_for_completion(conn):
                 )
 
         if contests_to_update:
-            update_positions_paid_for_contests(conn, contests_to_update)
+            db_check_contests_for_update(conn, contests_to_update)
+            # update_positions_paid_for_contests(conn, contests_to_update)
 
     except sqlite3.Error as err:
         print("sqlite error [check_db_contests_for_completion()]: ", err.args[0])
@@ -442,7 +492,8 @@ def get_contest_data(contest_id):
             #         "positions_paid": int(info_header[4].string),
             #     },
             # )
-        # else:
+        else:
+            return None
         # print("Contest {} is still in progress".format(contest_id))
     except IndexError:
         # This error occurs for old contests whose pages no longer are
@@ -482,20 +533,20 @@ def temp_add_column(conn):
     try:
         sql = "ALTER TABLE contests ADD COLUMN completed INTEGER"
         cur.execute(sql)
-    except sqlite3.Error: # as err:
+    except sqlite3.Error:  # as err:
         pass
         # print("sqlite error: ", err.args[0])
 
     try:
         sql = "ALTER TABLE contests ADD COLUMN status TEXT"
         cur.execute(sql)
-    except sqlite3.Error: # as err:
+    except sqlite3.Error:  # as err:
         pass
         # print("sqlite error: ", err.args[0])
 
 
 def main():
-    """"""
+    """Find new double ups."""
     # parse arguments
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -545,10 +596,10 @@ def main():
         double_ups = get_double_ups(contests, draft_groups)
 
         # create table if it doesn't exist
-        create_table(conn)
+        db_create_table(conn)
 
         # compare new double ups to DB
-        new_contests = compare_contests_with_db(conn, double_ups)
+        new_contests = db_compare_contests(conn, double_ups)
 
         if new_contests:
             # find contests matching the new contest IDs
@@ -556,7 +607,7 @@ def main():
 
             for contest in matching_contests:
                 print(
-                    "New double up found! [{:%Y-%m-%d}] Name: {} ID: {} Entry Fee: {} Entries: {}".format(
+                    "New dub found! [{:%Y-%m-%d}] Name: {} ID: {} Entry Fee: {} Entries: {}".format(
                         contest.start_dt,
                         contest.name,
                         contest.id,
@@ -567,7 +618,7 @@ def main():
                 # print(contest)
 
             # insert new double ups into DB
-            insert_contests(conn, matching_contests)
+            db_insert_contests(conn, matching_contests)
             # last_row_id = insert_contests(conn, matching_contests)
             # print("last_row_id: {}".format(last_row_id))
 
