@@ -2,7 +2,6 @@
 
 import argparse
 import datetime
-import json
 import re
 import sqlite3
 from bs4 import BeautifulSoup
@@ -100,11 +99,11 @@ def get_draft_groups_from_response(response):
         # not be the same for the rare long-running contest) and should be the
         # date we're looking for (game date in US time).
         # date = get_salary_date(response["DraftGroups"])
-        date = get_salary_date(draft_group)
+        # date = get_salary_date(draft_group)
+        # contest_type_id = draft_group["ContestTypeId"]
         tag = draft_group["DraftGroupTag"]
         suffix = draft_group["ContestStartTimeSuffix"]
         draft_group_id = draft_group["DraftGroupId"]
-        contest_type_id = draft_group["ContestTypeId"]
 
         # only care about featured draftgroups and those with no suffix
         if tag != "Featured" or suffix is not None:
@@ -181,7 +180,7 @@ def print_stats(contests):
             if "dubs" in values:
                 print("Single-entry double ups:")
                 for entry_fee, count in sorted(values["dubs"].items()):
-                    print(f"     ${entry_fee}: {count} contest(s)")
+                    print(f"${entry_fee}: {count} contest(s)")
 
 
 def get_double_ups(
@@ -233,21 +232,23 @@ def create_table(conn):
     """Create table if it does not exist."""
     cur = conn.cursor()
 
-    cur.execute(
-        """ CREATE TABLE IF NOT EXISTS contests (
-        dk_id INTEGER PRIMARY KEY,
-        sport varchar(10) NOT NULL,
-        name varchar(50) NOT NULL,
-        start_date datetime NOT NULL,
-        draft_group INTEGER NOT NULL,
-        total_prizes INTEGER NOT NULL,
-        entries INTEGER NOT NULL,
-        positions_paid INTEGER,
-        entry_fee INTEGER NOT NULL,
-        entry_count INTEGER NOT NULL,
-        max_entry_count INTEGER
-    )"""
-    )
+    sql = """
+        CREATE TABLE IF NOT EXISTS contests (
+            dk_id INTEGER PRIMARY KEY, 
+            sport varchar(10) NOT NULL, 
+            name varchar(50) NOT NULL, 
+            start_date datetime NOT NULL, 
+            draft_group INTEGER NOT NULL, 
+            total_prizes INTEGER NOT NULL, 
+            entries INTEGER NOT NULL, 
+            positions_paid INTEGER, 
+            entry_fee INTEGER NOT NULL, 
+            entry_count INTEGER NOT NULL, 
+            max_entry_count INTEGER
+        )
+    """
+
+    cur.execute(sql)
 
 
 def compare_contests_with_db(conn, contests):
@@ -325,9 +326,14 @@ def insert_contests(conn, contests):
 
 
 def update_positions_paid_for_contests(conn, contests_to_update):
+    """Update contest fields based on get_contest_data()."""
     cur = conn.cursor()
 
-    sql = "UPDATE contests SET positions_paid=?" + "WHERE dk_id=?"
+    sql = (
+        'UPDATE contests '
+        'SET positions_paid=?, status=?, completed=? '
+        'WHERE dk_id=?'
+    )
 
     try:
         cur.executemany(sql, contests_to_update)
@@ -346,7 +352,8 @@ def check_db_contests_for_completion(conn):
         sql = (
             "SELECT dk_id, draft_group FROM contests "
             + "WHERE start_date <= date('now') "
-            + "AND positions_paid IS NULL"
+            + "AND (positions_paid IS NULL "
+            + "OR completed = 0)"
         )
 
         cur.execute(sql)
@@ -357,16 +364,23 @@ def check_db_contests_for_completion(conn):
         contests_to_update = []
 
         for row in rows:
-            data = get_contest_data(row[0])
+            contest_data = get_contest_data(row[0])
 
-            if "positions_paid" in data:
-                contests_to_update.append((data["positions_paid"], row[0]))
+            if contest_data:
+                contests_to_update.append(
+                    (
+                        contest_data["positions_paid"],
+                        contest_data["status"],
+                        contest_data["completed"],
+                        row[0],
+                    )
+                )
 
         if contests_to_update:
             update_positions_paid_for_contests(conn, contests_to_update)
 
     except sqlite3.Error as err:
-        print("sqlite error: ", err.args[0])
+        print("sqlite error [check_db_contests_for_completion()]: ", err.args[0])
 
 
 def get_contest_data(contest_id):
@@ -382,9 +396,9 @@ def get_contest_data(contest_id):
             .find_all(class_="info-header")[0]
             .find_all("span")
         )
-        completed = info_header[3].string
-        print("Positions paid: %s", int(info_header[4].string))
-        if completed.strip().upper() == "COMPLETED":
+        status = info_header[3].string.strip().upper()
+        print("Positions paid: %s".format(int(info_header[4].string)))
+        if status in ["COMPLETED", "LIVE"]:
             print("contest {} is completed".format(contest_id))
             print(
                 "name: {} total_prizes: {} date: {} entries: {} positions_paid: {}".format(
@@ -395,7 +409,13 @@ def get_contest_data(contest_id):
                     info_header[4].string,
                 )
             )
+
+            # set completed status
+            completed = 1 if status == "COMPLETED" else 0
+
             return {
+                "completed": completed,
+                "status": status,
                 "name": header[0].string,
                 "total_prizes": header[1].string,
                 "date": info_header[0].string,
@@ -423,27 +443,43 @@ def get_contest_data(contest_id):
         print("Couldn't find DK contest with id {}".format(contest_id))
 
 
-def get_contest_prize_data(contest_id):
-    url = "https://www.draftkings.com/contest/detailspop"
-    params = {
-        "contestId": contest_id,
-        "showDraftButton": False,
-        "defaultToDetails": True,
-        "layoutType": "legacy",
-    }
-    response = requests.get(url, headers=HEADERS, cookies=COOKIES, params=params)
-    soup = BeautifulSoup(response.text, "html.parser")
+# def get_contest_prize_data(contest_id):
+#     url = "https://www.draftkings.com/contest/detailspop"
+#     params = {
+#         "contestId": contest_id,
+#         "showDraftButton": False,
+#         "defaultToDetails": True,
+#         "layoutType": "legacy",
+#     }
+#     response = requests.get(url, headers=HEADERS, cookies=COOKIES, params=params)
+#     soup = BeautifulSoup(response.text, "html.parser")
+
+#     try:
+#         payouts = soup.find_all(id="payouts-table")[0].find_all("tr")
+#         entry_fee = soup.find_all("h2")[0].text.split("|")[2].strip()
+#         for payout in payouts:
+#             places, payout = [x.string for x in payout.find_all("td")]
+#             places = [place_to_number(x.strip()) for x in places.split("-")]
+#             top, bottom = (places[0], places[0]) if len(places) == 1 else places
+#     except IndexError as ex:
+#         # See comment in get_contest_data()
+#         print("Couldn't find DK contest with id %s: %s", contest_id, ex)
+
+
+def temp_add_column(conn):
+    cur = conn.cursor()
 
     try:
-        payouts = soup.find_all(id="payouts-table")[0].find_all("tr")
-        entry_fee = soup.find_all("h2")[0].text.split("|")[2].strip()
-        for payout in payouts:
-            places, payout = [x.string for x in payout.find_all("td")]
-            places = [place_to_number(x.strip()) for x in places.split("-")]
-            top, bottom = (places[0], places[0]) if len(places) == 1 else places
-    except IndexError as ex:
-        # See comment in get_contest_data()
-        print("Couldn't find DK contest with id %s: %s", contest_id, ex)
+        sql = "ALTER TABLE contests ADD COLUMN completed INTEGER"
+        cur.execute(sql)
+    except sqlite3.Error as err:
+        print("sqlite error: ", err.args[0])
+
+    try:
+        sql = "ALTER TABLE contests ADD COLUMN status TEXT"
+        cur.execute(sql)
+    except sqlite3.Error as err:
+        print("sqlite error: ", err.args[0])
 
 
 def main():
@@ -465,10 +501,13 @@ def main():
     # create_connection("contests.db")
     conn = sqlite3.connect("contests.db")
 
-    for sport in args.sport:
-        # update old contests
-        check_db_contests_for_completion(conn)
+    # temp_add_column
+    temp_add_column(conn)
 
+    # update old contests
+    check_db_contests_for_completion(conn)
+
+    for sport in args.sport:
         # get contests from url
         url = f"https://www.draftkings.com/lobby/getcontests?sport={sport}"
 
