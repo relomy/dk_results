@@ -152,7 +152,7 @@ class DFSSheet(Sheet):
 
     def clear_lineups(self):
         lineups_range = self.LINEUP_RANGES[self.sport]
-        self.clear_sheet_range(lineups_range)
+        self.clear_sheet_range(f"{self.sport}!{lineups_range}")
 
     def write_players(self, values):
         """Write players (from standings) to DFSsheet."""
