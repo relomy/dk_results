@@ -290,10 +290,23 @@ def compare_contests_with_db(conn, contests):
 def insert_contests(conn, contests):
     """Insert given contests in database"""
     # create SQL command
+    columns = [
+        "sport",
+        "dk_id",
+        "name",
+        "start_date",
+        "draft_group",
+        "total_prizes",
+        "entries",
+        "entry_fee",
+        "entry_count",
+        "max_entry_count",
+    ]
     sql = (
-        "INSERT INTO contests(sport, dk_id, name, start_date, draft_group, total_prizes,"
-        + "entries, entry_fee, entry_count, max_entry_count)"
-        + "VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+        "INSERT INTO contests ({}) VALUES ({});".format(
+            ", ".join(columns),
+            ", ".join("?" for _ in columns)
+        )
     )
 
     cur = conn.cursor()
@@ -330,9 +343,9 @@ def update_positions_paid_for_contests(conn, contests_to_update):
     cur = conn.cursor()
 
     sql = (
-        'UPDATE contests '
-        'SET positions_paid=?, status=?, completed=? '
-        'WHERE dk_id=?'
+        "UPDATE contests "
+        "SET positions_paid=?, status=?, completed=? "
+        "WHERE dk_id=?"
     )
 
     try:
@@ -344,25 +357,25 @@ def update_positions_paid_for_contests(conn, contests_to_update):
 
 
 def check_db_contests_for_completion(conn):
+    """Check each contest for completion/positions_paid data."""
     # get cursor
     cur = conn.cursor()
 
     try:
         # execute SQL command
         sql = (
-            "SELECT dk_id, draft_group FROM contests "
-            + "WHERE start_date <= date('now') "
-            + "AND (positions_paid IS NULL "
-            + "OR completed = 0)"
+            "SELECT dk_id, draft_group "
+            "FROM contests "
+            "WHERE start_date <= date('now') "
+            "  AND (positions_paid IS NULL "
+            "    OR completed = 0)"
         )
-
         cur.execute(sql)
 
         # fetch rows
         rows = cur.fetchall()
 
         contests_to_update = []
-
         for row in rows:
             contest_data = get_contest_data(row[0])
 
@@ -397,18 +410,18 @@ def get_contest_data(contest_id):
             .find_all("span")
         )
         status = info_header[3].string.strip().upper()
-        print("Positions paid: %s".format(int(info_header[4].string)))
+        # print("Positions paid: %s".format(int(info_header[4].string)))
         if status in ["COMPLETED", "LIVE"]:
-            print("contest {} is completed".format(contest_id))
-            print(
-                "name: {} total_prizes: {} date: {} entries: {} positions_paid: {}".format(
-                    header[0].string,
-                    header[1].string,
-                    info_header[0].string,
-                    info_header[2].string,
-                    info_header[4].string,
-                )
-            )
+            # print(f"contest {contest_id} is {status}")
+            # print(
+            #     "name: {} total_prizes: {} date: {} entries: {} positions_paid: {}".format(
+            #         header[0].string,
+            #         header[1].string,
+            #         info_header[0].string,
+            #         info_header[2].string,
+            #         info_header[4].string,
+            #     )
+            # )
 
             # set completed status
             completed = 1 if status == "COMPLETED" else 0
@@ -433,14 +446,14 @@ def get_contest_data(contest_id):
             #     },
             # )
         else:
-            print("Contest {} is still in progress".format(contest_id))
+            pass
+            # print("Contest {} is still in progress".format(contest_id))
     except IndexError:
         # This error occurs for old contests whose pages no longer are
         # being served.
-        # Traceback:
-        # header = soup.find_all(class_='top')[0].find_all('h4')
         # IndexError: list index out of range
-        print("Couldn't find DK contest with id {}".format(contest_id))
+        pass
+        # print("Couldn't find DK contest with id {}".format(contest_id))
 
 
 # def get_contest_prize_data(contest_id):
