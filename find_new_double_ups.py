@@ -168,21 +168,6 @@ def get_stats(contests):
     return stats
 
 
-def print_stats(contests):
-    """Print stats for list of Contest objects."""
-    stats = get_stats(contests)
-
-    if stats:
-        print("Breakdown per date:")
-        for date, values in sorted(stats.items()):
-            print(f"{date} - {values['count']} total contests")
-
-            if "dubs" in values:
-                print("Single-entry double ups:")
-                for entry_fee, count in sorted(values["dubs"].items()):
-                    print(f"${entry_fee}: {count} contest(s)")
-
-
 def get_double_ups(
     contests, draft_groups, min_entry_fee=1, max_entry_fee=50, entries=200
 ):
@@ -233,19 +218,22 @@ def db_create_table(conn):
     cur = conn.cursor()
 
     sql = """
-        CREATE TABLE IF NOT EXISTS contests (
-            dk_id INTEGER PRIMARY KEY, 
-            sport varchar(10) NOT NULL, 
-            name varchar(50) NOT NULL, 
-            start_date datetime NOT NULL, 
-            draft_group INTEGER NOT NULL, 
-            total_prizes INTEGER NOT NULL, 
-            entries INTEGER NOT NULL, 
-            positions_paid INTEGER, 
-            entry_fee INTEGER NOT NULL, 
-            entry_count INTEGER NOT NULL, 
-            max_entry_count INTEGER
-        )
+    CREATE TABLE IF NOT EXISTS "contests" (
+        "dk_id" INTEGER,
+        "sport" varchar(10) NOT NULL,
+        "name"  varchar(50) NOT NULL,
+        "start_date"    datetime NOT NULL,
+        "draft_group"   INTEGER NOT NULL,
+        "total_prizes"  INTEGER NOT NULL,
+        "entries"       INTEGER NOT NULL,
+        "positions_paid"        INTEGER,
+        "entry_fee"     INTEGER NOT NULL,
+        "entry_count"   INTEGER NOT NULL,
+        "max_entry_count"       INTEGER NOT NULL,
+        "completed"     INTEGER NOT NULL DEFAULT 0,
+        "status"        TEXT,
+        PRIMARY KEY("dk_id")
+    );
     """
 
     cur.execute(sql)
@@ -538,7 +526,7 @@ def temp_add_column(conn):
     cur = conn.cursor()
 
     try:
-        sql = "ALTER TABLE contests ADD COLUMN completed INTEGER"
+        sql = "ALTER TABLE contests ADD COLUMN completed INTEGER DEFAULT 0"
         cur.execute(sql)
     except sqlite3.Error:  # as err:
         pass
