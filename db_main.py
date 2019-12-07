@@ -128,21 +128,21 @@ def request_contest_url(s, contest_id):
     url_contest_csv = (
         f"https://www.draftkings.com/contest/exportfullstandingscsv/{contest_id}"
     )
-    r = s.get(url_contest_csv)
-    logger.debug(r.status_code)
-    logger.debug(r.url)
-    logger.debug(r.headers["Content-Type"])
+    response = s.get(url_contest_csv)
+    logger.debug(response.status_code)
+    logger.debug(response.url)
+    logger.debug(response.headers["Content-Type"])
     # print(r.headers)
-    if "text/html" in r.headers["Content-Type"]:
+    if "text/html" in response.headers["Content-Type"]:
         logger.info("We cannot do anything with html!")
         return None
     # if headers say file is a CSV file
-    elif r.headers["Content-Type"] == "text/csv":
+    elif response.headers["Content-Type"] == "text/csv":
         # write working cookies
         with open("pickled_cookies_works.txt", "wb") as f:
             pickle.dump(s.cookies, f)
         # decode bytes into string
-        csvfile = r.content.decode("utf-8")
+        csvfile = response.content.decode("utf-8")
         print(csvfile, file=open(f"contest-standings-{contest_id}.csv", "w"))
         # open reader object on csvfile
         # rdr = csv.reader(csvfile.splitlines(), delimiter=",")
@@ -152,7 +152,7 @@ def request_contest_url(s, contest_id):
         with open("pickled_cookies_works.txt", "wb") as f:
             pickle.dump(s.cookies, f)
         # request will be a zip file
-        z = zipfile.ZipFile(io.BytesIO(r.content))
+        z = zipfile.ZipFile(io.BytesIO(response.content))
         for name in z.namelist():
             # extract file - it seems easier this way
             path = z.extract(name)
@@ -185,31 +185,37 @@ def get_live_contest(conn, sport, entry_fee=25):
         # execute SQL command
         sql = (
             "SELECT dk_id, draft_group, start_date FROM contests "
-            + "WHERE sport=? AND entry_fee=? "
-            + "    AND start_date >= date('now')"
-            + "ORDER BY start_date"
+            "WHERE sport=? "
+            "  AND entry_fee=? "
+            "  AND start_date <= date('now') "
+            "  AND status='LIVE' "
+            "ORDER BY entries DESC "
+            "LIMIT 1"
         )
 
         cur.execute(sql, (sport, entry_fee))
 
         # fetch rows
-        row = cur.fetchall()
+        row = cur.fetchone()
 
-        if row[2]:
-            start_date = datetime.datetime.strptime(row[2], "%Y-%m-%d %H:%M:%S")
-            if now < start_date:
-                logger.debug(
-                    "Contest {} has not started yet start_date: {}".format(
-                        row[0], start_date
-                    )
-                )
-                return None
+        if row:
+            # return none if contest has not started yet
+            # start_date = datetime.datetime.strptime(row[2], "%Y-%m-%d %H:%M:%S")
+            # if now < start_date:
+            #     logger.debug(
+            #         "Contest {} has not started yet start_date: {}".format(
+            #             row[0], start_date
+            #         )
+            #     )
+            #     return None
 
-        # return
-        return row
+            # return dk_id, draft_group
+            return row[:2]
+
+        return None
 
     except sqlite3.Error as err:
-        print("sqlite error: ", err.args[0])
+        logger.error("sqlite error in get_live_contest(): %s", err.args[0])
 
 
 def main():
@@ -244,13 +250,7 @@ def main():
     parser.add_argument("-v", "--verbose", help="Increase verbosity")
 
     args = parser.parse_args()
-    print(args)
-
-    # live = ""
-    # if args.live:
-    #     live = "live"
-
-    # create_connection("contests.db")
+    # print(args)
 
     # create connection to database file
     # create_connection("contests.db")
@@ -260,18 +260,16 @@ def main():
 
     for sport in args.sport:
 
-        logger.info(sport)
-
         result = get_live_contest(conn, sport)
 
         if not result:
-            logger.warning(f"There are no live contests for {sport}! Moving on.")
+            logger.warning("There are no live contests for %s! Moving on.", sport)
             continue
 
         # store dk_id and draft_group from database result
         dk_id, draft_group = result
 
-        fn = f"DKSalaries_sport_{now:%A}.csv"
+        fn = f"DKSalaries_{sport}_{now:%A}.csv"
 
         logger.debug(args)
 
@@ -284,23 +282,26 @@ def main():
         # pull contest standings from draftkings
         contest_list = pull_contest_zip(dk_id)
 
+        #
         if contest_list is None:
-            raise Exception("pull_contest_zip() - contest_list is None.")
-        elif not contest_list:  # contest_list is empty
-            raise Exception("pull_contest_zip() - contest_list is empty.")
+            logger.error("pull_contest_zip() - contest_list is None.")
+            continue
+        if not contest_list:  # contest_list is empty
+            logger.error("pull_contest_zip() - contest_list is empty.")
+            continue
 
         sheet = DFSSheet(sport)
 
-        logger.debug(f"Creating Results object Results({sport}, {dk_id}, fn)")
-        r = Results(sport, dk_id, fn)
-        z = r.players_to_values(sport)
-        sheet.write_players(z)
+        logger.debug("Creating Results object Results(%s, %s, %s)", sport, dk_id, fn)
+        results = Results(sport, dk_id, fn)
+        players_to_values = results.players_to_values(sport)
+        sheet.write_players(players_to_values)
         logger.info("Writing players to sheet")
         sheet.add_last_updated(now)
 
-        if args.nolineups and r.vip_list:
+        if args.nolineups and results.vip_list:
             logger.info("Writing vip_lineups to sheet")
-            sheet.write_vip_lineups(r.vip_list)
+            sheet.write_vip_lineups(results.vip_list)
 
 
 if __name__ == "__main__":

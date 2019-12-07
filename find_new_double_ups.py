@@ -302,11 +302,8 @@ def insert_contests(conn, contests):
         "entry_count",
         "max_entry_count",
     ]
-    sql = (
-        "INSERT INTO contests ({}) VALUES ({});".format(
-            ", ".join(columns),
-            ", ".join("?" for _ in columns)
-        )
+    sql = "INSERT INTO contests ({}) VALUES ({});".format(
+        ", ".join(columns), ", ".join("?" for _ in columns)
     )
 
     cur = conn.cursor()
@@ -367,8 +364,7 @@ def check_db_contests_for_completion(conn):
             "SELECT dk_id, draft_group "
             "FROM contests "
             "WHERE start_date <= date('now') "
-            "  AND (positions_paid IS NULL "
-            "    OR completed = 0)"
+            "  AND (positions_paid IS NULL OR completed = 0)"
         )
         cur.execute(sql)
 
@@ -397,6 +393,7 @@ def check_db_contests_for_completion(conn):
 
 
 def get_contest_data(contest_id):
+    """Pull contest data (positions paid, status, etc.) with BeautifulSoup"""
     url = f"https://www.draftkings.com/contest/gamecenter/{contest_id}"
 
     response = requests.get(url, headers=HEADERS, cookies=COOKIES)
@@ -445,9 +442,8 @@ def get_contest_data(contest_id):
             #         "positions_paid": int(info_header[4].string),
             #     },
             # )
-        else:
-            pass
-            # print("Contest {} is still in progress".format(contest_id))
+        # else:
+        # print("Contest {} is still in progress".format(contest_id))
     except IndexError:
         # This error occurs for old contests whose pages no longer are
         # being served.
@@ -480,19 +476,20 @@ def get_contest_data(contest_id):
 
 
 def temp_add_column(conn):
+    """TODO: REMOVE"""
     cur = conn.cursor()
 
     try:
         sql = "ALTER TABLE contests ADD COLUMN completed INTEGER"
         cur.execute(sql)
-    except sqlite3.Error as err:
+    except sqlite3.Error: # as err:
         pass
         # print("sqlite error: ", err.args[0])
 
     try:
         sql = "ALTER TABLE contests ADD COLUMN status TEXT"
         cur.execute(sql)
-    except sqlite3.Error as err:
+    except sqlite3.Error: # as err:
         pass
         # print("sqlite error: ", err.args[0])
 
@@ -527,8 +524,6 @@ def main():
         url = f"https://www.draftkings.com/lobby/getcontests?sport={sport}"
 
         response_contests, draft_groups = get_dk_lobby(url)
-        # response_contests = get_contests(url)
-        # draft_groups = get_draft_groups(url)
 
         # create list of Contest objects
         contests = [Contest(c, sport) for c in response_contests]
@@ -546,9 +541,6 @@ def main():
         #     response_contests = response["Contests"]
         #     contests = [Contest(c) for c in response_contests]
 
-        # print stats for contests
-        # print_stats(contests)
-
         # get double ups from list of Contests
         double_ups = get_double_ups(contests, draft_groups)
 
@@ -564,7 +556,7 @@ def main():
 
             for contest in matching_contests:
                 print(
-                    "New double up found! [{0:%Y-%m-%d}] Name: {1} ID: {2} Entry Fee: {3} Entries: {4}".format(
+                    "New double up found! [{:%Y-%m-%d}] Name: {} ID: {} Entry Fee: {} Entries: {}".format(
                         contest.start_dt,
                         contest.name,
                         contest.id,
@@ -575,21 +567,9 @@ def main():
                 # print(contest)
 
             # insert new double ups into DB
-            last_row_id = insert_contests(conn, matching_contests)
+            insert_contests(conn, matching_contests)
+            # last_row_id = insert_contests(conn, matching_contests)
             # print("last_row_id: {}".format(last_row_id))
-
-    # test stuff
-    # test = 81358543
-    # curr = conn.cursor()
-    # curr.execute("SELECT dk_id FROM contests WHERE dk_id = ?", (test,))
-    # data = curr.fetchone()
-    # if data and len(data) >= 1:
-    #     print("Contest {} found with rowids {}".format(test, data[0]))
-    # else:
-    #     print("There is no contest with dk_id {}".format(test))
-
-    # get new double ups
-    # contests = get_contest(contests, args.date, largest=False)
 
 
 if __name__ == "__main__":
