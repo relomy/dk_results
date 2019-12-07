@@ -335,7 +335,7 @@ def db_insert_contests(conn, contests):
     return cur.lastrowid
 
 
-def db_update_positions_paid_for_contests(conn, contests_to_update):
+def db_update_contest_data_for_contests(conn, contests_to_update):
     """Update contest fields based on get_contest_data()."""
     cur = conn.cursor()
 
@@ -353,53 +353,54 @@ def db_update_positions_paid_for_contests(conn, contests_to_update):
         print("sqlite error: ", err.args[0])
 
 
-def db_check_contests_for_update(conn, contests_to_update):
-    """Check if contests need to be updated."""
-    cur = conn.cursor()
+# def db_check_contests_for_update(conn, contests_to_update):
+#     """Check if contests need to be updated."""
+#     cur = conn.cursor()
 
-    # store count of current list
-    contests_count = len(contests_to_update)
+#     # store count of current list
+#     contests_count = len(contests_to_update)
 
-    try:
-        # execute SQL command
-        dk_ids = [c[3] for c in contests_to_update]
-        # find all contests which supposedly need to be updated
-        sql = (
-            "SELECT positions_paid, status, completed, dk_id "
-            "FROM contests "
-            "WHERE dk_id IN ({0})"
-        ).format(", ".join("?" for _ in dk_ids))
-        cur.execute(sql, dk_ids)
+#     try:
+#         # execute SQL command
+#         dk_ids = [c[3] for c in contests_to_update]
+#         # find all contests which supposedly need to be updated
+#         sql = (
+#             "SELECT positions_paid, status, completed, dk_id "
+#             "FROM contests "
+#             "WHERE dk_id IN ({0})"
+#         ).format(", ".join("?" for _ in dk_ids))
+#         cur.execute(sql, dk_ids)
 
-        # fetch rows
-        rows = cur.fetchall()
+#         # fetch rows
+#         rows = cur.fetchall()
 
-        for row in rows:
-            # loop through each contest and see if anything is different
-            for contest in contests_to_update:
-                # if we find the right contest
-                if row[3] == contest[3]:
-                    # and everything matches
-                    if (
-                        row[0] == contest[0]
-                        and row[1] == contest[1]
-                        and row[2] == contest[2]
-                    ):
-                        # remove it from needing an update
-                        contests_to_update.remove(contest)
-                        break
+#         for row in rows:
+#             # loop through each contest and see if anything is different
+#             for contest in contests_to_update:
+#                 if list(row) == contest:
+#                     # # if we find the right contest
+#                     # if row[3] == contest[3]:
+#                     #     # and everything matches
+#                     #     if (
+#                     #         row[0] == contest[0]
+#                     #         and row[1] == contest[1]
+#                     #         and row[2] == contest[2]
+#                     #     ):
+#                     # remove it from needing an update
+#                     contests_to_update.remove(contest)
+#                     break
 
-        print(
-            "There were {} contests to update, but now there are {}".format(
-                contests_count, len(contests_to_update)
-            )
-        )
-        # if there are any contests left to update, update them
-        if contests_to_update:
-            db_update_positions_paid_for_contests(conn, contests_to_update)
+#         print(
+#             "There were {} contests to update, but now there are {}".format(
+#                 contests_count, len(contests_to_update)
+#             )
+#         )
+#         # if there are any contests left to update, update them
+#         if contests_to_update:
+#             db_update_contest_data_for_contests(conn, contests_to_update)
 
-    except sqlite3.Error as err:
-        print("sqlite error in check_db_contests_for_update(): ", err.args[0])
+#     except sqlite3.Error as err:
+#         print("sqlite error in check_db_contests_for_update(): ", err.args[0])
 
 
 def check_db_contests_for_completion(conn):
@@ -410,7 +411,7 @@ def check_db_contests_for_completion(conn):
     try:
         # execute SQL command
         sql = (
-            "SELECT dk_id, draft_group "
+            "SELECT dk_id, draft_group, positions_paid, status, completed "
             "FROM contests "
             "WHERE start_date <= date('now') "
             "  AND (positions_paid IS NULL OR completed = 0)"
@@ -425,18 +426,24 @@ def check_db_contests_for_completion(conn):
             contest_data = get_contest_data(row[0])
 
             if contest_data:
-                contests_to_update.append(
-                    (
-                        contest_data["positions_paid"],
-                        contest_data["status"],
-                        contest_data["completed"],
-                        row[0],
+                # if contest data is different, append list
+                if (
+                    row[2] != contest_data["positions_paid"]
+                    or row[3] != contest_data["status"]
+                    or row[4] != contest_data["completed"]
+                ):
+                    contests_to_update.append(
+                        (
+                            contest_data["positions_paid"],
+                            contest_data["status"],
+                            contest_data["completed"],
+                            row[0],
+                        )
                     )
-                )
 
         if contests_to_update:
-            db_check_contests_for_update(conn, contests_to_update)
-            # update_positions_paid_for_contests(conn, contests_to_update)
+            # db_check_contests_for_update(conn, contests_to_update)
+            db_update_contest_data_for_contests(conn, contests_to_update)
 
     except sqlite3.Error as err:
         print("sqlite error [check_db_contests_for_completion()]: ", err.args[0])
@@ -492,8 +499,8 @@ def get_contest_data(contest_id):
             #         "positions_paid": int(info_header[4].string),
             #     },
             # )
-        else:
-            return None
+
+        return None
         # print("Contest {} is still in progress".format(contest_id))
     except IndexError:
         # This error occurs for old contests whose pages no longer are
