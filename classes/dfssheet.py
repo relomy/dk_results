@@ -178,7 +178,7 @@ class DFSSheet(Sheet):
 
     def build_values_for_vip_lineup(self, vip):
         values = [
-            [vip.name, "", "PMR", vip.pmr, ""],
+            [vip.name, None, "PMR", vip.pmr, None, None],
             ["Pos", "Name", "Salary", "Pts", "Value", "Own"],
         ]
         for player in vip.lineup:
@@ -192,7 +192,7 @@ class DFSSheet(Sheet):
                     player.ownership,
                 ]
             )
-        values.append(["rank", vip.rank, "", vip.pts, "", ""])
+        values.append(["rank", vip.rank, None, vip.pts, None, None])
         return values
 
     def write_vip_lineups(self, vips):
