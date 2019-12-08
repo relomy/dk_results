@@ -18,17 +18,17 @@ class Draftkings:
     def __init__(self, logger=None):
         self.logger = logger or logging.getLogger(__name__)
 
-        self.s = requests.Session()
+        self.session = requests.Session()
 
         # set cookies based on Chrome session
         cookies = browsercookie.chrome()
 
         # update session with cookies
-        self.s.cookies.update(cookies)
+        self.session.cookies.update(cookies)
 
     def download_salary_csv(self, sport, draft_group, filename):
         """Given a filename and CSV URL, request download of CSV file and save to filename."""
-        CONTEST_TYPES = {
+        contest_types = {
             "PGA": 9,
             "SOC": 10,
             "MLB": 12,
@@ -38,14 +38,16 @@ class Draftkings:
             "TEN": 106,
         }
 
-        if sport in CONTEST_TYPES:
-            self.logger.debug("CONTEST_TYPES [%s]: %s", sport, CONTEST_TYPES[sport])
+        if sport in contest_types:
+            self.logger.debug("CONTEST_TYPES [%s]: %s", sport, contest_types[sport])
 
-        csv_url = "https://www.draftkings.com/lineup/getavailableplayerscsv?contestTypeId={0}&draftGroupId={1}".format(
-            CONTEST_TYPES[sport], draft_group
-        )
+        csv_url = (
+            "https://www.draftkings.com/lineup/getavailableplayerscsv?"
+            "contestTypeId={0}&draftGroupId={1}"
+        ).format(contest_types[sport], draft_group)
+
         # send GET request
-        response = self.s.get(csv_url)
+        response = self.session.get(csv_url)
 
         # if not successful, raise an exception
         if response.status_code != 200:

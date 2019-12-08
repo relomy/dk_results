@@ -1,4 +1,4 @@
-""""""
+"""Use database and update Google Sheet with contest standings from DraftKings."""
 
 import argparse
 import csv
@@ -36,19 +36,18 @@ def pull_contest_zip(contest_id):
     if cookies:
         result = setup_session(contest_id, cookies)
 
-        logger.debug("type(result): {}".format(type(result)))
+        logger.debug("type(result): %s", type(result))
 
         if result is not None:
             logger.debug("pickle method worked!!")
             return result
-        else:
-            logger.debug("Broken from pickle method")
 
     # try browsercookie method
+    logger.debug("First pickle method did not work - trying browsercookie method")
     cookies = browsercookie.chrome()
 
     result = setup_session(contest_id, cookies)
-    logger.debug("type(result): {}".format(type(result)))
+    logger.debug("type(result): %s", type(result))
 
     if result:
         return result
@@ -60,7 +59,7 @@ def pull_contest_zip(contest_id):
     cookies = browsercookie.chrome()
 
     result = setup_session(contest_id, cookies)
-    logger.debug("type(result): {}".format(type(result)))
+    logger.debug("type(result): %s", type(result))
 
     if result is not None:
         logger.debug("SECOND browsercookie method worked!!")
@@ -77,7 +76,7 @@ def use_selenium(contest_id):
     if not getenv("CHROMEDRIVER"):
         exit("Could not find CHROMEDRIVER in env variable")
 
-    logger.debug(f"Found chromedriver in env variable: {bin_chromedriver}")
+    logger.debug("Found chromedriver in env variable: %s", {bin_chromedriver})
     # start headless webdriver
     service = chrome_service.Service(bin_chromedriver)
     service.start()
@@ -91,7 +90,7 @@ def use_selenium(contest_id):
         service.service_url, desired_capabilities=options.to_capabilities()
     )
 
-    logger.debug("Performing get on {}".format(url_contest_csv))
+    logger.debug("Performing get on %s", url_contest_csv)
     driver.get(url_contest_csv)
     logger.debug(driver.current_url)
     logger.debug("Letting DK load ...")
@@ -105,30 +104,29 @@ def use_selenium(contest_id):
 
 
 def setup_session(contest_id, cookies):
-    s = requests.Session()
-    now = datetime.datetime.now()
+    session = requests.Session()
 
-    for c in cookies:
+    for cookie in cookies:
         # if the cookies already exists from a legitimate fresh session, clear them out
-        if c.name in s.cookies:
-            logger.debug("removing {} from 'cookies' -- ".format(c.name), end="")
-            cookies.clear(c.domain, c.path, c.name)
+        if cookie.name in session.cookies:
+            logger.debug("removing %s from 'cookies' -- ", cookie.name, end="")
+            cookies.clear(cookie.domain, cookie.path, cookie.name)
         else:
-            if not c.expires:
+            if not cookie.expires:
                 continue
 
     logger.debug("adding all missing cookies to session.cookies")
-    s.cookies.update(cookies)
+    session.cookies.update(cookies)
 
-    return request_contest_url(s, contest_id)
+    return request_contest_url(session, contest_id)
 
 
-def request_contest_url(s, contest_id):
+def request_contest_url(session, contest_id):
     # attempt to GET contest_csv_url
     url_contest_csv = (
         f"https://www.draftkings.com/contest/exportfullstandingscsv/{contest_id}"
     )
-    response = s.get(url_contest_csv)
+    response = session.get(url_contest_csv)
     logger.debug(response.status_code)
     logger.debug(response.url)
     logger.debug(response.headers["Content-Type"])
@@ -139,8 +137,8 @@ def request_contest_url(s, contest_id):
     # if headers say file is a CSV file
     elif response.headers["Content-Type"] == "text/csv":
         # write working cookies
-        with open("pickled_cookies_works.txt", "wb") as f:
-            pickle.dump(s.cookies, f)
+        with open("pickled_cookies_works.txt", "wb") as fp:
+            pickle.dump(session.cookies, fp)
         # decode bytes into string
         csvfile = response.content.decode("utf-8")
         print(csvfile, file=open(f"contest-standings-{contest_id}.csv", "w"))
@@ -149,16 +147,16 @@ def request_contest_url(s, contest_id):
         return list(csv.reader(csvfile.splitlines(), delimiter=","))
     else:
         # write working cookies
-        with open("pickled_cookies_works.txt", "wb") as f:
-            pickle.dump(s.cookies, f)
+        with open("pickled_cookies_works.txt", "wb") as fp:
+            pickle.dump(session.cookies, fp)
         # request will be a zip file
-        z = zipfile.ZipFile(io.BytesIO(response.content))
-        for name in z.namelist():
+        zipz = zipfile.ZipFile(io.BytesIO(response.content))
+        for name in zipz.namelist():
             # extract file - it seems easier this way
-            path = z.extract(name)
-            logger.debug(f"path: {path}")
-            with z.open(name) as csvfile:
-                logger.debug("name within zipfile: {}".format(name))
+            path = zipz.extract(name)
+            logger.debug("path: %s", path)
+            with zipz.open(name) as csvfile:
+                logger.debug("name within zipfile: %s", name)
                 # convert to TextIOWrapper object
                 lines = io.TextIOWrapper(csvfile, encoding="utf-8", newline="\r\n")
                 # open reader object on csvfile within zip file
@@ -168,18 +166,16 @@ def request_contest_url(s, contest_id):
 
 def cj_from_pickle(filename):
     try:
-        with open(filename, "rb") as f:
-            return pickle.load(f)
-    except FileNotFoundError as e:
-        logger.error("File {} not found [{}]".format(filename, e))
+        with open(filename, "rb") as fp:
+            return pickle.load(fp)
+    except FileNotFoundError as err:
+        logger.error("File %s not found [%s]", filename, err)
         return False
 
 
 def get_live_contest(conn, sport, entry_fee=25):
     # get cursor
     cur = conn.cursor()
-
-    now = datetime.datetime.now()
 
     try:
         # execute SQL command
@@ -220,7 +216,7 @@ def get_live_contest(conn, sport, entry_fee=25):
 
 
 def main():
-    """"""
+    """Use database and update Google Sheet with contest standings from DraftKings."""
     # parse arguments
     parser = argparse.ArgumentParser()
     choices = [

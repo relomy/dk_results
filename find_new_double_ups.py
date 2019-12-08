@@ -2,7 +2,6 @@
 
 import argparse
 import datetime
-import re
 import sqlite3
 from bs4 import BeautifulSoup
 

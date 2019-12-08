@@ -43,7 +43,7 @@ def pull_contest_zip(contest_id):
     if cookies:
         result = setup_session(contest_id, cookies)
 
-        logger.debug("type(result): {}".format(type(result)))
+        logger.debug("type(result): %s", type(result))
 
         if result is not None:
             logger.debug("pickle method worked!!")
@@ -64,7 +64,7 @@ def pull_contest_zip(contest_id):
     #             c.expires = new_expiry
 
     result = setup_session(contest_id, cookies)
-    logger.debug("type(result): {}".format(type(result)))
+    logger.debug("type(result): %s", type(result))
 
     if result:
         return result
@@ -81,7 +81,8 @@ def pull_contest_zip(contest_id):
     #     else:
     #         if c.expires:
     #             # chrome is ridiculous - this math is required
-    #             # Devide the actual timestamp (in my case it's expires_utc column in cookies table) by 1000000 // And someone should explain my why.
+    #             # Divide the actual timestamp (expires_utc column in cookies table) by 1000000
+    #             # // And someone should explain my why.
     #             # Subtract 11644473600
     #             # DONE! Now you got UNIX timestamp
     #             new_expiry = c.expires / 1000000
@@ -89,7 +90,7 @@ def pull_contest_zip(contest_id):
     #             c.expires = new_expiry
 
     result = setup_session(contest_id, cookies)
-    logger.debug("type(result): {}".format(type(result)))
+    logger.debug("type(result): %s", type(result))
 
     if result is not None:
         logger.debug("SECOND browsercookie method worked!!")
@@ -120,7 +121,7 @@ def use_selenium(contest_id):
         service.service_url, desired_capabilities=options.to_capabilities()
     )
 
-    logger.debug("Performing get on {}".format(url_contest_csv))
+    logger.debug("Performing get on %s", url_contest_csv)
     driver.get(url_contest_csv)
     logger.debug(driver.current_url)
     logger.debug("Letting DK load ...")
@@ -134,9 +135,7 @@ def use_selenium(contest_id):
 
 
 def setup_session(contest_id, cookies):
-
     s = requests.Session()
-    now = datetime.datetime.now()
 
     for c in cookies:
         # if the cookies already exists from a legitimate fresh session, clear them out
@@ -187,26 +186,26 @@ def setup_session(contest_id, cookies):
     return request_contest_url(s, contest_id)
 
 
-def request_contest_url(s, contest_id):
+def request_contest_url(session, contest_id):
     # attempt to GET contest_csv_url
     url_contest_csv = (
         f"https://www.draftkings.com/contest/exportfullstandingscsv/{contest_id}"
     )
-    r = s.get(url_contest_csv)
-    logger.debug(r.status_code)
-    logger.debug(r.url)
-    logger.debug(r.headers["Content-Type"])
+    response = session.get(url_contest_csv)
+    logger.debug(response.status_code)
+    logger.debug(response.url)
+    logger.debug(response.headers["Content-Type"])
     # print(r.headers)
-    if "text/html" in r.headers["Content-Type"]:
+    if "text/html" in response.headers["Content-Type"]:
         logger.info("We cannot do anything with html!")
         return None
     # if headers say file is a CSV file
-    elif r.headers["Content-Type"] == "text/csv":
+    elif response.headers["Content-Type"] == "text/csv":
         # write working cookies
         with open("pickled_cookies_works.txt", "wb") as f:
-            pickle.dump(s.cookies, f)
+            pickle.dump(session.cookies, f)
         # decode bytes into string
-        csvfile = r.content.decode("utf-8")
+        csvfile = response.content.decode("utf-8")
         print(csvfile, file=open(f"contest-standings-{contest_id}.csv", "w"))
         # open reader object on csvfile
         # rdr = csv.reader(csvfile.splitlines(), delimiter=",")
@@ -214,9 +213,9 @@ def request_contest_url(s, contest_id):
     else:
         # write working cookies
         with open("pickled_cookies_works.txt", "wb") as f:
-            pickle.dump(s.cookies, f)
+            pickle.dump(session.cookies, f)
         # request will be a zip file
-        z = zipfile.ZipFile(io.BytesIO(r.content))
+        z = zipfile.ZipFile(io.BytesIO(response.content))
         for name in z.namelist():
             # extract file - it seems easier this way
             path = z.extract(name)
