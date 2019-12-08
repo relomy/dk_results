@@ -313,7 +313,7 @@ def main():
 
     if args.nolineups and r.vip_list:
         logger.info("Writing vip_lineups to sheet")
-        sheet.write_vip_lineups(r.vip_list.sort(key=lambda x: x.name))
+        sheet.write_vip_lineups(r.vip_list)
 
     # for u in r.vip_list:
     # logger.info("User: {}".format(u.name))

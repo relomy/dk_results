@@ -198,6 +198,8 @@ class DFSSheet(Sheet):
     def write_vip_lineups(self, vips):
         cell_range = self.LINEUP_RANGES[self.sport]
         lineup_mod = 4
+        # sort VIPs based on name
+        vips.sort(key=lambda x: x.name)
         # add size of lineup + 3 for extra rows
         sport_mod = len(vips[0].lineup) + 3
         all_lineup_values = []
