@@ -297,7 +297,7 @@ def main():
         players_to_values = results.players_to_values(sport)
         sheet.clear_standings()
         sheet.write_players(players_to_values)
-        sheet.add_contest_details(name)
+        sheet.add_contest_details(name, positions_paid)
         logger.info("Writing players to sheet")
         sheet.add_last_updated(now)
 

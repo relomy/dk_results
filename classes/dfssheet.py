@@ -147,8 +147,7 @@ class DFSSheet(Sheet):
 
     def clear_standings(self):
         """Write players (from standings) to DFSsheet."""
-        standings_range = f"{self.sport}!{self.data_range}"
-        self.clear_sheet_range(standings_range)
+        self.clear_sheet_range(f"{self.sport}!{self.data_range}")
 
     def clear_lineups(self):
         lineups_range = self.LINEUP_RANGES[self.sport]
@@ -171,10 +170,10 @@ class DFSSheet(Sheet):
         values = [["Last Updated", "", dt_updated.strftime("%Y-%m-%d %H:%M:%S")]]
         self.write_values_to_sheet_range(values, cell_range)
 
-    def add_contest_details(self, contest_name):
+    def add_contest_details(self, contest_name, positions_paid):
         """Update timestamp for sheet."""
         cell_range = f"{self.sport}!X1:Y1"
-        values = [[contest_name]]
+        values = [[positions_paid, contest_name]]
         self.write_values_to_sheet_range(values, cell_range)
 
     def build_values_for_vip_lineup(self, vip):
