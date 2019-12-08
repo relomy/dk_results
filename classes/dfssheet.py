@@ -178,7 +178,7 @@ class DFSSheet(Sheet):
 
     def build_values_for_vip_lineup(self, vip):
         values = [
-            [vip.name, "", "PMR", vip.pmr, "", ""],
+            [vip.name, "", "PMR", vip.pmr, ""],
             ["Pos", "Name", "Salary", "Pts", "Value", "Own"],
         ]
         for player in vip.lineup:
