@@ -171,6 +171,12 @@ class DFSSheet(Sheet):
         values = [["Last Updated", "", dt_updated.strftime("%Y-%m-%d %H:%M:%S")]]
         self.write_values_to_sheet_range(values, cell_range)
 
+    def add_contest_details(self, contest_name):
+        """Update timestamp for sheet."""
+        cell_range = f"{self.sport}!X1:Y1"
+        values = [[contest_name]]
+        self.write_values_to_sheet_range(values, cell_range)
+
     def build_values_for_vip_lineup(self, vip):
         values = [
             [vip.name, "", "PMR", vip.pmr, "", ""],

@@ -180,7 +180,8 @@ def get_live_contest(conn, sport, entry_fee=25):
     try:
         # execute SQL command
         sql = (
-            "SELECT dk_id, draft_group, start_date FROM contests "
+            "SELECT dk_id, name, draft_group, positions_paid "
+            "FROM contests "
             "WHERE sport=? "
             "  AND entry_fee=? "
             "  AND start_date <= datetime('now', 'localtime') "
@@ -207,7 +208,8 @@ def get_live_contest(conn, sport, entry_fee=25):
             #     return None
 
             # return dk_id, draft_group
-            return row[:2]
+            # return row[:2]
+            return row
 
         return None
 
@@ -264,7 +266,7 @@ def main():
             continue
 
         # store dk_id and draft_group from database result
-        dk_id, draft_group = result
+        dk_id, name, draft_group, positions_paid = result
 
         fn = f"DKSalaries_{sport}_{now:%A}.csv"
 
@@ -295,6 +297,7 @@ def main():
         players_to_values = results.players_to_values(sport)
         sheet.clear_standings()
         sheet.write_players(players_to_values)
+        sheet.add_contest_details(name)
         logger.info("Writing players to sheet")
         sheet.add_last_updated(now)
 
