@@ -293,13 +293,16 @@ def main():
 
         logger.debug("Creating Results object Results(%s, %s, %s)", sport, dk_id, fn)
 
-        results = Results(sport, dk_id, fn)
+        results = Results(sport, dk_id, fn, positions_paid)
         players_to_values = results.players_to_values(sport)
         sheet.clear_standings()
         sheet.write_players(players_to_values)
         sheet.add_contest_details(name, positions_paid)
         logger.info("Writing players to sheet")
         sheet.add_last_updated(now)
+
+        if results.min_cash_pts > 0:
+            sheet.add_min_cash(results.min_cash_pts)
 
         if args.nolineups and results.vip_list:
             logger.info("Writing vip_lineups to sheet")

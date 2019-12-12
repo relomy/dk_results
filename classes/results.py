@@ -18,13 +18,19 @@ logging.config.fileConfig("logging.ini")
 class Results:
     """Create a Results object which contains the results for a given DraftKings contest."""
 
-    def __init__(self, sport, contest_id, salary_csv_fn, logger=None):
+    def __init__(
+        self, sport, contest_id, salary_csv_fn, positions_paid=None, logger=None
+    ):
         self.logger = logger or logging.getLogger(__name__)
 
         self.sport = sport
         self.contest_id = contest_id
         self.players = {}  # dict for players found in salary and standings CSV
         self.users = []  # list of Users found in standings CSV
+        self.positions_paid = positions_paid
+
+        self.min_rank = 0
+        self.min_cash_pts = 1000.0
 
         # if there's no salary file specified, use the sport/day for the filename
         if not salary_csv_fn:
@@ -125,10 +131,10 @@ class Results:
             if unicodedata.category(c) != "Mn"
         )
 
-    def parse_salary_csv(self, fn):
+    def parse_salary_csv(self, filename):
         """Parse CSV containing players and salary information."""
-        with open(fn, mode="r") as f:
-            cr = csv.reader(f, delimiter=",")
+        with open(filename, mode="r") as fp:
+            cr = csv.reader(fp, delimiter=",")
             slate_list = list(cr)
 
             for row in slate_list[1:]:  # [1:] to skip header
@@ -154,6 +160,9 @@ class Results:
 
             rank, player_id, name, pmr, points, lineup = row[:6]
 
+            rank = int(rank)
+            points = float(points)
+
             # create User object and append to users list
             user = User(rank, player_id, name, pmr, points, lineup)
             self.users.append(user)
@@ -161,8 +170,17 @@ class Results:
             # find lineup for friends
             if name in self.vips:
                 # if we found a VIP, add them to the VIP list
-                self.logger.info("found VIP {}".format(name))
+                self.logger.info("found VIP %s", name)
                 self.vip_list.append(user)
+
+            # keep track of minimum pts to cash
+            if (
+                self.positions_paid
+                and self.positions_paid >= rank
+                and self.min_cash_pts > points
+            ):
+                self.min_rank = rank
+                self.min_cash_pts = points
 
             player_stats = row[7:]
             if player_stats:
