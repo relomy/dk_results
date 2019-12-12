@@ -179,7 +179,7 @@ class DFSSheet(Sheet):
         self.write_values_to_sheet_range(values, cell_range)
 
     def add_min_cash(self, min_cash):
-        cell_range = f"{self.sport}!K1:K1"
+        cell_range = f"{self.sport}!W1:W1"
         values = [[min_cash]]
         self.write_values_to_sheet_range(values, cell_range)
 
