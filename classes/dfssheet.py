@@ -46,6 +46,8 @@ class Sheet:
                 # logger.debug("Sheet ID for %s is %s", title, sheet["properties"]["sheetId"])
                 return sheet["properties"]["sheetId"]
 
+        return None
+
     def write_values_to_sheet_range(self, values, cell_range):
         """Write a set of values to a column in a spreadsheet."""
         body = {"values": values}
