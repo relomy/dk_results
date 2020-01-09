@@ -71,13 +71,19 @@ def get_draft_groups_from_response(response):
         draft_group_id = draft_group["DraftGroupId"]
 
         # only care about featured draftgroups and those with no suffix
-        if tag != "Featured" or suffix is "(PGA TOUR)" or suffix is not None:
+        if tag != "Featured" or suffix is not "(PGA TOUR)" or suffix is not None:
             print(
                 "Skipping : tag {0} draft_group_id {1} [suffix: {2}]".format(
                     tag, draft_group_id, suffix
                 )
             )
             continue
+
+        print(
+            "Appending : tag {0} draft_group_id {1} [suffix: {2}]".format(
+                tag, draft_group_id, suffix
+            )
+        )
 
         # print(
         #     "Adding draft_group for [{0}]: draft group {1} contest type {2} [suffix: {3}]".format(
