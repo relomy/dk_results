@@ -71,16 +71,18 @@ def get_draft_groups_from_response(response):
         draft_group_id = draft_group["DraftGroupId"]
 
         # only care about featured draftgroups and those with no suffix
-        if tag != "Featured" or suffix is not "(PGA TOUR)" or suffix is not None:
-            print(
-                "Skipping : tag {0} draft_group_id {1} [suffix: {2}]".format(
-                    tag, draft_group_id, suffix
+        # special case for GOLF
+        if tag == "Featured":
+            if suffix is "(PGA TOUR)" or suffix is None:
+                print(
+                    "Appending : tag {0} draft_group_id {1} [suffix: {2}]".format(
+                        tag, draft_group_id, suffix
+                    )
                 )
-            )
-            continue
+                response_draft_groups.append(draft_group_id)
 
         print(
-            "Appending : tag {0} draft_group_id {1} [suffix: {2}]".format(
+            "Skipping : tag {0} draft_group_id {1} [suffix: {2}]".format(
                 tag, draft_group_id, suffix
             )
         )
@@ -90,7 +92,7 @@ def get_draft_groups_from_response(response):
         #         date, draft_group_id, contest_type_id, suffix
         #     )
         # )
-        response_draft_groups.append(draft_group_id)
+
         # row = get_salary_csv(sport, draft_group_id, contest_type_id, date)
         # if date not in rows_by_date:
         #     rows_by_date[date] = []
