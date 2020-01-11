@@ -67,13 +67,13 @@ def get_draft_groups_from_response(response):
         # date = get_salary_date(draft_group)
         # contest_type_id = draft_group["ContestTypeId"]
         tag = draft_group["DraftGroupTag"]
-        suffix = draft_group["ContestStartTimeSuffix"].strip()
+        suffix = draft_group["ContestStartTimeSuffix"]
         draft_group_id = draft_group["DraftGroupId"]
 
         # only care about featured draftgroups and those with no suffix
         # special case for GOLF
         if tag == "Featured":
-            if suffix == "(PGA TOUR)" or suffix is None:
+            if suffix is None or suffix.strip() == "(PGA TOUR)":
                 print(
                     "Appending : tag {0} draft_group_id {1} suffix: [{2}]".format(
                         tag, draft_group_id, suffix
