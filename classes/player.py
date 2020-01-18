@@ -89,7 +89,7 @@ class Player:
         )
 
     def writeable(self, sport):
-        if "PGA" in sport:
+        if sport in ["PGA", "GOLF"] or "PGA" in sport:
             return [self.pos, self.name, self.salary, self.ownership, self.fpts]
 
         return [

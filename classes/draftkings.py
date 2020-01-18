@@ -29,6 +29,7 @@ class Draftkings:
     def download_salary_csv(self, sport, draft_group, filename):
         """Given a filename and CSV URL, request download of CSV file and save to filename."""
         contest_types = {
+            "GOLF": 9, # temporary, decide if i want PGA or GOLF
             "PGA": 9,
             "SOC": 10,
             "MLB": 12,

@@ -74,6 +74,7 @@ class Results:
             "NBA": ["PG", "SG", "SF", "PF", "C", "G", "F", "UTIL"],
             "NFL": ["QB", "RB", "WR", "TE", "FLEX", "DST"],
             "NHL": ["C", "W", "D", "G", "UTIL"],
+            "GOLF": ["G"],
             "PGAMain": ["G"],
             "PGAWeekend": ["WG"],
             "PGAShowdown": ["G"],

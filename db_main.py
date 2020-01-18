@@ -225,6 +225,7 @@ def main():
         "NBA",
         "NFL",
         "CFB",
+        "GOLF",
         "PGAMain",
         "PGAWeekend",
         "PGAShowdown",
