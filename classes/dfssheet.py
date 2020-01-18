@@ -110,15 +110,15 @@ class DFSSheet(Sheet):
     """Methods and ranges specific to my "DFS" sheet object."""
 
     LINEUP_RANGES = {
-        "NBA": "J3:V58",
-        "CFB": "J3:V58",
-        "NFL": "J3:V58",
+        "NBA": "J3:V61",
+        "CFB": "J3:V61",
+        "NFL": "J3:V61",
         "GOLF": "L8:X46",
         "PGAMain": "L8:X46",
         "PGAWeekend": "L3:Q41",
         "PGAShowdown": "L3:Q41",
         "TEN": "J3:V42",
-        "MLB": "J3:V58",
+        "MLB": "J3:V61",
     }
 
     def __init__(self, sport):
