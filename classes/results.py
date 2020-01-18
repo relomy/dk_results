@@ -47,6 +47,8 @@ class Results:
             "Notorious",
             "Bra3105",
             "ChipotleAddict",
+            "papagates",
+            "EmpireMaker2",
         ]
         self.vip_list = []  # list of VIPs found in standings CSV
 
