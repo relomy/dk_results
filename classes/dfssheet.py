@@ -205,7 +205,7 @@ class DFSSheet(Sheet):
 
     def write_vip_lineups(self, vips):
         cell_range = self.LINEUP_RANGES[self.sport]
-        lineup_mod = 4
+        lineup_mod = 5
         # sort VIPs based on name
         vips.sort(key=lambda x: x.name.lower())
         # add size of lineup + 3 for extra rows
