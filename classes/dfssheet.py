@@ -113,11 +113,11 @@ class DFSSheet(Sheet):
         "NBA": "J3:V61",
         "CFB": "J3:V61",
         "NFL": "J3:V61",
-        "GOLF": "L8:X46",
-        "PGAMain": "L8:X46",
+        "GOLF": "L8:X56",
+        "PGAMain": "L8:X56",
         "PGAWeekend": "L3:Q41",
         "PGAShowdown": "L3:Q41",
-        "TEN": "J3:V42",
+        "TEN": "J3:V61",
         "MLB": "J3:V61",
     }
 

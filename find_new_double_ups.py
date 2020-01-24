@@ -70,10 +70,16 @@ def get_draft_groups_from_response(response):
         suffix = draft_group["ContestStartTimeSuffix"]
         draft_group_id = draft_group["DraftGroupId"]
 
+
+        suffix_list = [
+            "(PGA TOUR)",
+            "(AUS)"
+        ]
+
         # only care about featured draftgroups and those with no suffix
         # special case for GOLF
         if tag == "Featured":
-            if suffix is None or suffix.strip() == "(PGA TOUR)":
+            if suffix is None or suffix.strip() in suffix_list:
                 print(
                     "Appending : tag {0} draft_group_id {1} suffix: [{2}]".format(
                         tag, draft_group_id, suffix
