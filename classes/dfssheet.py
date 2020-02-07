@@ -113,7 +113,7 @@ class DFSSheet(Sheet):
         "NBA": "J3:V61",
         "CFB": "J3:V61",
         "NFL": "J3:V61",
-        "GOLF": "L8:X56",
+        "GOLF": "L8:AB56",
         "PGAMain": "L8:X56",
         "PGAWeekend": "L3:Q41",
         "PGAShowdown": "L3:Q41",
@@ -187,19 +187,36 @@ class DFSSheet(Sheet):
     def build_values_for_vip_lineup(self, vip):
         values = [
             [vip.name, None, "PMR", vip.pmr, None, None],
-            ["Pos", "Name", "Salary", "Pts", "Value", "Own"],
+           ,
         ]
-        for player in vip.lineup:
-            values.append(
-                [
-                    player.pos,
-                    player.name,
-                    player.salary,
-                    player.fpts,
-                    player.value,
-                    player.ownership,
-                ]
-            )
+        if "GOLF" in self.sport:
+            values.append(["Name", "Salary", "Pts", "Value", "Own", "Pos", "Score"])
+            for player in vip.lineup:
+                values.append(
+                    [
+                        player.pos,
+                        player.name,
+                        player.salary,
+                        player.fpts,
+                        player.value,
+                        player.ownership,
+                        "",
+                        ""
+                    ]
+                )
+        else:
+            values.append(["Pos", "Name", "Salary", "Pts", "Value", "Own"])
+            for player in vip.lineup:
+                values.append(
+                    [
+                        player.pos,
+                        player.name,
+                        player.salary,
+                        player.fpts,
+                        player.value,
+                        player.ownership,
+                    ]
+                )
         values.append(["rank", vip.rank, None, vip.pts, None, None])
         return values
 
