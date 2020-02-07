@@ -127,7 +127,7 @@ class DFSSheet(Sheet):
         # set ranges based on sport
         self.start_col = "A"
         if "PGA" in self.sport or self.sport == "GOLF":
-            self.end_col = "I"
+            self.end_col = "E"
         else:
             self.end_col = "H"
         self.data_range = "{0}2:{1}".format(self.start_col, self.end_col)
