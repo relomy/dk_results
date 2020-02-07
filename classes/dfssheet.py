@@ -191,7 +191,6 @@ class DFSSheet(Sheet):
             for player in vip.lineup:
                 values.append(
                     [
-                        player.pos,
                         player.name,
                         player.salary,
                         player.fpts,
