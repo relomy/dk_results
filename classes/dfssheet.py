@@ -185,10 +185,7 @@ class DFSSheet(Sheet):
         self.write_values_to_sheet_range(values, cell_range)
 
     def build_values_for_vip_lineup(self, vip):
-        values = [
-            [vip.name, None, "PMR", vip.pmr, None, None],
-           ,
-        ]
+        values = [[vip.name, None, "PMR", vip.pmr, None, None]]
         if "GOLF" in self.sport:
             values.append(["Name", "Salary", "Pts", "Value", "Own", "Pos", "Score"])
             for player in vip.lineup:
@@ -201,7 +198,7 @@ class DFSSheet(Sheet):
                         player.value,
                         player.ownership,
                         "",
-                        ""
+                        "",
                     ]
                 )
         else:
