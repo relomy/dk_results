@@ -432,7 +432,7 @@ def get_contest_data(contest_id):
         )
         status = info_header[3].string.strip().upper()
         # print("Positions paid: %s".format(int(info_header[4].string)))
-        if status in ["COMPLETED", "LIVE"]:
+        if status in ["COMPLETED", "LIVE", "CANCELLED"]:
             # print(f"contest {contest_id} is {status}")
             # print(
             #     "name: {} total_prizes: {} date: {} entries: {} positions_paid: {}".format(
@@ -445,7 +445,7 @@ def get_contest_data(contest_id):
             # )
 
             # set completed status
-            completed = 1 if status == "COMPLETED" else 0
+            completed = 1 if status in ["COMPLETED", "CANCELLED"] else 0
 
             return {
                 "completed": completed,
