@@ -161,7 +161,7 @@ class DFSSheet(Sheet):
 
     def write_players(self, values):
         """Write players (from standings) to DFSsheet."""
-        cell_range = f"{self.sport}!{self.data_range}"
+        cell_range = f"{self.data_range}"
         self.write_values_to_sheet_range(values, cell_range)
 
     def write_column(self, column, values, start_row=2):
