@@ -113,7 +113,7 @@ class DFSSheet(Sheet):
         "NBA": "J3:V61",
         "CFB": "J3:V61",
         "NFL": "J3:V61",
-        "GOLF": "L8:AB56",
+        "GOLF": "L8:Z56",
         "PGAMain": "L8:X56",
         "PGAWeekend": "L3:Q41",
         "PGAShowdown": "L3:Q41",
@@ -130,7 +130,9 @@ class DFSSheet(Sheet):
             self.end_col = "E"
         else:
             self.end_col = "H"
-        self.data_range = "{0}2:{1}".format(self.start_col, self.end_col)
+        self.data_range = "{0}!{1}2:{2}".format(
+            self.sport, self.start_col, self.end_col
+        )
 
         # init Sheet (super) class
         super().__init__()
@@ -140,7 +142,7 @@ class DFSSheet(Sheet):
             "{0}!{1}1:{2}1".format(self.sport, self.start_col, self.end_col)
         )[0]
 
-        # self.values = self.get_values_from_range(self.cell_range)
+        self.values = self.get_values_from_range(self.data_range)
 
         # if self.values:
         #     self.max_rows = len(self.values)
@@ -149,10 +151,11 @@ class DFSSheet(Sheet):
         #     raise f"No values from self.get_values_from_range({self.cell_range})"
 
     def clear_standings(self):
-        """Write players (from standings) to DFSsheet."""
+        """Clear standings range of DFSsheet."""
         self.clear_sheet_range(f"{self.sport}!{self.data_range}")
 
     def clear_lineups(self):
+        """Clear lineups range of DFSsheet."""
         lineups_range = self.LINEUP_RANGES[self.sport]
         self.clear_sheet_range(f"{self.sport}!{lineups_range}")
 
@@ -161,10 +164,20 @@ class DFSSheet(Sheet):
         cell_range = f"{self.sport}!{self.data_range}"
         self.write_values_to_sheet_range(values, cell_range)
 
-    def write_column(self, column, values):
+    def write_column(self, column, values, start_row=2):
         """Write a set of values to a column in a spreadsheet."""
         # set range based on column e.g. PGAMain!I2:I
-        cell_range = f"{self.sport}!{column}2:{column}"
+        cell_range = f"{self.sport}!{column}{start_row}:{column}"
+        self.write_values_to_sheet_range(values, cell_range)
+
+    def write_columns(self, start_col, end_col, values, start_row=2):
+        """Write a set of values to columns in a spreadsheet."""
+        # set range based on column e.g. PGAMain!I2:I
+        cell_range = f"{self.sport}!{start_col}{start_row}:{end_col}"
+        self.write_values_to_sheet_range(values, cell_range)
+
+    def write_lineup_range(self, values):
+        cell_range = f"{self.sport}!{self.LINEUP_RANGES[self.sport]}"
         self.write_values_to_sheet_range(values, cell_range)
 
     def add_last_updated(self, dt_updated):
@@ -185,8 +198,9 @@ class DFSSheet(Sheet):
         self.write_values_to_sheet_range(values, cell_range)
 
     def build_values_for_vip_lineup(self, vip):
-        values = [[vip.name, None, "PMR", vip.pmr, None, None]]
+        values = []
         if "GOLF" in self.sport:
+            values = [vip.name, None, "PMR", vip.pmr, None, None, None, None]
             values.append(["Name", "Salary", "Pts", "Value", "Own", "Pos", "Score"])
             for player in vip.lineup:
                 values.append(
@@ -200,7 +214,9 @@ class DFSSheet(Sheet):
                         "",
                     ]
                 )
+            values.append(["rank", vip.rank, vip.pts, None, None])
         else:
+            values = [vip.name, None, "PMR", vip.pmr, None, None]
             values.append(["Pos", "Name", "Salary", "Pts", "Value", "Own"])
             for player in vip.lineup:
                 values.append(
@@ -213,7 +229,7 @@ class DFSSheet(Sheet):
                         player.ownership,
                     ]
                 )
-        values.append(["rank", vip.rank, None, vip.pts, None, None])
+            values.append(["rank", vip.rank, None, vip.pts, None, None])
         return values
 
     def write_vip_lineups(self, vips):
@@ -241,8 +257,15 @@ class DFSSheet(Sheet):
             all_lineup_values, f"{self.sport}!{cell_range}"
         )
 
-    # def get_players(self):
-    #     return [row[self.columns.index("Name")] for row in self.values]
+    def get_players(self):
+        return [row[self.columns.index("Name")] for row in self.values]
+
+    def get_lineup_values(self):
+        return self.get_values_from_range(
+            "{0}!{1}".format(self.sport, self.LINEUP_RANGES[self.sport])
+        )
+
+        # return [row[self.columns.index("Name")] for row in self.values]
 
 
 # class DFSsheet_TEN(DFSsheet):
