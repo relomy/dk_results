@@ -14,6 +14,8 @@ class Sheet:
     """Object to represent Google Sheet."""
 
     def __init__(self):
+        self.logger = logger or logging.getLogger(__name__)
+
         # authorize class to use sheets API
         self.service = self.setup_service()
 
