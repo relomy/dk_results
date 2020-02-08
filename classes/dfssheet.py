@@ -152,7 +152,7 @@ class DFSSheet(Sheet):
 
     def clear_standings(self):
         """Clear standings range of DFSsheet."""
-        self.clear_sheet_range(f"{self.sport}!{self.data_range}")
+        self.clear_sheet_range(f"{self.data_range}")
 
     def clear_lineups(self):
         """Clear lineups range of DFSsheet."""
