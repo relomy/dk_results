@@ -210,11 +210,11 @@ class DFSSheet(Sheet):
                         player.fpts,
                         player.value,
                         player.ownership,
-                        "",
-                        "",
+                        None,
+                        None,
                     ]
                 )
-            values.append(["rank", vip.rank, vip.pts, None, None])
+            values.append(["rank", vip.rank, vip.pts, None, None, None, None])
         else:
             values = [vip.name, None, "PMR", vip.pmr, None, None]
             values.append(["Pos", "Name", "Salary", "Pts", "Value", "Own"])
