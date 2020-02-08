@@ -1,19 +1,21 @@
 """Object to represent Google Sheet."""
 
-import logging
 from os import path
 
 from googleapiclient.discovery import build
 from httplib2 import Http
 from oauth2client import client, file, tools
 
-logger = logging.getLogger(__name__)
+import logging
+import logging.config
+
+logging.config.fileConfig("logging.ini") 
 
 
 class Sheet:
     """Object to represent Google Sheet."""
 
-    def __init__(self):
+    def __init__(self, logger=None):
         self.logger = logger or logging.getLogger(__name__)
 
         # authorize class to use sheets API
@@ -65,7 +67,7 @@ class Sheet:
             )
             .execute()
         )
-        logger.info("%s cells updated.", result.get("updatedCells"))
+        self.logger.info("%s cells updated for [%s].", cell_range, result.get("updatedCells"))
 
     def clear_sheet_range(self, cell_range):
         """Clears (values only) a given cell_range."""
@@ -79,7 +81,7 @@ class Sheet:
             )
             .execute()
         )
-        logger.info("Range %s cleared.", result.get("clearedRange"))
+        self.logger.info("Range %s cleared.", result.get("clearedRange"))
 
     # def get_values_from_self_range(self):
     #     result = (
@@ -201,7 +203,7 @@ class DFSSheet(Sheet):
 
     def build_values_for_vip_lineup(self, vip):
         if "GOLF" in self.sport:
-            values = [vip.name, None, "PMR", vip.pmr, None, None, None]
+            values = [[vip.name, None, "PMR", vip.pmr, None, None, None]]
             values.append(["Name", "Salary", "Pts", "Value", "Own", "Pos", "Score"])
             for player in vip.lineup:
                 values.append(
@@ -216,9 +218,8 @@ class DFSSheet(Sheet):
                     ]
                 )
             values.append(["rank", vip.rank, vip.pts, None, None, None, None])
-            return values
         else:
-            values = [vip.name, None, "PMR", vip.pmr, None, None]
+            values = [[vip.name, None, "PMR", vip.pmr, None, None]]
             values.append(["Pos", "Name", "Salary", "Pts", "Value", "Own"])
             for player in vip.lineup:
                 values.append(
@@ -232,7 +233,7 @@ class DFSSheet(Sheet):
                     ]
                 )
             values.append(["rank", vip.rank, None, vip.pts, None, None])
-            return values
+        return values
 
     def write_vip_lineups(self, vips):
         cell_range = self.LINEUP_RANGES[self.sport]
@@ -250,7 +251,6 @@ class DFSSheet(Sheet):
             elif i >= lineup_mod:
                 for j, k in enumerate(values):
                     mod = (i % lineup_mod) + ((i % lineup_mod) * sport_mod) + j
-                    logger.debug(all_lineup_values)
                     all_lineup_values[mod].extend([""] + k)
 
             # add extra row to values for spacing if needed
