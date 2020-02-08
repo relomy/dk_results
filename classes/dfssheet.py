@@ -248,6 +248,7 @@ class DFSSheet(Sheet):
             elif i >= lineup_mod:
                 for j, k in enumerate(values):
                     mod = (i % lineup_mod) + ((i % lineup_mod) * sport_mod) + j
+                    logger.debug(all_lineup_values)
                     all_lineup_values[mod].extend([""] + k)
 
             # add extra row to values for spacing if needed
