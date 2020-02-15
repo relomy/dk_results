@@ -245,12 +245,14 @@ def main():
         "NBA",
         "NFL",
         "CFB",
+        "GOLF",
         "PGAMain",
         "PGAWeekend",
         "PGAShowdown",
         "NHL",
         "MLB",
         "TEN",
+        "XFL",
     ]
     parser.add_argument(
         "-i", "--id", type=int, required=True, help="Contest ID from DraftKings"
@@ -261,7 +263,7 @@ def main():
         "--sport",
         choices=choices,
         required=True,
-        help="Type of contest (NBA, NFL, PGAMain, PGAWeekend, PGAShowdown, CFB, NHL, or MLB)",
+        help="Type of contest (NBA, NFL, GOLF, PGAMain, PGAWeekend, PGAShowdown, CFB, NHL, MLB, TEN, or XFL)",
     )
     parser.add_argument(
         "--nolineups",
