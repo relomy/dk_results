@@ -77,6 +77,7 @@ def main():
         "NBA": 70,
         "CFB": 94,
         "TEN": 106,
+        "XFL": 134,
     }
 
     if args.sport:
