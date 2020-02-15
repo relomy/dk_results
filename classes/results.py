@@ -81,7 +81,7 @@ class Results:
             "PGAWeekend": ["WG"],
             "PGAShowdown": ["G"],
             "TEN": ["P"],
-            "XFL": ["QB", "RB", "WR", "FL", "DS"],
+            "XFL": ["QB", "RB", "WR", "FLEX", "DST"],
         }
         splt = lineup_str.split(" ")
 
