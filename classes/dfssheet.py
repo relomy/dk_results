@@ -9,7 +9,7 @@ from oauth2client import client, file, tools
 import logging
 import logging.config
 
-logging.config.fileConfig("logging.ini") 
+logging.config.fileConfig("logging.ini")
 
 
 class Sheet:
@@ -67,7 +67,9 @@ class Sheet:
             )
             .execute()
         )
-        self.logger.info("%s cells updated for [%s].", cell_range, result.get("updatedCells"))
+        self.logger.info(
+            "%s cells updated for [%s].", cell_range, result.get("updatedCells")
+        )
 
     def clear_sheet_range(self, cell_range):
         """Clears (values only) a given cell_range."""
@@ -123,6 +125,7 @@ class DFSSheet(Sheet):
         "PGAShowdown": "L3:Q41",
         "TEN": "J3:V61",
         "MLB": "J3:V61",
+        "XFL": "J3:V56",
     }
 
     def __init__(self, sport):

@@ -55,13 +55,13 @@ def main():
 
     # parse arguments
     arg_parser = argparse.ArgumentParser()
-    choices = ["NBA", "NFL", "CFB", "PGA", "NHL", "MLB", "TEN"]
+    choices = ["NBA", "NFL", "CFB", "PGA", "NHL", "MLB", "TEN", "XFL"]
     arg_parser.add_argument(
         "-s",
         "--sport",
         choices=choices,
         required=True,
-        help="Type of contest (NBA, NFL, PGA, CFB, NHL, or MLB)",
+        help="Type of contest (NBA, NFL, PGA, CFB, NHL, TEN, or XFL)",
     )
     arg_parser.add_argument(
         "-dg", "--draft_group", type=int, required=True, help="Draft Group ID"
