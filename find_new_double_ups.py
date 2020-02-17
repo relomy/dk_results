@@ -526,9 +526,9 @@ def main():
     parser.add_argument(
         "-s",
         "--sport",
-        choices=["NBA", "NFL", "CFB", "GOLF", "NHL", "MLB", "TEN"],
+        choices=["NBA", "NFL", "CFB", "GOLF", "NHL", "MLB", "TEN", "XFL"],
         required=True,
-        help="Type of contest (NBA, NFL, GOLF, CFB, NHL, MLB, or TEN)",
+        help="Type of contest (NBA, NFL, GOLF, CFB, NHL, MLB, TEN, or XFL)",
         nargs="+",
     )
     parser.add_argument("-v", "--verbose", help="Increase verbosity")

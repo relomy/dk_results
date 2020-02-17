@@ -232,13 +232,14 @@ def main():
         "NHL",
         "MLB",
         "TEN",
+        "XFL"
     ]
     parser.add_argument(
         "-s",
         "--sport",
         choices=choices,
         required=True,
-        help="Type of contest (NBA, NFL, GOLF, CFB, NHL, MLB, or TEN)",
+        help="Type of contest (NBA, NFL, GOLF, CFB, NHL, MLB, TEN, or XFL)",
         nargs="+",
     )
     parser.add_argument(
