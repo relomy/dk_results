@@ -66,9 +66,11 @@ def get_draft_groups_from_response(response):
         # date = get_salary_date(response["DraftGroups"])
         # date = get_salary_date(draft_group)
         # contest_type_id = draft_group["ContestTypeId"]
+        sport = draft_group["Sport"]
         tag = draft_group["DraftGroupTag"]
         suffix = draft_group["ContestStartTimeSuffix"]
         draft_group_id = draft_group["DraftGroupId"]
+        start_date_est = draft_group["StartDateEst"]
 
 
         suffix_list = [
@@ -81,16 +83,17 @@ def get_draft_groups_from_response(response):
         if tag == "Featured":
             if suffix is None or suffix.strip() in suffix_list:
                 print(
-                    "Appending : tag {0} draft_group_id {1} suffix: [{2}]".format(
-                        tag, draft_group_id, suffix
+                        "[{0}] Appending: tag {1} draft_group_id {2} suffix: [{3}] start_date_est: {4}".format(
+                        sport, tag, draft_group_id, suffix, start_date_est
                     )
                 )
                 response_draft_groups.append(draft_group_id)
+                continue
 
         print(
-            "Skipping : tag {0} draft_group_id {1} suffix: [{2}]".format(
-                tag, draft_group_id, suffix
-            )
+              "[{0}] Skipping: tag {1} draft_group_id {2} suffix: [{3}] start_date_est: {4}".format(
+              sport, tag, draft_group_id, suffix, start_date_est
+              )
         )
 
         # print(
