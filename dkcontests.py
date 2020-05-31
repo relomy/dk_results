@@ -322,19 +322,20 @@ def get_stats(contests):
         if c.max_entry_count == 1 and c.is_guaranteed and c.is_double_up:
             # initialize stats[start_date]["dubs"] if it doesn't exist
             if "dubs" not in stats[start_date]:
-                stats[start_date]["dubs"] = {c.entry_fee: 0, "largest": 0}
+                per_fee = {"count": 0, "largest": 0}
+                stats[start_date]["dubs"] = {c.entry_fee: per_fee}
 
             # initialize stats[start_date]["dubs"][c.entry_fee] if it doesn't exist
             if c.entry_fee not in stats[start_date]["dubs"]:
-                stats[start_date]["dubs"][c.entry_fee] = 0
-                stats[start_date]["dubs"]["largest"] = 0
+                stats[start_date]["dubs"][c.entry_fee]["count"] = 0
+                stats[start_date]["dubs"][c.entry_fee]["largest"] = 0
 
             # add 1 to contest
-            stats[start_date]["dubs"][c.entry_fee] += 1
+            stats[start_date]["dubs"][c.entry_fee]["count"] += 1
 
             # if contest entries is larger than what we have, set largest to entries
-            if c.entries > stats[start_date]["dubs"]["largest"]:
-                stats[start_date]["dubs"]["largest"] = c.entries
+            if c.entries > stats[start_date]["dubs"][c.entry_fee]["largest"]:
+                stats[start_date]["dubs"][c.entry_fee]["largest"] = c.entries
 
     return stats
 
