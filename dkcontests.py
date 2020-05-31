@@ -323,6 +323,7 @@ def get_stats(contests):
             # initialize stats[start_date]["dubs"] if it doesn't exist
             if "dubs" not in stats[start_date]:
                 stats[start_date]["dubs"] = {c.entry_fee: {"count": 0, "largest": 0}}
+                print(stats[start_date]["dubs"])
 
             # initialize stats[start_date]["dubs"][c.entry_fee] if it doesn't exist
             # if c.entry_fee not in stats[start_date]["dubs"]:
