@@ -326,8 +326,8 @@ def get_stats(contests):
                 print(stats[start_date]["dubs"])
 
             # initialize stats[start_date]["dubs"][c.entry_fee] if it doesn't exist
-            # if c.entry_fee not in stats[start_date]["dubs"]:
-            #     stats[start_date]["dubs"][c.entry_fee] = {"count": 0, "largest": 0}
+            if c.entry_fee not in stats[start_date]["dubs"]:
+                stats[start_date]["dubs"][c.entry_fee] = {"count": 0, "largest": 0}
 
             # add 1 to contest
             stats[start_date]["dubs"][c.entry_fee]["count"] += 1
