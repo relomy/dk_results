@@ -322,13 +322,14 @@ def get_stats(contests):
         if c.max_entry_count == 1 and c.is_guaranteed and c.is_double_up:
             # initialize stats[start_date]["dubs"] if it doesn't exist
             if "dubs" not in stats[start_date]:
-                stats[start_date]["dubs"] = {c.entry_fee: 0}
+                stats[start_date]["dubs"]["entry_fee"] = {c.entry_fee: 0}
+                stats[start_date]["dubs"]["entries"] = {c.entries: 0}
 
             # initialize stats[start_date]["dubs"][c.entry_fee] if it doesn't exist
             if c.entry_fee not in stats[start_date]["dubs"]:
-                stats[start_date]["dubs"][c.entry_fee] = 0
+                stats[start_date]["dubs"]["entry_fee"][c.entry_fee] = 0
 
-            stats[start_date]["dubs"][c.entry_fee] += 1
+            stats[start_date]["dubs"]["entry_fee"][c.entry_fee] += 1
 
     return stats
 
@@ -343,14 +344,26 @@ def print_stats(contests):
 
             if "dubs" in values:
                 print("Single-entry double ups:")
-                for entry_fee, count in sorted(values["dubs"].items()):
+                for entry_fee, count in sorted(values["dubs"]["entry_fee"].items()):
                     print(f"     ${entry_fee}: {count} contest(s)")
 
 
 def main():
     """"""
 
-    supported_sports = ["NBA", "NFL", "CFB", "GOLF", "NHL", "MLB", "TEN", "XFL", "MMA", "LOL", "NAS"]
+    supported_sports = [
+        "NBA",
+        "NFL",
+        "CFB",
+        "GOLF",
+        "NHL",
+        "MLB",
+        "TEN",
+        "XFL",
+        "MMA",
+        "LOL",
+        "NAS",
+    ]
 
     # parse arguments
     parser = argparse.ArgumentParser()
