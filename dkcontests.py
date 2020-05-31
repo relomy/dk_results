@@ -358,9 +358,11 @@ def print_stats(contests):
 
             if "dubs" in values:
                 print("Single-entry double ups:")
-                print(values["dubs"])
-                # for entry_fee, count in sorted(values["dubs"].items()):
-                #     print(f"     ${entry_fee}: {count} contest(s)")
+                for entry_fee, inner_dict in sorted(values["dubs"].items()):
+                    # inner_dict has 'count' and 'largest' keys
+                    print(
+                        f"     ${entry_fee}: {inner_dict['count']} contest(s) (largest entries: {inner_dict['largest']}"
+                    )
 
 
 def main():
