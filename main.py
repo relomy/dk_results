@@ -253,6 +253,9 @@ def main():
         "MLB",
         "TEN",
         "XFL",
+        "MMA",
+        "LOL",
+        "NAS",
     ]
     parser.add_argument(
         "-i", "--id", type=int, required=True, help="Contest ID from DraftKings"
@@ -263,7 +266,7 @@ def main():
         "--sport",
         choices=choices,
         required=True,
-        help="Type of contest (NBA, NFL, GOLF, PGAMain, PGAWeekend, PGAShowdown, CFB, NHL, MLB, TEN, or XFL)",
+        help="Type of contest (NBA, NFL, GOLF, PGAMain, PGAWeekend, PGAShowdown, CFB, NHL, MLB, TEN, XFL, MMA, or LOL)",
     )
     parser.add_argument(
         "--nolineups",

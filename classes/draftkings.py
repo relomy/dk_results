@@ -30,13 +30,16 @@ class Draftkings:
         """Given a filename and CSV URL, request download of CSV file and save to filename."""
         contest_types = {
             "GOLF": 9,  # temporary, decide if i want PGA or GOLF
+            "MMA": 7,
             "PGA": 9,
             "SOC": 10,
             "MLB": 12,
             "NFL": 21,
+            "NAS": 24,
             "NBA": 70,
             "CFB": 94,
             "TEN": 106,
+            "LOL": 106,
             "XFL": 134,
         }
 

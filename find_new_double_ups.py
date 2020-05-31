@@ -75,7 +75,10 @@ def get_draft_groups_from_response(response):
 
         suffix_list = [
             "(PGA TOUR)",
-            "(AUS)"
+            "(AUS)", # TEN
+            "(LCS)", # LOL
+            "(LEC)",
+            "(Cup)", # NAS
         ]
 
         # only care about featured draftgroups and those with no suffix
@@ -524,14 +527,17 @@ def temp_add_column(conn):
 
 def main():
     """Find new double ups."""
+
+    supported_sports = ["NBA", "NFL", "CFB", "GOLF", "NHL", "MLB", "TEN", "XFL", "MMA", "LOL", "NAS"]
+
     # parse arguments
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "-s",
         "--sport",
-        choices=["NBA", "NFL", "CFB", "GOLF", "NHL", "MLB", "TEN", "XFL"],
+        choices=supported_sports,
         required=True,
-        help="Type of contest (NBA, NFL, GOLF, CFB, NHL, MLB, TEN, or XFL)",
+        help="Type of contest", 
         nargs="+",
     )
     parser.add_argument("-v", "--verbose", help="Increase verbosity")

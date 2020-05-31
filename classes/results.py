@@ -82,6 +82,9 @@ class Results:
             "PGAShowdown": ["G"],
             "TEN": ["P"],
             "XFL": ["QB", "RB", "WR", "FLEX", "DST"],
+            "MMA": ["F"],
+            "LOL": ["CPT" ,"TOP", "JNG", "MID", "ADC", "SUP", "TEAM"],
+            "NAS": ["D"],
         }
         splt = lineup_str.split(" ")
 

@@ -252,6 +252,18 @@ def print_cron_job(contest, sport):
         sport_length = 15
         dl_interval = "4-59/15"
         get_interval = "5-59/10"
+    elif sport == "LOL":
+        sport_length = 4
+        dl_interval = "*/10"
+        get_interval = "*/5"
+    elif sport == "MMA":
+        sport_length = 6
+        dl_interval = "*/15"
+        get_interval = "*/10"
+    elif sport == "NAS":
+        sport_length = 4
+        dl_interval = "*/10"
+        get_interval = "*/5"
 
     # set some long strings up as variables
     py_str = f"cd {home_dir}/dk_results && {pipenv_path} run python"
@@ -337,14 +349,17 @@ def print_stats(contests):
 
 def main():
     """"""
+
+    supported_sports = ["NBA", "NFL", "CFB", "GOLF", "NHL", "MLB", "TEN", "XFL", "MMA", "LOL", "NAS"]
+
     # parse arguments
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "-s",
         "--sport",
-        choices=["NBA", "NFL", "CFB", "GOLF", "NHL", "MLB", "TEN"],
+        choices=supported_sports,
         required=True,
-        help="Type of contest (NBA, NFL, GOLF, CFB, NHL, MLB, or TEN)",
+        help="Type of contest",
     )
     parser.add_argument(
         "-l", "--live", action="store_true", default="", help="Get live contests"
