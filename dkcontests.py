@@ -325,13 +325,9 @@ def get_stats(contests):
             if "dubs" not in stats[start_date]:
                 stats[start_date]["dubs"] = {}
 
-            print(stats[start_date]["dubs"])
-
             # initialize stats[start_date]["dubs"][c.entry_fee] if it doesn't exist
             if c.entry_fee not in stats[start_date]["dubs"]:
                 stats[start_date]["dubs"][c.entry_fee] = {"count": 0, "largest": 0}
-
-            print(stats[start_date]["dubs"][c.entry_fee])
 
             # add 1 to contest
             stats[start_date]["dubs"][c.entry_fee]["count"] += 1
@@ -361,7 +357,7 @@ def print_stats(contests):
                 for entry_fee, inner_dict in sorted(values["dubs"].items()):
                     # inner_dict has 'count' and 'largest' keys
                     print(
-                        f"     ${entry_fee}: {inner_dict['count']} contest(s) (largest entries: {inner_dict['largest']}"
+                        f"     ${entry_fee}: {inner_dict['count']} contest(s) (largest entry count: {inner_dict['largest']})"
                     )
 
 
