@@ -354,8 +354,9 @@ def print_stats(contests):
 
             if "dubs" in values:
                 print("Single-entry double ups:")
-                for entry_fee, count in sorted(values["dubs"].items()):
-                    print(f"     ${entry_fee}: {count} contest(s)")
+                print(values["dubs"])
+                # for entry_fee, count in sorted(values["dubs"].items()):
+                #     print(f"     ${entry_fee}: {count} contest(s)")
 
 
 def main():
