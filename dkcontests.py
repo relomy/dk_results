@@ -322,16 +322,26 @@ def get_stats(contests):
         if c.max_entry_count == 1 and c.is_guaranteed and c.is_double_up:
             # initialize stats[start_date]["dubs"] if it doesn't exist
             if "dubs" not in stats[start_date]:
-                stats[start_date]["dubs"]["entry_fee"] = {c.entry_fee: 0}
-                stats[start_date]["dubs"]["entries"] = {c.entries: 0}
+                stats[start_date]["dubs"] = {c.entry_fee: 0, "largest": 0}
 
             # initialize stats[start_date]["dubs"][c.entry_fee] if it doesn't exist
             if c.entry_fee not in stats[start_date]["dubs"]:
-                stats[start_date]["dubs"]["entry_fee"][c.entry_fee] = 0
+                stats[start_date]["dubs"][c.entry_fee] = 0
+                stats[start_date]["dubs"]["largest"] = 0
 
-            stats[start_date]["dubs"]["entry_fee"][c.entry_fee] += 1
+            # add 1 to contest
+            stats[start_date]["dubs"][c.entry_fee] += 1
+
+            # if contest entries is larger than what we have, set largest to entries
+            if c.entries > stats[start_date]["dubs"]["largest"]:
+                stats[start_date]["dubs"]["largest"] = c.entries
 
     return stats
+
+
+# stats[2020-05-31]["dubs"]:
+# "25" --> 0
+# "largest" --> 0
 
 
 def print_stats(contests):
@@ -344,7 +354,7 @@ def print_stats(contests):
 
             if "dubs" in values:
                 print("Single-entry double ups:")
-                for entry_fee, count in sorted(values["dubs"]["entry_fee"].items()):
+                for entry_fee, count in sorted(values["dubs"].items()):
                     print(f"     ${entry_fee}: {count} contest(s)")
 
 
