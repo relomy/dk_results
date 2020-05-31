@@ -320,7 +320,6 @@ def get_stats(contests):
 
         # keep track of single-entry double-ups
         if c.max_entry_count == 1 and c.is_guaranteed and c.is_double_up:
-            print(f"Trying to add contest: entry_fee {c.entry_fee} entries {c.entries}")
             # initialize stats[start_date]["dubs"] if it doesn't exist
             if "dubs" not in stats[start_date]:
                 stats[start_date]["dubs"] = {}
