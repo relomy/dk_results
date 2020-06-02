@@ -42,6 +42,8 @@ import re
 import browsercookie
 import requests
 
+from classes.contest import Contest
+
 COOKIES = browsercookie.chrome()
 HEADERS = {
     "Accept": "*/*",
@@ -59,37 +61,6 @@ HEADERS = {
     ),
     "X-Requested-With": "XMLHttpRequest",
 }
-
-
-class Contest:
-    def __init__(self, contest):
-        self.start_date = contest["sd"]
-        self.name = contest["n"]
-        self.id = contest["id"]
-        self.draft_group = contest["dg"]
-        self.total_prizes = contest["po"]
-        self.entries = contest["m"]
-        self.entry_fee = contest["a"]
-        self.entry_count = contest["ec"]
-        self.max_entry_count = contest["mec"]
-        self.attr = contest["attr"]
-        self.is_guaranteed = False
-        self.is_double_up = False
-
-        self.start_dt = self.get_dt_from_timestamp(self.start_date)
-
-        if "IsDoubleUp" in self.attr:
-            self.is_double_up = self.attr["IsDoubleUp"]
-
-        if "IsGuaranteed" in self.attr:
-            self.is_guaranteed = self.attr["IsGuaranteed"]
-
-    def get_dt_from_timestamp(self, timestamp_str):
-        timestamp = float(re.findall(r"[^\d]*(\d+)[^\d]*", timestamp_str)[0])
-        return datetime.datetime.fromtimestamp(timestamp / 1000)
-
-    def __str__(self):
-        return f"{vars(self)}"
 
 
 def get_contests(url):
@@ -228,48 +199,23 @@ def print_cron_job(contest, sport):
     pipenv_path = "/usr/local/bin/pipenv"
 
     # set interval and length depending on sport
-    if sport == "NBA":
-        sport_length = 6
-        dl_interval = "*/10"
-        get_interval = "*/5"
-    elif sport == "NFL":
-        sport_length = 6
-        dl_interval = "*/10"
-        get_interval = "*/5"
-    elif sport == "CFB":
-        sport_length = 6
-        dl_interval = "*/10"
-        get_interval = "*/5"
-    elif sport == "MLB":
-        sport_length = 7
-        dl_interval = "1-59/15"
-        get_interval = "2-59/10"
-    elif sport == "PGA":
-        sport_length = 8
-        dl_interval = "3-59/30"
-        get_interval = "4-59/15"
-    elif sport == "TEN":
-        sport_length = 15
-        dl_interval = "4-59/15"
-        get_interval = "5-59/10"
-    elif sport == "LOL":
-        sport_length = 4
-        dl_interval = "*/10"
-        get_interval = "*/5"
-    elif sport == "MMA":
-        sport_length = 6
-        dl_interval = "*/15"
-        get_interval = "*/10"
-    elif sport == "NAS":
-        sport_length = 4
-        dl_interval = "*/10"
-        get_interval = "*/5"
+    dict_sports = {
+        "NBA": {"sport_length": 6, "get_interval": "*/5",},
+        "NFL": {"sport_length": 6, "get_interval": "*/5",},
+        "CFB": {"sport_length": 6, "get_interval": "*/5",},
+        "MLB": {"sport_length": 7, "get_interval": "2-59/10",},
+        "PGA": {"sport_length": 8, "get_interval": "4-59/15",},
+        "TEN": {"sport_length": 15, "get_interval": "5-59/10",},
+        "LOL": {"sport_length": 4, "get_interval": "*/5",},
+        "MMA": {"sport_length": 6, "get_interval": "*/10",},
+        "NAS": {"sport_length": 4, "get_interval": "*/5",},
+    }
 
     # set some long strings up as variables
     py_str = f"cd {home_dir}/dk_results && {pipenv_path} run python"
     dl_str = f"{py_str} download_DK_salary.py"
     get_str = f"export DISPLAY=:1 && {py_str} main.py"
-    cron_str = set_cron_interval(contest, sport_length)
+    cron_str = set_cron_interval(contest, dict_sports[sport]["get_interval"])
     out_str = f"{home_dir}/{sport}_results.log 2>&1"
     file_str = f"DKSalaries_{sport}_{contest.start_dt:%A}.csv"
 
@@ -280,7 +226,7 @@ def print_cron_job(contest, sport):
         f"Download CSV for this slate:\n{dl_str} -s {sport} -dg {contest.draft_group} -f {file_str}\n"
     )
     print(
-        f"{get_interval} {cron_str} {get_str} -s {sport} -i {contest.id} -dg {contest.draft_group} >> {out_str}"
+        f"{dict_sports[sport]['get_interval']} {cron_str} {get_str} -s {sport} -i {contest.id} -dg {contest.draft_group} >> {out_str}"
     )
 
 
@@ -336,11 +282,6 @@ def get_stats(contests):
                 stats[start_date]["dubs"][c.entry_fee]["largest"] = c.entries
 
     return stats
-
-
-# stats[2020-05-31]["dubs"]:
-# "25" --> 0
-# "largest" --> 0
 
 
 def print_stats(contests):
@@ -413,7 +354,7 @@ def main():
     response_contests = get_contests(url)
 
     # create list of Contest objects
-    contests = [Contest(c) for c in response_contests]
+    contests = [Contest(c, args.sport) for c in response_contests]
 
     # print stats for contests
     print_stats(contests)
