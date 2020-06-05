@@ -72,13 +72,12 @@ def get_draft_groups_from_response(response):
         draft_group_id = draft_group["DraftGroupId"]
         start_date_est = draft_group["StartDateEst"]
 
-
         suffix_list = [
             "(PGA TOUR)",
-            "(AUS)", # TEN
-            "(LCS)", # LOL
+            "(AUS)",  # TEN
+            "(LCS)",  # LOL
             "(LEC)",
-            "(Cup)", # NAS
+            "(Cup)",  # NAS
         ]
 
         # only care about featured draftgroups and those with no suffix
@@ -86,7 +85,7 @@ def get_draft_groups_from_response(response):
         if tag == "Featured":
             if suffix is None or suffix.strip() in suffix_list:
                 print(
-                        "[{0}] Appending: tag {1} draft_group_id {2} suffix: [{3}] start_date_est: {4}".format(
+                    "[{0}] Appending: tag {1} draft_group_id {2} suffix: [{3}] start_date_est: {4}".format(
                         sport, tag, draft_group_id, suffix, start_date_est
                     )
                 )
@@ -94,9 +93,9 @@ def get_draft_groups_from_response(response):
                 continue
 
         print(
-              "[{0}] Skipping: tag {1} draft_group_id {2} suffix: [{3}] start_date_est: {4}".format(
-              sport, tag, draft_group_id, suffix, start_date_est
-              )
+            "[{0}] Skipping: tag {1} draft_group_id {2} suffix: [{3}] start_date_est: {4}".format(
+                sport, tag, draft_group_id, suffix, start_date_est
+            )
         )
 
         # print(
@@ -528,7 +527,19 @@ def temp_add_column(conn):
 def main():
     """Find new double ups."""
 
-    supported_sports = ["NBA", "NFL", "CFB", "GOLF", "NHL", "MLB", "TEN", "XFL", "MMA", "LOL", "NAS"]
+    supported_sports = [
+        "NBA",
+        "NFL",
+        "CFB",
+        "GOLF",
+        "NHL",
+        "MLB",
+        "TEN",
+        "XFL",
+        "MMA",
+        "LOL",
+        "NAS",
+    ]
 
     # parse arguments
     parser = argparse.ArgumentParser()
@@ -537,7 +548,7 @@ def main():
         "--sport",
         choices=supported_sports,
         required=True,
-        help="Type of contest", 
+        help="Type of contest",
         nargs="+",
     )
     parser.add_argument("-v", "--verbose", help="Increase verbosity")
