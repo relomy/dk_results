@@ -77,7 +77,7 @@ def get_draft_groups_from_response(response):
             "(AUS)",  # TEN
             "(LCS)",  # LOL
             "(LEC)",
-            "(LPL",
+            "(LPL)",
             "(Cup)",  # NAS
         ]
 
