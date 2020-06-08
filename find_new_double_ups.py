@@ -67,7 +67,6 @@ def get_contests_from_response(response):
 
 def get_draft_groups_from_response(response):
     """Get draft groups from lobby/json."""
-
     response_draft_groups = []
     for draft_group in response["DraftGroups"]:
         # dg['StartDateEst'] should be mostly the same for draft groups, (might
@@ -204,7 +203,7 @@ def contest_meets_criteria(contest, criteria):
 
 
 def get_salary_date(draft_group):
-    """Return the salary date in format YYYY-MM-DD"""
+    """Return the salary date in format YYYY-MM-DD."""
     return datetime.datetime.strptime(
         draft_group["StartDateEst"].split("T")[0], "%Y-%m-%d"
     ).date()
@@ -250,8 +249,7 @@ def db_create_table(conn):
 
 
 def db_compare_contests(conn, contests):
-    """Check contest ids with dk_id in database"""
-
+    """Check contest ids with dk_id in database."""
     # get cursor
     cur = conn.cursor()
 
@@ -286,7 +284,7 @@ def db_compare_contests(conn, contests):
 
 
 def db_insert_contests(conn, contests):
-    """Insert given contests in database"""
+    """Insert given contests in database."""
     # create SQL command
     columns = [
         "sport",
@@ -352,6 +350,7 @@ def db_update_contest_data_for_contests(conn, contests_to_update):
 
 
 def db_get_incomplete_contests(conn):
+    """Get the incomplete contests from the database."""
     # get cursor
     cur = conn.cursor()
 
@@ -375,7 +374,6 @@ def db_get_incomplete_contests(conn):
 
 def check_contests_for_completion(conn):
     """Check each contest for completion/positions_paid data."""
-
     # get incopmlete contests from the database
     incomplete_contests = db_get_incomplete_contests(conn)
 
@@ -408,15 +406,13 @@ def check_contests_for_completion(conn):
                     )
                 )
 
-    # logger.info("quitting driver")
-    # driver.quit()
-
     if contests_to_update:
         # db_check_contests_for_update(conn, contests_to_update)
         db_update_contest_data_for_contests(conn, contests_to_update)
 
 
 def start_chromedriver():
+    """Start the chromedriver and return the driver."""
     # find chromedriver
     bin_chromedriver = getenv("CHROMEDRIVER")
     if not getenv("CHROMEDRIVER"):
@@ -440,7 +436,7 @@ def start_chromedriver():
 
 
 def get_contest_data(driver, contest_id):
-    """Pull contest data (positions paid, status, etc.) with BeautifulSoup"""
+    """Pull contest data (positions paid, status, etc.) with BeautifulSoup."""
     url = f"https://www.draftkings.com/contest/gamecenter/{contest_id}"
 
     driver.get(url)
@@ -514,7 +510,8 @@ def get_contest_data(driver, contest_id):
 
 
 def temp_add_column(conn):
-    """TODO: REMOVE"""
+    """Add a column of completed and status to the contests table."""
+    # TODO REMOVE
     cur = conn.cursor()
 
     try:
