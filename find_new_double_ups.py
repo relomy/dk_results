@@ -6,7 +6,6 @@ import logging
 import logging.config
 import sqlite3
 from os import getenv
-from time import sleep
 
 import browsercookie
 import requests
@@ -97,17 +96,23 @@ def get_draft_groups_from_response(response):
         if tag == "Featured":
             if suffix is None or suffix.strip() in suffix_list:
                 logger.info(
-                    "[{0}] Appending: tag {1} draft_group_id {2} suffix: [{3}] start_date_est: {4}".format(
-                        sport, tag, draft_group_id, suffix, start_date_est
-                    )
+                    "[%s] Appending: tag %s draft_group_id %d suffix: [%s] start_date_est: %s",
+                    sport,
+                    tag,
+                    draft_group_id,
+                    suffix,
+                    start_date_est,
                 )
                 response_draft_groups.append(draft_group_id)
                 continue
 
         logger.debug(
-            "[{0}] Skipping: tag {1} draft_group_id {2} suffix: [{3}] start_date_est: {4}".format(
-                sport, tag, draft_group_id, suffix, start_date_est
-            )
+            "[%s] Skipping: tag %s draft_group_id %d [%s] start_date_est: %s",
+            sport,
+            tag,
+            draft_group_id,
+            suffix,
+            start_date_est,
         )
 
         # print(
@@ -341,7 +346,7 @@ def db_update_contest_data_for_contests(conn, contests_to_update):
     try:
         cur.executemany(sql, contests_to_update)
         conn.commit()
-        logger.info(f"Total {cur.rowcount} records updated successfully!")
+        logger.info("Total %d records updated successfully!", cur.rowcount)
     except sqlite3.Error as err:
         logger.error("sqlite error: %s", err.args[0])
 
@@ -434,25 +439,6 @@ def start_chromedriver():
     return driver
 
 
-def get_selenium_html(driver, url, save_to_file=True):
-    """Use Chromedriver to get website's JS-generated HTML and write to file."""
-    logger.debug("getting url %s with driver", url)
-    try:
-        driver.get(url)
-    except Exception as e:
-        logger.error("Error with driver.get(): %s", e)
-        return None
-
-    logger.debug("got url with driver")
-
-    # print html for debugging
-    if save_to_file:
-        logger.debug("saving HTML to content.html")
-        print(driver.page_source, file=open("content.html", "w", encoding="utf-8"))
-
-    return driver.page_source
-
-
 def get_contest_data(driver, contest_id):
     """Pull contest data (positions paid, status, etc.) with BeautifulSoup"""
     url = f"https://www.draftkings.com/contest/gamecenter/{contest_id}"
@@ -478,9 +464,9 @@ def get_contest_data(driver, contest_id):
             soup.find("label", text="Positions Paid").find_next("span").text
         )
 
-        logger.debug(f"entries: {entries}")
-        logger.debug(f"status: {status}")
-        logger.debug(f"positions_paid: {positions_paid}")
+        logger.debug("entries: %s", entries)
+        logger.debug("status: %s", status)
+        logger.debug("positions_paid: %s", positions_paid)
 
         if status in ["COMPLETED", "LIVE", "CANCELLED"]:
             # set completed status
@@ -496,15 +482,12 @@ def get_contest_data(driver, contest_id):
             }
 
         return None
-    # except IndexError as e:
-    except Exception as e:
-        # This error occurs for old contests whose pages no longer are
-        # being served.
+    except IndexError as ex:
+        # This error occurs for old contests whose pages no longer are being served.
         # IndexError: list index out of range
         logger.warning(
-            "Couldn't find DK contest with id {} error: {} ".format(contest_id, e)
+            "Couldn't find DK contest with id %d error: %s", contest_id, ex,
         )
-        pass
 
 
 # def get_contest_prize_data(contest_id):
