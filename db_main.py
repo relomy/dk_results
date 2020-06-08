@@ -234,7 +234,7 @@ def main():
         "TEN",
         "XFL",
         "MMA",
-        "LOL"
+        "LOL",
     ]
     parser.add_argument(
         "-s",

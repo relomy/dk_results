@@ -2,13 +2,24 @@
 
 import argparse
 import datetime
+import logging
+import logging.config
 import sqlite3
-from bs4 import BeautifulSoup
+from os import getenv
+from time import sleep
 
 import browsercookie
 import requests
+import selenium.webdriver.chrome.service as chrome_service
+from bs4 import BeautifulSoup
+from selenium import webdriver
 
 from classes.contest import Contest
+
+# load the logging configuration
+logging.config.fileConfig("logging.ini")
+
+logger = logging.getLogger(__name__)
 
 COOKIES = browsercookie.chrome()
 HEADERS = {
@@ -49,7 +60,7 @@ def get_contests_from_response(response):
     elif "Contests" in response:
         response_contests = response["Contests"]
     else:
-        print("response isn't a dict or a list??? exiting")
+        logger.error("response isn't a dict or a list??? exiting")
         exit()
 
     return response_contests
@@ -85,7 +96,7 @@ def get_draft_groups_from_response(response):
         # special case for GOLF
         if tag == "Featured":
             if suffix is None or suffix.strip() in suffix_list:
-                print(
+                logger.info(
                     "[{0}] Appending: tag {1} draft_group_id {2} suffix: [{3}] start_date_est: {4}".format(
                         sport, tag, draft_group_id, suffix, start_date_est
                     )
@@ -93,7 +104,7 @@ def get_draft_groups_from_response(response):
                 response_draft_groups.append(draft_group_id)
                 continue
 
-        print(
+        logger.debug(
             "[{0}] Skipping: tag {1} draft_group_id {2} suffix: [{3}] start_date_est: {4}".format(
                 sport, tag, draft_group_id, suffix, start_date_est
             )
@@ -156,26 +167,35 @@ def get_stats(contests):
 def get_double_ups(
     contests, draft_groups, min_entry_fee=1, max_entry_fee=50, entries=200
 ):
-    """Find $1-$10 contests with atleast n entries"""
+    """Find contests matching criteria."""
+    criteria = {
+        "draft_groups": draft_groups,
+        "min_entry_fee": min_entry_fee,
+        "max_entry_fee": max_entry_fee,
+        "entries": entries,
+    }
     contest_list = []
     for contest in contests:
         # skip contests not for today
         # if contest.start_dt.date() != datetime.datetime.today().date():
         #     continue
-
-        # keep track of single-entry double-ups
-        if (
-            contest.entries >= entries
-            and contest.entry_fee >= min_entry_fee
-            and contest.entry_fee <= max_entry_fee
-            and contest.max_entry_count == 1
-            and contest.is_guaranteed
-            and contest.is_double_up
-            and contest.draft_group in draft_groups
-        ):
+        if contest_meets_criteria(contest, criteria):
             contest_list.append(contest)
 
     return contest_list
+
+
+def contest_meets_criteria(contest, criteria):
+    """Ensure contests meet criteria."""
+    return (
+        contest.entries >= criteria["entries"]
+        and contest.draft_group in criteria["draft_groups"]
+        and contest.entry_fee >= criteria["min_entry_fee"]
+        and contest.entry_fee <= criteria["max_entry_fee"]
+        and contest.max_entry_count == 1
+        and contest.is_guaranteed
+        and contest.is_double_up
+    )
 
 
 def get_salary_date(draft_group):
@@ -190,9 +210,9 @@ def create_connection(db_file):
     conn = None
     try:
         conn = sqlite3.connect(db_file)
-        print(sqlite3.sqlite_version)
+        logger.debug(sqlite3.sqlite_version)
     except sqlite3.Error as err:
-        print(err)
+        logger.error(err)
     finally:
         if conn:
             conn.close()
@@ -257,7 +277,7 @@ def db_compare_contests(conn, contests):
         return dk_ids
 
     except sqlite3.Error as err:
-        print("sqlite error: ", err.args[0])
+        logger.error("sqlite error: %s", err.args[0])
 
 
 def db_insert_contests(conn, contests):
@@ -300,7 +320,7 @@ def db_insert_contests(conn, contests):
             # execute SQL command
             cur.execute(sql, tpl_contest)
         except sqlite3.Error as err:
-            print("sqlite error: ", err.args[0])
+            logger.error("sqlite error: %s", err.args[0])
 
     # commit database
     conn.commit()
@@ -321,63 +341,12 @@ def db_update_contest_data_for_contests(conn, contests_to_update):
     try:
         cur.executemany(sql, contests_to_update)
         conn.commit()
-        print(f"Total {cur.rowcount} records updated successfully!")
+        logger.info(f"Total {cur.rowcount} records updated successfully!")
     except sqlite3.Error as err:
-        print("sqlite error: ", err.args[0])
+        logger.error("sqlite error: %s", err.args[0])
 
 
-# def db_check_contests_for_update(conn, contests_to_update):
-#     """Check if contests need to be updated."""
-#     cur = conn.cursor()
-
-#     # store count of current list
-#     contests_count = len(contests_to_update)
-
-#     try:
-#         # execute SQL command
-#         dk_ids = [c[3] for c in contests_to_update]
-#         # find all contests which supposedly need to be updated
-#         sql = (
-#             "SELECT positions_paid, status, completed, dk_id "
-#             "FROM contests "
-#             "WHERE dk_id IN ({0})"
-#         ).format(", ".join("?" for _ in dk_ids))
-#         cur.execute(sql, dk_ids)
-
-#         # fetch rows
-#         rows = cur.fetchall()
-
-#         for row in rows:
-#             # loop through each contest and see if anything is different
-#             for contest in contests_to_update:
-#                 if list(row) == contest:
-#                     # # if we find the right contest
-#                     # if row[3] == contest[3]:
-#                     #     # and everything matches
-#                     #     if (
-#                     #         row[0] == contest[0]
-#                     #         and row[1] == contest[1]
-#                     #         and row[2] == contest[2]
-#                     #     ):
-#                     # remove it from needing an update
-#                     contests_to_update.remove(contest)
-#                     break
-
-#         print(
-#             "There were {} contests to update, but now there are {}".format(
-#                 contests_count, len(contests_to_update)
-#             )
-#         )
-#         # if there are any contests left to update, update them
-#         if contests_to_update:
-#             db_update_contest_data_for_contests(conn, contests_to_update)
-
-#     except sqlite3.Error as err:
-#         print("sqlite error in check_db_contests_for_update(): ", err.args[0])
-
-
-def check_db_contests_for_completion(conn):
-    """Check each contest for completion/positions_paid data."""
+def db_get_incomplete_contests(conn):
     # get cursor
     cur = conn.cursor()
 
@@ -391,96 +360,151 @@ def check_db_contests_for_completion(conn):
         )
         cur.execute(sql)
 
-        # fetch rows
-        rows = cur.fetchall()
-
-        contests_to_update = []
-        for row in rows:
-            contest_data = get_contest_data(row[0])
-
-            if contest_data:
-                # if contest data is different, append list
-                if (
-                    row[2] != contest_data["positions_paid"]
-                    or row[3] != contest_data["status"]
-                    or row[4] != contest_data["completed"]
-                ):
-                    contests_to_update.append(
-                        (
-                            contest_data["positions_paid"],
-                            contest_data["status"],
-                            contest_data["completed"],
-                            row[0],
-                        )
-                    )
-
-        if contests_to_update:
-            # db_check_contests_for_update(conn, contests_to_update)
-            db_update_contest_data_for_contests(conn, contests_to_update)
-
+        # return all rows
+        return cur.fetchall()
     except sqlite3.Error as err:
         print("sqlite error [check_db_contests_for_completion()]: ", err.args[0])
 
+    return None
 
-def get_contest_data(contest_id):
+
+def check_contests_for_completion(conn):
+    """Check each contest for completion/positions_paid data."""
+
+    # get incopmlete contests from the database
+    incomplete_contests = db_get_incomplete_contests(conn)
+
+    # if there are no incomplete contests, return
+    if not incomplete_contests:
+        return
+
+    logger.debug("found %i incomplete contests", len(incomplete_contests))
+
+    # start chromium driver
+    driver = start_chromedriver()
+
+    contests_to_update = []
+    for row in incomplete_contests:
+        contest_data = get_contest_data(driver, row[0])
+
+        if contest_data:
+            # if contest data is different, append list
+            if (
+                row[2] != contest_data["positions_paid"]
+                or row[3] != contest_data["status"]
+                or row[4] != contest_data["completed"]
+            ):
+                contests_to_update.append(
+                    (
+                        contest_data["positions_paid"],
+                        contest_data["status"],
+                        contest_data["completed"],
+                        row[0],
+                    )
+                )
+
+    # logger.info("quitting driver")
+    # driver.quit()
+
+    if contests_to_update:
+        # db_check_contests_for_update(conn, contests_to_update)
+        db_update_contest_data_for_contests(conn, contests_to_update)
+
+
+def start_chromedriver():
+    # find chromedriver
+    bin_chromedriver = getenv("CHROMEDRIVER")
+    if not getenv("CHROMEDRIVER"):
+        raise "Could not find CHROMEDRIVER in environment"
+
+    # start webdriver
+    logger.debug("starting chromedriver..")
+    service = chrome_service.Service(bin_chromedriver)
+    service.start()
+    options = webdriver.ChromeOptions()
+    # TODO try headless? probably won't work due to the geolocation stuff
+    # options.headless = True
+    options.add_argument("--no-sandbox")
+    options.add_argument("--user-data-dir=/home/pi/.config/chromium")
+    options.add_argument(r"--profile-directory=Profile 1")
+    driver = webdriver.Remote(
+        service.service_url, desired_capabilities=options.to_capabilities()
+    )
+    logger.debug("returning driver")
+    return driver
+
+
+def get_selenium_html(driver, url, save_to_file=True):
+    """Use Chromedriver to get website's JS-generated HTML and write to file."""
+    logger.debug("getting url %s with driver", url)
+    try:
+        driver.get(url)
+    except Exception as e:
+        logger.error("Error with driver.get(): %s", e)
+        return None
+
+    logger.debug("got url with driver")
+
+    # print html for debugging
+    if save_to_file:
+        logger.debug("saving HTML to content.html")
+        print(driver.page_source, file=open("content.html", "w", encoding="utf-8"))
+
+    return driver.page_source
+
+
+def get_contest_data(driver, contest_id):
     """Pull contest data (positions paid, status, etc.) with BeautifulSoup"""
     url = f"https://www.draftkings.com/contest/gamecenter/{contest_id}"
 
-    response = requests.get(url, headers=HEADERS, cookies=COOKIES)
-    soup = BeautifulSoup(response.text, "html.parser")
+    driver.get(url)
+    # draftkings takes forever to load
+    html = driver.page_source
+
+    # get the HTML using selenium, since there is html loaded with javascript
+    # html = get_selenium_html(driver, url)
+
+    if not html:
+        logger.warning("couldn't get HTML from %s", url)
+        return None
+
+    logger.debug("parsing html for contest %i", contest_id)
+    soup = BeautifulSoup(html, "html.parser")
 
     try:
-        header = soup.find_all(class_="top")[0].find_all("h4")
-        info_header = (
-            soup.find_all(class_="top")[0]
-            .find_all(class_="info-header")[0]
-            .find_all("span")
+        entries = soup.find("label", text="Entries").find_next("span").text
+        status = soup.find("label", text="Status").find_next("span").text.upper()
+        positions_paid = (
+            soup.find("label", text="Positions Paid").find_next("span").text
         )
-        status = info_header[3].string.strip().upper()
-        # print("Positions paid: %s".format(int(info_header[4].string)))
-        if status in ["COMPLETED", "LIVE", "CANCELLED"]:
-            # print(f"contest {contest_id} is {status}")
-            # print(
-            #     "name: {} total_prizes: {} date: {} entries: {} positions_paid: {}".format(
-            #         header[0].string,
-            #         header[1].string,
-            #         info_header[0].string,
-            #         info_header[2].string,
-            #         info_header[4].string,
-            #     )
-            # )
 
+        logger.debug(f"entries: {entries}")
+        logger.debug(f"status: {status}")
+        logger.debug(f"positions_paid: {positions_paid}")
+
+        if status in ["COMPLETED", "LIVE", "CANCELLED"]:
             # set completed status
             completed = 1 if status in ["COMPLETED", "CANCELLED"] else 0
-
             return {
                 "completed": completed,
                 "status": status,
-                "name": header[0].string,
-                "total_prizes": header[1].string,
-                "date": info_header[0].string,
-                "entries": int(info_header[2].string),
-                "positions_paid": int(info_header[4].string),
+                "entries": int(entries),
+                "positions_paid": int(positions_paid),
+                # "name": header[0].string,
+                # "total_prizes": header[1].string,
+                # "date": info_header[0].string,
             }
-            # DKContest.objects.update_or_create(
-            #     dk_id=contest_id,
-            #     defaults={
-            #         "name": header[0].string,
-            #         "total_prizes": dollars_to_decimal(header[1].string),
-            #         "date": datestr_to_date(info_header[0].string),
-            #         "entries": int(info_header[2].string),
-            #         "positions_paid": int(info_header[4].string),
-            #     },
-            # )
 
         return None
-        # print("Contest {} is still in progress".format(contest_id))
-    except IndexError:
+    # except IndexError as e:
+    except Exception as e:
         # This error occurs for old contests whose pages no longer are
         # being served.
         # IndexError: list index out of range
+        logger.warning(
+            "Couldn't find DK contest with id {} error: {} ".format(contest_id, e)
+        )
         pass
-        # print("Couldn't find DK contest with id {}".format(contest_id))
 
 
 # def get_contest_prize_data(contest_id):
@@ -527,7 +551,6 @@ def temp_add_column(conn):
 
 def main():
     """Find new double ups."""
-
     supported_sports = [
         "NBA",
         "NFL",
@@ -563,7 +586,7 @@ def main():
     temp_add_column(conn)
 
     # update old contests
-    check_db_contests_for_completion(conn)
+    check_contests_for_completion(conn)
 
     for sport in args.sport:
         # get contests from url
@@ -601,7 +624,7 @@ def main():
             matching_contests = [c for c in contests if c.id in new_contests]
 
             for contest in matching_contests:
-                print(
+                logger.info(
                     "New dub found! [{:%Y-%m-%d}] Name: {} ID: {} Entry Fee: {} Entries: {}".format(
                         contest.start_dt,
                         contest.name,
