@@ -5,6 +5,7 @@ import datetime
 import logging
 import logging.config
 import sqlite3
+import sys
 from os import getenv
 
 import browsercookie
@@ -60,7 +61,7 @@ def get_contests_from_response(response):
         response_contests = response["Contests"]
     else:
         logger.error("response isn't a dict or a list??? exiting")
-        exit()
+        sys.exit()
 
     return response_contests
 
@@ -357,7 +358,7 @@ def db_get_incomplete_contests(conn):
     try:
         # execute SQL command
         sql = (
-            "SELECT dk_id, draft_group, positions_paid, status, completed "
+            "SELECT dk_id, positions_paid, status, completed "
             "FROM contests "
             "WHERE start_date <= datetime('now', 'localtime') "
             "  AND (positions_paid IS NULL OR completed = 0)"
@@ -387,22 +388,22 @@ def check_contests_for_completion(conn):
     driver = start_chromedriver()
 
     contests_to_update = []
-    for row in incomplete_contests:
-        contest_data = get_contest_data(driver, row[0])
+    for dk_id, positions_paid, status, completed in incomplete_contests:
+        contest_data = get_contest_data(driver, dk_id)
 
         if contest_data:
             # if contest data is different, append list
             if (
-                row[2] != contest_data["positions_paid"]
-                or row[3] != contest_data["status"]
-                or row[4] != contest_data["completed"]
+                positions_paid != contest_data["positions_paid"]
+                or status != contest_data["status"]
+                or completed != contest_data["completed"]
             ):
                 contests_to_update.append(
                     (
                         contest_data["positions_paid"],
                         contest_data["status"],
                         contest_data["completed"],
-                        row[0],
+                        dk_id,
                     )
                 )
 

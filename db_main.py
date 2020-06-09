@@ -8,6 +8,7 @@ import logging
 import logging.config
 import pickle
 import sqlite3
+import sys
 import time
 import zipfile
 from os import getenv
@@ -30,7 +31,6 @@ logger = logging.getLogger(__name__)
 
 def pull_contest_zip(contest_id):
     """Pull contest file (so far can be .zip or .csv file)."""
-
     # try pickle cookies method
     cookies = cj_from_pickle("pickled_cookies_works.txt")
     if cookies:
@@ -64,8 +64,9 @@ def pull_contest_zip(contest_id):
     if result is not None:
         logger.debug("SECOND browsercookie method worked!!")
         return result
-    else:
-        logger.debug("Broken from SECOND browsercookie method")
+
+    logger.debug("Broken from SECOND browsercookie method")
+    return None
 
 
 def use_selenium(contest_id):
@@ -74,7 +75,8 @@ def use_selenium(contest_id):
     )
     bin_chromedriver = getenv("CHROMEDRIVER")
     if not getenv("CHROMEDRIVER"):
-        exit("Could not find CHROMEDRIVER in env variable")
+        logger.error("Could not find CHROMEDRIVER in env variable")
+        sys.exit()
 
     logger.debug("Found chromedriver in env variable: %s", {bin_chromedriver})
     # start headless webdriver
@@ -130,12 +132,13 @@ def request_contest_url(session, contest_id):
     logger.debug(response.status_code)
     logger.debug(response.url)
     logger.debug(response.headers["Content-Type"])
-    # print(r.headers)
+
     if "text/html" in response.headers["Content-Type"]:
-        logger.info("We cannot do anything with html!")
+        logger.warning("We cannot do anything with html!")
         return None
+
     # if headers say file is a CSV file
-    elif response.headers["Content-Type"] == "text/csv":
+    if response.headers["Content-Type"] == "text/csv":
         # write working cookies
         with open("pickled_cookies_works.txt", "wb") as fp:
             pickle.dump(session.cookies, fp)
@@ -145,23 +148,23 @@ def request_contest_url(session, contest_id):
         # open reader object on csvfile
         # rdr = csv.reader(csvfile.splitlines(), delimiter=",")
         return list(csv.reader(csvfile.splitlines(), delimiter=","))
-    else:
-        # write working cookies
-        with open("pickled_cookies_works.txt", "wb") as fp:
-            pickle.dump(session.cookies, fp)
-        # request will be a zip file
-        zipz = zipfile.ZipFile(io.BytesIO(response.content))
-        for name in zipz.namelist():
-            # extract file - it seems easier this way
-            path = zipz.extract(name)
-            logger.debug("path: %s", path)
-            with zipz.open(name) as csvfile:
-                logger.debug("name within zipfile: %s", name)
-                # convert to TextIOWrapper object
-                lines = io.TextIOWrapper(csvfile, encoding="utf-8", newline="\r\n")
-                # open reader object on csvfile within zip file
-                # rdr = csv.reader(lines, delimiter=",")
-                return list(csv.reader(lines, delimiter=","))
+
+    # write working cookies
+    with open("pickled_cookies_works.txt", "wb") as fp:
+        pickle.dump(session.cookies, fp)
+    # request will be a zip file
+    zipz = zipfile.ZipFile(io.BytesIO(response.content))
+    for name in zipz.namelist():
+        # extract file - it seems easier this way
+        path = zipz.extract(name)
+        logger.debug("path: %s", path)
+        with zipz.open(name) as csvfile:
+            logger.debug("name within zipfile: %s", name)
+            # convert to TextIOWrapper object
+            lines = io.TextIOWrapper(csvfile, encoding="utf-8", newline="\r\n")
+            # open reader object on csvfile within zip file
+            # rdr = csv.reader(lines, delimiter=",")
+            return list(csv.reader(lines, delimiter=","))
 
 
 def cj_from_pickle(filename):
@@ -173,7 +176,7 @@ def cj_from_pickle(filename):
         return False
 
 
-def get_live_contest(conn, sport, entry_fee=25):
+def db_get_live_contest(conn, sport, entry_fee=25):
     # get cursor
     cur = conn.cursor()
 
@@ -235,7 +238,9 @@ def main():
         "XFL",
         "MMA",
         "LOL",
+        "NAS",
     ]
+
     parser.add_argument(
         "-s",
         "--sport",
@@ -263,7 +268,7 @@ def main():
 
     for sport in args.sport:
 
-        result = get_live_contest(conn, sport)
+        result = db_get_live_contest(conn, sport)
 
         if not result:
             logger.warning("There are no live contests for %s! Moving on.", sport)
