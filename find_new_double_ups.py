@@ -6,13 +6,9 @@ import logging
 import logging.config
 import sqlite3
 import sys
-from os import getenv
 
 import browsercookie
 import requests
-import selenium.webdriver.chrome.service as chrome_service
-from bs4 import BeautifulSoup
-from selenium import webdriver
 
 from classes.contest import Contest
 
@@ -332,204 +328,6 @@ def db_insert_contests(conn, contests):
     return cur.lastrowid
 
 
-def db_update_contest_data_for_contests(conn, contests_to_update):
-    """Update contest fields based on get_contest_data()."""
-    cur = conn.cursor()
-
-    sql = (
-        "UPDATE contests "
-        "SET positions_paid=?, status=?, completed=? "
-        "WHERE dk_id=?"
-    )
-
-    try:
-        cur.executemany(sql, contests_to_update)
-        conn.commit()
-        logger.info("Total %d records updated successfully!", cur.rowcount)
-    except sqlite3.Error as err:
-        logger.error("sqlite error: %s", err.args[0])
-
-
-def db_get_incomplete_contests(conn):
-    """Get the incomplete contests from the database."""
-    # get cursor
-    cur = conn.cursor()
-
-    try:
-        # execute SQL command
-        sql = (
-            "SELECT dk_id, positions_paid, status, completed "
-            "FROM contests "
-            "WHERE start_date <= datetime('now', 'localtime') "
-            "  AND (positions_paid IS NULL OR completed = 0)"
-        )
-        cur.execute(sql)
-
-        # return all rows
-        return cur.fetchall()
-    except sqlite3.Error as err:
-        print("sqlite error [check_db_contests_for_completion()]: ", err.args[0])
-
-    return None
-
-
-def check_contests_for_completion(conn):
-    """Check each contest for completion/positions_paid data."""
-    # get incopmlete contests from the database
-    incomplete_contests = db_get_incomplete_contests(conn)
-
-    # if there are no incomplete contests, return
-    if not incomplete_contests:
-        return
-
-    logger.debug("found %i incomplete contests", len(incomplete_contests))
-
-    # start chromium driver
-    driver = start_chromedriver()
-
-    contests_to_update = []
-    for dk_id, positions_paid, status, completed in incomplete_contests:
-        contest_data = get_contest_data(driver, dk_id)
-
-        if contest_data:
-            # if contest data is different, append list
-            if (
-                positions_paid != contest_data["positions_paid"]
-                or status != contest_data["status"]
-                or completed != contest_data["completed"]
-            ):
-                contests_to_update.append(
-                    (
-                        contest_data["positions_paid"],
-                        contest_data["status"],
-                        contest_data["completed"],
-                        dk_id,
-                    )
-                )
-
-    if contests_to_update:
-        # db_check_contests_for_update(conn, contests_to_update)
-        db_update_contest_data_for_contests(conn, contests_to_update)
-
-
-def start_chromedriver():
-    """Start the chromedriver and return the driver."""
-    # find chromedriver
-    bin_chromedriver = getenv("CHROMEDRIVER")
-    if not getenv("CHROMEDRIVER"):
-        raise "Could not find CHROMEDRIVER in environment"
-
-    # start webdriver
-    logger.debug("starting chromedriver..")
-    service = chrome_service.Service(bin_chromedriver)
-    service.start()
-    options = webdriver.ChromeOptions()
-    # TODO try headless? probably won't work due to the geolocation stuff
-    # options.headless = True
-    options.add_argument("--no-sandbox")
-    options.add_argument("--user-data-dir=/home/pi/.config/chromium")
-    options.add_argument(r"--profile-directory=Profile 1")
-    driver = webdriver.Remote(
-        service.service_url, desired_capabilities=options.to_capabilities()
-    )
-    logger.debug("returning driver")
-    return driver
-
-
-def get_contest_data(driver, contest_id):
-    """Pull contest data (positions paid, status, etc.) with BeautifulSoup."""
-    url = f"https://www.draftkings.com/contest/gamecenter/{contest_id}"
-
-    driver.get(url)
-    # draftkings takes forever to load
-    html = driver.page_source
-
-    # get the HTML using selenium, since there is html loaded with javascript
-    # html = get_selenium_html(driver, url)
-
-    if not html:
-        logger.warning("couldn't get HTML from %s", url)
-        return None
-
-    logger.debug("parsing html for contest %i", contest_id)
-    soup = BeautifulSoup(html, "html.parser")
-
-    try:
-        entries = soup.find("label", text="Entries").find_next("span").text
-        status = soup.find("label", text="Status").find_next("span").text.upper()
-        positions_paid = (
-            soup.find("label", text="Positions Paid").find_next("span").text
-        )
-
-        logger.debug("entries: %s", entries)
-        logger.debug("status: %s", status)
-        logger.debug("positions_paid: %s", positions_paid)
-
-        if status in ["COMPLETED", "LIVE", "CANCELLED"]:
-            # set completed status
-            completed = 1 if status in ["COMPLETED", "CANCELLED"] else 0
-            return {
-                "completed": completed,
-                "status": status,
-                "entries": int(entries),
-                "positions_paid": int(positions_paid),
-                # "name": header[0].string,
-                # "total_prizes": header[1].string,
-                # "date": info_header[0].string,
-            }
-
-        return None
-    except IndexError as ex:
-        # This error occurs for old contests whose pages no longer are being served.
-        # IndexError: list index out of range
-        logger.warning(
-            "Couldn't find DK contest with id %d error: %s", contest_id, ex,
-        )
-
-
-# def get_contest_prize_data(contest_id):
-#     url = "https://www.draftkings.com/contest/detailspop"
-#     params = {
-#         "contestId": contest_id,
-#         "showDraftButton": False,
-#         "defaultToDetails": True,
-#         "layoutType": "legacy",
-#     }
-#     response = requests.get(url, headers=HEADERS, cookies=COOKIES, params=params)
-#     soup = BeautifulSoup(response.text, "html.parser")
-
-#     try:
-#         payouts = soup.find_all(id="payouts-table")[0].find_all("tr")
-#         entry_fee = soup.find_all("h2")[0].text.split("|")[2].strip()
-#         for payout in payouts:
-#             places, payout = [x.string for x in payout.find_all("td")]
-#             places = [place_to_number(x.strip()) for x in places.split("-")]
-#             top, bottom = (places[0], places[0]) if len(places) == 1 else places
-#     except IndexError as ex:
-#         # See comment in get_contest_data()
-#         print("Couldn't find DK contest with id %s: %s", contest_id, ex)
-
-
-def temp_add_column(conn):
-    """Add a column of completed and status to the contests table."""
-    # TODO REMOVE
-    cur = conn.cursor()
-
-    try:
-        sql = "ALTER TABLE contests ADD COLUMN completed INTEGER DEFAULT 0"
-        cur.execute(sql)
-    except sqlite3.Error:  # as err:
-        pass
-        # print("sqlite error: ", err.args[0])
-
-    try:
-        sql = "ALTER TABLE contests ADD COLUMN status TEXT"
-        cur.execute(sql)
-    except sqlite3.Error:  # as err:
-        pass
-        # print("sqlite error: ", err.args[0])
-
-
 def main():
     """Find new double ups."""
     supported_sports = [
@@ -563,12 +361,6 @@ def main():
     # create_connection("contests.db")
     conn = sqlite3.connect("contests.db")
 
-    # temp_add_column
-    temp_add_column(conn)
-
-    # update old contests
-    check_contests_for_completion(conn)
-
     for sport in args.sport:
         # get contests from url
         url = f"https://www.draftkings.com/lobby/getcontests?sport={sport}"
@@ -577,20 +369,6 @@ def main():
 
         # create list of Contest objects
         contests = [Contest(c, sport) for c in response_contests]
-
-        # temp
-        # contests = []
-        # with open("getcontests.json", "r") as fp:
-        #     response = json.loads(fp.read())
-        #     response_contests = {}
-        #     if isinstance(response, list):
-        #         print("response is a list")
-        #         response_contests = response
-        #     elif "Contests" in response:
-        #         print("response is a dict")
-        #     response_contests = response["Contests"]
-        #     contests = [Contest(c) for c in response_contests]
-
         # get double ups from list of Contests
         double_ups = get_double_ups(contests, draft_groups)
 
