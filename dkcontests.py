@@ -215,7 +215,8 @@ def print_cron_job(contest, sport):
     py_str = f"cd {home_dir}/dk_results && {pipenv_path} run python"
     dl_str = f"{py_str} download_DK_salary.py"
     get_str = f"export DISPLAY=:1 && {py_str} main.py"
-    cron_str = set_cron_interval(contest, dict_sports[sport]["get_interval"])
+    # cron_str = set_cron_interval(contest, dict_sports[sport]["get_interval"])
+    cron_str = set_cron_interval(contest, dict_sports[sport]["sport_length"])
     out_str = f"{home_dir}/{sport}_results.log 2>&1"
     file_str = f"DKSalaries_{sport}_{contest.start_dt:%A}.csv"
 

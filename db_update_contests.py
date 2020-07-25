@@ -53,7 +53,7 @@ def check_contests_for_completion(conn):
         logger.debug("driver.get url %s", url)
         driver.get(url)
 
-        logger.debug("getting contest data for %i", dk_id)
+        logger.debug("getting contest data for %i [current status: %s]", dk_id, status)
         contest_data = get_contest_data(driver.page_source, dk_id)
 
         if not contest_data:
@@ -113,6 +113,7 @@ def db_get_incomplete_contests(conn):
             "FROM contests "
             "WHERE start_date <= datetime('now', 'localtime') "
             "  AND (positions_paid IS NULL OR completed = 0)"
+#            "  AND status != 'LIVE'"
         )
         cur.execute(sql)
 
@@ -162,10 +163,10 @@ def get_contest_data(html, contest_id):
             }
 
         return None
-    except IndexError as ex:
+    except (IndexError, AttributeError) as ex:
         # This error occurs for old contests whose pages no longer are being served.
         # IndexError: list index out of range
-        logger.warning(
+        logger.error(
             "Couldn't find DK contest with id %d error: %s", contest_id, ex,
         )
 

@@ -124,7 +124,7 @@ class DFSSheet(Sheet):
         "PGAWeekend": "L3:Q41",
         "PGAShowdown": "L3:Q41",
         "TEN": "J3:V61",
-        "MLB": "J3:V61",
+        "MLB": "J3:V71",
         "XFL": "J3:V56",
         "MMA": "J3:V61",
         "LOL": "J3:V61",
