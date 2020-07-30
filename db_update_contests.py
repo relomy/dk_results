@@ -2,6 +2,7 @@ import logging
 import logging.config
 import sqlite3
 from os import getenv
+from time import sleep
 
 import selenium.webdriver.chrome.service as chrome_service
 from bs4 import BeautifulSoup
@@ -47,13 +48,20 @@ def check_contests_for_completion(conn):
         service.service_url, desired_capabilities=options.to_capabilities()
     )
 
-    for dk_id, positions_paid, status, completed in incomplete_contests:
+    for dk_id, sport, positions_paid, status, completed in incomplete_contests:
         # navigate to the gamecenter URL
         url = f"https://www.draftkings.com/contest/gamecenter/{dk_id}"
         logger.debug("driver.get url %s", url)
         driver.get(url)
 
-        logger.debug("getting contest data for %i [current status: %s]", dk_id, status)
+        logger.debug("getting contest data for %i [sport: %s current status: %s]", dk_id, sport, status)
+
+	# sleep before using JavaScript to return the DOM
+        sleep(5)
+        html = driver.execute_script(
+            "return document.getElementsByTagName('html')[0].innerHTML"
+        )
+
         contest_data = get_contest_data(driver.page_source, dk_id)
 
         if not contest_data:
@@ -65,7 +73,7 @@ def check_contests_for_completion(conn):
             or status != contest_data["status"]
             or completed != contest_data["completed"]
         ):
-            logger.debug("add contest %i to contests_to_update", dk_id)
+            logger.info("[+] add contest %i [status: %s] to contests_to_update", dk_id, status)
             contests_to_update.append(
                 (
                     contest_data["positions_paid"],
@@ -109,7 +117,7 @@ def db_get_incomplete_contests(conn):
     try:
         # execute SQL command
         sql = (
-            "SELECT dk_id, positions_paid, status, completed "
+            "SELECT dk_id, sport, positions_paid, status, completed "
             "FROM contests "
             "WHERE start_date <= datetime('now', 'localtime') "
             "  AND (positions_paid IS NULL OR completed = 0)"
