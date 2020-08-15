@@ -1,4 +1,5 @@
 import logging
+import coloredlogs
 import logging.config
 import sqlite3
 from os import getenv
@@ -9,9 +10,11 @@ from selenium import webdriver
 
 
 # load the logging configuration
-logging.config.fileConfig("logging.ini")
+#logging.config.fileConfig("logging.ini")
 
 logger = logging.getLogger(__name__)
+
+coloredlogs.install(level='DEBUG')
 
 
 def check_contests_for_completion(conn):

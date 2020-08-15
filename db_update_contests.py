@@ -4,6 +4,7 @@ import sqlite3
 from os import getenv
 from time import sleep
 
+import coloredlogs
 import selenium.webdriver.chrome.service as chrome_service
 from bs4 import BeautifulSoup
 from selenium import webdriver
@@ -13,7 +14,7 @@ from selenium import webdriver
 logging.config.fileConfig("logging.ini")
 
 logger = logging.getLogger(__name__)
-
+coloredlogs.install(level='DEBUG', logger=logger)
 
 def check_contests_for_completion(conn):
     """Check each contest for completion/positions_paid data."""
@@ -54,7 +55,7 @@ def check_contests_for_completion(conn):
         logger.debug("driver.get url %s", url)
         driver.get(url)
 
-        logger.debug("getting contest data for %i [sport: %s current status: %s]", dk_id, sport, status)
+        logger.info("getting contest data for %i [sport: %s current status: %s]", dk_id, sport, status)
 
 	# sleep before using JavaScript to return the DOM
         sleep(5)
@@ -121,7 +122,6 @@ def db_get_incomplete_contests(conn):
             "FROM contests "
             "WHERE start_date <= datetime('now', 'localtime') "
             "  AND (positions_paid IS NULL OR completed = 0)"
-#            "  AND status != 'LIVE'"
         )
         cur.execute(sql)
 

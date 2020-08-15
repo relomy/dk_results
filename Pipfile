@@ -1,4 +1,9 @@
 [[source]]
+name = "piwheels"
+url = "https://www.piwheels.org/simple/"
+verify_ssl = true
+
+[[source]]
 name = "pypi"
 url = "https://pypi.org/simple"
 verify_ssl = true
@@ -10,16 +15,18 @@ pylint = "*"
 
 [packages]
 browsercookie = {hg = "https://bitbucket.org/richardpenman/browsercookie/"}
-pywin32 = {version = "*",sys_platform = "== 'win32'"}
+# pywin32 = {version = "*",sys_platform = "== 'win32'"}
+# pywin32 = {version = "*", markers="sys_platform == 'win32'"}
 google-api-python-client = "*"
 oauth2client = "*"
 pytz = "*"
 requests = "*"
 selenium = "*"
 beautifulsoup4 = "*"
+coloredlogs = "*"
 
 [requires]
-python_version = "3.8"
+python_version = "3.7"
 
 [pipenv]
 allow_prereleases = true
