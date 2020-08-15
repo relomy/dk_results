@@ -39,7 +39,7 @@ HEADERS = {
 def get_dk_lobby(url):
     """Get contests from the DraftKings lobby. Returns a list."""
     # set cookies based on Chrome session
-    # print(url)
+    # logger.debug(url)
 
     response = requests.get(url, headers=HEADERS, cookies=COOKIES).json()
 
@@ -79,6 +79,7 @@ def get_draft_groups_from_response(response):
         start_date_est = draft_group["StartDateEst"]
 
         suffix_list = [
+            "(PGA)",
             "(PGA TOUR)",
             "(AUS)",  # TEN
             "(LCS)",  # LOL
@@ -88,28 +89,28 @@ def get_draft_groups_from_response(response):
         ]
 
         # only care about featured draftgroups and those with no suffix
-        # special case for GOLF
+        # some special cases in list above
         if tag == "Featured":
             if suffix is None or suffix.strip() in suffix_list:
                 logger.info(
-                    "[%s] Appending: tag %s draft_group_id %d suffix: [%s] start_date_est: %s",
+                    "[%4s] Append: start date: [%s] dg: [%d] tag [%s] suffix: [%s]",
                     sport,
-                    tag,
-                    draft_group_id,
-                    suffix,
                     start_date_est,
+                    draft_group_id,
+                    tag,
+                    suffix,
                 )
                 response_draft_groups.append(draft_group_id)
                 continue
 
         logger.debug(
-            "[%s] Skipping: tag %s draft_group_id %d [%s] start_date_est: %s",
+            "[%4s]   Skip: start date: [%s] dg: [%d] tag [%s] suffix: [%s]",
             sport,
-            tag,
-            draft_group_id,
-            suffix,
             start_date_est,
-        )
+            draft_group_id,
+            tag,
+            suffix,
+       )
 
         # print(
         #     "Adding draft_group for [{0}]: draft group {1} contest type {2} [suffix: {3}]".format(
