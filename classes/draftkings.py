@@ -32,6 +32,8 @@ class Draftkings:
             "GOLF": 9,  # temporary, decide if i want PGA or GOLF
             "MMA": 7,
             "PGA": 9,
+            "PGAWeekend": 9,
+            "PGAShowdown": 9,
             "SOC": 10,
             "MLB": 12,
             "NFL": 21,
