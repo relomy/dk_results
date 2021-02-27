@@ -143,7 +143,8 @@ def request_contest_url(session, contest_id):
         with open("pickled_cookies_works.txt", "wb") as fp:
             pickle.dump(session.cookies, fp)
         # decode bytes into string
-        csvfile = response.content.decode("utf-8")
+        #csvfile = response.content.decode("utf-8")
+        csvfile = response.content.decode("utf-8-sig")
         print(csvfile, file=open(f"contest-standings-{contest_id}.csv", "w"))
         # open reader object on csvfile
         # rdr = csv.reader(csvfile.splitlines(), delimiter=",")
@@ -161,7 +162,7 @@ def request_contest_url(session, contest_id):
         with zipz.open(name) as csvfile:
             logger.debug("name within zipfile: %s", name)
             # convert to TextIOWrapper object
-            lines = io.TextIOWrapper(csvfile, encoding="utf-8", newline="\r\n")
+            lines = io.TextIOWrapper(csvfile, encoding="utf-8", newline="\n")
             # open reader object on csvfile within zip file
             # rdr = csv.reader(lines, delimiter=",")
             return list(csv.reader(lines, delimiter=","))

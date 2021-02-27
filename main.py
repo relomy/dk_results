@@ -223,7 +223,8 @@ def request_contest_url(session, contest_id):
             with z.open(name) as csvfile:
                 logger.debug("name within zipfile: {}".format(name))
                 # convert to TextIOWrapper object
-                lines = io.TextIOWrapper(csvfile, encoding="utf-8", newline="\r\n")
+                #lines = io.TextIOWrapper(csvfile, encoding="utf-8-sig", newline="\r\n")
+                lines = io.TextIOWrapper(csvfile, encoding="utf-8-sig", newline="\n")
                 # open reader object on csvfile within zip file
                 # rdr = csv.reader(lines, delimiter=",")
                 return list(csv.reader(lines, delimiter=","))
