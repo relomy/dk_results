@@ -208,7 +208,7 @@ class Results:
     def load_standings(self, filename):
         """Load standings CSV and return list."""
         with open(filename, "rb") as csvfile:
-            lines = io.TextIOWrapper(csvfile, encoding="utf-8", newline="\r\n")
+            lines = io.TextIOWrapper(csvfile, encoding="utf-8", newline="\n")
             rdr = csv.reader(lines, delimiter=",")
             return list(rdr)
 
