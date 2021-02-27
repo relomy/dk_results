@@ -167,7 +167,7 @@ def get_stats(contests):
 
 
 def get_double_ups(
-    contests, draft_groups, min_entry_fee=1, max_entry_fee=50, entries=200
+    contests, draft_groups, min_entry_fee=1, max_entry_fee=50, entries=125
 ):
     """Find contests matching criteria."""
     criteria = {
