@@ -14,7 +14,8 @@ black = "*"
 pylint = "*"
 
 [packages]
-browsercookie = {hg = "https://bitbucket.org/richardpenman/browsercookie/"}
+# browsercookie = {hg = "https://bitbucket.org/richardpenman/browsercookie/"}
+browsercookie = "*"
 # pywin32 = {version = "*",sys_platform = "== 'win32'"}
 # pywin32 = {version = "*", markers="sys_platform == 'win32'"}
 google-api-python-client = "*"
@@ -27,8 +28,8 @@ coloredlogs = "*"
 google-auth-httplib2 = "*"
 google-auth-oauthlib = "*"
 
-[requires]
-python_version = "3.7"
+#[requires]
+#python_version = "3.7"
 
 [pipenv]
 allow_prereleases = true

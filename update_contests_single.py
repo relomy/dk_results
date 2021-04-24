@@ -10,11 +10,11 @@ from selenium import webdriver
 
 
 # load the logging configuration
-#logging.config.fileConfig("logging.ini")
+# logging.config.fileConfig("logging.ini")
 
 logger = logging.getLogger(__name__)
 
-coloredlogs.install(level='DEBUG', logger=logger)
+coloredlogs.install(level="DEBUG", logger=logger)
 
 
 def check_contests_for_completion(conn):
@@ -68,16 +68,24 @@ def check_contests_for_completion(conn):
             or status != contest_data["status"]
             or completed != contest_data["completed"]
         ):
-#            logger.debug("trying to update contest %i", dk_id)
-            db_update_contest(conn, [contest_data["positions_paid"], contest_data["status"], contest_data["completed"], dk_id])
-#            contests_to_update.append(
-#                (
-#                    contest_data["positions_paid"],
-#                    contest_data["status"],
-#                    contest_data["completed"],
-#                    dk_id,
-#                )
-#            )
+            #            logger.debug("trying to update contest %i", dk_id)
+            db_update_contest(
+                conn,
+                [
+                    contest_data["positions_paid"],
+                    contest_data["status"],
+                    contest_data["completed"],
+                    dk_id,
+                ],
+            )
+    #            contests_to_update.append(
+    #                (
+    #                    contest_data["positions_paid"],
+    #                    contest_data["status"],
+    #                    contest_data["completed"],
+    #                    dk_id,
+    #                )
+    #            )
 
     logger.debug("quitting driver")
     driver.quit()
@@ -85,6 +93,7 @@ def check_contests_for_completion(conn):
     if contests_to_update:
         # db_check_contests_for_update(conn, contests_to_update)
         db_update_contest_data_for_contests(conn, contests_to_update)
+
 
 def db_update_contest(conn, contest_to_update):
     """Update contest fields based on get_contest_data()."""
@@ -103,7 +112,6 @@ def db_update_contest(conn, contest_to_update):
         logger.info("Total %d records updated successfully!", cur.rowcount)
     except sqlite3.Error as err:
         logger.error("sqlite error: %s", err.args[0])
-
 
 
 def db_update_contest_data_for_contests(conn, contests_to_update):
@@ -189,9 +197,7 @@ def get_contest_data(html, contest_id):
         # This error occurs for old contests whose pages no longer are being served.
         # IndexError: list index out of range
         # logger.debug("driver.get url %s", driver.current_url)
-        logger.error(
-            "Couldn't find DK contest with id %d error: %s", contest_id, ex,
-        )
+        logger.error("Couldn't find DK contest with id %d error: %s", contest_id, ex)
 
 
 def main():
