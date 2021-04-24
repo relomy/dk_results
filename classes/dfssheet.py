@@ -1,10 +1,14 @@
 """Object to represent Google Sheet."""
 
 from os import path
+import pickle
 
 from googleapiclient.discovery import build
 from httplib2 import Http
-from oauth2client import client, file, tools
+#from oauth2client import client, file, tools
+from google.oauth2 import service_account
+#from google_auth_oauthlib.flow import InstalledAppFlow
+#from google.auth.transport.requests import Request
 
 import logging
 import logging.config
@@ -26,18 +30,44 @@ class Sheet:
 
     def setup_service(self):
         """Sets up the service for the spreadsheet."""
-        scopes = "https://www.googleapis.com/auth/spreadsheets"
+        scopes = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
+        creds = None
+#        # The file token.pickle stores the user's access and refresh tokens, and is
+#        # created automatically when the authorization flow completes for the first
+#        # time.
+#        if path.exists('token.pickle'):
+#            with open('token.pickle', 'rb') as token:
+#                creds = pickle.load(token)
+#        
+#        # If there are no (valid) credentials available, let the user log in.
+#        if not creds or not creds.valid:
+#            if creds and creds.expired and creds.refresh_token:
+#                creds.refresh(Request())
+#            else:
+#                flow = InstalledAppFlow.from_client_secrets_file('credentials.json', scopes)
+#        
+#        creds = flow.run_local_server(port=0)
+#        # Save the credentials for the next run
+#        
+#        with open('token.pickle', 'wb') as token:
+#            pickle.dump(creds, token)
+#
+#        service = build('sheets', 'v4', credentials=creds)
         directory = "."
-        store = file.Storage(path.join(directory, "token.json"))
-        creds = store.get()
-        if not creds or creds.invalid:
-            flow = client.flow_from_clientsecrets(
-                path.join(directory, "token.json"), scopes
-            )
-            creds = tools.run_flow(flow, store)
-        return build(
-            "sheets", "v4", http=creds.authorize(Http()), cache_discovery=False
-        )
+        #store = file.Storage(path.join(directory, "token.json"))
+        secret_file = path.join(directory, 'client_secret.json')
+
+        credentials = service_account.Credentials.from_service_account_file(secret_file, scopes=scopes)
+#        creds = store.get()
+#        if not creds or creds.invalid:
+#            flow = client.flow_from_clientsecrets(
+#                path.join(directory, "token.json"), scopes
+#            )
+#            creds = tools.run_flow(flow, store)
+#        return build(
+#            "sheets", "v4", http=creds.authorize(Http()), cache_discovery=False
+#        )
+        return build('sheets', 'v4', credentials=credentials, cache_discovery=False)
 
     def find_sheet_id(self, title):
         """Find the spreadsheet ID based on title."""
@@ -327,3 +357,4 @@ class DFSSheet(Sheet):
 #         ]
 
 #         DFSsheet.__init__(self, "PGAMain", "A2:I", columns)
+
