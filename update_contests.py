@@ -168,6 +168,7 @@ def get_contest_data(html, contest_id):
     except (IndexError, AttributeError) as ex:
         # This error occurs for old contests whose pages no longer are being served.
         # IndexError: list index out of range
+        # logger.debug("driver.get url %s", driver.current_url)
         logger.error(
             "Couldn't find DK contest with id %d error: %s", contest_id, ex,
         )
