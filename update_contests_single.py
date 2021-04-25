@@ -50,6 +50,8 @@ def check_contests_for_completion(conn):
         service.service_url, desired_capabilities=options.to_capabilities()
     )
 
+    skip_draft_groups = []
+
     for (
         dk_id,
         draft_group,
@@ -59,6 +61,11 @@ def check_contests_for_completion(conn):
         name,
         start_date,
     ) in incomplete_contests:
+        if draft_group in skip_draft_groups:
+            logger.debug("skipping %i because it has a draft_group of %d")
+            logger.debug("skip_draft_groups: %s", skip_draft_groups.join(" "))
+            continue
+
         # navigate to the gamecenter URL
         url = f"https://www.draftkings.com/contest/gamecenter/{dk_id}"
         logger.debug("driver.get url %s", url)
@@ -93,6 +100,8 @@ def check_contests_for_completion(conn):
                 ],
             )
         else:
+            # if contest data is the same, don't update other contests in the same draft group
+            skip_draft_groups.add(draft_group)
             logger.debug("contest data is the same, not updating")
 
     logger.debug("quitting driver")
