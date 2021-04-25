@@ -184,13 +184,14 @@ def get_contest_data(html, contest_id):
 
     try:
         entries = soup.find("label", text="Entries").find_next("span").text
+        logger.debug("entries: %s", entries)
+
         status = soup.find("label", text="Status").find_next("span").text.upper()
+        logger.debug("status: %s", status)
+
         positions_paid = (
             soup.find("label", text="Positions Paid").find_next("span").text
         )
-
-        logger.debug("entries: %s", entries)
-        logger.debug("status: %s", status)
         logger.debug("positions_paid: %s", positions_paid)
 
         if status in ["COMPLETED", "LIVE", "CANCELLED"]:
