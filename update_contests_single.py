@@ -63,7 +63,7 @@ def check_contests_for_completion(conn):
     ) in incomplete_contests:
         if draft_group in skip_draft_groups:
             logger.debug("skipping %i because it has a draft_group of %d")
-            logger.debug("skip_draft_groups: %s", skip_draft_groups.join(" "))
+            logger.debug("skip_draft_groups: %s", " ".join(skip_draft_groups))
             continue
 
         # navigate to the gamecenter URL
@@ -101,7 +101,7 @@ def check_contests_for_completion(conn):
             )
         else:
             # if contest data is the same, don't update other contests in the same draft group
-            skip_draft_groups.add(draft_group)
+            skip_draft_groups.append(draft_group)
             logger.debug("contest data is the same, not updating")
 
     logger.debug("quitting driver")
