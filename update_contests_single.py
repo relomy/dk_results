@@ -183,6 +183,7 @@ def get_contest_data(html, contest_id):
     soup = BeautifulSoup(html, "html.parser")
 
     try:
+        logger.debug("looking for entries...")
         entries = soup.find("label", text="Entries").find_next("span").text
         logger.debug("entries: %s", entries)
 
@@ -213,6 +214,7 @@ def get_contest_data(html, contest_id):
         # IndexError: list index out of range
         # logger.debug("driver.get url %s", driver.current_url)
         logger.error("Couldn't find DK contest with id %d error: %s", contest_id, ex)
+        print(html, file=open("debug.html", "w"))
 
 
 def main():
