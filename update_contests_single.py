@@ -56,7 +56,7 @@ def check_contests_for_completion(conn):
         positions_paid,
         status,
         completed,
-        sport,
+        name,
         start_date,
     ) in incomplete_contests:
         # navigate to the gamecenter URL
@@ -65,8 +65,8 @@ def check_contests_for_completion(conn):
         driver.get(url)
 
         logger.debug(
-            "getting contest data for [%s] %i [start: %s dg: %d]",
-            sport,
+            "getting contest data for %s [id: %i start: %s dg: %d]",
+            name,
             dk_id,
             start_date,
             draft_group,
@@ -76,7 +76,7 @@ def check_contests_for_completion(conn):
         if not contest_data:
             continue
 
-        # if contest data is different, append list
+        # if contest data is different, update it
         if (
             positions_paid != contest_data["positions_paid"]
             or status != contest_data["status"]
@@ -92,14 +92,8 @@ def check_contests_for_completion(conn):
                     dk_id,
                 ],
             )
-    #            contests_to_update.append(
-    #                (
-    #                    contest_data["positions_paid"],
-    #                    contest_data["status"],
-    #                    contest_data["completed"],
-    #                    dk_id,
-    #                )
-    #            )
+        else:
+            logger.debug("contest data is the same, not updating")
 
     logger.debug("quitting driver")
     driver.quit()
@@ -154,7 +148,7 @@ def db_get_incomplete_contests(conn):
     try:
         # execute SQL command
         sql = (
-            "SELECT dk_id, draft_group, positions_paid, status, completed, sport, start_date "
+            "SELECT dk_id, draft_group, positions_paid, status, completed, name, start_date "
             "FROM contests "
             "WHERE start_date <= datetime('now', 'localtime') "
             "  AND (positions_paid IS NULL OR completed = 0)"
