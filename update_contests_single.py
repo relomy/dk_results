@@ -63,7 +63,9 @@ def check_contests_for_completion(conn):
     ) in incomplete_contests:
         if draft_group in skip_draft_groups:
             logger.debug("skipping %i because it has a draft_group of %d")
-            logger.debug("skip_draft_groups: %s", " ".join(skip_draft_groups))
+            logger.debug(
+                "skip_draft_groups: %s", " ".join(str(dg) for dg in skip_draft_groups)
+            )
             continue
 
         # navigate to the gamecenter URL
