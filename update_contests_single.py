@@ -50,13 +50,27 @@ def check_contests_for_completion(conn):
         service.service_url, desired_capabilities=options.to_capabilities()
     )
 
-    for dk_id, positions_paid, status, completed in incomplete_contests:
+    for (
+        dk_id,
+        draft_group,
+        positions_paid,
+        status,
+        completed,
+        sport,
+        start_date,
+    ) in incomplete_contests:
         # navigate to the gamecenter URL
         url = f"https://www.draftkings.com/contest/gamecenter/{dk_id}"
         logger.debug("driver.get url %s", url)
         driver.get(url)
 
-        logger.debug("getting contest data for %i", dk_id)
+        logger.debug(
+            "getting contest data for [%s] %i [start: %s dg: %d]",
+            sport,
+            dk_id,
+            start_date,
+            draft_group,
+        )
         contest_data = get_contest_data(driver.page_source, dk_id)
 
         if not contest_data:
@@ -140,7 +154,7 @@ def db_get_incomplete_contests(conn):
     try:
         # execute SQL command
         sql = (
-            "SELECT dk_id, positions_paid, status, completed "
+            "SELECT dk_id, draft_group, positions_paid, status, completed, sport, start_date "
             "FROM contests "
             "WHERE start_date <= datetime('now', 'localtime') "
             "  AND (positions_paid IS NULL OR completed = 0)"
