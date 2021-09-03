@@ -78,6 +78,9 @@ def get_draft_groups_from_response(response):
         draft_group_id = draft_group["DraftGroupId"]
         start_date_est = draft_group["StartDateEst"]
 
+        if suffix is not None:
+            suffix = suffix.strip()
+
         suffix_list = [
             "(PGA)",
             "(PGA TOUR)",
@@ -86,6 +89,7 @@ def get_draft_groups_from_response(response):
             "(LEC)",
             "(LPL)",
             "(Cup)",  # NAS
+            "(Preseason)",  # NFL preseason
         ]
 
         # only care about featured draftgroups and those with no suffix
