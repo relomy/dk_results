@@ -143,7 +143,7 @@ def request_contest_url(session, contest_id):
         with open("pickled_cookies_works.txt", "wb") as fp:
             pickle.dump(session.cookies, fp)
         # decode bytes into string
-        #csvfile = response.content.decode("utf-8")
+        # csvfile = response.content.decode("utf-8")
         csvfile = response.content.decode("utf-8-sig")
         print(csvfile, file=open(f"contest-standings-{contest_id}.csv", "w"))
         # open reader object on csvfile
@@ -269,7 +269,11 @@ def main():
 
     for sport in args.sport:
 
-        result = db_get_live_contest(conn, sport)
+        min_entry_fee = 25
+        if sport == "CFB":
+            min_entry_fee = 5
+
+        result = db_get_live_contest(conn, sport, min_entry_fee)
 
         if not result:
             logger.warning("There are no live contests for %s! Moving on.", sport)
