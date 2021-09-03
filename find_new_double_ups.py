@@ -114,7 +114,7 @@ def get_draft_groups_from_response(response):
             draft_group_id,
             tag,
             suffix,
-       )
+        )
 
         # print(
         #     "Adding draft_group for [{0}]: draft group {1} contest type {2} [suffix: {3}]".format(
@@ -171,9 +171,10 @@ def get_stats(contests):
 
 
 def get_double_ups(
-    contests, draft_groups, min_entry_fee=1, max_entry_fee=50, entries=125
+    contests, draft_groups, min_entry_fee=5, max_entry_fee=50, entries=125
 ):
     """Find contests matching criteria."""
+
     criteria = {
         "draft_groups": draft_groups,
         "min_entry_fee": min_entry_fee,
@@ -375,7 +376,11 @@ def main():
         # create list of Contest objects
         contests = [Contest(c, sport) for c in response_contests]
         # get double ups from list of Contests
-        double_ups = get_double_ups(contests, draft_groups)
+        min_entries = 125
+        if sport == "CFB":
+            min_entries = 100
+
+        double_ups = get_double_ups(contests, draft_groups, entries=min_entries)
 
         # create table if it doesn't exist
         db_create_table(conn)
