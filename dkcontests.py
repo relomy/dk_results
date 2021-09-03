@@ -230,12 +230,35 @@ def print_cron_job(contest, sport):
         f"{dict_sports[sport]['get_interval']} {cron_str} {get_str} -s {sport} -i {contest.id} -dg {contest.draft_group} >> {out_str}"
     )
 
-def print_sql_insert(contest, sport):
+
+def print_sql_insert(contest):
     #  "sport",
-    fields = {"dk_id", "name", "start_date", "draft_group", "total_prizes", "entries", "entry_fee", "entry_count", "max_entry_count"}
-    print(f"INSERT INTO contests ({', '.join(fields)})")
-    values = [str(contest.id), contest.name, str(contest.start_date), str(contest.draft_group)]
-    print(f"VALUES ('{'\', \''.join(values)}')");
+    fields = [
+        "sport",
+        "dk_id",
+        "name",
+        "start_date",
+        "draft_group",
+        "total_prizes",
+        "entries",
+        "entry_fee",
+        "entry_count",
+        "max_entry_count",
+    ]
+    values = [
+        contest.sport,
+        contest.id,
+        contest.name,
+        contest.start_dt,
+        contest.draft_group,
+        contest.total_prizes,
+        contest.entries,
+        contest.entry_fee,
+        contest.entry_count,    
+        contest.max_entry_count,
+    ]
+    value_str = "', '".join([str(v) for v in values])
+    print(f"INSERT INTO contests ({', '.join(fields)}) VALUES ('{value_str}')")
 
 
 def valid_date(date_string):
@@ -383,7 +406,7 @@ def main():
     # print out cron job for our other scripts
     print_cron_job(contest, args.sport)
 
-    print_sql_insert(contest, args.sport)
+    print_sql_insert(contest)
 
 
 if __name__ == "__main__":
