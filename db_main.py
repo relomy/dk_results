@@ -177,9 +177,13 @@ def cj_from_pickle(filename):
         return False
 
 
-def db_get_live_contest(conn, sport, entry_fee=25):
+def db_get_live_contest(conn, sport, entry_fee=25, keyword="%"):
     # get cursor
     cur = conn.cursor()
+
+    if sport == "PGAShowdown":
+        sport = "GOLF"
+        keyword = r"PGA %round%"
 
     try:
         # execute SQL command
@@ -187,6 +191,7 @@ def db_get_live_contest(conn, sport, entry_fee=25):
             "SELECT dk_id, name, draft_group, positions_paid "
             "FROM contests "
             "WHERE sport=? "
+            "  AND name LIKE ? "
             "  AND entry_fee=? "
             "  AND start_date <= datetime('now', 'localtime') "
             # "  AND status='LIVE' "
@@ -195,7 +200,7 @@ def db_get_live_contest(conn, sport, entry_fee=25):
             "LIMIT 1"
         )
 
-        cur.execute(sql, (sport, entry_fee))
+        cur.execute(sql, (sport, keyword, entry_fee))
 
         # fetch rows
         row = cur.fetchone()
@@ -268,12 +273,16 @@ def main():
     now = datetime.datetime.now(timezone("US/Eastern"))
 
     min_entry_fee = 25
+    keyword = "%"
     for sport in args.sport:
 
         if sport == "CFB":
             min_entry_fee = 5
+        elif sport == "PGAShowdown":
+            min_entry_fee = 5
+            keyword = r"%round%"
 
-        result = db_get_live_contest(conn, sport, min_entry_fee)
+        result = db_get_live_contest(conn, sport, min_entry_fee, keyword)
 
         if not result:
             logger.warning("There are no live contests for %s! Moving on.", sport)
