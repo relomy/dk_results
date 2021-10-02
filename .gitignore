@@ -5,6 +5,8 @@ Pipfile.lock
 DKSalaries_*.csv
 contest-standings-*.csv
 token.json
+client_secret.json
+credentials.json
 
 *.txt
 *.db
