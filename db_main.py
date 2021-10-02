@@ -267,9 +267,9 @@ def main():
 
     now = datetime.datetime.now(timezone("US/Eastern"))
 
+    min_entry_fee = 25
     for sport in args.sport:
 
-        min_entry_fee = 25
         if sport == "CFB":
             min_entry_fee = 5
 
@@ -296,11 +296,8 @@ def main():
         contest_list = pull_contest_zip(dk_id)
 
         #
-        if contest_list is None:
-            logger.error("pull_contest_zip() - contest_list is None.")
-            continue
-        if not contest_list:  # contest_list is empty
-            logger.error("pull_contest_zip() - contest_list is empty.")
+        if contest_list is None or not contest_list:
+            logger.error(f"pull_contest_zip() - contest_list is {contest_list}")
             continue
 
         sheet = DFSSheet(sport)
@@ -316,6 +313,7 @@ def main():
         sheet.add_last_updated(now)
 
         if results.min_cash_pts > 0:
+            logger.info(f"Writing min_cash_pts: {results.min_cash_pts}")
             sheet.add_min_cash(results.min_cash_pts)
 
         if args.nolineups and results.vip_list:
