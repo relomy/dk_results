@@ -84,6 +84,11 @@ def get_draft_groups_from_response(response):
         suffix_list = [
             "(PGA)",
             "(PGA TOUR)",
+            "(Weekend PGA TOUR)",
+            "(Round 1 PGA TOUR)",
+            "(Round 2 PGA TOUR)",
+            "(Round 3 PGA TOUR)",
+            "(Round 4 PGA TOUR)",
             "(AUS)",  # TEN
             "(LCS)",  # LOL
             "(LEC)",
