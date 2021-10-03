@@ -59,7 +59,7 @@ def check_contests_for_completion(conn):
         name,
         start_date,
     ) in incomplete_contests:
-        if draft_group in skip_draft_groups:
+        if positions_paid is not None and draft_group in skip_draft_groups:
             logger.debug(
                 "skipping %s because we've already updated %d [skipped draft groups %s]",
                 name,
