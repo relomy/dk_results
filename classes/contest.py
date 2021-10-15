@@ -9,7 +9,7 @@ class Contest:
     def __init__(self, contest, sport):
         self.sport = sport
         self.start_date = contest["sd"]
-        self.name = contest["n"]
+        self.name = contest["n"].strip()
         self.id = contest["id"]
         self.draft_group = contest["dg"]
         self.total_prizes = contest["po"]
