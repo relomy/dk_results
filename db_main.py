@@ -11,7 +11,7 @@ import sqlite3
 import sys
 import time
 import zipfile
-from os import getenv
+import os
 
 import browsercookie
 import requests
@@ -73,8 +73,8 @@ def use_selenium(contest_id):
     url_contest_csv = (
         f"https://www.draftkings.com/contest/exportfullstandingscsv/{contest_id}"
     )
-    bin_chromedriver = getenv("CHROMEDRIVER")
-    if not getenv("CHROMEDRIVER"):
+    bin_chromedriver = os.getenv("CHROMEDRIVER")
+    if not os.getenv("CHROMEDRIVER"):
         logger.error("Could not find CHROMEDRIVER in env variable")
         sys.exit()
 
@@ -124,6 +124,9 @@ def setup_session(contest_id, cookies):
 
 
 def request_contest_url(session, contest_id):
+    contest_dir = "contests"
+    fn = os.path.join(contest_dir, f"contest-standings-{contest_id}.csv")
+
     # attempt to GET contest_csv_url
     url_contest_csv = (
         f"https://www.draftkings.com/contest/exportfullstandingscsv/{contest_id}"
@@ -145,7 +148,7 @@ def request_contest_url(session, contest_id):
         # decode bytes into string
         # csvfile = response.content.decode("utf-8")
         csvfile = response.content.decode("utf-8-sig")
-        print(csvfile, file=open(f"contest-standings-{contest_id}.csv", "w"))
+        print(csvfile, file=open(fn, "w"))
         # open reader object on csvfile
         # rdr = csv.reader(csvfile.splitlines(), delimiter=",")
         return list(csv.reader(csvfile.splitlines(), delimiter=","))
@@ -157,7 +160,7 @@ def request_contest_url(session, contest_id):
     zipz = zipfile.ZipFile(io.BytesIO(response.content))
     for name in zipz.namelist():
         # extract file - it seems easier this way
-        path = zipz.extract(name)
+        path = zipz.extract(name, contest_dir)
         logger.debug("path: %s", path)
         with zipz.open(name) as csvfile:
             logger.debug("name within zipfile: %s", name)
@@ -184,6 +187,9 @@ def db_get_live_contest(conn, sport, entry_fee=25, keyword="%"):
     if sport == "PGAShowdown":
         sport = "GOLF"
         keyword = r"PGA %round%"
+    elif sport == "NFLShowdown":
+        sport = "NFL"
+        keyword = r"%vs%    "
 
     try:
         # execute SQL command
@@ -199,6 +205,8 @@ def db_get_live_contest(conn, sport, entry_fee=25, keyword="%"):
             "ORDER BY entries DESC "
             "LIMIT 1"
         )
+        print("sport: {} keyword: {} entry_fee: {}".format(sport, keyword, entry_fee))
+        print(sql)
 
         cur.execute(sql, (sport, keyword, entry_fee))
 
@@ -227,12 +235,15 @@ def db_get_live_contest(conn, sport, entry_fee=25, keyword="%"):
 
 
 def main():
+    # Results("GOLF", 115490837, "DKSalaries_GOLF_Thursday.csv")
+    # exit()
     """Use database and update Google Sheet with contest standings from DraftKings."""
     # parse arguments
     parser = argparse.ArgumentParser()
     choices = [
         "NBA",
         "NFL",
+        "NFLShowdown",
         "CFB",
         "GOLF",
         "PGAMain",
@@ -272,15 +283,17 @@ def main():
 
     now = datetime.datetime.now(timezone("US/Eastern"))
 
-    min_entry_fee = 25
-    keyword = "%"
     for sport in args.sport:
+        min_entry_fee = 25
+        keyword = "%"
 
         if sport == "CFB":
             min_entry_fee = 5
         elif sport == "PGAShowdown":
             min_entry_fee = 5
             keyword = r"%round%"
+        elif sport == "NFLShowdown":
+            keyword = r"vs"
 
         result = db_get_live_contest(conn, sport, min_entry_fee, keyword)
 
@@ -291,7 +304,8 @@ def main():
         # store dk_id and draft_group from database result
         dk_id, name, draft_group, positions_paid = result
 
-        fn = f"DKSalaries_{sport}_{now:%A}.csv"
+        salary_dir = "salary"
+        fn = os.path.join(salary_dir, f"DKSalaries_{sport}_{now:%A}.csv")
 
         logger.debug(args)
 
