@@ -1,16 +1,23 @@
 # package-specific
 .vscode/
+salary/
+standings/
+
+# specific files
 .remote-sync.json
-Pipfile.lock
-DKSalaries_*.csv
-contest-standings-*.csv
 token.json
 client_secret.json
 credentials.json
+Pipfile.lock
 
+# specific file extenions
+DKSalaries_*.csv
+contest-standings-*.csv
+
+# file extensions
+*.html
 *.txt
 *.db
-
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
