@@ -188,8 +188,8 @@ def db_get_live_contest(conn, sport, entry_fee=25, keyword="%"):
         sport = "GOLF"
         keyword = r"PGA %round%"
     elif sport == "NFLShowdown":
-        sport = "NFL"
-        keyword = r"%vs%    "
+        # sport = "NFL"
+        keyword = r"%vs%"
 
     try:
         # execute SQL command
@@ -288,7 +288,7 @@ def main():
         keyword = "%"
 
         if sport == "CFB":
-            min_entry_fee = 5
+            min_entry_fee = 25
         elif sport == "PGAShowdown":
             min_entry_fee = 5
             keyword = r"%round%"
@@ -343,6 +343,35 @@ def main():
             logger.info("Writing vip_lineups to sheet")
             sheet.clear_lineups()
             sheet.write_vip_lineups(results.vip_list)
+
+        if results.non_cashing_users > 0:
+            logger.info("Writing non_cashing info")
+            info = [
+                ["Non-Cashing Info", ""],
+                ["Users not cashing", results.non_cashing_users],
+                ["Avg PMR Remaining", results.non_cashing_avg_pmr],
+            ]
+
+            if results.non_cashing_players:
+                info.append(["Top 10 Own% Remaining", ""])
+                # sort player dict by how many times they've been seen in non-cashing lineups
+                sorted_non_cashing_players = {
+                    k: v
+                    for k, v in sorted(
+                        results.non_cashing_players.items(),
+                        key=lambda item: item[1],
+                        reverse=True,
+                    )
+                }
+                # take top 10
+                top_ten_players = list(sorted_non_cashing_players)[:10]
+                for p in top_ten_players:
+                    count = results.non_cashing_players[p]
+                    ownership = float(count / results.non_cashing_users)
+
+                    info.append([p, ownership])
+
+            sheet.add_non_cashing_info(info)
 
 
 if __name__ == "__main__":
