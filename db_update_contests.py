@@ -14,7 +14,8 @@ from selenium import webdriver
 logging.config.fileConfig("logging.ini")
 
 logger = logging.getLogger(__name__)
-coloredlogs.install(level='DEBUG', logger=logger)
+coloredlogs.install(level="DEBUG", logger=logger)
+
 
 def check_contests_for_completion(conn):
     """Check each contest for completion/positions_paid data."""
@@ -55,9 +56,14 @@ def check_contests_for_completion(conn):
         logger.debug("driver.get url %s", url)
         driver.get(url)
 
-        logger.info("getting contest data for %i [sport: %s current status: %s]", dk_id, sport, status)
+        logger.info(
+            "getting contest data for %i [sport: %s current status: %s]",
+            dk_id,
+            sport,
+            status,
+        )
 
-	# sleep before using JavaScript to return the DOM
+        # sleep before using JavaScript to return the DOM
         sleep(5)
         html = driver.execute_script(
             "return document.getElementsByTagName('html')[0].innerHTML"
@@ -74,7 +80,9 @@ def check_contests_for_completion(conn):
             or status != contest_data["status"]
             or completed != contest_data["completed"]
         ):
-            logger.info("[+] add contest %i [status: %s] to contests_to_update", dk_id, status)
+            logger.info(
+                "[+] add contest %i [status: %s] to contests_to_update", dk_id, status
+            )
             contests_to_update.append(
                 (
                     contest_data["positions_paid"],
@@ -165,7 +173,7 @@ def get_contest_data(html, contest_id):
                 "status": status,
                 "entries": int(entries.replace(",", "")),
                 "positions_paid": int(positions_paid.replace(",", "")),
-                # "name": header[0].string,
+                # "name": header[0].stri    g,
                 # "total_prizes": header[1].string,
                 # "date": info_header[0].string,
             }

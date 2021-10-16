@@ -14,7 +14,6 @@ black = "*"
 pylint = "*"
 
 [packages]
-# browsercookie = {hg = "https://bitbucket.org/richardpenman/browsercookie/"}
 browsercookie = "*"
 # pywin32 = {version = "*",sys_platform = "== 'win32'"}
 # pywin32 = {version = "*", markers="sys_platform == 'win32'"}

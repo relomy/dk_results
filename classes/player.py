@@ -61,8 +61,8 @@ class Player:
             return self.game_info
 
         # split game info into matchup_info
-        home_team, a = self.game_info.split("@")
-        away_team, match_time = a.split(" ", 1)
+        home_team, at = self.game_info.split("@")
+        away_team, _ = at.split(" ", 1)
         # self.logger.debug("home_team: {} away_team: {} t: {}".format(
         #     home_team, away_team, match_time))
         # home_team, away_team = self.game_info.split(" ", 1)[0].split("@")

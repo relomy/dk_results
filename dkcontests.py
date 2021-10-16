@@ -254,7 +254,7 @@ def print_sql_insert(contest):
         contest.total_prizes,
         contest.entries,
         contest.entry_fee,
-        contest.entry_count,    
+        contest.entry_count,
         contest.max_entry_count,
     ]
     value_str = "', '".join([str(v) for v in values])

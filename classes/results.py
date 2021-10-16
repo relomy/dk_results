@@ -7,6 +7,7 @@ import io
 import logging
 import logging.config
 import unicodedata
+import os
 
 from .player import Player
 from .user import User
@@ -79,7 +80,10 @@ class Results:
         self.vip_list = []  # list of VIPs found in standings CSV
 
         # contest_fn = 'contest-standings-73990354.csv'
-        contest_fn = "contest-standings-{}.csv".format(self.contest_id)
+        contest_dir = "contests"
+        contest_fn = os.path.join(
+            contest_dir, "contest-standings-{}.csv".format(self.contest_id)
+        )
 
         # this pulls the DK users and updates the players stats
         self.parse_contest_standings_csv(contest_fn)
@@ -205,27 +209,26 @@ class Results:
                     self.non_cashing_total_pmr += float(pmr)
 
                     # let's only parse lineups for NFL right now
-                    if self.sport not in ["NFL", "NFLShowdown", "GOLF", "CFB"]:
-                        continue
+                    if self.sport in ["NFL", "NFLShowdown", "CFB"]:
 
-                    # for those below minimum cash, let's find their players
-                    lineup_players = self.parse_lineup_string(lineup)
+                        # for those below minimum cash, let's find their players
+                        lineup_players = self.parse_lineup_string(lineup)
 
-                    for player in lineup_players:
-                        if player.pos == "CPT":
-                            showdown_captains = self.add_player_to_dict(
-                                player, showdown_captains
+                        for player in lineup_players:
+                            if player.pos == "CPT":
+                                showdown_captains = self.add_player_to_dict(
+                                    player, showdown_captains
+                                )
+
+                            # we only care about players that are not done yet
+                            if player.game_info == "Final":
+                                continue
+
+                            self.non_cashing_players = self.add_player_to_dict(
+                                player, self.non_cashing_players
                             )
 
-                        # we only care about players that are not done yet
-                        if player.game_info == "Final":
-                            continue
-
-                        self.non_cashing_players = self.add_player_to_dict(
-                            player, self.non_cashing_players
-                        )
-
-                    self.non_cashing_users += 1
+                        self.non_cashing_users += 1
 
             player_stats = row[7:]
             if player_stats:

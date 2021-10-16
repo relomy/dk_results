@@ -111,6 +111,24 @@ def get_draft_groups_from_response(response):
                 )
                 response_draft_groups.append(draft_group_id)
                 continue
+            elif "vs" in suffix:
+                # python won't convert the DK state time because of the milliseconds
+                dt_start_date = datetime.datetime.fromisoformat(start_date_est[:-8])
+
+                if is_time_between(
+                    datetime.time(20, 00), datetime.time(23, 59), dt_start_date.time()
+                ):
+                    logger.info(
+                        "[%4s] Found VS!!!!!!!!!!!!!!: start time: [%s] start date: [%s] dg: [%d] tag [%s] suffix: [%s]",
+                        sport,
+                        dt_start_date.time(),
+                        dt_start_date,
+                        # start_date_est,
+                        draft_group_id,
+                        tag,
+                        suffix,
+                    )
+                continue
 
         logger.debug(
             "[%4s]   Skip: start date: [%s] dg: [%d] tag [%s] suffix: [%s]",
@@ -339,6 +357,15 @@ def db_insert_contests(conn, contests):
     return cur.lastrowid
 
 
+def is_time_between(begin_time, end_time, check_time=None):
+    # If check time is not given, default to current UTC time
+    check_time = check_time or datetime.datetime.utcnow().time()
+    if begin_time < end_time:
+        return check_time >= begin_time and check_time <= end_time
+    else:  # crosses midnight
+        return check_time >= begin_time or check_time <= end_time
+
+
 def main():
     """Find new double ups."""
     supported_sports = [
@@ -373,8 +400,13 @@ def main():
     conn = sqlite3.connect("contests.db")
 
     for sport in args.sport:
+        if sport == "NFLShowdown":
+            primary_sport = "NFL"
+        else:
+            primary_sport = sport
+
         # get contests from url
-        url = f"https://www.draftkings.com/lobby/getcontests?sport={sport}"
+        url = f"https://www.draftkings.com/lobby/getcontests?sport={primary_sport}"
 
         response_contests, draft_groups = get_dk_lobby(url)
 
