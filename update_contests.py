@@ -3,6 +3,7 @@ import coloredlogs
 import logging.config
 import sqlite3
 from os import getenv
+from time import sleep
 
 import selenium.webdriver.chrome.service as chrome_service
 from bs4 import BeautifulSoup
@@ -60,6 +61,7 @@ def check_contests_for_completion(conn):
         start_date,
     ) in incomplete_contests:
         if positions_paid is not None and draft_group in skip_draft_groups:
+            logger.debug("dk_id: {} positions_paid: {}".format(dk_id, positions_paid))
             logger.debug(
                 "skipping %s because we've already updated %d [skipped draft groups %s]",
                 name,
@@ -80,7 +82,13 @@ def check_contests_for_completion(conn):
             start_date,
             draft_group,
         )
+
         contest_data = get_contest_data(driver.page_source, dk_id)
+
+        # try again in case geo-check
+        if contest_data is None:
+            contest_data = get_contest_data(driver.page_source, dk_id)
+
 
         if not contest_data:
             continue
@@ -160,12 +168,22 @@ def get_contest_data(html, contest_id):
         logger.warning("couldn't get HTML for contest_id %d", contest_id)
         return None
 
-    # print(html, file=open("output.html", "w"))
 
     logger.debug("parsing html for contest %i", contest_id)
     soup = BeautifulSoup(html, "html.parser")
 
     try:
+        geo_check = soup.find("div", {"class": "searching-geolocation-overlay"})
+        if geo_check:
+            logger.debug("found geo_check - waiting 5 seconds")
+            # logger.debug("geo_check: {}".format(geo_check))
+            sleep(5)
+        # searching-geolocation-overlay
+
+        logger.debug("re-parsing html for contest %i after geo_check", contest_id)
+        soup = BeautifulSoup(html, "html.parser")
+        print(html, file=open("output.html", "w"))
+
         logger.debug("looking for entries...")
         entries = soup.find("label", text="Entries").find_next("span").text
         logger.debug("entries: %s", entries)
@@ -198,6 +216,7 @@ def get_contest_data(html, contest_id):
         # logger.debug("driver.get url %s", driver.current_url)
         logger.error("Couldn't find DK contest with id %d error: %s", contest_id, ex)
         print(html, file=open("debug.html", "w"))
+        return None
 
 
 def main():

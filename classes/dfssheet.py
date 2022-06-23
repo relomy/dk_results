@@ -139,6 +139,7 @@ class DFSSheet(Sheet):
         "MMA": "J3:V61",
         "LOL": "J3:V61",
         "NAS": "J3:V61",
+        "USFL": "J3:V66",
     }
 
     def __init__(self, sport):

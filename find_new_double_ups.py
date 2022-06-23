@@ -380,6 +380,7 @@ def main():
         "MMA",
         "LOL",
         "NAS",
+        "USFL",
     ]
 
     # parse arguments

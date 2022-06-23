@@ -44,6 +44,7 @@ class Draftkings:
             "TEN": 106,
             "LOL": 106,
             "XFL": 134,
+            "USFL": 204,
         }
 
         if sport in contest_types:

@@ -209,6 +209,7 @@ def print_cron_job(contest, sport):
         "LOL": {"sport_length": 4, "get_interval": "*/5",},
         "MMA": {"sport_length": 6, "get_interval": "*/10",},
         "NAS": {"sport_length": 4, "get_interval": "*/5",},
+        "USFL": {"sport_length": 6, "get_interval": "*/10",},
     }
 
     # set some long strings up as variables
@@ -347,6 +348,7 @@ def main():
         "MMA",
         "LOL",
         "NAS",
+        "USFL",
     ]
 
     # parse arguments

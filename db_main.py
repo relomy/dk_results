@@ -157,12 +157,12 @@ def request_contest_url(session, contest_id):
     with open("pickled_cookies_works.txt", "wb") as fp:
         pickle.dump(session.cookies, fp)
     # request will be a zip file
-    zipz = zipfile.ZipFile(io.BytesIO(response.content))
-    for name in zipz.namelist():
+    zip_obj = zipfile.ZipFile(io.BytesIO(response.content))
+    for name in zip_obj.namelist():
         # extract file - it seems easier this way
-        path = zipz.extract(name, contest_dir)
+        path = zip_obj.extract(name, contest_dir)
         logger.debug("path: %s", path)
-        with zipz.open(name) as csvfile:
+        with zip_obj.open(name) as csvfile:
             logger.debug("name within zipfile: %s", name)
             # convert to TextIOWrapper object
             lines = io.TextIOWrapper(csvfile, encoding="utf-8", newline="\n")
@@ -188,7 +188,7 @@ def db_get_live_contest(conn, sport, entry_fee=25, keyword="%"):
         sport = "GOLF"
         keyword = r"PGA %round%"
     elif sport == "NFLShowdown":
-        # sport = "NFL"
+        sport = "NFL"
         keyword = r"%vs%"
 
     try:
@@ -198,7 +198,7 @@ def db_get_live_contest(conn, sport, entry_fee=25, keyword="%"):
             "FROM contests "
             "WHERE sport=? "
             "  AND name LIKE ? "
-            "  AND entry_fee=? "
+            "  AND entry_fee >= ? "
             "  AND start_date <= datetime('now', 'localtime') "
             # "  AND status='LIVE' "
             "  AND completed=0 "
@@ -256,6 +256,7 @@ def main():
         "MMA",
         "LOL",
         "NAS",
+        "USFL",
     ]
 
     parser.add_argument(
@@ -288,12 +289,14 @@ def main():
         keyword = "%"
 
         if sport == "CFB":
-            min_entry_fee = 25
+            min_entry_fee = 5
         elif sport == "PGAShowdown":
             min_entry_fee = 5
             keyword = r"%round%"
         elif sport == "NFLShowdown":
             keyword = r"vs"
+        elif sport == "USFL":
+            min_entry_fee = 10
 
         result = db_get_live_contest(conn, sport, min_entry_fee, keyword)
 
@@ -343,35 +346,6 @@ def main():
             logger.info("Writing vip_lineups to sheet")
             sheet.clear_lineups()
             sheet.write_vip_lineups(results.vip_list)
-
-        if results.non_cashing_users > 0:
-            logger.info("Writing non_cashing info")
-            info = [
-                ["Non-Cashing Info", ""],
-                ["Users not cashing", results.non_cashing_users],
-                ["Avg PMR Remaining", results.non_cashing_avg_pmr],
-            ]
-
-            if results.non_cashing_players:
-                info.append(["Top 10 Own% Remaining", ""])
-                # sort player dict by how many times they've been seen in non-cashing lineups
-                sorted_non_cashing_players = {
-                    k: v
-                    for k, v in sorted(
-                        results.non_cashing_players.items(),
-                        key=lambda item: item[1],
-                        reverse=True,
-                    )
-                }
-                # take top 10
-                top_ten_players = list(sorted_non_cashing_players)[:10]
-                for p in top_ten_players:
-                    count = results.non_cashing_players[p]
-                    ownership = float(count / results.non_cashing_users)
-
-                    info.append([p, ownership])
-
-            sheet.add_non_cashing_info(info)
 
 
 if __name__ == "__main__":

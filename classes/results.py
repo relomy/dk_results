@@ -57,6 +57,7 @@ class Results:
             "MMA": ["F"],
             "LOL": ["CPT", "TOP", "JNG", "MID", "ADC", "SUP", "TEAM"],
             "NAS": ["D"],
+            "USFL": ["QB", "RB", "WR/TE", "WR/TE", "FLEX", "FLEX", "DST"],
         }
 
         # if there's no salary file specified, use the sport/day for the filename
@@ -186,8 +187,9 @@ class Results:
 
             rank, player_id, name, pmr, points, lineup = row[:6]
 
-            rank = int(rank)
-            points = float(points)
+            if rank and points:
+                rank = int(rank)
+                points = float(points)
 
             # create User object and append to users list
             user = User(rank, player_id, name, pmr, points, lineup)
@@ -209,7 +211,7 @@ class Results:
                     self.non_cashing_total_pmr += float(pmr)
 
                     # let's only parse lineups for NFL right now
-                    if self.sport in ["NFL", "NFLShowdown", "CFB"]:
+                    if self.sport in ["NFL", "NFLShowdown", "CFB", "NBA"]:
 
                         # for those below minimum cash, let's find their players
                         lineup_players = self.parse_lineup_string(lineup)
@@ -263,9 +265,7 @@ class Results:
             sorted_captains = {
                 k: v
                 for k, v in sorted(
-                    showdown_captains.items(),
-                    key=lambda item: item[1],
-                    reverse=True,
+                    showdown_captains.items(), key=lambda item: item[1], reverse=True,
                 )
             }
 
