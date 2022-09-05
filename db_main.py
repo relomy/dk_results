@@ -73,6 +73,9 @@ def use_selenium(contest_id):
     url_contest_csv = (
         f"https://www.draftkings.com/contest/exportfullstandingscsv/{contest_id}"
     )
+
+    app_deposit_url = f"https://secure.draftkings.com/app/deposit"
+
     bin_chromedriver = os.getenv("CHROMEDRIVER")
     if not os.getenv("CHROMEDRIVER"):
         logger.error("Could not find CHROMEDRIVER in env variable")
@@ -92,8 +95,8 @@ def use_selenium(contest_id):
         service.service_url, desired_capabilities=options.to_capabilities()
     )
 
-    logger.debug("Performing get on %s", url_contest_csv)
-    driver.get(url_contest_csv)
+    logger.debug("Performing get on %s", app_deposit_url)
+    driver.get(app_deposit_url)
     logger.debug(driver.current_url)
     logger.debug("Letting DK load ...")
     time.sleep(5)  # Let DK Load!
@@ -205,8 +208,8 @@ def db_get_live_contest(conn, sport, entry_fee=25, keyword="%"):
             "ORDER BY entries DESC "
             "LIMIT 1"
         )
-        print("sport: {} keyword: {} entry_fee: {}".format(sport, keyword, entry_fee))
-        print(sql)
+        #print("sport: {} keyword: {} entry_fee: {}".format(sport, keyword, entry_fee))
+        #print(sql)
 
         cur.execute(sql, (sport, keyword, entry_fee))
 
