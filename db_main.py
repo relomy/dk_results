@@ -6,12 +6,13 @@ import datetime
 import io
 import logging
 import logging.config
+import os
 import pickle
 import sqlite3
 import sys
 import time
 import zipfile
-import os
+from re import X
 
 import browsercookie
 import requests
@@ -22,6 +23,7 @@ from selenium import webdriver
 from classes.dfssheet import DFSSheet
 from classes.draftkings import Draftkings
 from classes.results import Results
+from classes.sport import CFBSport, GolfSport, NBASport, NFLSport, Sport
 
 # load the logging configuration
 logging.config.fileConfig("logging.ini")
@@ -183,7 +185,7 @@ def cj_from_pickle(filename):
         return False
 
 
-def db_get_live_contest(conn, sport, entry_fee=25, keyword="%"):
+def db_get_live_contest(conn, sport, entry_fee=25, keyword="%") -> (tuple):
     # get cursor
     cur = conn.cursor()
 
@@ -208,8 +210,8 @@ def db_get_live_contest(conn, sport, entry_fee=25, keyword="%"):
             "ORDER BY entries DESC "
             "LIMIT 1"
         )
-        #print("sport: {} keyword: {} entry_fee: {}".format(sport, keyword, entry_fee))
-        #print(sql)
+        # print("sport: {} keyword: {} entry_fee: {}".format(sport, keyword, entry_fee))
+        # print(sql)
 
         cur.execute(sql, (sport, keyword, entry_fee))
 
@@ -243,31 +245,36 @@ def main():
     """Use database and update Google Sheet with contest standings from DraftKings."""
     # parse arguments
     parser = argparse.ArgumentParser()
-    choices = [
-        "NBA",
-        "NFL",
-        "NFLShowdown",
-        "CFB",
-        "GOLF",
-        "PGAMain",
-        "PGAWeekend",
-        "PGAShowdown",
-        "NHL",
-        "MLB",
-        "TEN",
-        "XFL",
-        "MMA",
-        "LOL",
-        "NAS",
-        "USFL",
-    ]
+
+    sportz = Sport.__subclasses__()
+
+    choices = dict({sport.name: sport for sport in sportz})
+
+    # choices = [
+    #     "NBA",
+    #     "NFL",
+    #     "NFLShowdown",
+    #     "CFB",
+    #     "GOLF",
+    #     "PGAMain",
+    #     "PGAWeekend",
+    #     "PGAShowdown",
+    #     "NHL",
+    #     "MLB",
+    #     "TEN",
+    #     "XFL",
+    #     "MMA",
+    #     "LOL",
+    #     "NAS",
+    #     "USFL",
+    # ]
 
     parser.add_argument(
         "-s",
         "--sport",
         choices=choices,
         required=True,
-        help="Type of contest (NBA, NFL, GOLF, CFB, NHL, MLB, TEN, XFL, MMA, or LOL)",
+        help="Type of contest",
         nargs="+",
     )
     parser.add_argument(
@@ -279,39 +286,46 @@ def main():
     parser.add_argument("-v", "--verbose", help="Increase verbosity")
 
     args = parser.parse_args()
-    # print(args)
 
     # create connection to database file
-    # create_connection("contests.db")
     conn = sqlite3.connect("contests.db")
 
     now = datetime.datetime.now(timezone("US/Eastern"))
 
-    for sport in args.sport:
-        min_entry_fee = 25
-        keyword = "%"
+    for sport_name in args.sport:
+        # find matching Sport subclass
+        if sport_name not in choices:
+            # fail if we don't find one
+            raise Exception("Could not find matching Sport subclass")
 
-        if sport == "CFB":
-            min_entry_fee = 5
-        elif sport == "PGAShowdown":
-            min_entry_fee = 5
-            keyword = r"%round%"
-        elif sport == "NFLShowdown":
-            keyword = r"vs"
-        elif sport == "USFL":
-            min_entry_fee = 10
+        sport_obj = choices[sport_name]
 
-        result = db_get_live_contest(conn, sport, min_entry_fee, keyword)
+        # min_entry_fee = 25
+        # keyword = "%"
+
+        # if sport_name == "CFB":
+        #     min_entry_fee = 5
+        # elif sport_name == "PGAShowdown":
+        #     min_entry_fee = 5
+        #     keyword = r"%round%"
+        # elif sport_name == "NFLShowdown":
+        #     keyword = r"vs"
+        # elif sport_name == "USFL":
+        #     min_entry_fee = 10
+
+        result = db_get_live_contest(
+            conn, sport_obj.name, sport_obj.min_entry_fee, sport_obj.keyword
+        )
 
         if not result:
-            logger.warning("There are no live contests for %s! Moving on.", sport)
+            logger.warning("There are no live contests for %s! Moving on.", sport_name)
             continue
 
         # store dk_id and draft_group from database result
         dk_id, name, draft_group, positions_paid = result
 
         salary_dir = "salary"
-        fn = os.path.join(salary_dir, f"DKSalaries_{sport}_{now:%A}.csv")
+        fn = os.path.join(salary_dir, f"DKSalaries_{sport_name}_{now:%A}.csv")
 
         logger.debug(args)
 
@@ -319,22 +333,24 @@ def main():
 
         if draft_group:
             logger.info("Downloading salary file (draft_group: %d)", draft_group)
-            dk.download_salary_csv(sport, draft_group, fn)
+            dk.download_salary_csv(sport_name, draft_group, fn)
 
         # pull contest standings from draftkings
         contest_list = pull_contest_zip(dk_id)
 
         #
         if contest_list is None or not contest_list:
-            logger.error(f"pull_contest_zip() - contest_list is {contest_list}")
+            logger.error("pull_contest_zip() - contest_list is %s", contest_list)
             continue
 
-        sheet = DFSSheet(sport)
+        sheet = DFSSheet(sport_name)
 
-        logger.debug("Creating Results object Results(%s, %s, %s)", sport, dk_id, fn)
+        logger.debug(
+            "Creating Results object Results(%s, %s, %s)", sport_name, dk_id, fn
+        )
 
-        results = Results(sport, dk_id, fn, positions_paid)
-        players_to_values = results.players_to_values(sport)
+        results = Results(sport_name, dk_id, fn, positions_paid)
+        players_to_values = results.players_to_values(sport_name)
         sheet.clear_standings()
         sheet.write_players(players_to_values)
         sheet.add_contest_details(name, positions_paid)
@@ -342,7 +358,7 @@ def main():
         sheet.add_last_updated(now)
 
         if results.min_cash_pts > 0:
-            logger.info(f"Writing min_cash_pts: {results.min_cash_pts}")
+            logger.info("Writing min_cash_pts: %d", results.min_cash_pts)
             sheet.add_min_cash(results.min_cash_pts)
 
         if args.nolineups and results.vip_list:

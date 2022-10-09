@@ -1,21 +1,17 @@
-"""Object to represent Google Sheet."""
-
-from os import path
-
-from googleapiclient.discovery import build
-from httplib2 import Http
-
-from google.oauth2 import service_account
-
-
 import logging
 import logging.config
+from os import path
+
+from google.oauth2 import service_account
+from googleapiclient.discovery import build
+from httplib2 import Http
 
 logging.config.fileConfig("logging.ini")
 
 
 class Sheet:
-    """Object to represent Google Sheet."""
+    """Object to represent Google Sheet.
+    """
 
     def __init__(self, logger=None):
         self.logger = logger or logging.getLogger(__name__)
@@ -38,15 +34,7 @@ class Sheet:
         credentials = service_account.Credentials.from_service_account_file(
             secret_file, scopes=scopes
         )
-        #        creds = store.get()
-        #        if not creds or creds.invalid:
-        #            flow = client.flow_from_clientsecrets(
-        #                path.join(directory, "token.json"), scopes
-        #            )
-        #            creds = tools.run_flow(flow, store)
-        #        return build(
-        #            "sheets", "v4", http=creds.authorize(Http()), cache_discovery=False
-        #        )
+
         return build("sheets", "v4", credentials=credentials, cache_discovery=False)
 
     def find_sheet_id(self, title):
