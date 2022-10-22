@@ -1,5 +1,6 @@
 """Find new double ups and print out a message when a new one is found."""
 
+
 import argparse
 import datetime
 import logging
@@ -7,10 +8,14 @@ import logging.config
 import sqlite3
 import sys
 
+from os import environ
+
 import browsercookie
 import requests
 
+from classes.sport import CFBSport, GolfSport, NBASport, NFLSport, Sport
 from classes.contest import Contest
+from bot.discord import Discord
 
 # load the logging configuration
 logging.config.fileConfig("logging.ini")
@@ -36,7 +41,7 @@ HEADERS = {
 }
 
 
-def get_dk_lobby(url):
+def get_dk_lobby(sport, url):
     """Get contests from the DraftKings lobby. Returns a list."""
     # set cookies based on Chrome session
     # logger.debug(url)
@@ -44,7 +49,7 @@ def get_dk_lobby(url):
     response = requests.get(url, headers=HEADERS, cookies=COOKIES).json()
 
     contests = get_contests_from_response(response)
-    draft_groups = get_draft_groups_from_response(response)
+    draft_groups = get_draft_groups_from_response(response, sport)
 
     return contests, draft_groups
 
@@ -62,7 +67,7 @@ def get_contests_from_response(response):
     return response_contests
 
 
-def get_draft_groups_from_response(response):
+def get_draft_groups_from_response(response, sport_obj: Sport):
     """Get draft groups from lobby/json."""
     response_draft_groups = []
     for draft_group in response["DraftGroups"]:
@@ -100,6 +105,23 @@ def get_draft_groups_from_response(response):
         # only care about featured draftgroups and those with no suffix
         # some special cases in list above
         if tag == "Featured":
+            if sport_obj.suffixes:
+                if suffix is not None and suffix.strip() in sport_obj.suffixes:
+                    # python won't convert the DK state time because of the milliseconds
+                    dt_start_date = datetime.datetime.fromisoformat(start_date_est[:-8])
+
+                    logger.debug(
+                        "[%4s] Found PRIMETIME!!!: start time: [%s] start date: [%s] dg: [%d] tag [%s] suffix: [%s]",
+                        sport,
+                        dt_start_date.time(),
+                        dt_start_date,
+                        # start_date_est,
+                        draft_group_id,
+                        tag,
+                        suffix,
+                    )
+                continue
+
             if suffix is None or suffix.strip() in suffix_list:
                 logger.info(
                     "[%4s] Append: start date: [%s] dg: [%d] tag [%s] suffix: [%s]",
@@ -111,24 +133,25 @@ def get_draft_groups_from_response(response):
                 )
                 response_draft_groups.append(draft_group_id)
                 continue
-            elif "vs" in suffix:
-                # python won't convert the DK state time because of the milliseconds
-                dt_start_date = datetime.datetime.fromisoformat(start_date_est[:-8])
 
-                if is_time_between(
-                    datetime.time(20, 00), datetime.time(23, 59), dt_start_date.time()
-                ):
-                    logger.info(
-                        "[%4s] Found VS!!!!!!!!!!!!!!: start time: [%s] start date: [%s] dg: [%d] tag [%s] suffix: [%s]",
-                        sport,
-                        dt_start_date.time(),
-                        dt_start_date,
-                        # start_date_est,
-                        draft_group_id,
-                        tag,
-                        suffix,
-                    )
-                continue
+            # elif "vs" in suffix:
+            #     # python won't convert the DK state time because of the milliseconds
+            #     dt_start_date = datetime.datetime.fromisoformat(start_date_est[:-8])
+
+            #     if is_time_between(
+            #         datetime.time(20, 00), datetime.time(23, 59), dt_start_date.time()
+            #     ):
+            #         logger.debug(
+            #             "[%4s] Found VS!!!!!!!!!!!!!!: start time: [%s] start date: [%s] dg: [%d] tag [%s] suffix: [%s]",
+            #             sport,
+            #             dt_start_date.time(),
+            #             dt_start_date,
+            #             # start_date_est,
+            #             draft_group_id,
+            #             tag,
+            #             suffix,
+            #         )
+            #     continue
 
         logger.debug(
             "[%4s]   Skip: start date: [%s] dg: [%d] tag [%s] suffix: [%s]",
@@ -194,8 +217,8 @@ def get_stats(contests):
 
 
 def get_double_ups(
-    contests, draft_groups, min_entry_fee=5, max_entry_fee=50, entries=125
-):
+    contests, draft_groups, min_entry_fee=5, max_entry_fee=50, entries=125,
+) -> list:
     """Find contests matching criteria."""
 
     criteria = {
@@ -361,64 +384,75 @@ def is_time_between(begin_time, end_time, check_time=None):
     # If check time is not given, default to current UTC time
     check_time = check_time or datetime.datetime.utcnow().time()
     if begin_time < end_time:
-        return check_time >= begin_time and check_time <= end_time
-    else:  # crosses midnight
-        return check_time >= begin_time or check_time <= end_time
+        # return check_time >= begin_time and check_time <= end_time
+        return begin_time <= check_time <= end_time
+
+    # crosses midnight
+    return check_time >= begin_time or check_time <= end_time
+
+
+def set_quiet_verbosity() -> None:
+    logger.setLevel(logging.INFO)
 
 
 def main():
     """Find new double ups."""
-    supported_sports = [
-        "NBA",
-        "NFL",
-        "CFB",
-        "GOLF",
-        "NHL",
-        "MLB",
-        "TEN",
-        "XFL",
-        "MMA",
-        "LOL",
-        "NAS",
-        "USFL",
-    ]
+    sportz = Sport.__subclasses__()
+    choices = dict({sport.name: sport for sport in sportz})
+
+    webhook = environ["DISCORD_WEBHOOK"]
+
+    bot = Discord(webhook)
 
     # parse arguments
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "-s",
         "--sport",
-        choices=supported_sports,
+        choices=choices,
         required=True,
         help="Type of contest",
         nargs="+",
     )
-    parser.add_argument("-v", "--verbose", help="Increase verbosity")
+    parser.add_argument("-q", "--quiet", action="store_true", help="Decrease verbosity")
     args = parser.parse_args()
+
+    if args.quiet:
+        set_quiet_verbosity()
 
     # create connection to database file
     # create_connection("contests.db")
     conn = sqlite3.connect("contests.db")
 
-    for sport in args.sport:
-        if sport == "NFLShowdown":
-            primary_sport = "NFL"
-        else:
-            primary_sport = sport
+    for sport_name in args.sport:
+        # find matching Sport subclass
+        if sport_name not in choices:
+            # fail if we don't find one
+            raise Exception("Could not find matching Sport subclass")
+
+        sport_obj = choices[sport_name]
+        primary_sport = sport_obj.get_primary_sport()
+
+        # if sport == "NFLShowdown":
+        #     primary_sport = "NFL"
+        # else:
+        #     primary_sport = sport
 
         # get contests from url
         url = f"https://www.draftkings.com/lobby/getcontests?sport={primary_sport}"
 
-        response_contests, draft_groups = get_dk_lobby(url)
+        response_contests, draft_groups = get_dk_lobby(sport_obj, url)
 
         # create list of Contest objects
-        contests = [Contest(c, sport) for c in response_contests]
+        contests = [Contest(c, sport_obj.name) for c in response_contests]
         # get double ups from list of Contests
-        min_entries = 125
-        if sport == "CFB":
-            min_entries = 100
 
-        double_ups = get_double_ups(contests, draft_groups, entries=min_entries)
+        double_ups = get_double_ups(
+            contests,
+            draft_groups,
+            min_entry_fee=sport_obj.dub_min_entry_fee,
+            entries=sport_obj.dub_min_entries,
+        )
 
         # create table if it doesn't exist
         db_create_table(conn)
@@ -431,15 +465,18 @@ def main():
             matching_contests = [c for c in contests if c.id in new_contests]
 
             for contest in matching_contests:
-                logger.info(
-                    "New dub found! [{:%Y-%m-%d}] Name: {} ID: {} Entry Fee: {} Entries: {}".format(
-                        contest.start_dt,
-                        contest.name,
-                        contest.id,
-                        contest.entry_fee,
-                        contest.entries,
-                    )
+                message = "New dub found! [{:%Y-%m-%d}] Name: {} ID: {} Entry Fee: {} Entries: {}".format(
+                    contest.start_dt,
+                    contest.name,
+                    contest.id,
+                    contest.entry_fee,
+                    contest.entries,
                 )
+                logger.info(message)
+
+                if contest.sport == "NBA":
+                    bot.send_message(message)
+
                 # print(contest)
 
             # insert new double ups into DB
