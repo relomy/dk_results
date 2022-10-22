@@ -247,7 +247,6 @@ def main():
     parser = argparse.ArgumentParser()
 
     sportz = Sport.__subclasses__()
-
     choices = dict({sport.name: sport for sport in sportz})
 
     # choices = [
@@ -314,7 +313,7 @@ def main():
         #     min_entry_fee = 10
 
         result = db_get_live_contest(
-            conn, sport_obj.name, sport_obj.min_entry_fee, sport_obj.keyword
+            conn, sport_obj.name, sport_obj.sheet_min_entry_fee, sport_obj.keyword
         )
 
         if not result:
@@ -369,3 +368,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
