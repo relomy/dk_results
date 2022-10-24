@@ -475,7 +475,7 @@ def main():
                 logger.info(message)
 
                 if contest.sport == "NBA":
-                    bot.send_message(message)
+                    bot.send_message("<@&1034206287153594470> " + message)
 
                 # print(contest)
 
