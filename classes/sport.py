@@ -101,6 +101,8 @@ class CFBSport(Sport):
     lineup_range = "J3:V61"
 
     sheet_min_entry_fee = 5
+    dub_min_entry_fee = 2
+    dub_min_entries = 100
 
 
 class GolfSport(Sport):
