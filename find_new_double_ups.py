@@ -464,6 +464,7 @@ def main():
             # find contests matching the new contest IDs
             matching_contests = [c for c in contests if c.id in new_contests]
 
+            discord_message = ""
             for contest in matching_contests:
                 message = "New dub found! [{:%Y-%m-%d}] Name: {} ID: {} Entry Fee: {} Entries: {}".format(
                     contest.start_dt,
@@ -474,12 +475,18 @@ def main():
                 )
                 logger.info(message)
 
-                if contest.sport == "NBA":
-                    bot.send_message(":basketball: " + message + " <@&1034206287153594470>")
-                elif contest.sport == "CFB":
-                    bot.send_message(":football: " + message + " <@&1034214536544268439>")
+                discord_message += message + "\n"
 
                 # print(contest)
+
+            if sport_obj.name == "NBA":
+                bot.send_message(
+                    ":basketball: " + discord_message + " <@&1034206287153594470>"
+                )
+            elif sport_obj.name == "CFB":
+                bot.send_message(
+                    ":football: " + discord_message + " <@&1034214536544268439>"
+                )
 
             # insert new double ups into DB
             db_insert_contests(conn, matching_contests)
