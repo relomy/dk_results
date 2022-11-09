@@ -116,6 +116,9 @@ class GolfSport(Sport):
     sheet_name = "GOLF"
     lineup_range = "L8:Z56"
 
+    dub_min_entry_fee = 2
+    dub_min_entries = 100
+
 
 class MLBSport(Sport):
     """MLB
