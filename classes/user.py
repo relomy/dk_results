@@ -3,6 +3,8 @@
 import logging
 import logging.config
 
+from .lineup import Lineup
+
 # load the logging configuration
 logging.config.fileConfig("logging.ini")
 
@@ -19,6 +21,7 @@ class User:
         self.lineup_str = lineup_str
 
         self.lineup = []
+        self.lineupobj = None
         self.salary = 50000
 
         # self.lineup = lineup_str.split()
@@ -29,6 +32,12 @@ class User:
             self.salary -= player.salary
 
         self.lineup = lineup
+
+    def set_lineup_obj(self, lineup: Lineup):
+        self.lineupobj = lineup
+
+        for player in lineup.lineup:
+            self.salary -= player.salary
 
     def __str__(self):
         return "[User]: Name: {} Rank: {} PMR: {} Pts: {} Salary: {} LU: {}".format(
