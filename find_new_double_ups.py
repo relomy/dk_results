@@ -487,6 +487,10 @@ def main():
                 bot.send_message(
                     ":football: " + discord_message + " <@&1034214536544268439>"
                 )
+            elif sport_obj.name == "GOLF":
+                bot.send_message(
+                    ":golf: " + discord_message + " <@&1040014001452630046>"
+                )
 
             # insert new double ups into DB
             db_insert_contests(conn, matching_contests)
