@@ -7,12 +7,12 @@ import io
 import logging
 import logging.config
 import os
+from collections import OrderedDict
 import pickle
 import sqlite3
 import sys
 import time
 import zipfile
-from re import X
 
 import browsercookie
 import requests
@@ -24,6 +24,7 @@ from classes.dfssheet import DFSSheet
 from classes.draftkings import Draftkings
 from classes.results import Results
 from classes.sport import CFBSport, GolfSport, NBASport, NFLSport, Sport
+from classes.trainfinder import TrainFinder
 
 # load the logging configuration
 logging.config.fileConfig("logging.ini")
@@ -192,9 +193,9 @@ def db_get_live_contest(conn, sport, entry_fee=25, keyword="%") -> (tuple):
     if sport == "PGAShowdown":
         sport = "GOLF"
         keyword = r"PGA %round%"
-    elif sport == "NFLShowdown":
-        sport = "NFL"
-        keyword = r"%vs%"
+    # elif sport == "NFLShowdown":
+    # sport = "NFL"
+    # keyword = r"%vs%"
 
     try:
         # execute SQL command
@@ -349,6 +350,7 @@ def main():
         )
 
         results = Results(sport_name, dk_id, fn, positions_paid)
+
         players_to_values = results.players_to_values(sport_name)
         sheet.clear_standings()
         sheet.write_players(players_to_values)
@@ -393,6 +395,49 @@ def main():
                     info.append([p, ownership])
 
             sheet.add_non_cashing_info(info)
+
+        if results and results.users:
+            trainfinder = TrainFinder(results.users)
+
+            salary_limit = 40000
+
+            logger.info("total users:")
+            logger.info(trainfinder.get_total_users())
+            logger.info(f"total users above salary ${salary_limit}")
+            logger.info(trainfinder.get_total_users_above_salary(salary_limit))
+            logger.info(f"total scores above salary ${salary_limit}")
+
+            trains = trainfinder.get_users_above_salary_spent(salary_limit)
+
+            delete_keys = [key for key in trains if trains[key]["count"] == 1]
+
+            for key in delete_keys:
+                del trains[key]
+
+            sorted_trains = OrderedDict(
+                sorted(trains.items(), key=lambda kv: kv[1]["count"], reverse=True)[:5]
+            )
+
+            info = [
+                ["Rank", "Users", "Score", "PMR"],
+            ]
+            for k, v in sorted_trains.items():
+                # info.append([v["count"], v["pts"], v["pmr"], str(v["lineup"])])
+                row = [v["rank"], v["count"], v["pts"], v["pmr"]]
+
+                logger.info(
+                    f"Users: {v['count']} Score: {v['pts']} PMR: {v['pmr']} Lineup: {v['lineup']}"
+                )
+
+                lineupobj = v["lineup"]
+
+                # expand the players, in order per sport, from the lineup
+                if lineupobj:
+                    row.extend([player.name for player in lineupobj.lineup])
+
+                info.append(row)
+
+            sheet.add_train_info(info)
 
 
 if __name__ == "__main__":

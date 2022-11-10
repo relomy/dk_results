@@ -89,7 +89,6 @@ def check_contests_for_completion(conn):
         if contest_data is None:
             contest_data = get_contest_data(driver.page_source, dk_id)
 
-
         if not contest_data:
             continue
 
@@ -167,7 +166,6 @@ def get_contest_data(html, contest_id):
     if not html:
         logger.warning("couldn't get HTML for contest_id %d", contest_id)
         return None
-
 
     logger.debug("parsing html for contest %i", contest_id)
     soup = BeautifulSoup(html, "html.parser")
