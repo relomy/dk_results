@@ -1,21 +1,3 @@
-# LINEUP_RANGES = {
-#         "NBA": "J3:V61",
-#         "CFB": "J3:V61",
-#         "NFL": "J3:V66",
-#         "GOLF": "L8:Z56",
-#         "PGAMain": "L8:X56",
-#         "PGAWeekend": "L3:Q41",
-#         "PGAShowdown": "L3:Q41",
-#         "TEN": "J3:V61",
-#         "MLB": "J3:V71",
-#         "XFL": "J3:V56",
-#         "MMA": "J3:V61",
-#         "LOL": "J3:V61",
-#         "NAS": "J3:V61",
-#         "USFL": "J3:V66",
-#     }
-
-
 class Sport:
     """An object to represent a DFS sport from DraftKings.
 
@@ -118,6 +100,8 @@ class GolfSport(Sport):
 
     dub_min_entry_fee = 2
     dub_min_entries = 100
+
+    suffixes = ["(PGA)", "(PGA TOUR)"]
 
 
 class MLBSport(Sport):

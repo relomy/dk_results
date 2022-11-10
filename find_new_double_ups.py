@@ -90,10 +90,10 @@ def get_draft_groups_from_response(response, sport_obj: Sport):
             "(PGA)",
             "(PGA TOUR)",
             "(Weekend PGA TOUR)",
-            "(Round 1 PGA TOUR)",
-            "(Round 2 PGA TOUR)",
-            "(Round 3 PGA TOUR)",
-            "(Round 4 PGA TOUR)",
+            # "(Round 1 PGA TOUR)",
+            # "(Round 2 PGA TOUR)",
+            # "(Round 3 PGA TOUR)",
+            # "(Round 4 PGA TOUR)",
             "(AUS)",  # TEN
             "(LCS)",  # LOL
             "(LEC)",
@@ -217,7 +217,11 @@ def get_stats(contests):
 
 
 def get_double_ups(
-    contests, draft_groups, min_entry_fee=5, max_entry_fee=50, entries=125,
+    contests,
+    draft_groups,
+    min_entry_fee=5,
+    max_entry_fee=50,
+    entries=125,
 ) -> list:
     """Find contests matching criteria."""
 
