@@ -41,12 +41,13 @@ class Lineup:
 
         # list comp for indicies of positions in splt
         indices = [i for i, pos in enumerate(splt) if pos in self.POSITIONS[self.sport]]
+
         # list comp for ending indices in splt. for splicing, the second argument is exclusive
         end_indices = [indices[i] for i in range(1, len(indices))]
+
         # append size of splt as last index
         end_indices.append(len(splt))
-        # self.logger.debug("indices: {}".format(indices))
-        # self.logger.debug("end_indices: {}".format(end_indices))
+
         for i, index in enumerate(indices):
             name_slice = slice(index + 1, end_indices[i])
             pos_slice = slice(index, index + 1)

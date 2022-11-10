@@ -11,9 +11,7 @@ import os
 
 from .player import Player
 from .user import User
-
-# load the logging configuration
-logging.config.fileConfig("logging.ini")
+from .lineup import Lineup
 
 
 class Results:
@@ -77,7 +75,7 @@ class Results:
             "ChipotleAddict",
             "papagates",
             "EmpireMaker2",
-            "AdamLevitan"
+            "AdamLevitan",
         ]
         self.vip_list = []  # list of VIPs found in standings CSV
 
@@ -193,7 +191,9 @@ class Results:
                 points = float(points)
 
             # create User object and append to users list
+            lineupobj = Lineup(self.sport, self.players, lineup)
             user = User(rank, player_id, name, pmr, points, lineup)
+            user.set_lineup_obj(lineupobj)
             self.users.append(user)
 
             # find lineup for friends
@@ -266,13 +266,15 @@ class Results:
             sorted_captains = {
                 k: v
                 for k, v in sorted(
-                    showdown_captains.items(), key=lambda item: item[1], reverse=True,
+                    showdown_captains.items(),
+                    key=lambda item: item[1],
+                    reverse=True,
                 )
             }
 
             top_ten_cpts = list(sorted_captains)[:10]
 
-            print("Top 10 captains:")
+            self.logger.info("Top 10 captains:")
             for cpt in top_ten_cpts:
                 self.get_showdown_captain_percent(cpt, showdown_captains)
 
