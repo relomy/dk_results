@@ -10,8 +10,7 @@ logging.config.fileConfig("logging.ini")
 
 
 class Sheet:
-    """Object to represent Google Sheet.
-    """
+    """Object to represent Google Sheet."""
 
     def __init__(self, logger=None):
         self.logger = logger or logging.getLogger(__name__)
@@ -117,6 +116,7 @@ class DFSSheet(Sheet):
         "NBA": "J3:V61",
         "CFB": "J3:V61",
         "NFL": "J3:V66",
+        "NFLShowdown": "J3:V66",
         "GOLF": "L8:Z56",
         "PGAMain": "L8:X56",
         "PGAWeekend": "L3:Q41",
@@ -209,6 +209,11 @@ class DFSSheet(Sheet):
     def add_non_cashing_info(self, non_cashing_info):
         cell_range = f"{self.sport}!X3:Y16"
         values = non_cashing_info
+        self.write_values_to_sheet_range(values, cell_range)
+
+    def add_train_info(self, train_info):
+        cell_range = f"{self.sport}!AA3:AM10"
+        values = train_info
         self.write_values_to_sheet_range(values, cell_range)
 
     def build_values_for_vip_lineup(self, vip):
