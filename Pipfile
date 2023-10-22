@@ -14,7 +14,7 @@ black = "*"
 pylint = "*"
 
 [packages]
-browsercookie = "*"
+#browsercookie = "*"
 # pywin32 = {version = "*",sys_platform = "== 'win32'"}
 # pywin32 = {version = "*", markers="sys_platform == 'win32'"}
 google-api-python-client = "*"
@@ -26,9 +26,10 @@ beautifulsoup4 = "*"
 coloredlogs = "*"
 google-auth-httplib2 = "*"
 google-auth-oauthlib = "*"
+pulp = "*"
 
 #[requires]
-#python_version = "3.7"
+#python_version = "3.11"
 
 [pipenv]
 allow_prereleases = true

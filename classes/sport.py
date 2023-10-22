@@ -39,6 +39,17 @@ class NFLSport(Sport):
     sheet_name = "NFL"
     lineup_range = "J3:V66"
 
+    # optimizer
+    positions = ["QB", "RB", "RB", "WR", "WR", "WR", "TE", "FLEX"]
+    positions_count = 9
+    position_constraints = [
+        ("QB", 1, None),  # 1 or 2 (SFLEX)
+        ("RB", 2, 3),  # 2 <> 4 (FLEX/SFLEX)
+        ("WR", 3, 4),  # 3 <> 5 (FLEX/SFLEX)
+        ("TE", 1, 2),
+        ("DST", 1, None),
+    ]
+
 
 class NFLShowdownSport(Sport):
     """NFL
@@ -86,6 +97,15 @@ class CFBSport(Sport):
     dub_min_entry_fee = 2
     dub_min_entries = 100
 
+    # optimizer
+    positions = ["QB", "RB", "RB", "WR", "WR", "WR", "FLEX", "S-FLEX"]
+    positions_count = 8
+    position_constraints = [
+        ("QB", 1, 2),  # 1 or 2 (SFLEX)
+        ("RB", 2, 4),  # 2 <> 4 (FLEX/SFLEX)
+        ("WR", 3, 5),  # 3 <> 5 (FLEX/SFLEX)
+    ]
+
 
 class GolfSport(Sport):
     """GOLF/PGA
@@ -102,6 +122,13 @@ class GolfSport(Sport):
     dub_min_entries = 100
 
     suffixes = ["(PGA)", "(PGA TOUR)"]
+
+    lineup_range = "L8:Z56"
+
+    # optimizer
+    positions = ["G"]
+    positions_count = 6
+    position_constraints = [("G", 6, None)]
 
 
 class MLBSport(Sport):

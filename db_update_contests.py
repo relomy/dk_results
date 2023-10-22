@@ -47,8 +47,11 @@ def check_contests_for_completion(conn):
     options.add_argument("--user-data-dir=/home/pi/.config/chromium")
     options.add_argument(r"--profile-directory=Profile 1")
     driver = webdriver.Remote(
-        service.service_url, desired_capabilities=options.to_capabilities()
+        service.service_url, options=options
     )
+    #driver = webdriver.Remote(
+    #    service.service_url, desired_capabilities=options.to_capabilities()
+    #)
 
     for dk_id, sport, positions_paid, status, completed in incomplete_contests:
         # navigate to the gamecenter URL
@@ -155,10 +158,10 @@ def get_contest_data(html, contest_id):
     soup = BeautifulSoup(html, "html.parser")
 
     try:
-        entries = soup.find("label", text="Entries").find_next("span").text
-        status = soup.find("label", text="Status").find_next("span").text.upper()
+        entries = soup.find("label", string="Entries").find_next("span").text
+        status = soup.find("label", string="Status").find_next("span").text.upper()
         positions_paid = (
-            soup.find("label", text="Positions Paid").find_next("span").text
+            soup.find("label", string="Positions Paid").find_next("span").text
         )
 
         logger.debug("entries: %s", entries)

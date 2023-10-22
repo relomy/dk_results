@@ -40,10 +40,12 @@ import datetime
 import re
 
 import browsercookie
+#import browser_cookie3
 import requests
 
 from classes.contest import Contest
 
+#COOKIES = browser_cookie3.chrome()
 COOKIES = browsercookie.chrome()
 HEADERS = {
     "Accept": "*/*",

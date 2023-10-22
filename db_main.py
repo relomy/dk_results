@@ -25,6 +25,7 @@ from classes.draftkings import Draftkings
 from classes.results import Results
 from classes.sport import CFBSport, GolfSport, NBASport, NFLSport, Sport
 from classes.trainfinder import TrainFinder
+from classes.optimizer import Optimizer
 
 # load the logging configuration
 logging.config.fileConfig("logging.ini")
@@ -41,7 +42,7 @@ def pull_contest_zip(contest_id):
 
         logger.debug("type(result): %s", type(result))
 
-        if result is not None:
+        if result is not None and result:
             logger.debug("pickle method worked!!")
             return result
 
@@ -53,6 +54,7 @@ def pull_contest_zip(contest_id):
     logger.debug("type(result): %s", type(result))
 
     if result:
+        logger.debug("returning result")
         return result
 
     # use selenium to refresh cookies
@@ -94,9 +96,7 @@ def use_selenium(contest_id):
     # options.add_argument("--user-data-dir=/Users/Adam/Library/Application Support/Google/Chrome")
     options.add_argument("--user-data-dir=/home/pi/.config/chromium")
     options.add_argument(r"--profile-directory=Profile 1")
-    driver = webdriver.Remote(
-        service.service_url, desired_capabilities=options.to_capabilities()
-    )
+    driver = webdriver.Remote(service.service_url, options=options)
 
     logger.debug("Performing get on %s", app_deposit_url)
     driver.get(app_deposit_url)
@@ -186,7 +186,7 @@ def cj_from_pickle(filename):
         return False
 
 
-def db_get_live_contest(conn, sport, entry_fee=25, keyword="%") -> (tuple):
+def db_get_live_contest(conn, sport, entry_fee=25, keyword="%") -> tuple:
     # get cursor
     cur = conn.cursor()
 
@@ -350,6 +350,39 @@ def main():
         )
 
         results = Results(sport_name, dk_id, fn, positions_paid)
+
+        try:
+            p = results.get_players()
+            optimizer = Optimizer(sport_obj, p)
+            optimized_players = optimizer.get_optimal_lineup()
+
+            if optimized_players:
+                optimized_info = [
+                    ["Pos", "Name", "Salary", "Pts", "Value", "Own%"],
+                ]
+                for player in optimized_players:
+                    # info.append([v["count"], v["pts"], v["pmr"], str(v["lineup"])])
+                    row = [
+                        player.pos,
+                        player.name,
+                        player.salary,
+                        player.fpts,
+                        player.value,
+                        player.ownership,
+                    ]
+
+                    logger.info(
+                        f"Player [{player.pos}]: {player.name} Score: {player.fpts} Salary: {player.salary} Value {player.value} Own: {player.ownership}"
+                    )
+
+                    optimized_info.append(row)
+
+                sheet.add_optimal_lineup(optimized_info)
+
+                logger.debug(optimized_players)
+        except Exception as error:
+            logger.error(error)
+            logger.error("Error in optimal lineup")
 
         players_to_values = results.players_to_values(sport_name)
         sheet.clear_standings()
