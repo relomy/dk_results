@@ -30,12 +30,24 @@ class Optimizer:
             del players["49ers "]
 
     def get_optimal_lineup(self) -> dict():
-        # Create binary decision variables for player selection (0 or 1)
-        selected_players = {
+        selected_players = self.create_decision_variables()
+        self.define_objective(selected_players)
+        self.define_budget_constraint(selected_players)
+        self.define_player_count_constraint(selected_players)
+        self.define_position_constraints(selected_players)
+
+        self.solve_problem()
+
+        return self.extract_optimal_lineup(selected_players)
+
+    # Helper methods
+
+    def create_decision_variables(self):
+        return {
             player: pl.LpVariable(player, 0, 1, pl.LpInteger) for player in self.players
         }
 
-        # Objective function: maximize total points
+    def define_objective(self, selected_players):
         self.prob += (
             sum(
                 self.players[player].fpts * selected_players[player]
@@ -44,7 +56,7 @@ class Optimizer:
             "Total Points",
         )
 
-        # Define constraint: Total salary should not exceed a certain budget
+    def define_budget_constraint(self, selected_players):
         budget = 50000
         self.prob += (
             sum(
@@ -55,53 +67,34 @@ class Optimizer:
             "Budget Constraint",
         )
 
-        # Define constraint: Number of selected players should meet lineup requirements
-        # Maximum number of players in the lineup
+    def define_player_count_constraint(self, selected_players):
         max_players = self.sport_obj.positions_count
-
         self.prob += (
             sum(selected_players[player] for player in self.players) == max_players,
             "Required Players",
         )
 
-        # Add position constraints to the problem
+    def define_position_constraints(self, selected_players):
         for pos, min_count, max_count in self.sport_obj.position_constraints:
-            self.logger.debug(
-                f"adding create_position_constraint(selelcted_players, players, {pos}, {min_count}, {max_count})"
-            )
             x = self.create_position_constraint(
                 selected_players, self.players, pos, min_count, max_count
             )
             self.prob += x
 
-        # Solve the linear programming problem
-        # pl.listSolvers(onlyAvailable=True)
+    def solve_problem(self):
         pl.GLPK(msg=0).solve(self.prob)
-        # pl.GLPK().solve(self.prob)
-        # self.prob.solve()
 
+    def extract_optimal_lineup(self, selected_players):
         optimal_players = []
-        # Check the status of the optimization
         if self.prob.status == 1:
             total_points = 0
             total_salary = 0
-            self.logger.info("Optimal Lineup:")
             for player, var in selected_players.items():
                 if var.value() == 1:
-                    self.logger.info(
-                        f"{self.players[player].pos} {player}: {self.players[player].salary} salary, {self.players[player].fpts} points"
-                    )
                     optimal_players.append(self.players[player])
                     total_points += self.players[player].fpts
                     total_salary += self.players[player].salary
-
-            self.logger.info(
-                f"total points {total_points:0.2f} total salary {total_salary}"
-            )
-
             return optimal_players
-
-        self.logger.info("No optimal lineup found within the constraints.")
         return None
 
     # Define a function to create position constraints
