@@ -212,8 +212,13 @@ class DFSSheet(Sheet):
         self.write_values_to_sheet_range(values, cell_range)
 
     def add_train_info(self, train_info):
-        cell_range = f"{self.sport}!AA3:AM10"
+        cell_range = f"{self.sport}!AA4:AM11"
         values = train_info
+        self.write_values_to_sheet_range(values, cell_range)
+
+    def add_optimal_lineup(self, optimal_lineup_info):
+        values = optimal_lineup_info
+        cell_range = f"{self.sport}!X25:AC35"
         self.write_values_to_sheet_range(values, cell_range)
 
     def build_values_for_vip_lineup(self, vip):

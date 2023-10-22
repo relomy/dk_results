@@ -117,9 +117,7 @@ def use_selenium(contest_id):
     # options.add_argument("--user-data-dir=/Users/Adam/Library/Application Support/Google/Chrome")
     options.add_argument("--user-data-dir=/home/pi/.config/chromium")
     options.add_argument(r"--profile-directory=Profile 1")
-    driver = webdriver.Remote(
-        service.service_url, desired_capabilities=options.to_capabilities()
-    )
+    driver = webdriver.Remote(service.service_url, options=options.to_capabilities())
 
     logger.debug("Performing get on %s", url_contest_csv)
     driver.get(url_contest_csv)
@@ -223,7 +221,7 @@ def request_contest_url(session, contest_id):
             with z.open(name) as csvfile:
                 logger.debug("name within zipfile: {}".format(name))
                 # convert to TextIOWrapper object
-                #lines = io.TextIOWrapper(csvfile, encoding="utf-8-sig", newline="\r\n")
+                # lines = io.TextIOWrapper(csvfile, encoding="utf-8-sig", newline="\r\n")
                 lines = io.TextIOWrapper(csvfile, encoding="utf-8-sig", newline="\n")
                 # open reader object on csvfile within zip file
                 # rdr = csv.reader(lines, delimiter=",")

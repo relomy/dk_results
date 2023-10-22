@@ -120,7 +120,8 @@ def get_draft_groups_from_response(response, sport_obj: Sport):
                         tag,
                         suffix,
                     )
-                continue
+#                response_draft_groups.append(draft_group_id)
+#                continue
 
             if suffix is None or suffix.strip() in suffix_list:
                 logger.info(

@@ -70,6 +70,7 @@ class Results:
             "Cubbiesftw23",
             "Mcoleman1902",
             "cglenn91",
+            "tuck8989",
             "Notorious",
             "Bra3105",
             "ChipotleAddict",
@@ -213,7 +214,6 @@ class Results:
 
                     # let's only parse lineups for NFL right now
                     if self.sport in ["NFL", "NFLShowdown", "CFB", "NBA"]:
-
                         # for those below minimum cash, let's find their players
                         lineup_players = self.parse_lineup_string(lineup)
 
@@ -327,3 +327,6 @@ class Results:
             for p in sorted_players
             if self.players[p].ownership > 0
         ]
+
+    def get_players(self):
+        return self.players

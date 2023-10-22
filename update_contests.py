@@ -43,11 +43,10 @@ def check_contests_for_completion(conn):
     # TODO try headless? probably won't work due to the geolocation stuff
     # options.headless = True
     options.add_argument("--no-sandbox")
+    #options.add_argument("--user-data-dir='~/Library/Application Support/Google/Chrome/Default'")
     options.add_argument("--user-data-dir=/home/pi/.config/chromium")
     options.add_argument(r"--profile-directory=Profile 1")
-    driver = webdriver.Remote(
-        service.service_url, desired_capabilities=options.to_capabilities()
-    )
+    driver = webdriver.Remote(service.service_url, options=options  )
 
     skip_draft_groups = []
 
@@ -171,6 +170,23 @@ def get_contest_data(html, contest_id):
     soup = BeautifulSoup(html, "html.parser")
 
     try:
+        # found_user = False
+        # scripts = soup.findAll('script')
+        # print(scripts, file=open("user_check.html", "w"))
+        # count = 1
+        # for script in scripts:            
+        #     if count == 2:
+        #         break
+        #     logger.debug(type(script))
+        #     logger.debug(vars(script))
+        #Hereug(f"found relomy in script tag #{count}")
+        #         found_user = True
+        #         break
+        #     else:
+        #         logger.debug(f"could not find relomy in script tag #{count}")
+            
+        #     count += 1
+        
         geo_check = soup.find("div", {"class": "searching-geolocation-overlay"})
         if geo_check:
             logger.debug("found geo_check - waiting 5 seconds")
@@ -183,14 +199,14 @@ def get_contest_data(html, contest_id):
         print(html, file=open("output.html", "w"))
 
         logger.debug("looking for entries...")
-        entries = soup.find("label", text="Entries").find_next("span").text
+        entries = soup.find("label", string="Entries").find_next("span").text
         logger.debug("entries: %s", entries)
 
-        status = soup.find("label", text="Status").find_next("span").text.upper()
+        status = soup.find("label", string="Status").find_next("span").text.upper()
         logger.debug("status: %s", status)
 
         positions_paid = (
-            soup.find("label", text="Positions Paid").find_next("span").text
+            soup.find("label", string="Positions Paid").find_next("span").text
         )
         logger.debug("positions_paid: %s", positions_paid)
 
