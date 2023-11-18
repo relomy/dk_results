@@ -9,7 +9,6 @@ import logging.config
 import os
 from collections import OrderedDict
 import pickle
-import sqlite3
 import sys
 import time
 import zipfile
@@ -20,10 +19,12 @@ import selenium.webdriver.chrome.service as chrome_service
 from pytz import timezone
 from selenium import webdriver
 
+from classes.contestdatabase import ContestDatabase
 from classes.dfssheet import DFSSheet
 from classes.draftkings import Draftkings
+from classes.dksession import DkSession
 from classes.results import Results
-from classes.sport import CFBSport, GolfSport, NBASport, NFLSport, Sport
+from classes.sport import Sport
 from classes.trainfinder import TrainFinder
 from classes.optimizer import Optimizer
 
@@ -58,7 +59,7 @@ def pull_contest_zip(contest_id):
         return result
 
     # use selenium to refresh cookies
-    use_selenium(contest_id)
+    use_selenium()
 
     # try browsercookie method again
     cookies = browsercookie.chrome()
@@ -74,11 +75,7 @@ def pull_contest_zip(contest_id):
     return None
 
 
-def use_selenium(contest_id):
-    url_contest_csv = (
-        f"https://www.draftkings.com/contest/exportfullstandingscsv/{contest_id}"
-    )
-
+def use_selenium():
     app_deposit_url = f"https://secure.draftkings.com/app/deposit"
 
     bin_chromedriver = os.getenv("CHROMEDRIVER")
@@ -93,9 +90,11 @@ def use_selenium(contest_id):
     logger.debug("Starting driver with options")
     options = webdriver.ChromeOptions()
     options.add_argument("--no-sandbox")
-    # options.add_argument("--user-data-dir=/Users/Adam/Library/Application Support/Google/Chrome")
-    options.add_argument("--user-data-dir=/home/pi/.config/chromium")
-    options.add_argument(r"--profile-directory=Profile 1")
+    options.add_argument(
+        "--user-data-dir=/Users/Adam/Library/Application Support/Google/Chrome"
+    )
+    # options.add_argument("--user-data-dir=/home/pi/.config/chromium")
+    # options.add_argument(r"--profile-directory=Profile 1")
     driver = webdriver.Remote(service.service_url, options=options)
 
     logger.debug("Performing get on %s", app_deposit_url)
@@ -186,88 +185,13 @@ def cj_from_pickle(filename):
         return False
 
 
-def db_get_live_contest(conn, sport, entry_fee=25, keyword="%") -> tuple:
-    # get cursor
-    cur = conn.cursor()
-
-    if sport == "PGAShowdown":
-        sport = "GOLF"
-        keyword = r"PGA %round%"
-    # elif sport == "NFLShowdown":
-    # sport = "NFL"
-    # keyword = r"%vs%"
-
-    try:
-        # execute SQL command
-        sql = (
-            "SELECT dk_id, name, draft_group, positions_paid "
-            "FROM contests "
-            "WHERE sport=? "
-            "  AND name LIKE ? "
-            "  AND entry_fee >= ? "
-            "  AND start_date <= datetime('now', 'localtime') "
-            # "  AND status='LIVE' "
-            "  AND completed=0 "
-            "ORDER BY entries DESC "
-            "LIMIT 1"
-        )
-        # print("sport: {} keyword: {} entry_fee: {}".format(sport, keyword, entry_fee))
-        # print(sql)
-
-        cur.execute(sql, (sport, keyword, entry_fee))
-
-        # fetch rows
-        row = cur.fetchone()
-
-        if row:
-            # return none if contest has not started yet
-            # start_date = datetime.datetime.strptime(row[2], "%Y-%m-%d %H:%M:%S")
-            # if now < start_date:
-            #     logger.debug(
-            #         "Contest {} has not started yet start_date: {}".format(
-            #             row[0], start_date
-            #         )
-            #     )
-            #     return None
-
-            # return dk_id, draft_group
-            # return row[:2]
-            return row
-
-        return None
-
-    except sqlite3.Error as err:
-        logger.error("sqlite error in get_live_contest(): %s", err.args[0])
-
-
 def main():
-    # Results("GOLF", 115490837, "DKSalaries_GOLF_Thursday.csv")
-    # exit()
     """Use database and update Google Sheet with contest standings from DraftKings."""
     # parse arguments
     parser = argparse.ArgumentParser()
 
     sportz = Sport.__subclasses__()
     choices = dict({sport.name: sport for sport in sportz})
-
-    # choices = [
-    #     "NBA",
-    #     "NFL",
-    #     "NFLShowdown",
-    #     "CFB",
-    #     "GOLF",
-    #     "PGAMain",
-    #     "PGAWeekend",
-    #     "PGAShowdown",
-    #     "NHL",
-    #     "MLB",
-    #     "TEN",
-    #     "XFL",
-    #     "MMA",
-    #     "LOL",
-    #     "NAS",
-    #     "USFL",
-    # ]
 
     parser.add_argument(
         "-s",
@@ -288,7 +212,7 @@ def main():
     args = parser.parse_args()
 
     # create connection to database file
-    conn = sqlite3.connect("contests.db")
+    contest_database = ContestDatabase("contests.db")
 
     now = datetime.datetime.now(timezone("US/Eastern"))
 
@@ -300,21 +224,8 @@ def main():
 
         sport_obj = choices[sport_name]
 
-        # min_entry_fee = 25
-        # keyword = "%"
-
-        # if sport_name == "CFB":
-        #     min_entry_fee = 5
-        # elif sport_name == "PGAShowdown":
-        #     min_entry_fee = 5
-        #     keyword = r"%round%"
-        # elif sport_name == "NFLShowdown":
-        #     keyword = r"vs"
-        # elif sport_name == "USFL":
-        #     min_entry_fee = 10
-
-        result = db_get_live_contest(
-            conn, sport_obj.name, sport_obj.sheet_min_entry_fee, sport_obj.keyword
+        result = contest_database.get_live_contest(
+            sport_obj.name, sport_obj.sheet_min_entry_fee, sport_obj.keyword
         )
 
         if not result:
@@ -349,12 +260,16 @@ def main():
             "Creating Results object Results(%s, %s, %s)", sport_name, dk_id, fn
         )
 
-        results = Results(sport_name, dk_id, fn, positions_paid)
+        results = Results(sport_obj, dk_id, fn, positions_paid)
 
         try:
             p = results.get_players()
             optimizer = Optimizer(sport_obj, p)
             optimized_players = optimizer.get_optimal_lineup()
+
+            optimized_players.sort(
+                key=lambda x: (sport_obj.positions.index(x.pos), x.name)
+            )
 
             if optimized_players:
                 optimized_info = [
