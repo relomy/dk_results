@@ -1,34 +1,16 @@
 import copy
 import unicodedata
 
+from classes.sport import Sport
+
 from .player import Player
 
 
 class Lineup:
     """A representation of a list of Players"""
 
-    # dict of positions for each sport
-    POSITIONS = {
-        "CFB": ["QB", "RB", "RB", "WR", "WR", "WR", "FLEX", "S-FLEX"],
-        "MLB": ["P", "C", "1B", "2B", "3B", "SS", "OF"],
-        "NBA": ["PG", "SG", "SF", "PF", "C", "G", "F", "UTIL"],
-        "NFL": ["QB", "RB", "WR", "TE", "FLEX", "DST"],
-        "NFLShowdown": ["CPT", "FLEX"],
-        "NHL": ["C", "W", "D", "G", "UTIL"],
-        "GOLF": ["G"],
-        "PGAMain": ["G"],
-        "PGAWeekend": ["WG"],
-        "PGAShowdown": ["G"],
-        "TEN": ["P"],
-        "XFL": ["QB", "RB", "WR", "FLEX", "DST"],
-        "MMA": ["F"],
-        "LOL": ["CPT", "TOP", "JNG", "MID", "ADC", "SUP", "TEAM"],
-        "NAS": ["D"],
-        "USFL": ["QB", "RB", "WR/TE", "WR/TE", "FLEX", "FLEX", "DST"],
-    }
-
-    def __init__(self, sport, players, lineup_str):
-        self.sport = sport
+    def __init__(self, sport_obj: Sport, players, lineup_str):
+        self.sport_obj = sport_obj
         self.players = players
 
         self.lineup = self.parse_lineup_string(lineup_str)
@@ -40,7 +22,7 @@ class Lineup:
         splt = lineup_str.split(" ")
 
         # list comp for indicies of positions in splt
-        indices = [i for i, pos in enumerate(splt) if pos in self.POSITIONS[self.sport]]
+        indices = [i for i, pos in enumerate(splt) if pos in self.sport_obj.positions]
 
         # list comp for ending indices in splt. for splicing, the second argument is exclusive
         end_indices = [indices[i] for i in range(1, len(indices))]
@@ -56,7 +38,7 @@ class Lineup:
 
             if "LOCKED" in name:
                 name = "LOCKED 🔒"
-                player_list.append(Player(name, position, 0, None, None))
+                player_list.append(Player(name, position, None, 0, None, None))
             else:
                 # self.logger.debug(name)
                 name = " ".join(name)
@@ -76,7 +58,8 @@ class Lineup:
 
         # sort by DraftKings roster order (RB, RB, WR, WR, etc.), then name
         sorted_list = sorted(
-            player_list, key=lambda x: (self.POSITIONS[self.sport].index(x.pos), x.name)
+            player_list,
+            key=lambda x: (self.sport_obj.positions.index(x.pos), x.name),
         )
 
         return sorted_list
@@ -84,7 +67,6 @@ class Lineup:
     def strip_accents_and_periods(self, name):
         """Strip accents from a given string and replace with letters without accents."""
         return "".join(
-            # c.replace(".", "")
             c
             for c in unicodedata.normalize("NFD", name)
             if unicodedata.category(c) != "Mn"
