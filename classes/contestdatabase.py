@@ -28,7 +28,7 @@ class ContestDatabase:
                 "  AND entry_fee >= ? "
                 "  AND start_date <= datetime('now', 'localtime') "
                 "  AND completed=0 "
-                "ORDER BY entry_fee DESC, entries DESC "
+                "ORDER BY start_date DESC, entry_fee DESC, entries DESC "
                 "LIMIT 1"
             )
 

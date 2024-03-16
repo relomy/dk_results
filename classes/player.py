@@ -10,11 +10,23 @@ logging.config.fileConfig("logging.ini")
 class Player:
     """Create a Player object to represent an athlete for a given sport."""
 
-    def __init__(self, name, pos, salary, game_info, team_abbv, logger=None):
+    def __init__(
+        self,
+        name: str,
+        pos: str,
+        roster_pos: str,
+        salary,
+        game_info: str,
+        team_abbv: str,
+        logger=None,
+    ):
         self.logger = logger or logging.getLogger(__name__)
 
         self.name = name
         self.pos = pos
+        self.roster_pos = roster_pos
+        if self.roster_pos:
+            self.roster_pos = self.roster_pos.split("/")
         self.salary = int(salary)
         self.game_info = game_info
         self.team_abbv = team_abbv

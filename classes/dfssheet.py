@@ -114,7 +114,7 @@ class DFSSheet(Sheet):
 
     LINEUP_RANGES = {
         "NBA": "J3:V61",
-        "CFB": "J3:V61",
+        "CFB": "J3:O61",
         "NFL": "J3:V66",
         "NFLShowdown": "J3:V66",
         "GOLF": "L8:Z56",
