@@ -12,17 +12,23 @@ import os
 from .player import Player
 from .user import User
 from .lineup import Lineup
+from .sport import Sport
 
 
 class Results:
     """Create a Results object which contains the results for a given DraftKings contest."""
 
     def __init__(
-        self, sport, contest_id, salary_csv_fn, positions_paid=None, logger=None
+        self,
+        sport_obj: Sport,
+        contest_id: int,
+        salary_csv_fn: str,
+        positions_paid=None,
+        logger=None,
     ):
         self.logger = logger or logging.getLogger(__name__)
 
-        self.sport = sport
+        self.sport_obj = sport_obj
         self.contest_id = contest_id
         self.players = {}  # dict for players found in salary and standings CSV
         self.users = []  # list of Users found in standings CSV
@@ -40,27 +46,14 @@ class Results:
 
         # dict of positions for each sport
         self.POSITIONS = {
-            "CFB": ["QB", "RB", "RB", "WR", "WR", "WR", "FLEX", "S-FLEX"],
-            "MLB": ["P", "C", "1B", "2B", "3B", "SS", "OF"],
-            "NBA": ["PG", "SG", "SF", "PF", "C", "G", "F", "UTIL"],
-            "NFL": ["QB", "RB", "WR", "TE", "FLEX", "DST"],
-            "NFLShowdown": ["CPT", "FLEX"],
-            "NHL": ["C", "W", "D", "G", "UTIL"],
-            "GOLF": ["G"],
-            "PGAMain": ["G"],
-            "PGAWeekend": ["WG"],
-            "PGAShowdown": ["G"],
-            "TEN": ["P"],
             "XFL": ["QB", "RB", "WR", "FLEX", "DST"],
-            "MMA": ["F"],
-            "LOL": ["CPT", "TOP", "JNG", "MID", "ADC", "SUP", "TEAM"],
-            "NAS": ["D"],
-            "USFL": ["QB", "RB", "WR/TE", "WR/TE", "FLEX", "FLEX", "DST"],
         }
 
         # if there's no salary file specified, use the sport/day for the filename
         if not salary_csv_fn:
-            salary_csv_fn = f"DKSalaries_{self.sport}_{datetime.now():%A}.csv"
+            salary_csv_fn = (
+                f"DKSalaries_{self.sport_obj.sport_name}_{datetime.now():%A}.csv"
+            )
 
         self.parse_salary_csv(salary_csv_fn)
 
@@ -104,7 +97,7 @@ class Results:
         splt = lineup_str.split(" ")
 
         # list comp for indicies of positions in splt
-        indices = [i for i, pos in enumerate(splt) if pos in self.POSITIONS[self.sport]]
+        indices = [i for i, pos in enumerate(splt) if pos in self.sport_obj.positions]
         # list comp for ending indices in splt. for splicing, the second argument is exclusive
         end_indices = [indices[i] for i in range(1, len(indices))]
         # append size of splt as last index
@@ -119,7 +112,7 @@ class Results:
 
             if "LOCKED" in name:
                 name = "LOCKED 🔒"
-                player_list.append(Player(name, position, 0, None, None))
+                player_list.append(Player(name, position, None, 0, None, None))
             else:
                 # self.logger.debug(name)
                 name = " ".join(name)
@@ -139,7 +132,7 @@ class Results:
 
         # sort by DraftKings roster order (RB, RB, WR, WR, etc.), then name
         sorted_list = sorted(
-            player_list, key=lambda x: (self.POSITIONS[self.sport].index(x.pos), x.name)
+            player_list, key=lambda x: (self.sport_obj.positions.index(x.pos), x.name)
         )
 
         return sorted_list
@@ -164,12 +157,14 @@ class Results:
                     continue
                 # TODO: might use roster_pos in the future
                 # pos, _, name, _, roster_pos, salary, game_info, team_abbv, appg
-                pos, _, name, _, _, salary, game_info, team_abbv, _ = row
+                pos, _, name, _, roster_pos, salary, game_info, team_abbv, _ = row
 
                 # ensure name doesn't have any weird characters
                 name = self.strip_accents_and_periods(name)
 
-                self.players[name] = Player(name, pos, salary, game_info, team_abbv)
+                self.players[name] = Player(
+                    name, pos, roster_pos, salary, game_info, team_abbv
+                )
 
     def parse_contest_standings_csv(self, filename):
         """Parse CSV containing contest standings and player ownership."""
@@ -192,7 +187,7 @@ class Results:
                 points = float(points)
 
             # create User object and append to users list
-            lineupobj = Lineup(self.sport, self.players, lineup)
+            lineupobj = Lineup(self.sport_obj, self.players, lineup)
             user = User(rank, player_id, name, pmr, points, lineup)
             user.set_lineup_obj(lineupobj)
             self.users.append(user)
@@ -213,7 +208,12 @@ class Results:
                     self.non_cashing_total_pmr += float(pmr)
 
                     # let's only parse lineups for NFL right now
-                    if self.sport in ["NFL", "NFLShowdown", "CFB", "NBA"]:
+                    if self.sport_obj.name in [
+                        "NFL",
+                        "NFLShowdown",
+                        "CFB",
+                        "NBA",
+                    ]:
                         # for those below minimum cash, let's find their players
                         lineup_players = self.parse_lineup_string(lineup)
 
@@ -262,7 +262,7 @@ class Results:
             )
         )
 
-        if self.sport == "NFLShowdown":
+        if self.sport_obj.sport_name == "NFLShowdown":
             sorted_captains = {
                 k: v
                 for k, v in sorted(

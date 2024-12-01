@@ -1,5 +1,3 @@
-from .user import User
-
 import logging
 import logging.config
 
