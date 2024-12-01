@@ -114,8 +114,8 @@ class DFSSheet(Sheet):
 
     LINEUP_RANGES = {
         "NBA": "J3:V61",
-        "CFB": "J3:V61",
-        "NFL": "J3:V66",
+        "CFB": "J3:O99",
+        "NFL": "J3:V99",
         "NFLShowdown": "J3:V66",
         "GOLF": "L8:Z56",
         "PGAMain": "L8:X56",
@@ -128,6 +128,24 @@ class DFSSheet(Sheet):
         "LOL": "J3:V61",
         "NAS": "J3:V61",
         "USFL": "J3:V66",
+    }
+
+    NEW_LINEUP_RANGES = {
+        "NBA": "Q3:Z61",
+        "CFB": "Q3:Z61",
+        "NFL": "Q3:Z66",
+        "NFLShowdown": "Q3:Z66",
+        "GOLF": "L8:Z56",
+        "PGAMain": "L8:X56",
+        "PGAWeekend": "L3:Q41",
+        "PGAShowdown": "L3:Q41",
+        "TEN": "Q3:Z61",
+        "MLB": "Q3:Z71",
+        "XFL": "Q3:Z56",
+        "MMA": "Q3:Z61",
+        "LOL": "Q3:Z61",
+        "NAS": "Q3:Z61",
+        "USFL": "Q3:Z66",
     }
 
     def __init__(self, sport):
@@ -276,6 +294,45 @@ class DFSSheet(Sheet):
             # add extra row to values for spacing if needed
             if i != lineup_mod:
                 all_lineup_values.append([])
+        self.write_values_to_sheet_range(
+            all_lineup_values, f"{self.sport}!{cell_range}"
+        )
+
+    def build_values_for_new_vip_lineup(self, user, players):
+        values = [[user["user"], None, "PMR", user["pmr"], None, None, None, None]]
+        values.append(["Pos", "Name", "Own", "Pts", "RT Proj", "Time", "Stats"])
+        for d in players:
+            if d["valueIcon"] == "fire":
+                d["name"] += " 🔥"
+            elif d["valueIcon"] == "ice":
+                d["name"] += " ❄️"
+            values.append(
+                [
+                    d["pos"],
+                    d["name"],
+                    d["ownership"],
+                    d["pts"],
+                    d["rtProj"],
+                    d["timeStatus"],
+                    d["stats"],
+                ]
+            )
+        values.append(["rank", user["rank"], None, user["pts"], None, None, None, None])
+        return values
+
+    def write_new_vip_lineups(self, vip_lineups):
+        cell_range = self.NEW_LINEUP_RANGES[self.sport]
+
+        # sort VIPs based on name
+        vip_lineups.sort(key=lambda x: x["user"].lower())
+        all_lineup_values = []
+        for vip_lineup in vip_lineups:
+            values = self.build_values_for_new_vip_lineup(
+                vip_lineup, vip_lineup["players"]
+            )
+            values.append([])
+            all_lineup_values.extend(values)
+
         self.write_values_to_sheet_range(
             all_lineup_values, f"{self.sport}!{cell_range}"
         )
