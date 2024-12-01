@@ -1,26 +1,19 @@
 import logging
-import coloredlogs
 import logging.config
 import sqlite3
-from os import getenv
-from time import sleep
-
-import selenium.webdriver.chrome.service as chrome_service
-from bs4 import BeautifulSoup
-from selenium import webdriver
+import requests
 
 
 # load the logging configuration
-# logging.config.fileConfig("logging.ini")
-
+logging.config.fileConfig("logging.ini")
 logger = logging.getLogger(__name__)
 
-coloredlogs.install(level="DEBUG", logger=logger)
+# constants
+COMPLETED_STATUSES = ["COMPLETED", "CANCELLED"]
 
 
-def check_contests_for_completion(conn):
+def check_contests_for_completion(conn) -> None:
     """Check each contest for completion/positions_paid data."""
-    # get incopmlete contests from the database
     incomplete_contests = db_get_incomplete_contests(conn)
 
     # if there are no incomplete contests, return
@@ -29,30 +22,12 @@ def check_contests_for_completion(conn):
 
     logger.debug("found %i incomplete contests", len(incomplete_contests))
 
-    # start chromium driver
-    logger.debug("starting driver")
-    bin_chromedriver = getenv("CHROMEDRIVER")
-    if not getenv("CHROMEDRIVER"):
-        raise "Could not find CHROMEDRIVER in environment"
-
-    # start webdriver
-    logger.debug("starting chromedriver..")
-    service = chrome_service.Service(bin_chromedriver)
-    service.start()
-    options = webdriver.ChromeOptions()
-    # TODO try headless? probably won't work due to the geolocation stuff
-    # options.headless = True
-    options.add_argument("--no-sandbox")
-    #options.add_argument("--user-data-dir='~/Library/Application Support/Google/Chrome/Default'")
-    options.add_argument("--user-data-dir=/home/pi/.config/chromium")
-    options.add_argument(r"--profile-directory=Profile 1")
-    driver = webdriver.Remote(service.service_url, options=options  )
-
     skip_draft_groups = []
 
     for (
         dk_id,
         draft_group,
+        entries,
         positions_paid,
         status,
         completed,
@@ -70,10 +45,6 @@ def check_contests_for_completion(conn):
             continue
 
         # navigate to the gamecenter URL
-        url = f"https://www.draftkings.com/contest/gamecenter/{dk_id}"
-        logger.debug("driver.get url %s", url)
-        driver.get(url)
-
         logger.debug(
             "getting contest data for %s [id: %i start: %s dg: %d]",
             name,
@@ -82,41 +53,78 @@ def check_contests_for_completion(conn):
             draft_group,
         )
 
-        contest_data = get_contest_data(driver.page_source, dk_id)
+        try:
+            contest_data = get_contest_data(dk_id)
 
-        # try again in case geo-check
-        if contest_data is None:
-            contest_data = get_contest_data(driver.page_source, dk_id)
+            if contest_data is None:
+                continue
 
-        if not contest_data:
-            continue
-
-        # if contest data is different, update it
-        if (
-            positions_paid != contest_data["positions_paid"]
-            or status != contest_data["status"]
-            or completed != contest_data["completed"]
-        ):
-            #            logger.debug("trying to update contest %i", dk_id)
-            db_update_contest(
-                conn,
-                [
-                    contest_data["positions_paid"],
-                    contest_data["status"],
-                    contest_data["completed"],
-                    dk_id,
-                ],
+            logger.debug(
+                f"existing: status: {status} entries: {entries} positions_paid: {positions_paid}"
             )
-        else:
-            # if contest data is the same, don't update other contests in the same draft group
-            skip_draft_groups.append(draft_group)
-            logger.debug("contest data is the same, not updating")
+            logger.debug(contest_data)
 
-    logger.debug("quitting driver")
-    driver.quit()
+            # if contest data is different, update it
+            if (
+                positions_paid != contest_data["positions_paid"]
+                or status != contest_data["status"]
+                or completed != contest_data["completed"]
+            ):
+                #            logger.debug("trying to update contest %i", dk_id)
+                db_update_contest(
+                    conn,
+                    [
+                        contest_data["positions_paid"],
+                        contest_data["status"],
+                        contest_data["completed"],
+                        dk_id,
+                    ],
+                )
+            else:
+                # if contest data is the same, don't update other contests in the same draft group
+                skip_draft_groups.append(draft_group)
+                logger.debug("contest data is the same, not updating")
+        except Exception as error:
+            logger.error(error)
 
 
-def db_update_contest(conn, contest_to_update):
+def get_contest_data(dk_id) -> dict:
+    try:
+        url = f"https://api.draftkings.com/contests/v1/contests/{dk_id}?format=json"
+
+        response = requests.get(url)
+        response_json = response.json()
+        cd = response_json["contestDetail"]
+        payout_summary = cd["payoutSummary"]
+
+        positions_paid = payout_summary[0]["maxPosition"]
+        status = cd["contestStateDetail"]
+        entries = cd["maximumEntries"]
+
+        status = status.upper()
+
+        if status in ["COMPLETED", "LIVE", "CANCELLED"]:
+            # set completed status
+            completed = 1 if status in COMPLETED_STATUSES else 0
+            return {
+                "completed": completed,
+                "status": status,
+                "entries": entries,
+                "positions_paid": positions_paid,
+            }
+    except requests.RequestException as req_ex:
+        logger.error(f"Request error: {req_ex}")
+    except ValueError as val_err:
+        logger.error(f"JSON decoding error: {val_err}")
+    except KeyError as key_err:
+        logger.error(f"Key error: {key_err}")
+    except Exception as ex:
+        logger.error(f"An unexpected error occurred: {ex}")
+
+    return None
+
+
+def db_update_contest(conn, contest_to_update) -> None:
     """Update contest fields based on get_contest_data()."""
     logger.debug("trying to update contest %i", contest_to_update[3])
     cur = conn.cursor()
@@ -143,7 +151,7 @@ def db_get_incomplete_contests(conn):
     try:
         # execute SQL command
         sql = (
-            "SELECT dk_id, draft_group, positions_paid, status, completed, name, start_date "
+            "SELECT dk_id, draft_group, entries, positions_paid, status, completed, name, start_date "
             "FROM contests "
             "WHERE start_date <= datetime('now', 'localtime') "
             "  AND (positions_paid IS NULL OR completed = 0)"
@@ -153,90 +161,21 @@ def db_get_incomplete_contests(conn):
         # return all rows
         return cur.fetchall()
     except sqlite3.Error as err:
-        print("sqlite error [check_db_contests_for_completion()]: ", err.args[0])
+        logger.error(
+            f"sqlite error [check_db_contests_for_completion()]: {err.args[0]}"
+        )
 
     return None
 
 
-def get_contest_data(html, contest_id):
-    """Pull contest data (positions paid, status, etc.) with BeautifulSoup."""
-
-    # get the HTML using selenium, since there is html loaded with javascript
-    if not html:
-        logger.warning("couldn't get HTML for contest_id %d", contest_id)
-        return None
-
-    logger.debug("parsing html for contest %i", contest_id)
-    soup = BeautifulSoup(html, "html.parser")
-
-    try:
-        # found_user = False
-        # scripts = soup.findAll('script')
-        # print(scripts, file=open("user_check.html", "w"))
-        # count = 1
-        # for script in scripts:            
-        #     if count == 2:
-        #         break
-        #     logger.debug(type(script))
-        #     logger.debug(vars(script))
-        #Hereug(f"found relomy in script tag #{count}")
-        #         found_user = True
-        #         break
-        #     else:
-        #         logger.debug(f"could not find relomy in script tag #{count}")
-            
-        #     count += 1
-        
-        geo_check = soup.find("div", {"class": "searching-geolocation-overlay"})
-        if geo_check:
-            logger.debug("found geo_check - waiting 5 seconds")
-            # logger.debug("geo_check: {}".format(geo_check))
-            sleep(5)
-        # searching-geolocation-overlay
-
-        logger.debug("re-parsing html for contest %i after geo_check", contest_id)
-        soup = BeautifulSoup(html, "html.parser")
-        print(html, file=open("output.html", "w"))
-
-        logger.debug("looking for entries...")
-        entries = soup.find("label", string="Entries").find_next("span").text
-        logger.debug("entries: %s", entries)
-
-        status = soup.find("label", string="Status").find_next("span").text.upper()
-        logger.debug("status: %s", status)
-
-        positions_paid = (
-            soup.find("label", string="Positions Paid").find_next("span").text
-        )
-        logger.debug("positions_paid: %s", positions_paid)
-
-        if status in ["COMPLETED", "LIVE", "CANCELLED"]:
-            # set completed status
-            completed = 1 if status in ["COMPLETED", "CANCELLED"] else 0
-            return {
-                "completed": completed,
-                "status": status,
-                "entries": int(entries.replace(",", "")),
-                "positions_paid": int(positions_paid.replace(",", "")),
-                # "name": header[0].string,
-                # "total_prizes": header[1].string,
-                # "date": info_header[0].string,
-            }
-
-        return None
-    except (IndexError, AttributeError) as ex:
-        # This error occurs for old contests whose pages no longer are being served.
-        # IndexError: list index out of range
-        # logger.debug("driver.get url %s", driver.current_url)
-        logger.error("Couldn't find DK contest with id %d error: %s", contest_id, ex)
-        print(html, file=open("debug.html", "w"))
-        return None
-
-
 def main():
-    conn = sqlite3.connect("contests.db")
-    # update old contests
-    check_contests_for_completion(conn)
+    try:
+        conn = sqlite3.connect("contests.db")
+        check_contests_for_completion(conn)
+    except sqlite3.Error as sql_error:
+        logger.error(f"SQLite error: {sql_error}")
+    except Exception as e:
+        logger.error(f"An unexpected error occurred: {e}")
 
 
 if __name__ == "__main__":
