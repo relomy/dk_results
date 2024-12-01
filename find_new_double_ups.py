@@ -5,6 +5,7 @@ import argparse
 import datetime
 import logging
 import logging.config
+import re
 import sqlite3
 import sys
 
@@ -70,6 +71,7 @@ def get_contests_from_response(response):
 def get_draft_groups_from_response(response, sport_obj: Sport):
     """Get draft groups from lobby/json."""
     response_draft_groups = []
+    skipped_dg_suffixes = []
     for draft_group in response["DraftGroups"]:
         # dg['StartDateEst'] should be mostly the same for draft groups, (might
         # not be the same for the rare long-running contest) and should be the
@@ -82,6 +84,7 @@ def get_draft_groups_from_response(response, sport_obj: Sport):
         suffix = draft_group["ContestStartTimeSuffix"]
         draft_group_id = draft_group["DraftGroupId"]
         start_date_est = draft_group["StartDateEst"]
+        contest_type_id = draft_group["ContestTypeId"]
 
         if suffix is not None:
             suffix = suffix.strip()
@@ -90,10 +93,6 @@ def get_draft_groups_from_response(response, sport_obj: Sport):
             "(PGA)",
             "(PGA TOUR)",
             "(Weekend PGA TOUR)",
-            # "(Round 1 PGA TOUR)",
-            # "(Round 2 PGA TOUR)",
-            # "(Round 3 PGA TOUR)",
-            # "(Round 4 PGA TOUR)",
             "(AUS)",  # TEN
             "(LCS)",  # LOL
             "(LEC)",
@@ -105,74 +104,66 @@ def get_draft_groups_from_response(response, sport_obj: Sport):
         # only care about featured draftgroups and those with no suffix
         # some special cases in list above
         if tag == "Featured":
+            # python won't convert the DK state time because of the milliseconds
+            dt_start_date = datetime.datetime.fromisoformat(start_date_est[:-8])
             if sport_obj.suffixes:
-                if suffix is not None and suffix.strip() in sport_obj.suffixes:
-                    # python won't convert the DK state time because of the milliseconds
-                    dt_start_date = datetime.datetime.fromisoformat(start_date_est[:-8])
+                suffix_patterns = [
+                    re.compile(pattern) for pattern in sport_obj.suffixes
+                ]
 
-                    logger.debug(
-                        "[%4s] Found PRIMETIME!!!: start time: [%s] start date: [%s] dg: [%d] tag [%s] suffix: [%s]",
-                        sport,
-                        dt_start_date.time(),
+                if suffix is not None and any(
+                    pattern.search(suffix) for pattern in suffix_patterns
+                ):
+                    if (
+                        sport_obj.contest_restraint_time
+                        and dt_start_date.time() < sport_obj.contest_restraint_time
+                    ):
+                        logger.debug(
+                            "[%4s] Skipping [time constraint] (<%s): start date: [%s] dg/tag/suffix/typid: [%d]/[%s]/[%s]/[%d]",
+                            sport_obj.name,
+                            sport_obj.contest_restraint_time,
+                            dt_start_date,
+                            draft_group_id,
+                            tag,
+                            suffix,
+                            contest_type_id,
+                        )
+                        continue
+
+                    logger.info(
+                        "[%4s] Append: start date: [%s] dg/tag/suffix/typid: [%d]/[%s]/[%s]/[%d]",
+                        sport_obj.name,
                         dt_start_date,
-                        # start_date_est,
                         draft_group_id,
                         tag,
                         suffix,
+                        contest_type_id,
                     )
-#                response_draft_groups.append(draft_group_id)
-#                continue
+                    response_draft_groups.append(draft_group_id)
+                    continue
+            else:
+                if suffix is None or suffix.strip() in suffix_list:
+                    logger.info(
+                        "[%4s] Append: start date: [%s] dg/tag/suffix/typid: [%d]/[%s]/[%s]/[%d]",
+                        sport_obj.name,
+                        dt_start_date,
+                        draft_group_id,
+                        tag,
+                        suffix,
+                        contest_type_id,
+                    )
+                    response_draft_groups.append(draft_group_id)
+                    continue
 
-            if suffix is None or suffix.strip() in suffix_list:
-                logger.info(
-                    "[%4s] Append: start date: [%s] dg: [%d] tag [%s] suffix: [%s]",
-                    sport,
-                    start_date_est,
-                    draft_group_id,
-                    tag,
-                    suffix,
-                )
-                response_draft_groups.append(draft_group_id)
-                continue
+        if suffix:
+            skipped_dg_suffixes.append(suffix)
 
-            # elif "vs" in suffix:
-            #     # python won't convert the DK state time because of the milliseconds
-            #     dt_start_date = datetime.datetime.fromisoformat(start_date_est[:-8])
-
-            #     if is_time_between(
-            #         datetime.time(20, 00), datetime.time(23, 59), dt_start_date.time()
-            #     ):
-            #         logger.debug(
-            #             "[%4s] Found VS!!!!!!!!!!!!!!: start time: [%s] start date: [%s] dg: [%d] tag [%s] suffix: [%s]",
-            #             sport,
-            #             dt_start_date.time(),
-            #             dt_start_date,
-            #             # start_date_est,
-            #             draft_group_id,
-            #             tag,
-            #             suffix,
-            #         )
-            #     continue
-
+    if skipped_dg_suffixes:
         logger.debug(
-            "[%4s]   Skip: start date: [%s] dg: [%d] tag [%s] suffix: [%s]",
-            sport,
-            start_date_est,
-            draft_group_id,
-            tag,
-            suffix,
+            "[%4s] Skipped suffixes [%s]",
+            sport_obj.name,
+            ", ".join(skipped_dg_suffixes),
         )
-
-        # print(
-        #     "Adding draft_group for [{0}]: draft group {1} contest type {2} [suffix: {3}]".format(
-        #         date, draft_group_id, contest_type_id, suffix
-        #     )
-        # )
-
-        # row = get_salary_csv(sport, draft_group_id, contest_type_id, date)
-        # if date not in rows_by_date:
-        #     rows_by_date[date] = []
-        # rows_by_date[date] += row
 
     return response_draft_groups
 
@@ -495,6 +486,10 @@ def main():
             elif sport_obj.name == "GOLF":
                 bot.send_message(
                     ":golf: " + discord_message + " <@&1040014001452630046>"
+                )
+            elif sport_obj.name == "NFLShowdown":
+                bot.send_message(
+                    "<:stonks:858081117876518964> " + discord_message + " <@&1312478274085191770>"
                 )
 
             # insert new double ups into DB
