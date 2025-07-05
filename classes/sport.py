@@ -58,6 +58,7 @@ class NFLSport(Sport):
     #     ("DST", 1, None),
     # ]
 
+
 class NFLAfternoonSport(Sport):
     """NFL
 
@@ -162,7 +163,7 @@ class GolfSport(Sport):
     name = "GOLF"
     sheet_name = "GOLF"
     lineup_range = "L8:Z56"
-    
+
     sheet_min_entry_fee = 10
     dub_min_entry_fee = 2
     dub_min_entries = 100

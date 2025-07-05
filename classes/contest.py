@@ -1,4 +1,5 @@
 """Object representing a DraftKings contest from json."""
+
 import datetime
 import re
 

@@ -29,7 +29,6 @@ class TrainFinder:
             if user.salary <= salary:
                 key = f"{user.pts}-{user.pmr}"
                 if not key in return_users:
-
                     return_users[key] = {
                         "pos": 0,
                         "pmr": 0.0,

@@ -2,17 +2,17 @@
 
 import copy
 import csv
-from datetime import datetime
 import io
 import logging
 import logging.config
-import unicodedata
 import os
+import unicodedata
+from datetime import datetime
 
-from .player import Player
-from .user import User
 from .lineup import Lineup
+from .player import Player
 from .sport import Sport
+from .user import User
 
 
 class Results:

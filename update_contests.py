@@ -1,8 +1,8 @@
 import logging
 import logging.config
 import sqlite3
-import requests
 
+import requests
 
 # load the logging configuration
 logging.config.fileConfig("logging.ini")
@@ -129,11 +129,7 @@ def db_update_contest(conn, contest_to_update) -> None:
     logger.debug("trying to update contest %i", contest_to_update[3])
     cur = conn.cursor()
 
-    sql = (
-        "UPDATE contests "
-        "SET positions_paid=?, status=?, completed=? "
-        "WHERE dk_id=?"
-    )
+    sql = "UPDATE contests SET positions_paid=?, status=?, completed=? WHERE dk_id=?"
 
     try:
         cur.execute(sql, contest_to_update)
