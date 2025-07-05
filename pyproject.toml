@@ -16,6 +16,7 @@ dependencies = [
     "pulp",
     "rookiepy",
     "pyyaml",
+    "dotenv",
 ]
 
 [tool.setuptools.packages.find]

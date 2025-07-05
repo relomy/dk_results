@@ -7,14 +7,17 @@ import logging.config
 import re
 import sqlite3
 import sys
-from os import environ
+from os import getenv
 
 import requests
+from dotenv import load_dotenv
 
 from bot.discord import Discord
 from classes.contest import Contest
 from classes.cookieservice import get_dk_cookies
 from classes.sport import Sport
+
+load_dotenv()
 
 # load the logging configuration
 logging.config.fileConfig("logging.ini")
@@ -395,7 +398,7 @@ def main():
     sportz = Sport.__subclasses__()
     choices = dict({sport.name: sport for sport in sportz})
 
-    webhook = environ["DISCORD_WEBHOOK"]
+    webhook = getenv["DISCORD_WEBHOOK"]
 
     bot = Discord(webhook)
 
