@@ -4,11 +4,13 @@ salary/
 contests/
 
 # specific files
+.DS_Store
 .remote-sync.json
 token.json
 client_secret.json
 credentials.json
 Pipfile.lock
+repomix-output*
 
 # specific file extenions
 DKSalaries_*.csv
@@ -143,3 +145,4 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+.aider*

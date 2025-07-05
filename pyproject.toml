@@ -1,0 +1,36 @@
+[project]
+name = "dk_results"
+version = "0.1.0"
+description = ""
+requires-python = ">=3.12, <3.13"
+
+dependencies = [
+    "google-api-python-client",
+    "oauth2client",
+    "pytz",
+    "requests",
+    "selenium",
+    "beautifulsoup4",
+    "google-auth-httplib2",
+    "google-auth-oauthlib",
+    "pulp",
+    "rookiepy",
+    "pyyaml",
+]
+
+[tool.setuptools.packages.find]
+include = ["bot", "classes"]
+
+[dependency-groups]
+dev = [
+    "rope"
+]
+lint = [
+    "ruff"
+]
+
+[tool.pip]
+allow-prereleases = true
+
+[tool.uv]
+default-groups = "all"
