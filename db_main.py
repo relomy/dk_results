@@ -1,5 +1,3 @@
-"""Use database and update Google Sheet with contest standings from DraftKings."""
-
 import argparse
 import csv
 import datetime
@@ -7,26 +5,20 @@ import io
 import logging
 import logging.config
 import os
-from collections import OrderedDict
 import pickle
-import sys
-import time
 import zipfile
+from collections import OrderedDict
 
-import browsercookie
-import requests
-import selenium.webdriver.chrome.service as chrome_service
 from pytz import timezone
-from selenium import webdriver
 
 from classes.contestdatabase import ContestDatabase
 from classes.dfssheet import DFSSheet
-from classes.draftkings import Draftkings
 from classes.dksession import DkSession
+from classes.draftkings import Draftkings
+from classes.optimizer import Optimizer
 from classes.results import Results
 from classes.sport import Sport
 from classes.trainfinder import TrainFinder
-from classes.optimizer import Optimizer
 
 # load the logging configuration
 logging.config.fileConfig("logging.ini")
@@ -36,95 +28,8 @@ logger = logging.getLogger(__name__)
 
 def pull_contest_zip(contest_id):
     """Pull contest file (so far can be .zip or .csv file)."""
-    # try pickle cookies method
-    cookies = cj_from_pickle("pickled_cookies_works.txt")
-    if cookies:
-        result = setup_session(contest_id, cookies)
-
-        logger.debug("type(result): %s", type(result))
-
-        if result is not None and result:
-            logger.debug("pickle method worked!!")
-            return result
-
-    # try browsercookie method
-    logger.debug("First pickle method did not work - trying browsercookie method")
-    cookies = browsercookie.chrome()
-
-    result = setup_session(contest_id, cookies)
-    logger.debug("type(result): %s", type(result))
-
-    if result:
-        logger.debug("returning result")
-        return result
-
-    # use selenium to refresh cookies
-    use_selenium()
-
-    # try browsercookie method again
-    cookies = browsercookie.chrome()
-
-    result = setup_session(contest_id, cookies)
-    logger.debug("type(result): %s", type(result))
-
-    if result is not None:
-        logger.debug("SECOND browsercookie method worked!!")
-        return result
-
-    logger.debug("Broken from SECOND browsercookie method")
-    return None
-
-
-def use_selenium():
-    app_deposit_url = f"https://secure.draftkings.com/app/deposit"
-
-    bin_chromedriver = os.getenv("CHROMEDRIVER")
-    if not os.getenv("CHROMEDRIVER"):
-        logger.error("Could not find CHROMEDRIVER in env variable")
-        sys.exit()
-
-    logger.debug("Found chromedriver in env variable: %s", {bin_chromedriver})
-    # start headless webdriver
-    service = chrome_service.Service(bin_chromedriver)
-    service.start()
-    logger.debug("Starting driver with options")
-    options = webdriver.ChromeOptions()
-    options.add_argument("--no-sandbox")
-    options.add_argument(
-        "--user-data-dir=/Users/Adam/Library/Application Support/Google/Chrome"
-    )
-    # options.add_argument("--user-data-dir=/home/pi/.config/chromium")
-    # options.add_argument(r"--profile-directory=Profile 1")
-    driver = webdriver.Remote(service.service_url, options=options)
-
-    logger.debug("Performing get on %s", app_deposit_url)
-    driver.get(app_deposit_url)
-    logger.debug(driver.current_url)
-    logger.debug("Letting DK load ...")
-    time.sleep(5)  # Let DK Load!
-    logger.debug(driver.current_url)
-    logger.debug("Letting DK load ...")
-    time.sleep(5)  # Let DK Load!
-    logger.debug(driver.current_url)
-    logger.debug("Quitting driver")
-    driver.quit()
-
-
-def setup_session(contest_id, cookies):
-    session = requests.Session()
-
-    for cookie in cookies:
-        # if the cookies already exists from a legitimate fresh session, clear them out
-        if cookie.name in session.cookies:
-            logger.debug("removing %s from 'cookies' -- ", cookie.name, end="")
-            cookies.clear(cookie.domain, cookie.path, cookie.name)
-        else:
-            if not cookie.expires:
-                continue
-
-    logger.debug("adding all missing cookies to session.cookies")
-    session.cookies.update(cookies)
-
+    dksession = DkSession()
+    session = dksession.get_session()
     return request_contest_url(session, contest_id)
 
 
@@ -151,17 +56,9 @@ def request_contest_url(session, contest_id):
         with open("pickled_cookies_works.txt", "wb") as fp:
             pickle.dump(session.cookies, fp)
         # decode bytes into string
-        # csvfile = response.content.decode("utf-8")
         csvfile = response.content.decode("utf-8-sig")
-        print(csvfile, file=open(fn, "w"))
-        # open reader object on csvfile
-        # rdr = csv.reader(csvfile.splitlines(), delimiter=",")
         return list(csv.reader(csvfile.splitlines(), delimiter=","))
 
-    # write working cookies
-    with open("pickled_cookies_works.txt", "wb") as fp:
-        pickle.dump(session.cookies, fp)
-    # request will be a zip file
     zip_obj = zipfile.ZipFile(io.BytesIO(response.content))
     for name in zip_obj.namelist():
         # extract file - it seems easier this way
@@ -172,22 +69,11 @@ def request_contest_url(session, contest_id):
             # convert to TextIOWrapper object
             lines = io.TextIOWrapper(csvfile, encoding="utf-8", newline="\n")
             # open reader object on csvfile within zip file
-            # rdr = csv.reader(lines, delimiter=",")
             return list(csv.reader(lines, delimiter=","))
-
-
-def cj_from_pickle(filename):
-    try:
-        with open(filename, "rb") as fp:
-            return pickle.load(fp)
-    except FileNotFoundError as err:
-        logger.error("File %s not found [%s]", filename, err)
-        return False
 
 
 def main():
     """Use database and update Google Sheet with contest standings from DraftKings."""
-    # parse arguments
     parser = argparse.ArgumentParser()
 
     sportz = Sport.__subclasses__()
@@ -249,7 +135,6 @@ def main():
         # pull contest standings from draftkings
         contest_list = pull_contest_zip(dk_id)
 
-        #
         if contest_list is None or not contest_list:
             logger.error("pull_contest_zip() - contest_list is %s", contest_list)
             continue
@@ -276,7 +161,6 @@ def main():
                     ["Pos", "Name", "Salary", "Pts", "Value", "Own%"],
                 ]
                 for player in optimized_players:
-                    # info.append([v["count"], v["pts"], v["pmr"], str(v["lineup"])])
                     row = [
                         player.pos,
                         player.name,
@@ -339,7 +223,6 @@ def main():
                 for p in top_ten_players:
                     count = results.non_cashing_players[p]
                     ownership = float(count / results.non_cashing_users)
-
                     info.append([p, ownership])
 
             sheet.add_non_cashing_info(info)
@@ -370,7 +253,6 @@ def main():
                 ["Rank", "Users", "Score", "PMR"],
             ]
             for k, v in sorted_trains.items():
-                # info.append([v["count"], v["pts"], v["pmr"], str(v["lineup"])])
                 row = [v["rank"], v["count"], v["pts"], v["pmr"]]
 
                 logger.info(
