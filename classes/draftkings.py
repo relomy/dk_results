@@ -1,18 +1,22 @@
 """Creating a Draftkings object which can fetch contest results (authenticated)
-       and salary files for contests (unauthenticated).
-    """
+and salary files for contests (unauthenticated).
+"""
+
 import logging
 
-import browsercookie
 import requests
+
+from classes.cookieservice import get_dk_cookies
 
 # load the logging configuration
 logging.config.fileConfig("logging.ini")
 
+logger = logging.getLogger(__name__)
+
 
 class Draftkings:
     """Creating a Draftkings object which can fetch contest results (authenticated)
-       and salary files for contests (unauthenticated).
+    and salary files for contests (unauthenticated).
     """
 
     def __init__(self, logger=None):
@@ -21,7 +25,7 @@ class Draftkings:
         self.session = requests.Session()
 
         # set cookies based on Chrome session
-        cookies = browsercookie.chrome()
+        _, cookies = get_dk_cookies()
 
         # update session with cookies
         self.session.cookies.update(cookies)

@@ -1,8 +1,10 @@
 import logging
 import logging.config
-import browsercookie
-import requests
 import pickle
+
+import requests
+
+from classes.cookieservice import get_dk_cookies
 
 # load the logging configuration
 logging.config.fileConfig("logging.ini")
@@ -11,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 class DkSession:
     def __init__(self) -> None:
-        cookies = self.cj_from_pickle("pickled_cookies_works.txt")
+        _, cookies = get_dk_cookies()
         self.session = self.setup_session(cookies)
 
     def get_session(self):

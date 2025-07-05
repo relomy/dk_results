@@ -1,6 +1,5 @@
 """Find new double ups and print out a message when a new one is found."""
 
-
 import argparse
 import datetime
 import logging
@@ -8,22 +7,22 @@ import logging.config
 import re
 import sqlite3
 import sys
-
 from os import environ
 
-import browsercookie
 import requests
 
-from classes.sport import CFBSport, GolfSport, NBASport, NFLSport, Sport
-from classes.contest import Contest
 from bot.discord import Discord
+from classes.contest import Contest
+from classes.cookieservice import get_dk_cookies
+from classes.sport import Sport
 
 # load the logging configuration
 logging.config.fileConfig("logging.ini")
 
 logger = logging.getLogger(__name__)
 
-COOKIES = browsercookie.chrome()
+cookie_dict, jar = get_dk_cookies()
+COOKIES = jar
 HEADERS = {
     "Accept": "*/*",
     "Accept-Encoding": "gzip, deflate, sdch",
@@ -489,7 +488,9 @@ def main():
                 )
             elif sport_obj.name == "NFLShowdown":
                 bot.send_message(
-                    "<:stonks:858081117876518964> " + discord_message + " <@&1312478274085191770>"
+                    "<:stonks:858081117876518964> "
+                    + discord_message
+                    + " <@&1312478274085191770>"
                 )
 
             # insert new double ups into DB

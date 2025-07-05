@@ -37,16 +37,15 @@ Response format: {
 
 import argparse
 import datetime
-import re
 
-import browsercookie
-#import browser_cookie3
 import requests
 
 from classes.contest import Contest
+from classes.cookieservice import get_dk_cookies
 
-#COOKIES = browser_cookie3.chrome()
-COOKIES = browsercookie.chrome()
+cookie_dict, jar = get_dk_cookies()
+COOKIES = jar
+
 HEADERS = {
     "Accept": "*/*",
     "Accept-Encoding": "gzip, deflate, sdch",
@@ -70,6 +69,7 @@ def get_contests(url):
 
     print(url)
 
+    # response = requests.get(url, headers=HEADERS, cookies=COOKIES).json()
     response = requests.get(url, headers=HEADERS, cookies=COOKIES).json()
     response_contests = {}
     if isinstance(response, list):
@@ -202,16 +202,46 @@ def print_cron_job(contest, sport):
 
     # set interval and length depending on sport
     dict_sports = {
-        "NBA": {"sport_length": 6, "get_interval": "*/5",},
-        "NFL": {"sport_length": 6, "get_interval": "*/5",},
-        "CFB": {"sport_length": 6, "get_interval": "*/5",},
-        "MLB": {"sport_length": 7, "get_interval": "2-59/10",},
-        "PGA": {"sport_length": 8, "get_interval": "4-59/15",},
-        "TEN": {"sport_length": 15, "get_interval": "5-59/10",},
-        "LOL": {"sport_length": 4, "get_interval": "*/5",},
-        "MMA": {"sport_length": 6, "get_interval": "*/10",},
-        "NAS": {"sport_length": 4, "get_interval": "*/5",},
-        "USFL": {"sport_length": 6, "get_interval": "*/10",},
+        "NBA": {
+            "sport_length": 6,
+            "get_interval": "*/5",
+        },
+        "NFL": {
+            "sport_length": 6,
+            "get_interval": "*/5",
+        },
+        "CFB": {
+            "sport_length": 6,
+            "get_interval": "*/5",
+        },
+        "MLB": {
+            "sport_length": 7,
+            "get_interval": "2-59/10",
+        },
+        "PGA": {
+            "sport_length": 8,
+            "get_interval": "4-59/15",
+        },
+        "TEN": {
+            "sport_length": 15,
+            "get_interval": "5-59/10",
+        },
+        "LOL": {
+            "sport_length": 4,
+            "get_interval": "*/5",
+        },
+        "MMA": {
+            "sport_length": 6,
+            "get_interval": "*/10",
+        },
+        "NAS": {
+            "sport_length": 4,
+            "get_interval": "*/5",
+        },
+        "USFL": {
+            "sport_length": 6,
+            "get_interval": "*/10",
+        },
     }
 
     # set some long strings up as variables

@@ -1,14 +1,14 @@
 import logging
 import logging.config
-import browsercookie
+
 import requests
-import pickle
+
+from classes.dksession import DkSession
 
 # load the logging configuration
 logging.config.fileConfig("logging.ini")
 logger = logging.getLogger(__name__)
 
-from classes.dksession import DkSession
 
 dksession = DkSession()
 session = dksession.get_session()
