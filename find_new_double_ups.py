@@ -16,15 +16,9 @@ from bot.discord import Discord
 from classes.contest import Contest
 from classes.cookieservice import get_dk_cookies
 from classes.sport import Sport
+from discord_roles import DISCORD_ROLE_MAP
 
 load_dotenv()
-
-DISCORD_ROLE_MAP = {
-    "NBA": (":basketball:", "<@&1034206287153594470>"),
-    "CFB": (":football:", "<@&1034214536544268439>"),
-    "GOLF": (":golf:", "<@&1040014001452630046>"),
-    "NFLShowdown": ("<:stonks:858081117876518964>", "<@&1312478274085191770>"),
-}
 
 # load the logging configuration
 logging.config.fileConfig("logging.ini")
