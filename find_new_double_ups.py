@@ -116,13 +116,19 @@ def get_draft_groups_from_response(response: dict, sport_obj: Sport) -> list:
     """
     response_draft_groups = []
     skipped_dg_suffixes = []
+    suffix_list = [
+        "(PGA)",
+        "(PGA TOUR)",
+        "(Weekend PGA TOUR)",
+        "(AUS)",  # TEN
+        "(LCS)",  # LOL
+        "(LEC)",
+        "(LPL)",
+        "(Cup)",  # NAS
+        "(Preseason)",  # NFL preseason
+    ]
+
     for draft_group in response["DraftGroups"]:
-        # dg['StartDateEst'] should be mostly the same for draft groups, (might
-        # not be the same for the rare long-running contest) and should be the
-        # date we're looking for (game date in US time).
-        # date = get_salary_date(response["DraftGroups"])
-        # date = get_salary_date(draft_group)
-        # contest_type_id = draft_group["ContestTypeId"]
         sport = draft_group["Sport"]
         tag = draft_group["DraftGroupTag"]
         suffix = draft_group["ContestStartTimeSuffix"]
@@ -133,73 +139,63 @@ def get_draft_groups_from_response(response: dict, sport_obj: Sport) -> list:
         if suffix is not None:
             suffix = suffix.strip()
 
-        suffix_list = [
-            "(PGA)",
-            "(PGA TOUR)",
-            "(Weekend PGA TOUR)",
-            "(AUS)",  # TEN
-            "(LCS)",  # LOL
-            "(LEC)",
-            "(LPL)",
-            "(Cup)",  # NAS
-            "(Preseason)",  # NFL preseason
-        ]
+        # Only care about featured draftgroups and those with no suffix or special cases
+        if tag != "Featured":
+            if suffix:
+                skipped_dg_suffixes.append(suffix)
+            continue
 
-        # only care about featured draftgroups and those with no suffix
-        # some special cases in list above
-        if tag == "Featured":
-            # python won't convert the DK state time because of the milliseconds
-            dt_start_date = datetime.datetime.fromisoformat(start_date_est[:-8])
-            if sport_obj.suffixes:
-                suffix_patterns = [
-                    re.compile(pattern) for pattern in sport_obj.suffixes
-                ]
+        dt_start_date = datetime.datetime.fromisoformat(start_date_est[:-8])
 
-                if suffix is not None and any(
-                    pattern.search(suffix) for pattern in suffix_patterns
-                ):
-                    if (
-                        sport_obj.contest_restraint_time
-                        and dt_start_date.time() < sport_obj.contest_restraint_time
-                    ):
-                        logger.debug(
-                            "[%4s] Skipping [time constraint] (<%s): start date: [%s] dg/tag/suffix/typid: [%d]/[%s]/[%s]/[%d]",
-                            sport_obj.name,
-                            sport_obj.contest_restraint_time,
-                            dt_start_date,
-                            draft_group_id,
-                            tag,
-                            suffix,
-                            contest_type_id,
-                        )
-                        continue
+        # If sport_obj has suffixes, use regex matching
+        if sport_obj.suffixes:
+            suffix_patterns = [re.compile(pattern) for pattern in sport_obj.suffixes]
+            if suffix is None or not any(
+                pattern.search(suffix) for pattern in suffix_patterns
+            ):
+                if suffix:
+                    skipped_dg_suffixes.append(suffix)
+                continue
+            if (
+                sport_obj.contest_restraint_time
+                and dt_start_date.time() < sport_obj.contest_restraint_time
+            ):
+                logger.debug(
+                    "[%4s] Skipping [time constraint] (<%s): start date: [%s] dg/tag/suffix/typid: [%d]/[%s]/[%s]/[%d]",
+                    sport_obj.name,
+                    sport_obj.contest_restraint_time,
+                    dt_start_date,
+                    draft_group_id,
+                    tag,
+                    suffix,
+                    contest_type_id,
+                )
+                continue
+            logger.info(
+                "[%4s] Append: start date: [%s] dg/tag/suffix/typid: [%d]/[%s]/[%s]/[%d]",
+                sport_obj.name,
+                dt_start_date,
+                draft_group_id,
+                tag,
+                suffix,
+                contest_type_id,
+            )
+            response_draft_groups.append(draft_group_id)
+            continue
 
-                    logger.info(
-                        "[%4s] Append: start date: [%s] dg/tag/suffix/typid: [%d]/[%s]/[%s]/[%d]",
-                        sport_obj.name,
-                        dt_start_date,
-                        draft_group_id,
-                        tag,
-                        suffix,
-                        contest_type_id,
-                    )
-                    response_draft_groups.append(draft_group_id)
-                    continue
-            else:
-                if suffix is None or suffix.strip() in suffix_list:
-                    logger.info(
-                        "[%4s] Append: start date: [%s] dg/tag/suffix/typid: [%d]/[%s]/[%s]/[%d]",
-                        sport_obj.name,
-                        dt_start_date,
-                        draft_group_id,
-                        tag,
-                        suffix,
-                        contest_type_id,
-                    )
-                    response_draft_groups.append(draft_group_id)
-                    continue
-
-        if suffix:
+        # If no suffixes, allow None or in suffix_list
+        if suffix is None or suffix in suffix_list:
+            logger.info(
+                "[%4s] Append: start date: [%s] dg/tag/suffix/typid: [%d]/[%s]/[%s]/[%d]",
+                sport_obj.name,
+                dt_start_date,
+                draft_group_id,
+                tag,
+                suffix,
+                contest_type_id,
+            )
+            response_draft_groups.append(draft_group_id)
+        else:
             skipped_dg_suffixes.append(suffix)
 
     if skipped_dg_suffixes:
@@ -297,15 +293,9 @@ def get_double_ups(
         "max_entry_fee": max_entry_fee,
         "entries": entries,
     }
-    contest_list = []
-    for contest in contests:
-        # skip contests not for today
-        # if contest.start_dt.date() != datetime.datetime.today().date():
-        #     continue
-        if contest_meets_criteria(contest, criteria):
-            contest_list.append(contest)
-
-    return contest_list
+    return [
+        contest for contest in contests if contest_meets_criteria(contest, criteria)
+    ]
 
 
 def contest_meets_criteria(contest: Contest, criteria: dict) -> bool:
