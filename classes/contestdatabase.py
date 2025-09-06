@@ -8,11 +8,21 @@ logging.config.fileConfig("logging.ini")
 
 
 class ContestDatabase:
-    def __init__(self, sqlite3_database: str, logger=None):
+    def __init__(self, sqlite3_database: str, logger=None) -> None:
+        """
+        Initialize ContestDatabase with SQLite database file.
+
+        Args:
+            sqlite3_database (str): Path to SQLite database file.
+            logger (logging.Logger, optional): Logger instance.
+        """
         self.logger = logger or logging.getLogger(__name__)
         self.conn = sqlite3.connect(sqlite3_database)
 
-    def create_table(self):
+    def create_table(self) -> None:
+        """
+        Create the contests table if it does not exist.
+        """
         sql = """
         CREATE TABLE IF NOT EXISTS "contests" (
             "dk_id" INTEGER PRIMARY KEY,
@@ -34,6 +44,15 @@ class ContestDatabase:
         self.conn.commit()
 
     def compare_contests(self, contests: list[Contest]) -> list[int]:
+        """
+        Compare given contests with those in the database and return new contest IDs.
+
+        Args:
+            contests (list[Contest]): List of Contest objects.
+
+        Returns:
+            list[int]: List of new contest IDs not found in the database.
+        """
         dk_ids = [c.id for c in contests]
         if not dk_ids:
             return []
@@ -47,6 +66,12 @@ class ContestDatabase:
         return [dk_id for dk_id in dk_ids if dk_id not in found_ids]
 
     def insert_contests(self, contests: list[Contest]) -> None:
+        """
+        Insert contests into the database, ignoring duplicates.
+
+        Args:
+            contests (list[Contest]): List of Contest objects.
+        """
         columns = [
             "sport",
             "dk_id",
@@ -79,5 +104,44 @@ class ContestDatabase:
             cur.execute(sql, tpl_contest)
         self.conn.commit()
 
-    def close(self):
+    def close(self) -> None:
+        """
+        Close the database connection.
+        """
         self.conn.close()
+
+    def get_live_contest(
+        self, sport: str, entry_fee: int = 25, keyword: str = "%"
+    ) -> tuple | None:
+        """
+        Get a live contest matching the criteria.
+
+        Args:
+            sport (str): Sport name.
+            entry_fee (int, optional): Minimum entry fee. Defaults to 25.
+            keyword (str, optional): Name keyword pattern. Defaults to "%".
+
+        Returns:
+            tuple | None: Contest row if found, else None.
+        """
+        cur = self.conn.cursor()
+        try:
+            sql = (
+                "SELECT dk_id, name, draft_group, positions_paid "
+                "FROM contests "
+                "WHERE sport=? "
+                "  AND name LIKE ? "
+                "  AND entry_fee >= ? "
+                "  AND start_date <= datetime('now', 'localtime') "
+                "  AND completed=0 "
+                "ORDER BY entry_fee DESC, entries DESC "
+                "LIMIT 1"
+            )
+            cur.execute(sql, (sport, keyword, entry_fee))
+            row = cur.fetchone()
+            self.logger.debug(f"returning {row}")
+            if row:
+                return row
+            return None
+        except sqlite3.Error as err:
+            self.logger.error("sqlite error in get_live_contest(): %s", err.args[0])
