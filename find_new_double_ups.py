@@ -5,7 +5,6 @@ import datetime
 import logging
 import logging.config
 import re
-import sqlite3
 import sys
 from os import getenv
 
@@ -14,6 +13,7 @@ from dotenv import load_dotenv
 
 from bot.discord import Discord
 from classes.contest import Contest
+from classes.contestdatabase import ContestDatabase
 from classes.cookieservice import get_dk_cookies
 from classes.sport import Sport
 from discord_roles import DISCORD_ROLE_MAP
@@ -345,158 +345,6 @@ def get_salary_date(draft_group: dict) -> datetime.date:
     ).date()
 
 
-def create_connection(db_file: str) -> None:
-    """
-    Create a database connection to a SQLite database.
-
-    Args:
-        db_file (str): Path to the database file.
-    """
-    conn = None
-    try:
-        conn = sqlite3.connect(db_file)
-        logger.debug(sqlite3.sqlite_version)
-    except sqlite3.Error as err:
-        logger.error(err)
-    finally:
-        if conn:
-            conn.close()
-
-
-def db_create_table(conn: sqlite3.Connection) -> None:
-    """
-    Create the contests table in the database if it does not exist.
-
-    Args:
-        conn (sqlite3.Connection): SQLite database connection.
-    """
-    cur = conn.cursor()
-
-    sql = """
-    CREATE TABLE IF NOT EXISTS "contests" (
-        "dk_id" INTEGER,
-        "sport" varchar(10) NOT NULL,
-        "name"  varchar(50) NOT NULL,
-        "start_date"    datetime NOT NULL,
-        "draft_group"   INTEGER NOT NULL,
-        "total_prizes"  INTEGER NOT NULL,
-        "entries"       INTEGER NOT NULL,
-        "positions_paid"        INTEGER,
-        "entry_fee"     INTEGER NOT NULL,
-        "entry_count"   INTEGER NOT NULL,
-        "max_entry_count"       INTEGER NOT NULL,
-        "completed"     INTEGER NOT NULL DEFAULT 0,
-        "status"        TEXT,
-        PRIMARY KEY("dk_id")
-    );
-    """
-
-    cur.execute(sql)
-
-
-def db_compare_contests(
-    conn: sqlite3.Connection, contests: list[Contest]
-) -> list[int] | None:
-    """
-    Compare contest IDs with those in the database.
-
-    Args:
-        conn (sqlite3.Connection): SQLite database connection.
-        contests (list[Contest]): List of Contest objects.
-
-    Returns:
-        list[int] | None: List of new contest IDs not in the database.
-    """
-    # get cursor
-    cur = conn.cursor()
-
-    # get all rows with matching dk_ids
-    dk_ids = [c.id for c in contests]
-
-    try:
-        # execute SQL command
-        sql = "SELECT dk_id FROM contests WHERE dk_id IN ({0})".format(
-            ", ".join("?" for _ in dk_ids)
-        )
-        cur.execute(sql, dk_ids)
-
-        # fetch rows
-        rows = cur.fetchall()
-
-        # return None if nothing found
-        # if not rows:
-        #     print("All contest IDs are accounted for in database")
-        #     return None
-
-        # if there are rows, remove found id from ids list
-        if rows and len(rows) >= 1:
-            for row in rows:
-                if row[0] in dk_ids:
-                    dk_ids.remove(row[0])
-
-        return dk_ids
-
-    except sqlite3.Error as err:
-        logger.error("sqlite error: %s", err.args[0])
-
-
-def db_insert_contests(conn: sqlite3.Connection, contests: list[Contest]) -> int | None:
-    """
-    Insert contests into the database.
-
-    Args:
-        conn (sqlite3.Connection): SQLite database connection.
-        contests (list[Contest]): List of Contest objects.
-
-    Returns:
-        int | None: Last row ID inserted.
-    """
-    # create SQL command
-    columns = [
-        "sport",
-        "dk_id",
-        "name",
-        "start_date",
-        "draft_group",
-        "total_prizes",
-        "entries",
-        "entry_fee",
-        "entry_count",
-        "max_entry_count",
-    ]
-    sql = "INSERT INTO contests ({}) VALUES ({});".format(
-        ", ".join(columns), ", ".join("?" for _ in columns)
-    )
-
-    cur = conn.cursor()
-
-    # create tuple for SQL command
-    for contest in contests:
-        tpl_contest = (
-            contest.sport,
-            contest.id,
-            contest.name,
-            contest.start_dt,
-            contest.draft_group,
-            contest.total_prizes,
-            contest.entries,
-            contest.entry_fee,
-            contest.entry_count,
-            contest.max_entry_count,
-        )
-
-        try:
-            # execute SQL command
-            cur.execute(sql, tpl_contest)
-        except sqlite3.Error as err:
-            logger.error("sqlite error: %s", err.args[0])
-
-    # commit database
-    conn.commit()
-
-    return cur.lastrowid
-
-
 def is_time_between(
     begin_time: datetime.time, end_time: datetime.time, check_time: datetime.time = None
 ) -> bool:
@@ -528,12 +376,28 @@ def set_quiet_verbosity() -> None:
     logger.setLevel(logging.INFO)
 
 
-def parse_args(choices: dict) -> argparse.Namespace:
+def format_discord_messages(contests: list["Contest"]) -> str:
+    """
+    Format a list of Contest objects into Discord notification messages.
+
+    Args:
+        contests (list[Contest]): List of Contest objects.
+
+    Returns:
+        str: Formatted message string.
+    """
+    return "\n".join(
+        f"New dub found! [{c.start_dt:%Y-%m-%d}] Name: {c.name} ID: {c.id} Entry Fee: {c.entry_fee} Entries: {c.entries}"
+        for c in contests
+    )
+
+
+def parse_args(choices: dict[str, type]) -> argparse.Namespace:
     """
     Parse command-line arguments.
 
     Args:
-        choices (dict): Dictionary of available sport choices.
+        choices (dict[str, type]): Dictionary of available sport choices.
 
     Returns:
         argparse.Namespace: Parsed arguments.
@@ -549,6 +413,42 @@ def parse_args(choices: dict) -> argparse.Namespace:
     )
     parser.add_argument("-q", "--quiet", action="store_true", help="Decrease verbosity")
     return parser.parse_args()
+
+
+def process_sport(
+    sport_name: str, choices: dict[str, type], db: ContestDatabase, bot: Discord | None
+) -> None:
+    """
+    Process contests for a given sport, compare with database, and send Discord notifications.
+
+    Args:
+        sport_name (str): Name of the sport.
+        choices (dict[str, type]): Dictionary mapping sport names to Sport subclasses.
+        db (ContestDatabase): Contest database instance.
+        bot (Discord | None): Discord bot instance or None.
+    """
+    if sport_name not in choices:
+        raise Exception("Could not find matching Sport subclass")
+    sport_obj = choices[sport_name]
+    primary_sport = sport_obj.get_primary_sport()
+    url = f"https://www.draftkings.com/lobby/getcontests?sport={primary_sport}"
+    response_contests, draft_groups = get_dk_lobby(sport_obj, url)
+    contests = [Contest(c, sport_obj.name) for c in response_contests]
+    double_ups = get_double_ups(
+        contests,
+        draft_groups,
+        min_entry_fee=sport_obj.dub_min_entry_fee,
+        entries=sport_obj.dub_min_entries,
+    )
+    db.create_table()
+    new_contest_ids = db.compare_contests(double_ups)
+
+    if new_contest_ids:
+        matching_contests = [c for c in contests if c.id in new_contest_ids]
+        discord_message = format_discord_messages(matching_contests)
+        logger.info(discord_message)
+        db.insert_contests(matching_contests)
+        send_discord_notification(bot, sport_obj.name, discord_message)
 
 
 def main() -> None:
@@ -574,67 +474,12 @@ def main() -> None:
         set_quiet_verbosity()
 
     # create connection to database file
-    # create_connection("contests.db")
-    conn = sqlite3.connect("contests.db")
-
-    for sport_name in args.sport:
-        # find matching Sport subclass
-        if sport_name not in choices:
-            # fail if we don't find one
-            raise Exception("Could not find matching Sport subclass")
-
-        sport_obj = choices[sport_name]
-        primary_sport = sport_obj.get_primary_sport()
-
-        # if sport == "NFLShowdown":
-        #     primary_sport = "NFL"
-        # else:
-        #     primary_sport = sport
-
-        # get contests from url
-        url = f"https://www.draftkings.com/lobby/getcontests?sport={primary_sport}"
-
-        response_contests, draft_groups = get_dk_lobby(sport_obj, url)
-
-        # create list of Contest objects
-        contests = [Contest(c, sport_obj.name) for c in response_contests]
-        # get double ups from list of Contests
-
-        double_ups = get_double_ups(
-            contests,
-            draft_groups,
-            min_entry_fee=sport_obj.dub_min_entry_fee,
-            entries=sport_obj.dub_min_entries,
-        )
-
-        # create table if it doesn't exist
-        db_create_table(conn)
-
-        # compare new double ups to DB
-        new_contests = db_compare_contests(conn, double_ups)
-
-        if new_contests:
-            # find contests matching the new contest IDs
-            matching_contests = [c for c in contests if c.id in new_contests]
-
-            discord_message = ""
-            for contest in matching_contests:
-                message = "New dub found! [{:%Y-%m-%d}] Name: {} ID: {} Entry Fee: {} Entries: {}".format(
-                    contest.start_dt,
-                    contest.name,
-                    contest.id,
-                    contest.entry_fee,
-                    contest.entries,
-                )
-                logger.info(message)
-
-                discord_message += message + "\n"
-
-            # insert new double ups into DB
-            db_insert_contests(conn, matching_contests)
-            send_discord_notification(bot, sport_obj.name, discord_message)
-            # last_row_id = insert_contests(conn, matching_contests)
-            # print("last_row_id: {}".format(last_row_id))
+    db = ContestDatabase("contests.db")
+    try:
+        for sport_name in args.sport:
+            process_sport(sport_name, choices, db, bot)
+    finally:
+        db.close()
 
 
 if __name__ == "__main__":
