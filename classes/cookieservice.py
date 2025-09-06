@@ -5,7 +5,7 @@ from typing import List, Optional
 
 from dotenv import load_dotenv
 from requests.cookies import RequestsCookieJar
-from rookiepy import chromium_based
+from rookiepy import chrome, chromium_based
 
 load_dotenv()
 
@@ -19,16 +19,15 @@ def get_rookie_cookies(domains: Optional[List[str]] = None):
     if domains is None:
         domains = ["draftkings.com"]
 
+    platform = os.getenv("DK_PLATFORM", "pi").lower()
     db_path = os.getenv("COOKIES_DB_PATH")
 
-    if db_path:
-        logger.info(f"Loading cookies from explicit db_path: {db_path}")
+    if platform == "pi" and db_path:
+        logger.info(f"Loading cookies from Pi chromium db_path: {db_path}")
         cookies = chromium_based(db_path=db_path, domains=domains)
     else:
-        logger.info(
-            "No COOKIES_DB_PATH set, falling back to default chromium_based behavior"
-        )
-        cookies = chromium_based(domains=domains)
+        logger.info("Using chrome() for macOS or fallback")
+        cookies = chrome(domains=domains)
 
     return cookies
 
