@@ -415,16 +415,16 @@ def set_quiet_verbosity() -> None:
     logger.setLevel(logging.INFO)
 
 
-def main():
-    """Find new double ups."""
-    sportz = Sport.__subclasses__()
-    choices = dict({sport.name: sport for sport in sportz})
+def parse_args(choices: dict) -> argparse.Namespace:
+    """
+    Parse command-line arguments.
 
-    webhook = getenv["DISCORD_WEBHOOK"]
+    Args:
+        choices (dict): Dictionary of available sport choices.
 
-    bot = Discord(webhook)
-
-    # parse arguments
+    Returns:
+        argparse.Namespace: Parsed arguments.
+    """
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "-s",
@@ -435,7 +435,27 @@ def main():
         nargs="+",
     )
     parser.add_argument("-q", "--quiet", action="store_true", help="Decrease verbosity")
-    args = parser.parse_args()
+    return parser.parse_args()
+
+
+def main() -> None:
+    """
+    Main function to find new double ups and send notifications.
+
+    Parses arguments, fetches contests, compares with database, and sends notifications.
+    """
+    sportz = Sport.__subclasses__()
+    choices = dict({sport.name: sport for sport in sportz})
+
+    webhook = getenv("DISCORD_WEBHOOK")
+    if not webhook:
+        logger.warning("DISCORD_WEBHOOK is not set. Discord notifications disabled.")
+        bot = None
+    else:
+        bot = Discord(webhook)
+
+    # parse arguments
+    args = parse_args()
 
     if args.quiet:
         set_quiet_verbosity()
