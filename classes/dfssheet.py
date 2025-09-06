@@ -1,42 +1,55 @@
 import logging
+import logging.config
 from os import path
 
+from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from httplib2 import Http
-from oauth2client import client, file, tools
 
-logger = logging.getLogger(__name__)
+logging.config.fileConfig("logging.ini")
 
 
-class Sheet(object):
-    def __init__(self):
+class Sheet:
+    """Object to represent Google Sheet."""
+
+    def __init__(self, logger=None):
+        self.logger = logger or logging.getLogger(__name__)
+
         # authorize class to use sheets API
         self.service = self.setup_service()
 
         # unique ID for DFS Ownership/Value spreadsheet
-        self.SPREADSHEET_ID = "1Jv5nT-yUoEarkzY5wa7RW0_y0Dqoj8_zDrjeDs-pHL4"
+        self.spreadsheet_id = "1Jv5nT-yUoEarkzY5wa7RW0_y0Dqoj8_zDrjeDs-pHL4"
 
     def setup_service(self):
-        SCOPES = "https://www.googleapis.com/auth/spreadsheets"
-        dir = "."
-        store = file.Storage(path.join(dir, "token.json"))
-        creds = store.get()
-        if not creds or creds.invalid:
-            flow = client.flow_from_clientsecrets(path.join(dir, "token.json"), SCOPES)
-            creds = tools.run_flow(flow, store)
-        return build("sheets", "v4", http=creds.authorize(Http()), cache_discovery=False)
+        """Sets up the service for the spreadsheet."""
+        scopes = [
+            "https://www.googleapis.com/auth/spreadsheets",
+            "https://www.googleapis.com/auth/drive",
+        ]
+        directory = "."
+        secret_file = path.join(directory, "client_secret.json")
+
+        credentials = service_account.Credentials.from_service_account_file(
+            secret_file, scopes=scopes
+        )
+
+        return build("sheets", "v4", credentials=credentials, cache_discovery=False)
 
     def find_sheet_id(self, title):
+        """Find the spreadsheet ID based on title."""
         sheet_metadata = (
-            self.service.spreadsheets().get(spreadsheetId=self.SPREADSHEET_ID).execute()
+            self.service.spreadsheets().get(spreadsheetId=self.spreadsheet_id).execute()
         )
         sheets = sheet_metadata.get("sheets", "")
         for sheet in sheets:
             if title in sheet["properties"]["title"]:
-                # logger.debug("Sheet ID for {} is {}".format(title, sheet["properties"]["sheetId"]))
+                # logger.debug("Sheet ID for %s is %s", title, sheet["properties"]["sheetId"])
                 return sheet["properties"]["sheetId"]
 
-    def write_values_to_sheet_range(self, values, range):
+        return None
+
+    def write_values_to_sheet_range(self, values, cell_range):
         """Write a set of values to a column in a spreadsheet."""
         body = {"values": values}
         value_input_option = "USER_ENTERED"
@@ -44,49 +57,95 @@ class Sheet(object):
             self.service.spreadsheets()
             .values()
             .update(
-                spreadsheetId=self.SPREADSHEET_ID,
-                range=range,
+                spreadsheetId=self.spreadsheet_id,
+                range=cell_range,
                 valueInputOption=value_input_option,
                 body=body,
             )
             .execute()
         )
-        logger.info("{0} cells updated.".format(result.get("updatedCells")))
+        self.logger.info(
+            "%s cells updated for [%s].", cell_range, result.get("updatedCells")
+        )
 
-    def get_values_from_self_range(self):
+    def clear_sheet_range(self, cell_range):
+        """Clears (values only) a given cell_range."""
         result = (
             self.service.spreadsheets()
             .values()
-            .get(spreadsheetId=self.SPREADSHEET_ID, range=self.cell_range)
+            .clear(
+                spreadsheetId=self.spreadsheet_id,
+                range=cell_range,
+                body={},  # must be empty
+            )
+            .execute()
+        )
+        self.logger.info("Range %s cleared.", result.get("clearedRange"))
+
+    # def get_values_from_self_range(self):
+    #     result = (
+    #         self.service.spreadsheets()
+    #         .values()
+    #         .get(spreadsheetId=self.spreadsheet_id, range=self.cell_range)
+    #         .execute()
+    #     )
+    #     return result.get("values", [])
+
+    def get_values_from_range(self, cell_range):
+        result = (
+            self.service.spreadsheets()
+            .values()
+            .get(spreadsheetId=self.spreadsheet_id, range=cell_range)
             .execute()
         )
         return result.get("values", [])
 
-    def get_values_from_range(self, range):
-        result = (
-            self.service.spreadsheets()
-            .values()
-            .get(spreadsheetId=self.SPREADSHEET_ID, range=range)
-            .execute()
-        )
-        return result.get("values", [])
+    # def sheet_letter_to_index(self, letter):
+    #     """1-indexed"""
+    #     return ord(letter.lower()) - 96
 
-    def sheet_letter_to_index(self, letter):
-        """1-indexed"""
-        return ord(letter.lower()) - 96
-
-    def header_index_to_letter(self, header):
-        """1-indexed"""
-        return chr(self.columns.index(header) + 97).upper()
+    # def header_index_to_letter(self, header):
+    #     """1-indexed"""
+    #     return chr(self.columns.index(header) + 97).upper()
 
 
 class DFSSheet(Sheet):
+    """Methods and ranges specific to my "DFS" sheet object."""
+
     LINEUP_RANGES = {
-        "PGAMain": "L3:Q41",
+        "NBA": "J3:V61",
+        "CFB": "J3:O99",
+        "NFL": "J3:V99",
+        "NFLShowdown": "J3:V66",
+        "GOLF": "L8:Z56",
+        "PGAMain": "L8:X56",
         "PGAWeekend": "L3:Q41",
         "PGAShowdown": "L3:Q41",
-        "TEN": "J3:V42",
-        "MLB": "J3:V58",
+        "TEN": "J3:V61",
+        "MLB": "J3:V71",
+        "XFL": "J3:V56",
+        "MMA": "J3:V61",
+        "LOL": "J3:V61",
+        "NAS": "J3:V61",
+        "USFL": "J3:V66",
+    }
+
+    NEW_LINEUP_RANGES = {
+        "NBA": "Q3:Z61",
+        "CFB": "Q3:Z61",
+        "NFL": "Q3:Z66",
+        "NFLShowdown": "Q3:Z66",
+        "GOLF": "L8:Z56",
+        "PGAMain": "L8:X56",
+        "PGAWeekend": "L3:Q41",
+        "PGAShowdown": "L3:Q41",
+        "TEN": "Q3:Z61",
+        "MLB": "Q3:Z71",
+        "XFL": "Q3:Z56",
+        "MMA": "Q3:Z61",
+        "LOL": "Q3:Z61",
+        "NAS": "Q3:Z61",
+        "USFL": "Q3:Z66",
     }
 
     def __init__(self, sport):
@@ -94,11 +153,13 @@ class DFSSheet(Sheet):
 
         # set ranges based on sport
         self.start_col = "A"
-        if "PGA" in self.sport:
-            self.end_col = "I"
+        if "PGA" in self.sport or self.sport == "GOLF":
+            self.end_col = "E"
         else:
             self.end_col = "H"
-        self.data_range = "{0}2:{1}".format(self.start_col, self.end_col)
+        self.data_range = "{0}!{1}2:{2}".format(
+            self.sport, self.start_col, self.end_col
+        )
 
         # init Sheet (super) class
         super().__init__()
@@ -108,7 +169,7 @@ class DFSSheet(Sheet):
             "{0}!{1}1:{2}1".format(self.sport, self.start_col, self.end_col)
         )[0]
 
-        # self.values = self.get_values_from_range(self.cell_range)
+        self.values = self.get_values_from_range(self.data_range)
 
         # if self.values:
         #     self.max_rows = len(self.values)
@@ -116,44 +177,107 @@ class DFSSheet(Sheet):
         # else:
         #     raise f"No values from self.get_values_from_range({self.cell_range})"
 
+    def clear_standings(self):
+        """Clear standings range of DFSsheet."""
+        self.clear_sheet_range(f"{self.data_range}")
+
+    def clear_lineups(self):
+        """Clear lineups range of DFSsheet."""
+        lineups_range = self.LINEUP_RANGES[self.sport]
+        self.clear_sheet_range(f"{self.sport}!{lineups_range}")
+
     def write_players(self, values):
         """Write players (from standings) to DFSsheet."""
-        cell_range = f"{self.sport}!{self.data_range}"
+        cell_range = f"{self.data_range}"
         self.write_values_to_sheet_range(values, cell_range)
 
-    def write_column(self, column, values):
+    def write_column(self, column, values, start_row=2):
         """Write a set of values to a column in a spreadsheet."""
         # set range based on column e.g. PGAMain!I2:I
-        cell_range = f"{self.sport}!{column}2:{column}"
-        return super().write_values_to_sheet_range(cell_range, values)
+        cell_range = f"{self.sport}!{column}{start_row}:{column}"
+        self.write_values_to_sheet_range(values, cell_range)
 
-    def add_last_updated(self, dt):
+    def write_columns(self, start_col, end_col, values, start_row=2):
+        """Write a set of values to columns in a spreadsheet."""
+        # set range based on column e.g. PGAMain!I2:I
+        cell_range = f"{self.sport}!{start_col}{start_row}:{end_col}"
+        self.write_values_to_sheet_range(values, cell_range)
+
+    def write_lineup_range(self, values):
+        cell_range = f"{self.sport}!{self.LINEUP_RANGES[self.sport]}"
+        self.write_values_to_sheet_range(values, cell_range)
+
+    def add_last_updated(self, dt_updated):
+        """Update timestamp for sheet."""
         cell_range = f"{self.sport}!L1:Q1"
-        values = [["Last Updated", "", dt.strftime("%Y-%m-%d %H:%M:%S")]]
+        values = [["Last Updated", "", dt_updated.strftime("%Y-%m-%d %H:%M:%S")]]
+        self.write_values_to_sheet_range(values, cell_range)
+
+    def add_contest_details(self, contest_name, positions_paid):
+        """Update timestamp for sheet."""
+        cell_range = f"{self.sport}!X1:Y1"
+        values = [[positions_paid, contest_name]]
+        self.write_values_to_sheet_range(values, cell_range)
+
+    def add_min_cash(self, min_cash):
+        cell_range = f"{self.sport}!W1:W1"
+        values = [[min_cash]]
+        self.write_values_to_sheet_range(values, cell_range)
+
+    def add_non_cashing_info(self, non_cashing_info):
+        cell_range = f"{self.sport}!X3:Y16"
+        values = non_cashing_info
+        self.write_values_to_sheet_range(values, cell_range)
+
+    def add_train_info(self, train_info):
+        cell_range = f"{self.sport}!AA4:AM11"
+        values = train_info
+        self.write_values_to_sheet_range(values, cell_range)
+
+    def add_optimal_lineup(self, optimal_lineup_info):
+        values = optimal_lineup_info
+        cell_range = f"{self.sport}!X25:AC35"
         self.write_values_to_sheet_range(values, cell_range)
 
     def build_values_for_vip_lineup(self, vip):
-        values = [
-            [vip.name, "", "PMR", vip.pmr, "", ""],
-            ["Pos", "Name", "Salary", "Pts", "Value", "Own"],
-        ]
-        for player in vip.lineup:
-            values.append(
-                [
-                    player.pos,
-                    player.name,
-                    player.salary,
-                    player.fpts,
-                    player.value,
-                    player.ownership,
-                ]
-            )
-        values.append(["rank", vip.rank, "", vip.pts, "", ""])
+        if "GOLF" in self.sport:
+            values = [[vip.name, None, "PMR", vip.pmr, None, None, None]]
+            values.append(["Name", "Salary", "Pts", "Value", "Own", "Pos", "Score"])
+            for player in vip.lineup:
+                values.append(
+                    [
+                        player.name,
+                        player.salary,
+                        player.fpts,
+                        player.value,
+                        player.ownership,
+                        None,
+                        None,
+                    ]
+                )
+            values.append(["rank", vip.rank, vip.pts, None, None, None, None])
+        else:
+            values = [[vip.name, None, "PMR", vip.pmr, None, None]]
+            values.append(["Pos", "Name", "Salary", "Pts", "Value", "Own"])
+            for player in vip.lineup:
+                values.append(
+                    [
+                        player.pos,
+                        player.name,
+                        player.salary,
+                        player.fpts,
+                        player.value,
+                        player.ownership,
+                    ]
+                )
+            values.append(["rank", vip.rank, None, vip.pts, None, None])
         return values
 
     def write_vip_lineups(self, vips):
         cell_range = self.LINEUP_RANGES[self.sport]
-        lineup_mod = 2
+        lineup_mod = 5
+        # sort VIPs based on name
+        vips.sort(key=lambda x: x.name.lower())
         # add size of lineup + 3 for extra rows
         sport_mod = len(vips[0].lineup) + 3
         all_lineup_values = []
@@ -163,57 +287,60 @@ class DFSSheet(Sheet):
             if i < lineup_mod:
                 all_lineup_values.extend(values)
             elif i >= lineup_mod:
-                for j, z in enumerate(values):
+                for j, k in enumerate(values):
                     mod = (i % lineup_mod) + ((i % lineup_mod) * sport_mod) + j
-                    all_lineup_values[mod].extend([""] + z)
+                    all_lineup_values[mod].extend([""] + k)
 
             # add extra row to values for spacing if needed
             if i != lineup_mod:
                 all_lineup_values.append([])
-        self.write_values_to_sheet_range(all_lineup_values, f"{self.sport}!{cell_range}")
+        self.write_values_to_sheet_range(
+            all_lineup_values, f"{self.sport}!{cell_range}"
+        )
+
+    def build_values_for_new_vip_lineup(self, user, players):
+        values = [[user["user"], None, "PMR", user["pmr"], None, None, None, None]]
+        values.append(["Pos", "Name", "Own", "Pts", "RT Proj", "Time", "Stats"])
+        for d in players:
+            if d["valueIcon"] == "fire":
+                d["name"] += " 🔥"
+            elif d["valueIcon"] == "ice":
+                d["name"] += " ❄️"
+            values.append(
+                [
+                    d["pos"],
+                    d["name"],
+                    d["ownership"],
+                    d["pts"],
+                    d["rtProj"],
+                    d["timeStatus"],
+                    d["stats"],
+                ]
+            )
+        values.append(["rank", user["rank"], None, user["pts"], None, None, None, None])
+        return values
+
+    def write_new_vip_lineups(self, vip_lineups):
+        cell_range = self.NEW_LINEUP_RANGES[self.sport]
+
+        # sort VIPs based on name
+        vip_lineups.sort(key=lambda x: x["user"].lower())
+        all_lineup_values = []
+        for vip_lineup in vip_lineups:
+            values = self.build_values_for_new_vip_lineup(
+                vip_lineup, vip_lineup["players"]
+            )
+            values.append([])
+            all_lineup_values.extend(values)
+
+        self.write_values_to_sheet_range(
+            all_lineup_values, f"{self.sport}!{cell_range}"
+        )
 
     def get_players(self):
         return [row[self.columns.index("Name")] for row in self.values]
 
-
-# class DFSsheet_TEN(DFSsheet):
-#     def __init__(self):
-#         # current PGA sheet columns
-#         columns = ["Position", "Name", "Team", "Matchup", "Salary", "Ownership", "Points", "Values"]
-#         sport = "TEN"
-#         cell_range = f"A2:E"
-
-#         # call DFSsheet constructor
-#         super().__init__("TEN", cell_range, columns)
-
-#         self.lineups = []
-
-#         lineup_cell_ranges = ["J3:O11", "J13:O21", "J23:O31", "J33:O41"]
-
-#         for cell_range in lineup_cell_ranges:
-#             lineup = self.get_lineup(cell_range)
-#             if any(lineup):
-#                 self.lineups.append(lineup)
-#             else:
-#                 print("any(lineup) returned false")
-
-#     def get_lineup(self, cell_range):
-#         return super().get_values_from_range(cell_range)
-
-
-# class DFSsheet_PGA(DFSsheet):
-#     def __init__(self):
-#         # current PGA sheet columns
-#         columns = [
-#             "Position",
-#             "Name",
-#             "Team",
-#             "Matchup",
-#             "Salary",
-#             "Ownership",
-#             "Points",
-#             "Values",
-#             "mc",
-#         ]
-
-#         DFSsheet.__init__(self, "PGAMain", "A2:I", columns)
+    def get_lineup_values(self):
+        return self.get_values_from_range(
+            "{0}!{1}".format(self.sport, self.LINEUP_RANGES[self.sport])
+        )

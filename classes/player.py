@@ -1,3 +1,5 @@
+"""Create a Player object to represent an athlete for a given sport."""
+
 import logging
 import logging.config
 
@@ -5,14 +7,26 @@ import logging.config
 logging.config.fileConfig("logging.ini")
 
 
-class Player(object):
+class Player:
     """Create a Player object to represent an athlete for a given sport."""
 
-    def __init__(self, name, pos, salary, game_info, team_abbv, logger=None):
+    def __init__(
+        self,
+        name: str,
+        pos: str,
+        roster_pos: str,
+        salary,
+        game_info: str,
+        team_abbv: str,
+        logger=None,
+    ):
         self.logger = logger or logging.getLogger(__name__)
 
         self.name = name
         self.pos = pos
+        self.roster_pos = roster_pos
+        if self.roster_pos:
+            self.roster_pos = self.roster_pos.split("/")
         self.salary = int(salary)
         self.game_info = game_info
         self.team_abbv = team_abbv
@@ -59,11 +73,11 @@ class Player(object):
             return self.game_info
 
         # split game info into matchup_info
-        home_team, a = self.game_info.split("@")
-        away_team, match_time = a.split(" ", 1)
+        home_team, at = self.game_info.split("@")
+        away_team, _ = at.split(" ", 1)
         # self.logger.debug("home_team: {} away_team: {} t: {}".format(
         #     home_team, away_team, match_time))
-        home_team, away_team = self.game_info.split(" ", 1)[0].split("@")
+        # home_team, away_team = self.game_info.split(" ", 1)[0].split("@")
         if self.team_abbv == home_team:
             matchup_info = "vs. {}".format(away_team)
         else:
@@ -86,7 +100,10 @@ class Player(object):
             self.name, self.pos, self.salary, self.game_info, self.team_abbv
         )
 
-    def writeable(self):
+    def writeable(self, sport):
+        if sport in ["PGA", "GOLF"] or "PGA" in sport:
+            return [self.pos, self.name, self.salary, self.ownership, self.fpts]
+
         return [
             self.pos,
             self.name,

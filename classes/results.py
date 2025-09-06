@@ -1,31 +1,59 @@
+"""Create a Results object which contains the results for a given DraftKings contest."""
+
+import copy
 import csv
-from datetime import datetime
 import io
 import logging
 import logging.config
+import os
 import unicodedata
+from datetime import datetime
 
+from .lineup import Lineup
 from .player import Player
+from .sport import Sport
 from .user import User
 
-# load the logging configuration
-logging.config.fileConfig("logging.ini")
 
-
-class Results(object):
+class Results:
     """Create a Results object which contains the results for a given DraftKings contest."""
 
-    def __init__(self, sport, contest_id, salary_csv_fn, logger=None):
+    def __init__(
+        self,
+        sport_obj: Sport,
+        contest_id: int,
+        salary_csv_fn: str,
+        positions_paid=None,
+        logger=None,
+    ):
         self.logger = logger or logging.getLogger(__name__)
 
-        self.sport = sport
+        self.sport_obj = sport_obj
         self.contest_id = contest_id
         self.players = {}  # dict for players found in salary and standings CSV
         self.users = []  # list of Users found in standings CSV
+        self.positions_paid = positions_paid
+
+        self.min_rank = 0
+        self.min_cash_pts = 1000.0
+
+        # non cashing values (players outside the cash line)
+        self.avg_cashless_pmr = 0
+        self.non_cashing_players = {}
+        self.non_cashing_users = 0
+        self.non_cashing_total_pmr = 0
+        self.non_cashing_avg_pmr = 0.0
+
+        # dict of positions for each sport
+        self.POSITIONS = {
+            "XFL": ["QB", "RB", "WR", "FLEX", "DST"],
+        }
 
         # if there's no salary file specified, use the sport/day for the filename
         if not salary_csv_fn:
-            salary_csv_fn = f"DKSalaries_{self.sport}_{datetime.now():%A}.csv"
+            salary_csv_fn = (
+                f"DKSalaries_{self.sport_obj.sport_name}_{datetime.now():%A}.csv"
+            )
 
         self.parse_salary_csv(salary_csv_fn)
 
@@ -35,20 +63,27 @@ class Results(object):
             "Cubbiesftw23",
             "Mcoleman1902",
             "cglenn91",
+            "tuck8989",
             "Notorious",
             "Bra3105",
             "ChipotleAddict",
+            "papagates",
+            "EmpireMaker2",
+            "AdamLevitan",
         ]
         self.vip_list = []  # list of VIPs found in standings CSV
 
         # contest_fn = 'contest-standings-73990354.csv'
-        contest_fn = "contest-standings-{}.csv".format(self.contest_id)
+        contest_dir = "contests"
+        contest_fn = os.path.join(
+            contest_dir, "contest-standings-{}.csv".format(self.contest_id)
+        )
 
         # this pulls the DK users and updates the players stats
         self.parse_contest_standings_csv(contest_fn)
 
         for vip in self.vip_list:
-            self.logger.debug(f"VIP: {vip}")
+            self.logger.debug("VIP: %s", vip)
             # vip.lineup = self.parse_lineup_string(vip.lineup_str)
             vip.set_lineup(self.parse_lineup_string(vip.lineup_str))
 
@@ -58,22 +93,11 @@ class Results(object):
     def parse_lineup_string(self, lineup_str):
         """Parse VIP's lineup_str and return list of Players."""
         player_list = []
-        # dict of positions for each sport
-        positions = {
-            "CFL": ["QB", "RB", "WR", "TE", "FLEX", "S-FLEX"],
-            "MLB": ["P", "C", "1B", "2B", "3B", "SS", "OF"],
-            "NBA": ["PG", "SG", "SF", "PF", "C", "G", "F", "UTIL"],
-            "NFL": ["QB", "RB", "WR", "TE", "FLEX", "DST"],
-            "NHL": ["C", "W", "D", "G", "UTIL"],
-            "PGAMain": ["G"],
-            "PGAWeekend": ["WG"],
-            "PGAShowdown": ["G"],
-            "TEN": ["P"],
-        }
+
         splt = lineup_str.split(" ")
 
         # list comp for indicies of positions in splt
-        indices = [i for i, pos in enumerate(splt) if pos in positions[self.sport]]
+        indices = [i for i, pos in enumerate(splt) if pos in self.sport_obj.positions]
         # list comp for ending indices in splt. for splicing, the second argument is exclusive
         end_indices = [indices[i] for i in range(1, len(indices))]
         # append size of splt as last index
@@ -81,9 +105,15 @@ class Results(object):
         # self.logger.debug("indices: {}".format(indices))
         # self.logger.debug("end_indices: {}".format(end_indices))
         for i, index in enumerate(indices):
-            s = slice(index + 1, end_indices[i])
-            name = splt[s]
-            if name != "LOCKED":
+            name_slice = slice(index + 1, end_indices[i])
+            pos_slice = slice(index, index + 1)
+            name = splt[name_slice]
+            position = splt[pos_slice][0]
+
+            if "LOCKED" in name:
+                name = "LOCKED 🔒"
+                player_list.append(Player(name, position, None, 0, None, None))
+            else:
                 # self.logger.debug(name)
                 name = " ".join(name)
 
@@ -91,61 +121,122 @@ class Results(object):
                 name = self.strip_accents_and_periods(name)
 
                 if name in self.players:
-                    player_list.append(self.players[name])
+                    # check if position is different (FLEX, etc.)
+                    if position != self.players[name].pos:
+                        # create copy of local Player to update player's position for the sheet
+                        player_copy = copy.deepcopy(self.players[name])
+                        player_copy.pos = position
+                        player_list.append(player_copy)
+                    else:
+                        player_list.append(self.players[name])
 
-            if "LOCKED" in name:
-                name = "LOCKED 🔒"
+        # sort by DraftKings roster order (RB, RB, WR, WR, etc.), then name
+        sorted_list = sorted(
+            player_list, key=lambda x: (self.sport_obj.positions.index(x.pos), x.name)
+        )
 
-        return player_list
+        return sorted_list
 
     def strip_accents_and_periods(self, name):
         """Strip accents from a given string and replace with letters without accents."""
-        # TODO might not want to remove periods for the actual sheet
         return "".join(
-            c.replace(".", "")
+            # c.replace(".", "")
+            c
             for c in unicodedata.normalize("NFD", name)
             if unicodedata.category(c) != "Mn"
         )
 
-    def parse_salary_csv(self, fn):
+    def parse_salary_csv(self, filename):
         """Parse CSV containing players and salary information."""
-        with open(fn, mode="r") as f:
-            cr = csv.reader(f, delimiter=",")
+        with open(filename, mode="r") as fp:
+            cr = csv.reader(fp, delimiter=",")
             slate_list = list(cr)
 
             for row in slate_list[1:]:  # [1:] to skip header
                 if len(row) < 2:
                     continue
                 # TODO: might use roster_pos in the future
-                pos, _, name, _, roster_pos, salary, game_info, team_abbv, appg = row
+                # pos, _, name, _, roster_pos, salary, game_info, team_abbv, appg
+                pos, _, name, _, roster_pos, salary, game_info, team_abbv, _ = row
 
                 # ensure name doesn't have any weird characters
                 name = self.strip_accents_and_periods(name)
 
-                self.players[name] = Player(name, pos, salary, game_info, team_abbv)
+                self.players[name] = Player(
+                    name, pos, roster_pos, salary, game_info, team_abbv
+                )
 
-    def parse_contest_standings_csv(self, fn):
+    def parse_contest_standings_csv(self, filename):
         """Parse CSV containing contest standings and player ownership."""
-        standings = self.load_standings(fn)
+        standings = self.load_standings(filename)
+
+        # showdown only
+        showdown_captains = {}
+
         # create a copy of player list
         # player_list = self.players
         for row in standings[1:]:
-            rank, id, name, pmr, points, lineup = row[:6]
+            # catch empty rows
+            if not row:
+                continue
+
+            rank, player_id, name, pmr, points, lineup = row[:6]
+
+            if rank and points:
+                rank = int(rank)
+                points = float(points)
 
             # create User object and append to users list
-            u = User(rank, id, name, pmr, points, lineup)
-            self.users.append(u)
+            lineupobj = Lineup(self.sport_obj, self.players, lineup)
+            user = User(rank, player_id, name, pmr, points, lineup)
+            user.set_lineup_obj(lineupobj)
+            self.users.append(user)
 
             # find lineup for friends
             if name in self.vips:
                 # if we found a VIP, add them to the VIP list
-                self.logger.info("found VIP {}".format(name))
-                self.vip_list.append(u)
+                self.logger.info("found VIP %s", name)
+                self.vip_list.append(user)
+
+            # keep track of minimum pts to cash
+            if self.positions_paid:
+                # set minimum cash pts
+                if self.positions_paid >= rank and self.min_cash_pts > points:
+                    self.min_rank = rank
+                    self.min_cash_pts = points
+                else:
+                    self.non_cashing_total_pmr += float(pmr)
+
+                    # let's only parse lineups for NFL right now
+                    if self.sport_obj.name in [
+                        "NFL",
+                        "NFLShowdown",
+                        "CFB",
+                        "NBA",
+                    ]:
+                        # for those below minimum cash, let's find their players
+                        lineup_players = self.parse_lineup_string(lineup)
+
+                        for player in lineup_players:
+                            if player.pos == "CPT":
+                                showdown_captains = self.add_player_to_dict(
+                                    player, showdown_captains
+                                )
+
+                            # we only care about players that are not done yet
+                            if player.game_info == "Final":
+                                continue
+
+                            self.non_cashing_players = self.add_player_to_dict(
+                                player, self.non_cashing_players
+                            )
+
+                        self.non_cashing_users += 1
 
             player_stats = row[7:]
             if player_stats:
                 # continue if empty (sometimes happens on the player columns in the standings)
-                if all("" == s or s.isspace() for s in player_stats):
+                if all(s == "" or s.isspace() for s in player_stats):
                     continue
 
                 name, pos, ownership, fpts = player_stats
@@ -153,23 +244,89 @@ class Results(object):
 
                 # if 'Jr.' in name:
                 #     name = name.replace('Jr.', 'Jr')
+                try:
+                    self.players[name].update_stats(pos, ownership, fpts)
+                except KeyError:
+                    self.logger.error("Player %s not found in players[] dict", name)
 
-                self.players[name].update_stats(pos, ownership, fpts)
+        if self.non_cashing_users > 0 and self.non_cashing_total_pmr > 0:
+            self.non_cashing_avg_pmr = (
+                self.non_cashing_total_pmr / self.non_cashing_users
+            )
 
-    def load_standings(self, fn):
+        self.logger.debug(
+            "non_cashing: users {} total_pmr: {} avg_pmr: {}".format(
+                self.non_cashing_users,
+                self.non_cashing_total_pmr,
+                self.non_cashing_avg_pmr,
+            )
+        )
+
+        if self.sport_obj.sport_name == "NFLShowdown":
+            sorted_captains = {
+                k: v
+                for k, v in sorted(
+                    showdown_captains.items(),
+                    key=lambda item: item[1],
+                    reverse=True,
+                )
+            }
+
+            top_ten_cpts = list(sorted_captains)[:10]
+
+            self.logger.info("Top 10 captains:")
+            for cpt in top_ten_cpts:
+                self.get_showdown_captain_percent(cpt, showdown_captains)
+
+    def add_player_to_dict(self, player, dictionary):
+        if player.name not in dictionary:
+            # initialize player count to 1
+            dictionary[player.name] = 1
+
+        # add players
+        dictionary[player.name] += 1
+
+        return dictionary
+
+    # def add_to_showdown_dict(self, player):
+    #     if player.name not in self.showdown_captains:
+    #         # initialize player count to 1
+    #         self.showdown_captains[player.name] = 1
+
+    #     # add players
+    #     self.showdown_captains[player.name] += 1
+
+    def get_showdown_captain_percent(self, player, showdown_captains):
+        percent = 0.0
+        num_users = len(self.users)
+        percent = float(showdown_captains[player] / num_users) * 100
+        print(
+            "{}: {:0.2f}% [{}/{}]".format(
+                player, percent, showdown_captains[player], num_users
+            )
+        )
+
+    def load_standings(self, filename):
         """Load standings CSV and return list."""
-        with open(fn, "rb") as csvfile:
-            lines = io.TextIOWrapper(csvfile, encoding="utf-8", newline="\r\n")
+        with open(filename, "rb") as csvfile:
+            lines = io.TextIOWrapper(csvfile, encoding="utf-8", newline="\n")
             rdr = csv.reader(lines, delimiter=",")
             return list(rdr)
 
-    def players_to_values(self):
+    def players_to_values(self, sport):
+        """Return list for DFSSheet values."""
         # sort players by ownership
-        sorted_players = sorted(self.players, key=lambda x: self.players[x].ownership, reverse=True)
+        sorted_players = sorted(
+            self.players, key=lambda x: self.players[x].ownership, reverse=True
+        )
         # for p in self.players.values():
         #     print(p.perc)
         #     print()
         return [
-            self.players[p].writeable() for p in sorted_players if self.players[p].ownership > 0
+            self.players[p].writeable(sport)
+            for p in sorted_players
+            if self.players[p].ownership > 0
         ]
 
+    def get_players(self):
+        return self.players
