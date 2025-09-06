@@ -66,8 +66,17 @@ def send_discord_notification(bot: Discord, sport_name: str, message: str) -> No
     bot.send_message(f"{emoji} {message} {role}")
 
 
-def get_dk_lobby(sport, url):
-    """Get contests from the DraftKings lobby. Returns a list."""
+def get_dk_lobby(sport: Sport, url: str) -> tuple[list, list]:
+    """
+    Get contests and draft groups from the DraftKings lobby.
+
+    Args:
+        sport (Sport): Sport object.
+        url (str): URL to fetch contests.
+
+    Returns:
+        tuple[list, list]: List of contests and list of draft groups.
+    """
     # set cookies based on Chrome session
     # logger.debug(url)
 
@@ -79,8 +88,16 @@ def get_dk_lobby(sport, url):
     return contests, draft_groups
 
 
-def get_contests_from_response(response):
-    """Get contests from the DraftKings lobby. Returns a list."""
+def get_contests_from_response(response: dict | list) -> list:
+    """
+    Extract contests from the DraftKings lobby response.
+
+    Args:
+        response (dict | list): Response from DraftKings API.
+
+    Returns:
+        list: List of contests.
+    """
     if isinstance(response, list):
         response_contests = response
     elif "Contests" in response:
@@ -92,8 +109,17 @@ def get_contests_from_response(response):
     return response_contests
 
 
-def get_draft_groups_from_response(response, sport_obj: Sport):
-    """Get draft groups from lobby/json."""
+def get_draft_groups_from_response(response: dict, sport_obj: Sport) -> list:
+    """
+    Extract draft group IDs from the DraftKings lobby response.
+
+    Args:
+        response (dict): Response from DraftKings API.
+        sport_obj (Sport): Sport object.
+
+    Returns:
+        list: List of draft group IDs.
+    """
     response_draft_groups = []
     skipped_dg_suffixes = []
     for draft_group in response["DraftGroups"]:
@@ -192,8 +218,19 @@ def get_draft_groups_from_response(response, sport_obj: Sport):
     return response_draft_groups
 
 
-def valid_date(date_string):
-    """Check date argument to determine if it is a valid."""
+def valid_date(date_string: str) -> datetime.datetime:
+    """
+    Validate and parse a date string in YYYY-MM-DD format.
+
+    Args:
+        date_string (str): Date string to validate.
+
+    Returns:
+        datetime.datetime: Parsed datetime object.
+
+    Raises:
+        argparse.ArgumentTypeError: If date_string is not valid.
+    """
     try:
         return datetime.datetime.strptime(date_string, "%Y-%m-%d")
     except ValueError:
@@ -201,8 +238,16 @@ def valid_date(date_string):
         raise argparse.ArgumentTypeError(msg)
 
 
-def get_stats(contests):
-    """Get stats for list of Contest objects."""
+def get_stats(contests: list[Contest]) -> dict:
+    """
+    Get statistics for a list of Contest objects.
+
+    Args:
+        contests (list[Contest]): List of Contest objects.
+
+    Returns:
+        dict: Statistics grouped by start date.
+    """
     stats = {}
     for contest in contests:
         start_date = contest.start_dt.strftime("%Y-%m-%d")
@@ -233,14 +278,25 @@ def get_stats(contests):
 
 
 def get_double_ups(
-    contests,
-    draft_groups,
-    min_entry_fee=5,
-    max_entry_fee=50,
-    entries=125,
-) -> list:
-    """Find contests matching criteria."""
+    contests: list[Contest],
+    draft_groups: list,
+    min_entry_fee: int = 5,
+    max_entry_fee: int = 50,
+    entries: int = 125,
+) -> list[Contest]:
+    """
+    Find contests matching double-up criteria.
 
+    Args:
+        contests (list[Contest]): List of Contest objects.
+        draft_groups (list): List of draft group IDs.
+        min_entry_fee (int): Minimum entry fee.
+        max_entry_fee (int): Maximum entry fee.
+        entries (int): Minimum number of entries.
+
+    Returns:
+        list[Contest]: List of contests matching criteria.
+    """
     criteria = {
         "draft_groups": draft_groups,
         "min_entry_fee": min_entry_fee,
@@ -258,8 +314,17 @@ def get_double_ups(
     return contest_list
 
 
-def contest_meets_criteria(contest, criteria):
-    """Ensure contests meet criteria."""
+def contest_meets_criteria(contest: Contest, criteria: dict) -> bool:
+    """
+    Check if a contest meets the specified criteria.
+
+    Args:
+        contest (Contest): Contest object.
+        criteria (dict): Criteria dictionary.
+
+    Returns:
+        bool: True if contest meets criteria, False otherwise.
+    """
     return (
         contest.entries >= criteria["entries"]
         and contest.draft_group in criteria["draft_groups"]
@@ -271,15 +336,28 @@ def contest_meets_criteria(contest, criteria):
     )
 
 
-def get_salary_date(draft_group):
-    """Return the salary date in format YYYY-MM-DD."""
+def get_salary_date(draft_group: dict) -> datetime.date:
+    """
+    Get the salary date from a draft group.
+
+    Args:
+        draft_group (dict): Draft group dictionary.
+
+    Returns:
+        datetime.date: Salary date.
+    """
     return datetime.datetime.strptime(
         draft_group["StartDateEst"].split("T")[0], "%Y-%m-%d"
     ).date()
 
 
-def create_connection(db_file):
-    """Create a database connection to a SQLite database."""
+def create_connection(db_file: str) -> None:
+    """
+    Create a database connection to a SQLite database.
+
+    Args:
+        db_file (str): Path to the database file.
+    """
     conn = None
     try:
         conn = sqlite3.connect(db_file)
@@ -291,8 +369,13 @@ def create_connection(db_file):
             conn.close()
 
 
-def db_create_table(conn):
-    """Create table if it does not exist."""
+def db_create_table(conn: sqlite3.Connection) -> None:
+    """
+    Create the contests table in the database if it does not exist.
+
+    Args:
+        conn (sqlite3.Connection): SQLite database connection.
+    """
     cur = conn.cursor()
 
     sql = """
@@ -317,8 +400,19 @@ def db_create_table(conn):
     cur.execute(sql)
 
 
-def db_compare_contests(conn, contests):
-    """Check contest ids with dk_id in database."""
+def db_compare_contests(
+    conn: sqlite3.Connection, contests: list[Contest]
+) -> list[int] | None:
+    """
+    Compare contest IDs with those in the database.
+
+    Args:
+        conn (sqlite3.Connection): SQLite database connection.
+        contests (list[Contest]): List of Contest objects.
+
+    Returns:
+        list[int] | None: List of new contest IDs not in the database.
+    """
     # get cursor
     cur = conn.cursor()
 
@@ -352,8 +446,17 @@ def db_compare_contests(conn, contests):
         logger.error("sqlite error: %s", err.args[0])
 
 
-def db_insert_contests(conn, contests):
-    """Insert given contests in database."""
+def db_insert_contests(conn: sqlite3.Connection, contests: list[Contest]) -> int | None:
+    """
+    Insert contests into the database.
+
+    Args:
+        conn (sqlite3.Connection): SQLite database connection.
+        contests (list[Contest]): List of Contest objects.
+
+    Returns:
+        int | None: Last row ID inserted.
+    """
     # create SQL command
     columns = [
         "sport",
@@ -400,7 +503,20 @@ def db_insert_contests(conn, contests):
     return cur.lastrowid
 
 
-def is_time_between(begin_time, end_time, check_time=None):
+def is_time_between(
+    begin_time: datetime.time, end_time: datetime.time, check_time: datetime.time = None
+) -> bool:
+    """
+    Check if a time is between two times.
+
+    Args:
+        begin_time (datetime.time): Start time.
+        end_time (datetime.time): End time.
+        check_time (datetime.time, optional): Time to check. Defaults to current UTC time.
+
+    Returns:
+        bool: True if check_time is between begin_time and end_time.
+    """
     # If check time is not given, default to current UTC time
     check_time = check_time or datetime.datetime.utcnow().time()
     if begin_time < end_time:
@@ -412,6 +528,9 @@ def is_time_between(begin_time, end_time, check_time=None):
 
 
 def set_quiet_verbosity() -> None:
+    """
+    Set logger verbosity to INFO level.
+    """
     logger.setLevel(logging.INFO)
 
 
@@ -455,7 +574,7 @@ def main() -> None:
         bot = Discord(webhook)
 
     # parse arguments
-    args = parse_args()
+    args = parse_args(choices)
 
     if args.quiet:
         set_quiet_verbosity()
