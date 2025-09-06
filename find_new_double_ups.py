@@ -19,6 +19,13 @@ from classes.sport import Sport
 
 load_dotenv()
 
+DISCORD_ROLE_MAP = {
+    "NBA": (":basketball:", "<@&1034206287153594470>"),
+    "CFB": (":football:", "<@&1034214536544268439>"),
+    "GOLF": (":golf:", "<@&1040014001452630046>"),
+    "NFLShowdown": ("<:stonks:858081117876518964>", "<@&1312478274085191770>"),
+}
+
 # load the logging configuration
 logging.config.fileConfig("logging.ini")
 
@@ -42,6 +49,21 @@ HEADERS = {
     ),
     "X-Requested-With": "XMLHttpRequest",
 }
+
+
+def send_discord_notification(bot: Discord, sport_name: str, message: str) -> None:
+    """
+    Send a notification message to Discord for a specific sport.
+
+    Args:
+        bot (Discord): Discord bot instance.
+        sport_name (str): Name of the sport.
+        message (str): Message to send.
+    """
+    if bot is None or sport_name not in DISCORD_ROLE_MAP:
+        return
+    emoji, role = DISCORD_ROLE_MAP[sport_name]
+    bot.send_message(f"{emoji} {message} {role}")
 
 
 def get_dk_lobby(sport, url):
@@ -475,29 +497,9 @@ def main():
 
                 discord_message += message + "\n"
 
-                # print(contest)
-
-            if sport_obj.name == "NBA":
-                bot.send_message(
-                    ":basketball: " + discord_message + " <@&1034206287153594470>"
-                )
-            elif sport_obj.name == "CFB":
-                bot.send_message(
-                    ":football: " + discord_message + " <@&1034214536544268439>"
-                )
-            elif sport_obj.name == "GOLF":
-                bot.send_message(
-                    ":golf: " + discord_message + " <@&1040014001452630046>"
-                )
-            elif sport_obj.name == "NFLShowdown":
-                bot.send_message(
-                    "<:stonks:858081117876518964> "
-                    + discord_message
-                    + " <@&1312478274085191770>"
-                )
-
             # insert new double ups into DB
             db_insert_contests(conn, matching_contests)
+            send_discord_notification(bot, sport_obj.name, discord_message)
             # last_row_id = insert_contests(conn, matching_contests)
             # print("last_row_id: {}".format(last_row_id))
 
