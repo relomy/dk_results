@@ -1,19 +1,16 @@
 import argparse
-import csv
 import datetime
-import io
 import logging
 import logging.config
 import os
-import pickle
-import zipfile
+import pathlib
 from collections import OrderedDict
 
+import yaml
 from pytz import timezone
 
 from classes.contestdatabase import ContestDatabase
 from classes.dfssheet import DFSSheet
-from classes.dksession import DkSession
 from classes.draftkings import Draftkings
 from classes.optimizer import Optimizer
 from classes.results import Results
@@ -33,63 +30,39 @@ SALARY_LIMIT = 40000
 COOKIES_FILE = "pickled_cookies_works.txt"
 
 
-def pull_contest_zip(contest_id: int) -> list | None:
+def load_vips() -> list[str]:
     """
-    Pull contest file (can be .zip or .csv file) from DraftKings.
-
-    Args:
-        contest_id (int): Contest ID.
-
-    Returns:
-        list | None: List of contest rows or None if not found.
+    Load VIP usernames from vips.yaml located next to this file.
+    Returns an empty list if the file is missing or malformed.
     """
-    dksession = DkSession()
-    session = dksession.get_session()
-    return request_contest_url(session, contest_id)
-
-
-def request_contest_url(session, contest_id: int) -> list | None:
-    """
-    Request contest standings file from DraftKings.
-
-    Args:
-        session: Authenticated requests session.
-        contest_id (int): Contest ID.
-
-    Returns:
-        list | None: List of contest rows or None if not found.
-    """
-    fn = os.path.join(CONTEST_DIR, f"contest-standings-{contest_id}.csv")
-    url_contest_csv = (
-        f"https://www.draftkings.com/contest/exportfullstandingscsv/{contest_id}"
-    )
-    response = session.get(url_contest_csv)
-    logger.debug(response.status_code)
-    logger.debug(response.url)
-    logger.debug(response.headers["Content-Type"])
-
-    if "text/html" in response.headers["Content-Type"]:
-        logger.warning("We cannot do anything with html!")
-        return None
-
-    if response.headers["Content-Type"] == "text/csv":
-        with open(COOKIES_FILE, "wb") as fp:
-            pickle.dump(session.cookies, fp)
-        csvfile = response.content.decode("utf-8-sig")
-        return list(csv.reader(csvfile.splitlines(), delimiter=","))
-
-    zip_obj = zipfile.ZipFile(io.BytesIO(response.content))
-    for name in zip_obj.namelist():
-        path = zip_obj.extract(name, CONTEST_DIR)
-        logger.debug("path: %s", path)
-        with zip_obj.open(name) as csvfile:
-            logger.debug("name within zipfile: %s", name)
-            lines = io.TextIOWrapper(csvfile, encoding="utf-8", newline="\n")
-            return list(csv.reader(lines, delimiter=","))
+    vip_path = pathlib.Path(__file__).parent / "vips.yaml"
+    try:
+        with open(vip_path, "r") as f:
+            vips = yaml.safe_load(f) or []
+        if not isinstance(vips, list):
+            logger.warning("vips.yaml did not contain a list; treating as empty.")
+            return []
+        # Normalize to strings and strip whitespace
+        return [str(x).strip() for x in vips if str(x).strip()]
+    except FileNotFoundError:
+        logger.warning(
+            "vips.yaml not found at %s; proceeding with empty VIP list.", vip_path
+        )
+        return []
+    except Exception as e:
+        logger.warning(
+            "Failed to load vips.yaml: %s; proceeding with empty VIP list.", e
+        )
+        return []
 
 
 def write_players_to_sheet(
-    sheet: DFSSheet, results: Results, sport_name: str, now: datetime.datetime
+    sheet: DFSSheet,
+    results: Results,
+    sport_name: str,
+    now: datetime.datetime,
+    dk: Draftkings,
+    draft_group: int | None = None,
 ) -> None:
     """
     Write player values and contest details to the sheet.
@@ -99,6 +72,8 @@ def write_players_to_sheet(
         results (Results): Results object.
         sport_name (str): Sport name.
         now (datetime.datetime): Current datetime.
+        dk (Draftkings): Authenticated DraftKings API client.
+        draft_group (int, optional): Draft group id.
     """
     players_to_values = results.players_to_values(sport_name)
     sheet.clear_standings()
@@ -109,10 +84,21 @@ def write_players_to_sheet(
     if results.min_cash_pts > 0:
         logger.info("Writing min_cash_pts: %d", results.min_cash_pts)
         sheet.add_min_cash(results.min_cash_pts)
-    if results.vip_list:
-        logger.info("Writing vip_lineups to sheet")
+
+    vips = load_vips()
+    dk_id = results.contest_id
+    dg = draft_group
+    if dg is None:
+        logger.warning(
+            "No draft group found for sport, cannot pull VIP lineups from API."
+        )
+        return
+
+    vip_lineups = dk.get_vip_lineups(dk_id, dg, vips)
+    if vip_lineups:
+        logger.info("Writing API vip_lineups to sheet")
         sheet.clear_lineups()
-        sheet.write_vip_lineups(results.vip_list)
+        sheet.write_new_vip_lineups(vip_lineups)
 
 
 def write_non_cashing_info(sheet: DFSSheet, results: Results) -> None:
@@ -222,10 +208,10 @@ def process_sport(
     if draft_group:
         logger.info("Downloading salary file (draft_group: %d)", draft_group)
         dk.download_salary_csv(sport_name, draft_group, fn)
-    contest_list = pull_contest_zip(dk_id)
-    if contest_list is None or not contest_list:
-        logger.error("pull_contest_zip() - contest_list is %s", contest_list)
-        return
+
+    contest_list = dk.download_contest_rows(
+        dk_id, timeout=30, cookies_dump_file=COOKIES_FILE, contest_dir=CONTEST_DIR
+    )
 
     sheet = DFSSheet(sport_name)
     logger.debug("Creating Results object Results(%s, %s, %s)", sport_name, dk_id, fn)
@@ -234,34 +220,39 @@ def process_sport(
     results.positions_paid = positions_paid
 
     try:
-        p = results.get_players()
-        optimizer = Optimizer(sport_obj, p)
-        optimized_players = optimizer.get_optimal_lineup()
-        optimized_players.sort(key=lambda x: (sport_obj.positions.index(x.pos), x.name))
-        if optimized_players:
-            optimized_info = [
-                ["Pos", "Name", "Salary", "Pts", "Value", "Own%"],
-            ]
-            for player in optimized_players:
-                row = [
-                    player.pos,
-                    player.name,
-                    player.salary,
-                    player.fpts,
-                    player.value,
-                    player.ownership,
+        if (sport_obj.allow_optimizer is False) or (not args.nolineups):
+            logger.info("Skipping optimal lineup for %s", sport_name)
+        else:
+            p = results.get_players()
+            optimizer = Optimizer(sport_obj, p)
+            optimized_players = optimizer.get_optimal_lineup()
+            optimized_players.sort(
+                key=lambda x: (sport_obj.positions.index(x.pos), x.name)
+            )
+            if optimized_players:
+                optimized_info = [
+                    ["Pos", "Name", "Salary", "Pts", "Value", "Own%"],
                 ]
-                logger.info(
-                    f"Player [{player.pos}]: {player.name} Score: {player.fpts} Salary: {player.salary} Value {player.value} Own: {player.ownership}"
-                )
-                optimized_info.append(row)
-            sheet.add_optimal_lineup(optimized_info)
-            logger.debug(optimized_players)
+                for player in optimized_players:
+                    row = [
+                        player.pos,
+                        player.name,
+                        player.salary,
+                        player.fpts,
+                        player.value,
+                        player.ownership,
+                    ]
+                    logger.info(
+                        f"Player [{player.pos}]: {player.name} Score: {player.fpts} Salary: {player.salary} Value {player.value} Own: {player.ownership}"
+                    )
+                    optimized_info.append(row)
+                sheet.add_optimal_lineup(optimized_info)
+                logger.debug(optimized_players)
     except Exception as error:
         logger.error(error)
         logger.error("Error in optimal lineup")
 
-    write_players_to_sheet(sheet, results, sport_name, now)
+    write_players_to_sheet(sheet, results, sport_name, now, dk, draft_group)
     write_non_cashing_info(sheet, results)
     write_train_info(sheet, results)
 
