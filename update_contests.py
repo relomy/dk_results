@@ -2,7 +2,7 @@ import logging
 import logging.config
 import sqlite3
 
-import requests
+from classes.draftkings import Draftkings
 
 # load the logging configuration
 logging.config.fileConfig("logging.ini")
@@ -90,10 +90,8 @@ def check_contests_for_completion(conn) -> None:
 
 def get_contest_data(dk_id) -> dict:
     try:
-        url = f"https://api.draftkings.com/contests/v1/contests/{dk_id}?format=json"
-
-        response = requests.get(url)
-        response_json = response.json()
+        dk = Draftkings()
+        response_json = dk.get_contest_detail(dk_id)
         cd = response_json["contestDetail"]
         payout_summary = cd["payoutSummary"]
 
@@ -112,7 +110,7 @@ def get_contest_data(dk_id) -> dict:
                 "entries": entries,
                 "positions_paid": positions_paid,
             }
-    except requests.RequestException as req_ex:
+    except Exception as req_ex:
         logger.error(f"Request error: {req_ex}")
     except ValueError as val_err:
         logger.error(f"JSON decoding error: {val_err}")
