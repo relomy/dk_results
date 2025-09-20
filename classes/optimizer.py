@@ -20,7 +20,7 @@ class Optimizer:
         # self.logger.debug(solver_list)
 
         # Create the 'prob' variable to contain the problem data
-        self.prob = pl.LpProblem("DraftKings Lineup Optimization", pl.LpMaximize)
+        self.prob = pl.LpProblem("DraftKings_Lineup_Optimization", pl.LpMaximize)
 
         self.players = players
 
