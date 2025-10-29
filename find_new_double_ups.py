@@ -180,21 +180,6 @@ def get_draft_groups_from_response(response: dict, sport_obj: Sport) -> list:
             response_draft_groups.append(draft_group_id)
             continue
 
-        # If no suffixes, allow None or in SUFFIX_LIST
-        if suffix is None or suffix in SUFFIX_LIST:
-            logger.info(
-                "[%4s] Append: start date: [%s] dg/tag/suffix/typid: [%d]/[%s]/[%s]/[%d]",
-                sport_obj.name,
-                dt_start_date,
-                draft_group_id,
-                tag,
-                suffix,
-                contest_type_id,
-            )
-            response_draft_groups.append(draft_group_id)
-        else:
-            skipped_dg_suffixes.append(suffix)
-
     if skipped_dg_suffixes:
         logger.debug(
             "[%4s] Skipped suffixes [%s]",
