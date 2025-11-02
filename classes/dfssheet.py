@@ -130,21 +130,21 @@ class DFSSheet(Sheet):
     }
 
     NEW_LINEUP_RANGES = {
-        "NBA": "Q3:Z61",
-        "CFB": "Q3:Z61",
-        "NFL": "Q3:Z66",
-        "NFLShowdown": "Q3:Z66",
+        "NBA": "J3:Z61",
+        "CFB": "J3:Z61",
+        "NFL": "J3:Z66",
+        "NFLShowdown": "J3:Z66",
         "GOLF": "L8:Z56",
         "PGAMain": "L8:X56",
         "PGAWeekend": "L3:Q41",
         "PGAShowdown": "L3:Q41",
-        "TEN": "Q3:Z61",
-        "MLB": "Q3:Z71",
-        "XFL": "Q3:Z56",
-        "MMA": "Q3:Z61",
-        "LOL": "Q3:Z61",
-        "NAS": "Q3:Z61",
-        "USFL": "Q3:Z66",
+        "TEN": "J3:Z61",
+        "MLB": "J3:Z71",
+        "XFL": "J3:Z56",
+        "MMA": "J3:Z61",
+        "LOL": "J3:Z61",
+        "NAS": "J3:Z61",
+        "USFL": "J3:Z66",
     }
 
     def __init__(self, sport):
@@ -182,7 +182,7 @@ class DFSSheet(Sheet):
 
     def clear_lineups(self):
         """Clear lineups range of DFSsheet."""
-        lineups_range = self.LINEUP_RANGES[self.sport]
+        lineups_range = self.NEW_LINEUP_RANGES[self.sport]
         self.clear_sheet_range(f"{self.sport}!{lineups_range}")
 
     def write_players(self, values):
