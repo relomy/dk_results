@@ -14,8 +14,6 @@ import requests
 
 from .dksession import DkSession
 
-logger = logging.getLogger(__name__)
-
 
 class Draftkings:
     """
@@ -184,7 +182,7 @@ class Draftkings:
                 except Exception:
                     # Best-effort logging at client level
                     try:
-                        logger.exception(
+                        self.logger.exception(
                             "Failed fetching lineup for %s",
                             futures[fut].get("userName"),
                         )
@@ -235,7 +233,7 @@ class Draftkings:
         r = self.session.get(url, timeout=timeout)
 
         ctype = r.headers.get("Content-Type", "")
-        logger.debug(
+        self.logger.debug(
             "download_contest_rows status=%s url=%s ctype=%s",
             r.status_code,
             r.url,
@@ -243,7 +241,7 @@ class Draftkings:
         )
 
         if "text/html" in ctype:
-            logger.warning("Unexpected HTML for contest standings; cannot parse.")
+            self.logger.warning("Unexpected HTML for contest standings; cannot parse.")
             return None
 
         # Plain CSV
@@ -253,7 +251,9 @@ class Draftkings:
                     with open(cdf, "wb") as fp:
                         pickle.dump(self.session.cookies, fp)
                 except Exception:
-                    logger.debug("Skipping cookies dump; non-fatal.", exc_info=True)
+                    self.logger.debug(
+                        "Skipping cookies dump; non-fatal.", exc_info=True
+                    )
             csvfile = r.content.decode("utf-8-sig")
             return list(csv.reader(csvfile.splitlines(), delimiter=","))
 
@@ -261,13 +261,13 @@ class Draftkings:
         try:
             zip_obj = zipfile.ZipFile(io.BytesIO(r.content))
         except zipfile.BadZipFile:
-            logger.error("Response was neither CSV nor valid ZIP.")
+            self.logger.error("Response was neither CSV nor valid ZIP.")
             return None
 
         os.makedirs(cdir, exist_ok=True)
         for name in zip_obj.namelist():
             path = zip_obj.extract(name, cdir)
-            logger.debug("extracted: %s", path)
+            self.logger.debug("extracted: %s", path)
             with zip_obj.open(name) as csvfile:
                 lines = io.TextIOWrapper(csvfile, encoding="utf-8", newline="\n")
                 return list(csv.reader(lines, delimiter=","))
