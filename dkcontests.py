@@ -38,39 +38,13 @@ Response format: {
 import argparse
 import datetime
 
-import requests
-
 from classes.contest import Contest
-from classes.cookieservice import get_dk_cookies
-
-cookie_dict, jar = get_dk_cookies()
-COOKIES = jar
-
-HEADERS = {
-    "Accept": "*/*",
-    "Accept-Encoding": "gzip, deflate, sdch",
-    "Accept-Language": "en-US,en;q=0.8",
-    "Cache-Control": "no-cache",
-    "Connection": "keep-alive",
-    # 'Cookie': os.environ['DK_AUTH_COOKIES'],
-    "Host": "www.draftkings.com",
-    "Pragma": "no-cache",
-    "User-Agent": (
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_5) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/48.0.2564.97 Safari/537.36"
-    ),
-    "X-Requested-With": "XMLHttpRequest",
-}
+from classes.draftkings import Draftkings
 
 
-def get_contests(url):
-    # set cookies based on Chrome session
-
-    print(url)
-
-    # response = requests.get(url, headers=HEADERS, cookies=COOKIES).json()
-    response = requests.get(url, headers=HEADERS, cookies=COOKIES).json()
+def get_contests(sport: str, live: bool = False):
+    dk = Draftkings()
+    response = dk.get_lobby_contests(sport, live=live)
     response_contests = {}
     if isinstance(response, list):
         print("response is a list")
@@ -414,9 +388,8 @@ def main():
     if args.live:
         live = "live"
 
-    # get contests from url
-    url = f"https://www.draftkings.com/lobby/get{live}contests?sport={args.sport}"
-    response_contests = get_contests(url)
+    # get contests via authenticated client
+    response_contests = get_contests(args.sport, live=bool(live))
 
     # create list of Contest objects
     contests = [Contest(c, args.sport) for c in response_contests]

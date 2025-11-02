@@ -24,6 +24,8 @@ class Sport:
     contest_restraint_time = None
     contest_restraint_type_id = None
 
+    allow_optimizer = True
+
     def __init__(self, name, lineup_range) -> None:
         self.name = name
         self.lineup_range = lineup_range
@@ -100,6 +102,8 @@ class NFLShowdownSport(Sport):
     suffixes = [r"\(\w{2,3} @ \w{2,3}\)"]
 
     contest_restraint_time = time(20, 0)
+
+    allow_optimizer = False
 
 
 class NBASport(Sport):

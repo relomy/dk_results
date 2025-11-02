@@ -20,8 +20,16 @@ from discord_roles import DISCORD_ROLE_MAP
 
 load_dotenv()
 
+# Centralized constants
+LOBBY_URL_TEMPLATE = "https://www.draftkings.com/lobby/getcontests?sport={sport}"
+DB_FILE = "contests.db"
+LOGGING_CONFIG_FILE = "logging.ini"
+DEFAULT_MIN_ENTRY_FEE = 5
+DEFAULT_MAX_ENTRY_FEE = 50
+DEFAULT_MIN_ENTRIES = 125
+
 # load the logging configuration
-logging.config.fileConfig("logging.ini")
+logging.config.fileConfig(LOGGING_CONFIG_FILE)
 
 logger = logging.getLogger(__name__)
 
@@ -116,17 +124,6 @@ def get_draft_groups_from_response(response: dict, sport_obj: Sport) -> list:
     """
     response_draft_groups = []
     skipped_dg_suffixes = []
-    suffix_list = [
-        "(PGA)",
-        "(PGA TOUR)",
-        "(Weekend PGA TOUR)",
-        "(AUS)",  # TEN
-        "(LCS)",  # LOL
-        "(LEC)",
-        "(LPL)",
-        "(Cup)",  # NAS
-        "(Preseason)",  # NFL preseason
-    ]
 
     for draft_group in response["DraftGroups"]:
         sport = draft_group["Sport"]
@@ -182,21 +179,6 @@ def get_draft_groups_from_response(response: dict, sport_obj: Sport) -> list:
             )
             response_draft_groups.append(draft_group_id)
             continue
-
-        # If no suffixes, allow None or in suffix_list
-        if suffix is None or suffix in suffix_list:
-            logger.info(
-                "[%4s] Append: start date: [%s] dg/tag/suffix/typid: [%d]/[%s]/[%s]/[%d]",
-                sport_obj.name,
-                dt_start_date,
-                draft_group_id,
-                tag,
-                suffix,
-                contest_type_id,
-            )
-            response_draft_groups.append(draft_group_id)
-        else:
-            skipped_dg_suffixes.append(suffix)
 
     if skipped_dg_suffixes:
         logger.debug(
@@ -421,7 +403,7 @@ def process_sport(
         raise Exception("Could not find matching Sport subclass")
     sport_obj = choices[sport_name]
     primary_sport = sport_obj.get_primary_sport()
-    url = f"https://www.draftkings.com/lobby/getcontests?sport={primary_sport}"
+    url = LOBBY_URL_TEMPLATE.format(sport=primary_sport)
     response_contests, draft_groups = get_dk_lobby(sport_obj, url)
     contests = [Contest(c, sport_obj.name) for c in response_contests]
     double_ups = get_double_ups(
@@ -464,7 +446,7 @@ def main() -> None:
         set_quiet_verbosity()
 
     # create connection to database file
-    db = ContestDatabase("contests.db")
+    db = ContestDatabase(DB_FILE)
     try:
         for sport_name in args.sport:
             process_sport(sport_name, choices, db, bot)

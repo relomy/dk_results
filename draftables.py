@@ -1,8 +1,6 @@
 import logging
 import logging.config
 
-import requests
-
 from classes.dksession import DkSession
 
 # load the logging configuration
@@ -13,21 +11,21 @@ logger = logging.getLogger(__name__)
 dksession = DkSession()
 session = dksession.get_session()
 
-dk_id = 153835936
-dg = 95447
+dk_id = 181453948
+dg = 133307
 
-response = requests.get(
-    f"https://api.draftkings.com/draftgroups/v1/draftgroups/{dg}/draftables/"
-)
+# response = requests.get(
+#     f"https://api.draftkings.com/draftgroups/v1/draftgroups/{dg}/draftables/"
+# )
 
-js = response.json()
+# js = response.json()
 
-draftables = js["draftables"]
-competitions = js["competitions"]
-draftStats = js["draftStats"]
-playerGameAttributes = js["playerGameAttributes"]
+# draftables = js["draftables"]
+# competitions = js["competitions"]
+# draftStats = js["draftStats"]
+# playerGameAttributes = js["playerGameAttributes"]
 
-draftable = draftables[0]
+# draftable = draftables[0]
 
 leaderboard_response = session.get(
     f"https://api.draftkings.com/scores/v1/leaderboards/{dk_id}?format=json&embed=leaderboard"
@@ -65,10 +63,25 @@ for user in found_users:
     roster = scorecard_js["entries"][0]["roster"]
 
     for scorecard in roster["scorecards"]:
-        if "shortName" in scorecard:
-            print(
-                f"    shortName: {scorecard['shortName']} statsDescription: {scorecard['statsDescription']}"
-            )
-            print(scorecard)
-        else:
-            print(scorecard)
+        firstName = scorecard.get("firstName")
+        lastName = scorecard.get("lastName")
+        displayName = scorecard.get("displayName")
+        rosterPosition = scorecard.get("rosterPosition")
+        score = scorecard.get("score")
+        stats = scorecard.get("stats")
+        statsDescription = scorecard.get("statsDescription")
+        timeremaining = scorecard.get("timeRemaining")
+
+        projection = scorecard.get("projection")
+
+        valueIcon = projection.get("valueIcon")
+
+        print("scorecard properties:")
+        print("  firstName:", firstName)
+        print("  lastName:", lastName)
+        print("  displayName:", displayName)
+        print("  rosterPosition:", rosterPosition)
+        print("  score:", score)
+        print("  stats:", stats)
+        print("  statsDescription:", statsDescription)
+        print("  timeRemaining:", timeremaining)

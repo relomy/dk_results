@@ -4,7 +4,6 @@ import copy
 import csv
 import io
 import logging
-import logging.config
 import os
 import unicodedata
 from datetime import datetime

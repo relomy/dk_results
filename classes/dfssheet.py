@@ -1,10 +1,9 @@
 import logging
 import logging.config
-from os import path
+import os
 
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
-from httplib2 import Http
 
 logging.config.fileConfig("logging.ini")
 
@@ -19,7 +18,7 @@ class Sheet:
         self.service = self.setup_service()
 
         # unique ID for DFS Ownership/Value spreadsheet
-        self.spreadsheet_id = "1Jv5nT-yUoEarkzY5wa7RW0_y0Dqoj8_zDrjeDs-pHL4"
+        self.spreadsheet_id = os.getenv("SPREADSHEET_ID")
 
     def setup_service(self):
         """Sets up the service for the spreadsheet."""
@@ -28,7 +27,7 @@ class Sheet:
             "https://www.googleapis.com/auth/drive",
         ]
         directory = "."
-        secret_file = path.join(directory, "client_secret.json")
+        secret_file = os.path.join(directory, "client_secret.json")
 
         credentials = service_account.Credentials.from_service_account_file(
             secret_file, scopes=scopes
@@ -131,21 +130,21 @@ class DFSSheet(Sheet):
     }
 
     NEW_LINEUP_RANGES = {
-        "NBA": "Q3:Z61",
-        "CFB": "Q3:Z61",
-        "NFL": "Q3:Z66",
-        "NFLShowdown": "Q3:Z66",
+        "NBA": "J3:Z61",
+        "CFB": "J3:Z61",
+        "NFL": "J3:Z66",
+        "NFLShowdown": "J3:Z66",
         "GOLF": "L8:Z56",
         "PGAMain": "L8:X56",
         "PGAWeekend": "L3:Q41",
         "PGAShowdown": "L3:Q41",
-        "TEN": "Q3:Z61",
-        "MLB": "Q3:Z71",
-        "XFL": "Q3:Z56",
-        "MMA": "Q3:Z61",
-        "LOL": "Q3:Z61",
-        "NAS": "Q3:Z61",
-        "USFL": "Q3:Z66",
+        "TEN": "J3:Z61",
+        "MLB": "J3:Z71",
+        "XFL": "J3:Z56",
+        "MMA": "J3:Z61",
+        "LOL": "J3:Z61",
+        "NAS": "J3:Z61",
+        "USFL": "J3:Z66",
     }
 
     def __init__(self, sport):
@@ -183,7 +182,7 @@ class DFSSheet(Sheet):
 
     def clear_lineups(self):
         """Clear lineups range of DFSsheet."""
-        lineups_range = self.LINEUP_RANGES[self.sport]
+        lineups_range = self.NEW_LINEUP_RANGES[self.sport]
         self.clear_sheet_range(f"{self.sport}!{lineups_range}")
 
     def write_players(self, values):
