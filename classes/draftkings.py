@@ -135,7 +135,7 @@ class Draftkings:
             players.append(
                 {
                     "pos": sc.get("rosterPosition", "") or "",
-                    "name": sc.get("displayName", "") or "",
+                    "name": sc.get("displayName", "") or "LOCKED 🔒",
                     "ownership": ownership,
                     "pts": str(sc.get("score", "") or ""),
                     "rtProj": str(projection.get("realTimeProjection", "") or ""),
