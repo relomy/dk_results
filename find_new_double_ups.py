@@ -4,7 +4,6 @@ import argparse
 import datetime
 import logging
 import logging.config
-import re
 import sys
 from os import getenv
 
@@ -111,6 +110,50 @@ def get_contests_from_response(response: dict | list) -> list:
     return response_contests
 
 
+def log_draft_group_event(
+    action: str,
+    sport_obj: Sport,
+    start_date: datetime.datetime,
+    draft_group_id: int,
+    tag: str,
+    suffix: str | None,
+    contest_type_id: int,
+    *,
+    level: int = logging.INFO,
+    reason: str | None = None,
+) -> None:
+    """
+    Log a draft group action with consistent formatting.
+
+    Args:
+        action (str): Description of the action (e.g., "Append", "Skip").
+        sport_obj (Sport): Sport object.
+        start_date (datetime.datetime): Draft group start time.
+        draft_group_id (int): Draft group ID.
+        tag (str): Draft group tag.
+        suffix (str | None): Draft group suffix.
+        contest_type_id (int): Contest type ID.
+        level (int, optional): Logging level. Defaults to logging.INFO.
+        reason (str | None, optional): Additional context for the action.
+    """
+    message = (
+        "[%4s] %s: start date: [%s] dg/tag/suffix/typid: [%d]/[%s]/[%s]/[%d]"
+    )
+    args: tuple = (
+        sport_obj.name,
+        action,
+        start_date,
+        draft_group_id,
+        tag,
+        suffix,
+        contest_type_id,
+    )
+    if reason:
+        message += " reason: %s"
+        args = args + (reason,)
+    logger.log(level, message, *args)
+
+
 def get_draft_groups_from_response(response: dict, sport_obj: Sport) -> list:
     """
     Extract draft group IDs from the DraftKings lobby response.
@@ -144,6 +187,19 @@ def get_draft_groups_from_response(response: dict, sport_obj: Sport) -> list:
 
         dt_start_date = datetime.datetime.fromisoformat(start_date_est[:-8])
 
+        if suffix is None:
+            log_draft_group_event(
+                "Append",
+                sport_obj,
+                dt_start_date,
+                draft_group_id,
+                tag,
+                suffix,
+                contest_type_id,
+            )
+            response_draft_groups.append(draft_group_id)
+        else:
+            skipped_dg_suffixes.append(suffix)
         # If sport_obj has suffixes, use regex matching
         if sport_obj.suffixes:
             suffix_patterns = [re.compile(pattern) for pattern in sport_obj.suffixes]
@@ -157,20 +213,21 @@ def get_draft_groups_from_response(response: dict, sport_obj: Sport) -> list:
                 sport_obj.contest_restraint_time
                 and dt_start_date.time() < sport_obj.contest_restraint_time
             ):
-                logger.debug(
-                    "[%4s] Skipping [time constraint] (<%s): start date: [%s] dg/tag/suffix/typid: [%d]/[%s]/[%s]/[%d]",
-                    sport_obj.name,
-                    sport_obj.contest_restraint_time,
+                log_draft_group_event(
+                    "Skip",
+                    sport_obj,
                     dt_start_date,
                     draft_group_id,
                     tag,
                     suffix,
                     contest_type_id,
+                    level=logging.DEBUG,
+                    reason=f"time constraint (<{sport_obj.contest_restraint_time})",
                 )
                 continue
-            logger.info(
-                "[%4s] Append: start date: [%s] dg/tag/suffix/typid: [%d]/[%s]/[%s]/[%d]",
-                sport_obj.name,
+            log_draft_group_event(
+                "Append",
+                sport_obj,
                 dt_start_date,
                 draft_group_id,
                 tag,
