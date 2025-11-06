@@ -28,6 +28,7 @@ class Sport:
     contest_restraint_type_id = None
 
     allow_optimizer = True
+    allow_suffixless_draft_groups = True
 
     def __init__(self, name, lineup_range) -> None:
         self.name = name
@@ -48,7 +49,9 @@ class Sport:
             cls._compiled_suffix_patterns is None
             or cls._suffix_patterns_cache_key != current_key
         ):
-            cls._compiled_suffix_patterns = [re.compile(pattern) for pattern in cls.suffixes]
+            cls._compiled_suffix_patterns = [
+                re.compile(pattern) for pattern in cls.suffixes
+            ]
             cls._suffix_patterns_cache_key = current_key
         return cls._compiled_suffix_patterns
 
@@ -95,6 +98,9 @@ class NFLAfternoonSport(Sport):
     # optimizer
     positions = ["QB", "RB", "RB", "WR", "WR", "WR", "TE", "FLEX", "DST"]
 
+    # flags
+    allow_suffixless_draft_groups = False
+
 
 class NFLShowdownSport(Sport):
     """NFL
@@ -118,7 +124,9 @@ class NFLShowdownSport(Sport):
 
     contest_restraint_time = time(20, 0)
 
+    # flags
     allow_optimizer = False
+    allow_suffixless_draft_groups = False
 
 
 class NBASport(Sport):

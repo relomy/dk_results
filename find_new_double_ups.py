@@ -136,9 +136,7 @@ def log_draft_group_event(
         level (int, optional): Logging level. Defaults to logging.INFO.
         reason (str | None, optional): Additional context for the action.
     """
-    message = (
-        "[%4s] %s: start date: [%s] dg/tag/suffix/typid: [%d]/[%s]/[%s]/[%d]"
-    )
+    message = "[%4s] %s: start date: [%s] dg/tag/suffix/typid: [%d]/[%s]/[%s]/[%d]"
     args: tuple = (
         sport_obj.name,
         action,
@@ -168,6 +166,7 @@ def get_draft_groups_from_response(response: dict, sport_obj: Sport) -> list:
     response_draft_groups = []
     skipped_dg_suffixes = []
     suffix_patterns = sport_obj.get_suffix_patterns()
+    allow_suffixless = sport_obj.allow_suffixless_draft_groups
 
     for draft_group in response["DraftGroups"]:
         sport = draft_group["Sport"]
@@ -178,7 +177,7 @@ def get_draft_groups_from_response(response: dict, sport_obj: Sport) -> list:
         contest_type_id = draft_group["ContestTypeId"]
 
         if suffix is not None:
-            suffix = suffix.strip()
+            suffix = suffix.strip() or None
 
         # Only care about featured draftgroups and those with no suffix or special cases
         if tag != "Featured":
@@ -189,31 +188,7 @@ def get_draft_groups_from_response(response: dict, sport_obj: Sport) -> list:
         dt_start_date = datetime.datetime.fromisoformat(start_date_est[:-8])
 
         if suffix is None:
-            log_draft_group_event(
-                "Append",
-                sport_obj,
-                dt_start_date,
-                draft_group_id,
-                tag,
-                suffix,
-                contest_type_id,
-            )
-            response_draft_groups.append(draft_group_id)
-        else:
-            skipped_dg_suffixes.append(suffix)
-
-        # If sport_obj has suffixes, use regex matching
-        if suffix_patterns:
-            if suffix is None or not any(
-                pattern.search(suffix) for pattern in suffix_patterns
-            ):
-                if suffix:
-                    skipped_dg_suffixes.append(suffix)
-                continue
-            if (
-                sport_obj.contest_restraint_time
-                and dt_start_date.time() < sport_obj.contest_restraint_time
-            ):
+            if not allow_suffixless:
                 log_draft_group_event(
                     "Skip",
                     sport_obj,
@@ -223,8 +198,9 @@ def get_draft_groups_from_response(response: dict, sport_obj: Sport) -> list:
                     suffix,
                     contest_type_id,
                     level=logging.DEBUG,
-                    reason=f"time constraint (<{sport_obj.contest_restraint_time})",
+                    reason="suffix required",
                 )
+                skipped_dg_suffixes.append("<<none>>")
                 continue
             log_draft_group_event(
                 "Append",
@@ -237,6 +213,55 @@ def get_draft_groups_from_response(response: dict, sport_obj: Sport) -> list:
             )
             response_draft_groups.append(draft_group_id)
             continue
+
+        # If sport_obj has suffixes, use regex matching
+        matches_suffix = True
+        if suffix_patterns:
+            matches_suffix = any(pattern.search(suffix) for pattern in suffix_patterns)
+
+        if not matches_suffix:
+            if suffix:
+                skipped_dg_suffixes.append(suffix)
+            log_draft_group_event(
+                "Skip",
+                sport_obj,
+                dt_start_date,
+                draft_group_id,
+                tag,
+                suffix,
+                contest_type_id,
+                level=logging.DEBUG,
+                reason="suffix mismatch",
+            )
+            continue
+
+        if (
+            sport_obj.contest_restraint_time
+            and dt_start_date.time() < sport_obj.contest_restraint_time
+        ):
+            log_draft_group_event(
+                "Skip",
+                sport_obj,
+                dt_start_date,
+                draft_group_id,
+                tag,
+                suffix,
+                contest_type_id,
+                level=logging.DEBUG,
+                reason=f"time constraint (<{sport_obj.contest_restraint_time})",
+            )
+            continue
+
+        log_draft_group_event(
+            "Append",
+            sport_obj,
+            dt_start_date,
+            draft_group_id,
+            tag,
+            suffix,
+            contest_type_id,
+        )
+        response_draft_groups.append(draft_group_id)
 
     if skipped_dg_suffixes:
         logger.debug(
