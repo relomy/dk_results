@@ -20,6 +20,8 @@ class Sport:
     dub_min_entries = 125
 
     suffixes = []
+    _compiled_suffix_patterns: list[re.Pattern] | None = None
+    _suffix_patterns_cache_key: tuple[str, ...] | None = None
 
     contest_restraint_day = None
     contest_restraint_time = None
@@ -30,7 +32,6 @@ class Sport:
     def __init__(self, name, lineup_range) -> None:
         self.name = name
         self.lineup_range = lineup_range
-        self._suffix_patterns: list[re.Pattern] | None = None
 
     @classmethod
     def get_primary_sport(cls) -> str:
@@ -39,11 +40,17 @@ class Sport:
 
         return cls.name
 
-    def get_suffix_patterns(self) -> list[re.Pattern]:
+    @classmethod
+    def get_suffix_patterns(cls) -> list[re.Pattern]:
         """Return compiled regex patterns for suffix filtering."""
-        if self._suffix_patterns is None:
-            self._suffix_patterns = [re.compile(pattern) for pattern in self.suffixes]
-        return self._suffix_patterns
+        current_key = tuple(cls.suffixes)
+        if (
+            cls._compiled_suffix_patterns is None
+            or cls._suffix_patterns_cache_key != current_key
+        ):
+            cls._compiled_suffix_patterns = [re.compile(pattern) for pattern in cls.suffixes]
+            cls._suffix_patterns_cache_key = current_key
+        return cls._compiled_suffix_patterns
 
 
 class NFLSport(Sport):
