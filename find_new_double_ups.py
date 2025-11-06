@@ -167,6 +167,7 @@ def get_draft_groups_from_response(response: dict, sport_obj: Sport) -> list:
     """
     response_draft_groups = []
     skipped_dg_suffixes = []
+    suffix_patterns = sport_obj.get_suffix_patterns()
 
     for draft_group in response["DraftGroups"]:
         sport = draft_group["Sport"]
@@ -200,9 +201,9 @@ def get_draft_groups_from_response(response: dict, sport_obj: Sport) -> list:
             response_draft_groups.append(draft_group_id)
         else:
             skipped_dg_suffixes.append(suffix)
+
         # If sport_obj has suffixes, use regex matching
-        if sport_obj.suffixes:
-            suffix_patterns = [re.compile(pattern) for pattern in sport_obj.suffixes]
+        if suffix_patterns:
             if suffix is None or not any(
                 pattern.search(suffix) for pattern in suffix_patterns
             ):

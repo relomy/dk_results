@@ -1,3 +1,4 @@
+import re
 from datetime import time
 
 
@@ -29,6 +30,7 @@ class Sport:
     def __init__(self, name, lineup_range) -> None:
         self.name = name
         self.lineup_range = lineup_range
+        self._suffix_patterns: list[re.Pattern] | None = None
 
     @classmethod
     def get_primary_sport(cls) -> str:
@@ -36,6 +38,12 @@ class Sport:
             return cls.sport_name
 
         return cls.name
+
+    def get_suffix_patterns(self) -> list[re.Pattern]:
+        """Return compiled regex patterns for suffix filtering."""
+        if self._suffix_patterns is None:
+            self._suffix_patterns = [re.compile(pattern) for pattern in self.suffixes]
+        return self._suffix_patterns
 
 
 class NFLSport(Sport):
