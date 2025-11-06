@@ -215,7 +215,7 @@ def get_draft_groups_from_response(response: dict, sport_obj: Sport) -> list:
             continue
 
         # If sport_obj has suffixes, use regex matching
-        matches_suffix = True
+        matches_suffix = False
         if suffix_patterns:
             matches_suffix = any(pattern.search(suffix) for pattern in suffix_patterns)
 
