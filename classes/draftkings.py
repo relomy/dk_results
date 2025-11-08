@@ -285,6 +285,7 @@ class Draftkings:
             "SOC": 10,
             "MLB": 12,
             "NFL": 21,
+            "NFLAfternoon": 21,
             "NFLShowdown": 21,
             "NAS": 24,
             "NBA": 70,
