@@ -152,39 +152,72 @@ class Draftkings:
         }
 
     def get_vip_lineups(
-        self, dk_id: int, dg: int, vips: list[str], max_workers: int = 8
+        self,
+        dk_id: int,
+        dg: int,
+        vips: list[str],
+        vip_entries: dict[str, str] | None = None,
+        max_workers: int = 8,
     ) -> list[dict]:
         """
         Fetch VIP lineups concurrently and format for sheet usage.
-        Returns list of dicts with user metadata and players.
+        If vip_entries are provided (mapping user -> entry_key), those entries
+        are fetched directly; otherwise the leaderboard is queried and filtered
+        by the provided vips list. Returns list of dicts with user metadata and players.
         """
-        js_leaderboard = self.get_leaderboard(dk_id, timeout=self.timeout_sec)
-        found_users = [
-            u
-            for u in js_leaderboard.get("leaderBoard", [])
-            if u.get("userName") in vips
-        ]
-        if not found_users:
+        users_to_fetch: list[dict] = []
+        if vip_entries:
+            for vip_name, entry_key in vip_entries.items():
+                if not entry_key:
+                    continue
+                users_to_fetch.append(
+                    {
+                        "userName": vip_name,
+                        "entryKey": entry_key,
+                        "timeRemaining": "",
+                        "rank": "",
+                        "fantasyPoints": "",
+                    }
+                )
+        else:
+            js_leaderboard = self.get_leaderboard(dk_id, timeout=self.timeout_sec)
+            users_to_fetch = [
+                u
+                for u in js_leaderboard.get("leaderBoard", [])
+                if u.get("userName") in vips
+            ]
+
+        if not users_to_fetch:
+            self.logger.debug("No VIP entries found to fetch.")
             return []
 
-        max_workers = min(max_workers, len(found_users)) or 1
+        max_workers = min(max_workers, len(users_to_fetch)) or 1
         vip_lineups: list[dict] = []
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             futures = {
                 executor.submit(self._fetch_user_lineup_worker, u, dg): u
-                for u in found_users
+                for u in users_to_fetch
             }
             for fut in as_completed(futures):
+                user = futures[fut].get("userName", "<unknown>")
                 try:
                     result = fut.result()
-                    if result:
-                        vip_lineups.append(result)
-                except Exception:
+
+                    if not result:
+                        self.logger.debug("VIP %s had no roster data", user)
+                        continue
+
+                    self.logger.info(
+                        "Found VIP lineup for user %s", result.get("user", user)
+                    )
+                    vip_lineups.append(result)
+                except Exception as e:
                     # Best-effort logging at client level
                     try:
-                        self.logger.exception(
-                            "Failed fetching lineup for %s",
-                            futures[fut].get("userName"),
+                        self.logger.error(
+                            "Failed fetching lineup for %s: %s",
+                            user,
+                            e,
                         )
                     except Exception:
                         pass
