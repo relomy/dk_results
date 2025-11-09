@@ -156,7 +156,7 @@ class Draftkings:
         dk_id: int,
         dg: int,
         vips: list[str],
-        vip_entries: dict[str, str] | None = None,
+        vip_entries: dict[str, dict | str] | None = None,
         max_workers: int = 8,
     ) -> list[dict]:
         """
@@ -167,16 +167,27 @@ class Draftkings:
         """
         users_to_fetch: list[dict] = []
         if vip_entries:
-            for vip_name, entry_key in vip_entries.items():
+            for vip_name, entry_data in vip_entries.items():
+                if isinstance(entry_data, dict):
+                    entry_key = entry_data.get("entry_key") or entry_data.get(
+                        "entryKey"
+                    )
+                    pmr = entry_data.get("pmr", "")
+                    rank = entry_data.get("rank", "")
+                    fantasy_points = entry_data.get("pts", "")
+                else:
+                    entry_key = entry_data
+                    pmr = rank = fantasy_points = ""
                 if not entry_key:
                     continue
+
                 users_to_fetch.append(
                     {
                         "userName": vip_name,
                         "entryKey": entry_key,
-                        "timeRemaining": "",
-                        "rank": "",
-                        "fantasyPoints": "",
+                        "timeRemaining": pmr,
+                        "rank": rank,
+                        "fantasyPoints": fantasy_points,
                     }
                 )
         else:

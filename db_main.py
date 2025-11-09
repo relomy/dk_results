@@ -94,11 +94,16 @@ def write_players_to_sheet(
         )
         return
 
-    vip_entries = {
-        vip.name: vip.player_id
-        for vip in results.vip_list
-        if vip.name and vip.player_id
-    }
+    vip_entries = {}
+    for vip in results.vip_list:
+        if not vip.name or not vip.player_id:
+            continue
+        vip_entries[vip.name] = {
+            "entry_key": vip.player_id,
+            "pmr": vip.pmr,
+            "rank": vip.rank,
+            "pts": vip.pts,
+        }
     vip_lineups = dk.get_vip_lineups(dk_id, dg, vips, vip_entries=vip_entries)
     if vip_lineups:
         logger.info("Writing API vip_lineups to sheet")
