@@ -133,6 +133,7 @@ class DFSSheet(Sheet):
         "NBA": "J3:W999",
         "CFB": "J3:W999",
         "NFL": "J3:W999",
+        "NFLAfternoon": "J3:W999",
         "NFLShowdown": "J3:W999",
         "GOLF": "L8:Z56",
         "PGAMain": "L8:X56",
