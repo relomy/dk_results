@@ -130,21 +130,21 @@ class DFSSheet(Sheet):
     }
 
     NEW_LINEUP_RANGES = {
-        "NBA": "J3:Z999",
-        "CFB": "J3:Z999",
-        "NFL": "J3:Z999",
-        "NFLShowdown": "J3:Z999",
+        "NBA": "J3:W999",
+        "CFB": "J3:W999",
+        "NFL": "J3:W999",
+        "NFLShowdown": "J3:W999",
         "GOLF": "L8:Z56",
         "PGAMain": "L8:X56",
         "PGAWeekend": "L3:Q41",
         "PGAShowdown": "L3:Q41",
-        "TEN": "J3:Z999",
+        "TEN": "J3:W999",
         "MLB": "J3:Z71",
         "XFL": "J3:Z56",
-        "MMA": "J3:Z999",
-        "LOL": "J3:Z999",
-        "NAS": "J3:Z999",
-        "USFL": "J3:Z999",
+        "MMA": "J3:W999",
+        "LOL": "J3:W999",
+        "NAS": "J3:W999",
+        "USFL": "J3:W999",
     }
 
     def __init__(self, sport):
