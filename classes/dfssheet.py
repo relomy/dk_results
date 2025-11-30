@@ -300,21 +300,24 @@ class DFSSheet(Sheet):
 
     def build_values_for_new_vip_lineup(self, user, players):
         values = [[user["user"], None, "PMR", user["pmr"], None, None, None, None]]
-        values.append(["Pos", "Name", "Own", "Pts", "RT Proj", "Time", "Stats"])
+        values.append(["Pos", "Name", "Own", "Pts", "Value", "RT Proj", "Time", "Stats"])
         for d in players:
-            if d["valueIcon"] == "fire":
-                d["name"] += " 🔥"
-            elif d["valueIcon"] == "ice":
-                d["name"] += " ❄️"
+            name = d.get("name", "") or ""
+            value_icon = d.get("valueIcon")
+            if value_icon == "fire":
+                name += " 🔥"
+            elif value_icon == "ice":
+                name += " ❄️"
             values.append(
                 [
-                    d["pos"],
-                    d["name"],
-                    d["ownership"],
-                    d["pts"],
-                    d["rtProj"],
-                    d["timeStatus"],
-                    d["stats"],
+                    d.get("pos", ""),
+                    name,
+                    d.get("ownership", ""),
+                    d.get("pts", ""),
+                    d.get("value", ""),
+                    d.get("rtProj", ""),
+                    d.get("timeStatus", ""),
+                    d.get("stats", ""),
                 ]
             )
         values.append(["rank", user["rank"], None, user["pts"], None, None, None, None])

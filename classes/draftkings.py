@@ -6,6 +6,7 @@ import io
 import logging
 import os
 import pickle
+import unicodedata
 import zipfile
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Optional
@@ -107,7 +108,37 @@ class Draftkings:
     # VIP Lineups helper
     # -----------------------
 
-    def _fetch_user_lineup_worker(self, user_dict: dict, dg: int) -> dict | None:
+    @staticmethod
+    def _normalize_name(name: str) -> str:
+        if not isinstance(name, str):
+            return ""
+        return "".join(
+            c
+            for c in unicodedata.normalize("NFD", name)
+            if unicodedata.category(c) != "Mn"
+        )
+
+    def _lookup_salary(
+        self, player_name: str, player_salary_map: dict[str, int] | None
+    ) -> int | None:
+        if not player_salary_map or not player_name:
+            return None
+        clean_name = player_name.strip()
+        if not clean_name:
+            return None
+        if clean_name in player_salary_map:
+            return player_salary_map[clean_name]
+        normalized = self._normalize_name(clean_name)
+        if normalized in player_salary_map:
+            return player_salary_map[normalized]
+        return None
+
+    def _fetch_user_lineup_worker(
+        self,
+        user_dict: dict,
+        dg: int,
+        player_salary_map: dict[str, int] | None = None,
+    ) -> dict | None:
         entry_key = user_dict.get("entryKey")
         if not entry_key:
             return None
@@ -130,16 +161,39 @@ class Draftkings:
             projection = sc.get("projection", {}) or {}
             percent = sc.get("percentDrafted")
             ownership = float(percent) / 100 if percent not in (None, "") else ""
+            display_name = sc.get("displayName", "") or "LOCKED 🔒"
+            salary_val = self._lookup_salary(display_name, player_salary_map)
+            salary_display = str(salary_val) if salary_val is not None else ""
+            pts_raw = sc.get("score", "") or ""
+            pts_display = str(pts_raw)
+            value = ""
+            if salary_val is not None:
+                try:
+                    pts_val = float(pts_raw)
+                    if pts_val:
+                        value = f"{pts_val / (salary_val / 1000):.2f}"
+                except (TypeError, ValueError, ZeroDivisionError):
+                    pass
+            rt_proj_raw = projection.get("realTimeProjection", "")
+            rt_proj = ""
+            if rt_proj_raw not in (None, ""):
+                try:
+                    rt_proj = f"{float(rt_proj_raw):.2f}"
+                except (TypeError, ValueError):
+                    rt_proj = str(rt_proj_raw)
+
             players.append(
                 {
                     "pos": sc.get("rosterPosition", "") or "",
-                    "name": sc.get("displayName", "") or "LOCKED 🔒",
+                    "name": display_name,
                     "ownership": ownership,
-                    "pts": str(sc.get("score", "") or ""),
-                    "rtProj": str(projection.get("realTimeProjection", "") or ""),
+                    "pts": pts_display,
+                    "rtProj": rt_proj,
                     "timeStatus": str(sc.get("timeRemaining", "") or ""),
                     "stats": sc.get("statsDescription", "") or "",
                     "valueIcon": projection.get("valueIcon", "") or "",
+                    "salary": salary_display,
+                    "value": value,
                 }
             )
 
@@ -157,6 +211,7 @@ class Draftkings:
         dg: int,
         vips: list[str],
         vip_entries: dict[str, dict | str] | None = None,
+        player_salary_map: dict[str, int] | None = None,
         max_workers: int = 8,
     ) -> list[dict]:
         """
@@ -164,6 +219,8 @@ class Draftkings:
         If vip_entries are provided (mapping user -> entry_key), those entries
         are fetched directly; otherwise the leaderboard is queried and filtered
         by the provided vips list. Returns list of dicts with user metadata and players.
+        When player_salary_map is provided (name -> salary), the lineup rows include
+        a salary/points value derived from that data.
         """
         users_to_fetch: list[dict] = []
         if vip_entries:
@@ -206,7 +263,9 @@ class Draftkings:
         vip_lineups: list[dict] = []
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             futures = {
-                executor.submit(self._fetch_user_lineup_worker, u, dg): u
+                executor.submit(
+                    self._fetch_user_lineup_worker, u, dg, player_salary_map
+                ): u
                 for u in users_to_fetch
             }
             for fut in as_completed(futures):

@@ -75,6 +75,8 @@ class DkLineup:
                 "rtProj": 0.0,
                 "timeStatus": "",
                 "valueIcon": "",
+                "salary": "",
+                "value": "",
             }
             for scorecard in roster["scorecards"]:
                 d = default_player.copy()
@@ -86,10 +88,35 @@ class DkLineup:
                     d["pts"] = scorecard["score"]
                     d["stats"] = scorecard["statsDescription"]
                     d["ownership"] = scorecard["percentDrafted"] / 100
-                    d["rtProj"] = projection.get("realTimeProjection", "")
+                    rt_proj_raw = projection.get("realTimeProjection", "")
+                    if rt_proj_raw not in (None, ""):
+                        try:
+                            d["rtProj"] = f"{float(rt_proj_raw):.2f}"
+                        except (TypeError, ValueError):
+                            d["rtProj"] = rt_proj_raw
+                    else:
+                        d["rtProj"] = ""
                     d["pregameProj"] = projection.get("pregameProjection", "")
                     d["timeStatus"] = scorecard["competition"]["timeStatus"]
                     d["valueIcon"] = scorecard["projection"]["valueIcon"]
+                    salary_raw = scorecard.get("salary")
+                    salary_val = None
+                    if salary_raw not in (None, ""):
+                        try:
+                            salary_val = int(float(salary_raw))
+                            d["salary"] = salary_val
+                        except (TypeError, ValueError):
+                            salary_val = None
+
+                    pts_raw = scorecard.get("score")
+                    if salary_val is not None:
+                        try:
+                            pts_val = float(pts_raw)
+                            if pts_val:
+                                # d["value"] = f"{salary_val / pts_val:.2f}"
+                                d["value"] = f"{pts_val / (salary_val / 1000):.2f}"
+                        except (TypeError, ValueError, ZeroDivisionError):
+                            d["value"] = ""
                 players.append(d)
 
             data["players"] = players

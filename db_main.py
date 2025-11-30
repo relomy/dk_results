@@ -104,7 +104,14 @@ def write_players_to_sheet(
             "rank": vip.rank,
             "pts": vip.pts,
         }
-    vip_lineups = dk.get_vip_lineups(dk_id, dg, vips, vip_entries=vip_entries)
+    player_salary_map = {name: player.salary for name, player in results.players.items()}
+    vip_lineups = dk.get_vip_lineups(
+        dk_id,
+        dg,
+        vips,
+        vip_entries=vip_entries,
+        player_salary_map=player_salary_map,
+    )
     if vip_lineups:
         logger.info("Writing API vip_lineups to sheet")
         sheet.clear_lineups()
