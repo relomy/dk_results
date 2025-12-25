@@ -2,6 +2,7 @@ import logging
 import logging.config
 import os
 import sys
+import time
 from pathlib import Path
 from typing import Optional
 
@@ -23,6 +24,7 @@ logger = logging.getLogger(__name__)
 COMMAND_PREFIX = "!"
 DB_PATH = os.getenv("CONTESTS_DB_PATH", "contests.db")
 BOT_TOKEN = os.getenv("DISCORD_BOT_TOKEN")
+START_TIME = time.time()
 
 
 def _channel_id_from_env() -> Optional[int]:
@@ -69,6 +71,30 @@ def _fetch_live_contest(sport_cls: type) -> Optional[tuple]:
         contest_db.close()
 
 
+def _format_uptime(seconds: float) -> str:
+    minutes, sec = divmod(int(seconds), 60)
+    hours, minutes = divmod(minutes, 60)
+    days, hours = divmod(hours, 24)
+    parts = []
+    if days:
+        parts.append(f"{days}d")
+    if hours:
+        parts.append(f"{hours}h")
+    if minutes:
+        parts.append(f"{minutes}m")
+    parts.append(f"{sec}s")
+    return " ".join(parts)
+
+
+def _system_uptime_seconds() -> Optional[float]:
+    try:
+        with open("/proc/uptime", "r") as f:
+            first_field = f.read().split()[0]
+            return float(first_field)
+    except Exception:
+        return None
+
+
 @bot.check
 async def limit_to_channel(ctx: commands.Context) -> bool:
     if ALLOWED_CHANNEL_ID is None:
@@ -86,6 +112,9 @@ async def on_ready():
 async def on_command_error(ctx: commands.Context, error: Exception):
     if isinstance(error, commands.CheckFailure):
         # Silently ignore commands from other channels.
+        return
+    if isinstance(error, commands.CommandNotFound):
+        # Ignore unknown commands so the bot only responds to expected prefixes.
         return
     logger.error("Command error: %s", error)
     await ctx.send("Something went wrong running that command.")
@@ -137,6 +166,27 @@ async def live(ctx: commands.Context):
     for dk_id, name, _, _, start_date, sport in rows:
         lines.append(f"{sport}: dk_id={dk_id}, name={name}, start_date={start_date}")
 
+    await ctx.send("\n".join(lines))
+
+
+@bot.command(name="health")
+async def health(ctx: commands.Context):
+    uptime = _format_uptime(time.time() - START_TIME)
+    sys_uptime_sec = _system_uptime_seconds()
+    sys_uptime = _format_uptime(sys_uptime_sec) if sys_uptime_sec is not None else "n/a"
+    await ctx.send(f"alive. bot uptime: {uptime}. host uptime: {sys_uptime}")
+
+
+@bot.command(name="help")
+async def help_command(ctx: commands.Context):
+    choices = _sport_choices()
+    allowed = _allowed_sports_label(choices)
+    lines = [
+        "!sankayadead -> responds 'ya man'",
+        "!health -> shows bot uptime",
+        f"!contests <sport> -> shows one live contest for that sport. Sports: {allowed}",
+        "!live -> shows all live contests across supported sports",
+    ]
     await ctx.send("\n".join(lines))
 
 
