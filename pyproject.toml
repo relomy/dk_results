@@ -17,6 +17,7 @@ dependencies = [
     "rookiepy",
     "pyyaml",
     "dotenv",
+    "discord"
 ]
 
 [tool.setuptools.packages.find]
