@@ -218,7 +218,7 @@ def process_sport(
         logger.warning("There are no live contests for %s! Moving on.", sport_name)
         return
 
-    dk_id, name, draft_group, positions_paid = result
+    dk_id, name, draft_group, positions_paid, start_date = result
     fn = os.path.join(SALARY_DIR, f"DKSalaries_{sport_name}_{now:%A}.csv")
     logger.debug(args)
     dk = Draftkings()

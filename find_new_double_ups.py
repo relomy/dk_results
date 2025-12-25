@@ -10,7 +10,7 @@ from os import getenv
 import requests
 from dotenv import load_dotenv
 
-from bot.discord import Discord
+from bot.webhook import DiscordWebhook as Discord
 from classes.contest import Contest
 from classes.contestdatabase import ContestDatabase
 from classes.cookieservice import get_dk_cookies

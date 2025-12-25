@@ -159,7 +159,7 @@ if __name__ == "__main__":
         if not live_contest:
             continue
 
-        dk_id, name, draft_group, positions_paid = live_contest
+        dk_id, name, draft_group, positions_paid, start_date = live_contest
 
         dksession = DkSession()
         dkl = DkLineup(dksession, dk_id, draft_group)

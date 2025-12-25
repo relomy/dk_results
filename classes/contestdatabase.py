@@ -122,12 +122,12 @@ class ContestDatabase:
             keyword (str, optional): Name keyword pattern. Defaults to "%".
 
         Returns:
-            tuple | None: Contest row if found, else None.
+            tuple | None: (dk_id, name, draft_group, positions_paid, start_date) if found, else None.
         """
         cur = self.conn.cursor()
         try:
             sql = (
-                "SELECT dk_id, name, draft_group, positions_paid "
+                "SELECT dk_id, name, draft_group, positions_paid, start_date "
                 "FROM contests "
                 "WHERE sport=? "
                 "  AND name LIKE ? "
