@@ -145,3 +145,42 @@ class ContestDatabase:
             return None
         except sqlite3.Error as err:
             self.logger.error("sqlite error in get_live_contest(): %s", err.args[0])
+
+    def get_live_contests(
+        self, sports: list[str] | None = None, entry_fee: int = 25, keyword: str = "%"
+    ) -> list[tuple]:
+        """
+        Get all live contests matching the criteria.
+
+        Args:
+            sports (list[str] | None): Sport names to include; if None, include all.
+            entry_fee (int, optional): Minimum entry fee. Defaults to 25.
+            keyword (str, optional): Name keyword pattern. Defaults to "%".
+
+        Returns:
+            list[tuple]: Each tuple is (dk_id, name, draft_group, positions_paid, start_date, sport).
+        """
+        cur = self.conn.cursor()
+        try:
+            base_sql = (
+                "SELECT dk_id, name, draft_group, positions_paid, start_date, sport "
+                "FROM contests "
+                "WHERE name LIKE ? "
+                "  AND entry_fee >= ? "
+                "  AND start_date <= datetime('now', 'localtime') "
+                "  AND completed=0 "
+            )
+            params: list = [keyword, entry_fee]
+            if sports:
+                placeholders = ", ".join("?" for _ in sports)
+                base_sql += f" AND sport IN ({placeholders})"
+                params.extend(sports)
+            base_sql += " ORDER BY sport, entry_fee DESC, entries DESC"
+
+            cur.execute(base_sql, params)
+            rows = cur.fetchall()
+            self.logger.debug("returning %d live contests", len(rows))
+            return rows or []
+        except sqlite3.Error as err:
+            self.logger.error("sqlite error in get_live_contests(): %s", err.args[0])
+            return []

@@ -118,6 +118,28 @@ async def contests(ctx: commands.Context, sport: Optional[str] = None):
     await ctx.send(_format_contest_row(contest, choices[sport_key].name))
 
 
+@bot.command(name="live")
+async def live(ctx: commands.Context):
+    choices = _sport_choices()
+    allowed_sports = [sport_cls.name for sport_cls in choices.values()]
+
+    contest_db = ContestDatabase(DB_PATH, logger=logger)
+    try:
+        rows = contest_db.get_live_contests(sports=allowed_sports)
+    finally:
+        contest_db.close()
+
+    if not rows:
+        await ctx.send("No live contests found.")
+        return
+
+    lines = []
+    for dk_id, name, _, _, start_date, sport in rows:
+        lines.append(f"{sport}: dk_id={dk_id}, name={name}, start_date={start_date}")
+
+    await ctx.send("\n".join(lines))
+
+
 def main():
     if not BOT_TOKEN:
         raise RuntimeError(
