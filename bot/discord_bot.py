@@ -186,8 +186,16 @@ async def help_command(ctx: commands.Context):
         "!health -> shows bot uptime",
         f"!contests <sport> -> shows one live contest for that sport. Sports: {allowed}",
         "!live -> shows all live contests across supported sports",
+        "!sports -> lists supported sports",
     ]
     await ctx.send("\n".join(lines))
+
+
+@bot.command(name="sports")
+async def sports(ctx: commands.Context):
+    choices = _sport_choices()
+    allowed = _allowed_sports_label(choices)
+    await ctx.send(f"Supported sports: {allowed}")
 
 
 def main():

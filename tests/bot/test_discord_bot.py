@@ -229,3 +229,13 @@ async def test_help_lists_commands(monkeypatch):
     assert "!health" in message
     assert "!contests <sport>" in message
     assert "NBA" in message and "NFL" in message
+    assert "!live" in message
+    assert "!sports" in message
+
+
+@pytest.mark.asyncio
+async def test_sports_lists_supported(monkeypatch):
+    monkeypatch.setattr(discord_bot, "_sport_choices", lambda: {"nba": DummySport, "nfl": DummySportTwo})
+    ctx = FakeCtx()
+    await discord_bot.sports(ctx)
+    assert ctx.sent == ["Supported sports: NBA, NFL"]
