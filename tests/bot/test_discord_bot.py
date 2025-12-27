@@ -92,7 +92,9 @@ async def test_contests_returns_live_contest(monkeypatch):
     ctx = FakeCtx()
     await discord_bot.contests(ctx, "nba")
 
-    assert ctx.sent == ["NBA: dk_id=1, name=Contest, start_date=2024-01-01"]
+    assert ctx.sent == [
+        "NBA: dk_id=1, name=Contest, start_date=2024-01-01, url=https://www.draftkings.com/contest/gamecenter/1#/"
+    ]
 
 
 @pytest.mark.asyncio
@@ -126,7 +128,8 @@ async def test_live_lists_all_live_contests(monkeypatch):
     assert captured["sports"] == ["NBA", "NFL"]
     assert captured.get("closed") is True
     assert ctx.sent == [
-        "NBA: dk_id=1, name=ContestA, start_date=2024-01-01\nNFL: dk_id=2, name=ContestB, start_date=2024-01-02"
+        "NBA: dk_id=1, name=ContestA, start_date=2024-01-01, url=https://www.draftkings.com/contest/gamecenter/1#/\n"
+        "NFL: dk_id=2, name=ContestB, start_date=2024-01-02, url=https://www.draftkings.com/contest/gamecenter/2#/"
     ]
 
 
