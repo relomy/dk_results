@@ -9,17 +9,17 @@ class Sport:
         object (_type_): _description_
     """
 
-    sport_name = None
-    name = None
-    positions = []
+    sport_name: str = ""
+    name: str = ""
+    positions: list[str] = []
 
-    sheet_min_entry_fee = 25
-    keyword = "%"
+    sheet_min_entry_fee: int = 25
+    keyword: str = "%"
 
-    dub_min_entry_fee = 5
-    dub_min_entries = 125
+    dub_min_entry_fee: int = 5
+    dub_min_entries: int = 125
 
-    suffixes = []
+    suffixes: list[str] = []
     _compiled_suffix_patterns: list[re.Pattern] | None = None
     _suffix_patterns_cache_key: tuple[str, ...] | None = None
 
@@ -27,8 +27,8 @@ class Sport:
     contest_restraint_time = None
     contest_restraint_type_id = None
 
-    allow_optimizer = True
-    allow_suffixless_draft_groups = True
+    allow_optimizer: bool = True
+    allow_suffixless_draft_groups: bool = True
 
     def __init__(self, name, lineup_range) -> None:
         self.name = name
@@ -36,9 +36,8 @@ class Sport:
 
     @classmethod
     def get_primary_sport(cls) -> str:
-        if cls.sport_name is not None:
+        if cls.sport_name:
             return cls.sport_name
-
         return cls.name
 
     @classmethod

@@ -1,18 +1,10 @@
 import logging
 import logging.config
 import os
-import sys
 import time
-from pathlib import Path
-from typing import Optional
+from typing import Optional, Type, TypeAlias
 
-# Ensure we import the discord library, not the local legacy webhook module.
-CURRENT_DIR = Path(__file__).resolve().parent
-if sys.path and sys.path[0] == str(CURRENT_DIR):
-    sys.path.pop(0)
-    sys.path.insert(0, str(CURRENT_DIR.parent))
-
-import discord
+import discord  # noqa: E402
 from discord.ext import commands
 
 from classes.contestdatabase import ContestDatabase
@@ -25,6 +17,9 @@ COMMAND_PREFIX = "!"
 DB_PATH = os.getenv("CONTESTS_DB_PATH", "contests.db")
 BOT_TOKEN = os.getenv("DISCORD_BOT_TOKEN")
 START_TIME = time.time()
+
+
+SportType: TypeAlias = Type[Sport]
 
 
 def _channel_id_from_env() -> Optional[int]:
@@ -45,15 +40,19 @@ intents.message_content = True
 bot = commands.Bot(command_prefix=COMMAND_PREFIX, intents=intents, help_command=None)
 
 
-def _sport_choices() -> dict[str, type]:
-    sportz = Sport.__subclasses__()
-    return {
-        sport.name.lower(): sport for sport in sportz if getattr(sport, "name", None)
-    }
+def _sport_choices() -> dict[str, SportType]:
+    choices: dict[str, SportType] = {}
+    for sport in Sport.__subclasses__():
+        name = getattr(sport, "name", None)
+        if not isinstance(name, str) or not name:
+            continue
+        choices[name.lower()] = sport
+    return choices
 
 
-def _allowed_sports_label(choices: dict[str, type]) -> str:
-    return ", ".join(sorted({sport_cls.name for sport_cls in choices.values()}))
+def _allowed_sports_label(choices: dict[str, SportType]) -> str:
+    names: list[str] = [sport_cls.name for sport_cls in choices.values()]
+    return ", ".join(sorted(names))
 
 
 def _format_contest_row(row: tuple, sport_name: str) -> str:
@@ -61,7 +60,7 @@ def _format_contest_row(row: tuple, sport_name: str) -> str:
     return f"{sport_name}: dk_id={dk_id}, name={name}, start_date={start_date}"
 
 
-def _fetch_live_contest(sport_cls: type) -> Optional[tuple]:
+def _fetch_live_contest(sport_cls: SportType) -> Optional[tuple]:
     contest_db = ContestDatabase(DB_PATH, logger=logger)
     try:
         return contest_db.get_live_contest(
@@ -135,22 +134,28 @@ async def contests(ctx: commands.Context, sport: Optional[str] = None):
     sport_key = sport.lower()
     if sport_key not in choices:
         await ctx.send(
-            f"Unknown sport '{sport}'. Allowed options: {_allowed_sports_label(choices)}"
+            f"Unknown sport '{sport}'. Allowed options: "
+            f"{_allowed_sports_label(choices)}"
         )
         return
 
-    contest = _fetch_live_contest(choices[sport_key])
-    if not contest:
-        await ctx.send(f"No live contest found for {choices[sport_key].name}.")
+    sport_choice = choices[sport_key]
+    if not isinstance(getattr(sport_choice, "name", None), str):
+        await ctx.send("Invalid sport configuration.")
         return
 
-    await ctx.send(_format_contest_row(contest, choices[sport_key].name))
+    contest = _fetch_live_contest(sport_choice)
+    if not contest:
+        await ctx.send(f"No live contest found for {sport_choice.name}.")
+        return
+
+    await ctx.send(_format_contest_row(contest, sport_choice.name))
 
 
 @bot.command(name="live")
 async def live(ctx: commands.Context):
     choices = _sport_choices()
-    allowed_sports = [sport_cls.name for sport_cls in choices.values()]
+    allowed_sports: list[str] = [sport_cls.name for sport_cls in choices.values()]
 
     contest_db = ContestDatabase(DB_PATH, logger=logger)
     try:
@@ -184,7 +189,10 @@ async def help_command(ctx: commands.Context):
     lines = [
         "!sankayadead -> responds 'ya man'",
         "!health -> shows bot uptime",
-        f"!contests <sport> -> shows one live contest for that sport. Sports: {allowed}",
+        (
+            "!contests <sport> -> shows one live contest for that sport. "
+            f"Sports: {allowed}"
+        ),
         "!live -> shows all live contests across supported sports",
         "!sports -> lists supported sports",
     ]
