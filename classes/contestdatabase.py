@@ -156,7 +156,9 @@ class ContestDatabase:
         self, sports: list[str] | None = None, entry_fee: int = 25, keyword: str = "%"
     ) -> list[tuple]:
         """
-        Get all live contests matching the criteria.
+        Get one live contest per sport, using the same fallback as get_live_contest:
+        prefer contests at or above the minimum entry fee; if none exist for a sport,
+        fall back to the highest entry fee below the minimum.
 
         Args:
             sports (list[str] | None): Sport names to include; if None, include all.
@@ -168,25 +170,30 @@ class ContestDatabase:
         """
         cur = self.conn.cursor()
         try:
-            base_sql = (
-                "SELECT dk_id, name, draft_group, positions_paid, start_date, sport "
-                "FROM contests "
-                "WHERE name LIKE ? "
-                "  AND entry_fee >= ? "
-                "  AND start_date <= datetime('now', 'localtime') "
-                "  AND completed=0 "
-            )
-            params: list = [keyword, entry_fee]
-            if sports:
-                placeholders = ", ".join("?" for _ in sports)
-                base_sql += f" AND sport IN ({placeholders})"
-                params.extend(sports)
-            base_sql += " ORDER BY sport, entry_fee DESC, entries DESC"
+            sport_list = list(sports) if sports else []
 
-            cur.execute(base_sql, params)
-            rows = cur.fetchall()
+            if not sport_list:
+                cur.execute(
+                    """
+                    SELECT DISTINCT sport
+                    FROM contests
+                    WHERE name LIKE ?
+                      AND start_date <= datetime('now', 'localtime')
+                      AND completed=0
+                    """,
+                    (keyword,),
+                )
+                sport_list = [row[0] for row in cur.fetchall()]
+
+            rows: list[tuple] = []
+            for sport_name in sorted(sport_list):
+                live = self.get_live_contest(sport_name, entry_fee, keyword)
+                if live:
+                    dk_id, name, draft_group, positions_paid, start_date = live
+                    rows.append((dk_id, name, draft_group, positions_paid, start_date, sport_name))
+
             self.logger.debug("returning %d live contests", len(rows))
-            return rows or []
+            return rows
         except sqlite3.Error as err:
             self.logger.error("sqlite error in get_live_contests(): %s", err.args[0])
             return []

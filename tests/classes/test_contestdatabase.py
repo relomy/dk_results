@@ -102,3 +102,25 @@ def test_get_live_contest_is_deterministic_on_ties(contest_db):
     row = contest_db.get_live_contest("NBA", entry_fee=25)
 
     assert row[0] == 6
+
+
+def test_get_live_contests_uses_fallback_per_sport(contest_db):
+    _insert_contest(contest_db, dk_id=10, sport="NBA", entry_fee=10, entries=200)
+    _insert_contest(contest_db, dk_id=11, sport="NFL", entry_fee=30, entries=100)
+
+    rows = contest_db.get_live_contests(sports=["NBA", "NFL"], entry_fee=25)
+
+    assert rows == [
+        (10, "Contest", 1, None, "2024-01-01 00:00:00", "NBA"),
+        (11, "Contest", 1, None, "2024-01-01 00:00:00", "NFL"),
+    ]
+
+
+def test_get_live_contests_discovers_sports_when_not_provided(contest_db):
+    _insert_contest(contest_db, dk_id=12, sport="NBA", entry_fee=20, entries=50)
+
+    rows = contest_db.get_live_contests(entry_fee=25)
+
+    assert rows == [
+        (12, "Contest", 1, None, "2024-01-01 00:00:00", "NBA"),
+    ]
