@@ -114,7 +114,9 @@ class ContestDatabase:
         self, sport: str, entry_fee: int = 25, keyword: str = "%"
     ) -> tuple | None:
         """
-        Get a live contest matching the criteria.
+        Get a live contest matching the criteria. Prefer contests at or above the
+        minimum entry fee; if none exist, fall back to the highest entry fee
+        below the minimum.
 
         Args:
             sport (str): Sport name.
@@ -126,23 +128,27 @@ class ContestDatabase:
         """
         cur = self.conn.cursor()
         try:
-            sql = (
+            base_sql = (
                 "SELECT dk_id, name, draft_group, positions_paid, start_date "
                 "FROM contests "
                 "WHERE sport=? "
                 "  AND name LIKE ? "
-                "  AND entry_fee >= ? "
                 "  AND start_date <= datetime('now', 'localtime') "
                 "  AND completed=0 "
-                "ORDER BY entry_fee DESC, entries DESC "
-                "LIMIT 1"
             )
-            cur.execute(sql, (sport, keyword, entry_fee))
+
+            ordering = " ORDER BY entry_fee DESC, entries DESC, start_date DESC, dk_id DESC LIMIT 1"
+
+            cur.execute(base_sql + "  AND entry_fee >= ?" + ordering, (sport, keyword, entry_fee))
             row = cur.fetchone()
-            self.logger.debug(f"returning {row}")
             if row:
+                self.logger.debug("returning %s", row)
                 return row
-            return None
+
+            cur.execute(base_sql + "  AND entry_fee < ?" + ordering, (sport, keyword, entry_fee))
+            row = cur.fetchone()
+            self.logger.debug("returning %s", row)
+            return row
         except sqlite3.Error as err:
             self.logger.error("sqlite error in get_live_contest(): %s", err.args[0])
 

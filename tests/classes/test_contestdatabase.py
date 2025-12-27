@@ -1,0 +1,104 @@
+import datetime
+
+import pytest
+
+from classes.contestdatabase import ContestDatabase
+
+
+@pytest.fixture
+def contest_db():
+    db = ContestDatabase(":memory:")
+    db.create_table()
+    try:
+        yield db
+    finally:
+        db.close()
+
+
+def _insert_contest(
+    db: ContestDatabase,
+    *,
+    dk_id: int,
+    sport: str = "NBA",
+    name: str = "Contest",
+    start_date: str = "2024-01-01 00:00:00",
+    draft_group: int = 1,
+    total_prizes: int = 1000,
+    entries: int = 100,
+    positions_paid: int | None = None,
+    entry_fee: int = 25,
+    entry_count: int = 0,
+    max_entry_count: int = 1,
+    completed: int = 0,
+    status: str | None = "LIVE",
+):
+    db.conn.execute(
+        """
+        INSERT INTO contests (
+            dk_id, sport, name, start_date, draft_group, total_prizes,
+            entries, positions_paid, entry_fee, entry_count, max_entry_count,
+            completed, status
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            dk_id,
+            sport,
+            name,
+            start_date,
+            draft_group,
+            total_prizes,
+            entries,
+            positions_paid,
+            entry_fee,
+            entry_count,
+            max_entry_count,
+            completed,
+            status,
+        ),
+    )
+    db.conn.commit()
+
+
+def test_get_live_contest_prefers_entry_fee_at_or_above_min(contest_db):
+    _insert_contest(contest_db, dk_id=1, entry_fee=30, entries=150)
+    _insert_contest(contest_db, dk_id=2, entry_fee=10, entries=500)
+
+    row = contest_db.get_live_contest("NBA", entry_fee=25)
+
+    assert row[0] == 1  # dk_id
+
+
+def test_get_live_contest_falls_back_to_highest_below_min(contest_db):
+    _insert_contest(contest_db, dk_id=3, entry_fee=10, entries=200)
+    _insert_contest(contest_db, dk_id=4, entry_fee=5, entries=400)
+
+    row = contest_db.get_live_contest("NBA", entry_fee=25)
+
+    assert row[0] == 3
+
+
+def test_get_live_contest_returns_none_when_no_rows(contest_db):
+    assert contest_db.get_live_contest("NBA", entry_fee=25) is None
+
+
+def test_get_live_contest_is_deterministic_on_ties(contest_db):
+    base_time = datetime.datetime(2024, 1, 1, 12, 0, 0)
+    _insert_contest(
+        contest_db,
+        dk_id=5,
+        entry_fee=20,
+        entries=100,
+        start_date=(base_time - datetime.timedelta(hours=1)).strftime("%Y-%m-%d %H:%M:%S"),
+    )
+    _insert_contest(
+        contest_db,
+        dk_id=6,
+        entry_fee=20,
+        entries=100,
+        start_date=base_time.strftime("%Y-%m-%d %H:%M:%S"),
+    )
+
+    row = contest_db.get_live_contest("NBA", entry_fee=25)
+
+    assert row[0] == 6
