@@ -57,7 +57,8 @@ def _allowed_sports_label(choices: dict[str, SportType]) -> str:
 
 def _format_contest_row(row: tuple, sport_name: str) -> str:
     dk_id, name, _, _, start_date = row
-    url = f"https://www.draftkings.com/contest/gamecenter/{dk_id}#/"
+    # Wrap URL in angle brackets to prevent Discord from embedding a preview.
+    url = f"<https://www.draftkings.com/contest/gamecenter/{dk_id}#/>"
     return f"{sport_name}: dk_id={dk_id}, name={name}, start_date={start_date}, url={url}"
 
 
@@ -170,7 +171,8 @@ async def live(ctx: commands.Context):
 
     lines = []
     for dk_id, name, _, _, start_date, sport in rows:
-        url = f"https://www.draftkings.com/contest/gamecenter/{dk_id}#/"
+        # Wrap URL in angle brackets to prevent Discord from embedding a preview.
+        url = f"<https://www.draftkings.com/contest/gamecenter/{dk_id}#/>"
         lines.append(
             f"{sport}: dk_id={dk_id}, name={name}, start_date={start_date}, url={url}"
         )
