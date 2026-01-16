@@ -178,10 +178,15 @@ def test_channel_id_from_env_valid(monkeypatch):
 
 
 def test_channel_id_from_env_invalid(monkeypatch, caplog):
-    caplog.set_level("WARNING")
+    captured = []
+    monkeypatch.setattr(
+        discord_bot.logger,
+        "warning",
+        lambda message, *args: captured.append(message % args if args else message),
+    )
     monkeypatch.setenv("DISCORD_CHANNEL_ID", "abc")
     assert discord_bot._channel_id_from_env() is None
-    assert any("not a valid integer" in msg for msg in caplog.messages)
+    assert any("not a valid integer" in msg for msg in captured)
 
 
 @pytest.mark.asyncio
