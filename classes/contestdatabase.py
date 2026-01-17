@@ -197,3 +197,71 @@ class ContestDatabase:
         except sqlite3.Error as err:
             self.logger.error("sqlite error in get_live_contests(): %s", err.args[0])
             return []
+
+    def get_next_upcoming_contest(
+        self, sport: str, entry_fee: int = 25, keyword: str = "%"
+    ) -> tuple | None:
+        """
+        Get the next upcoming contest matching the criteria.
+
+        Args:
+            sport (str): Sport name.
+            entry_fee (int, optional): Minimum entry fee. Defaults to 25.
+            keyword (str, optional): Name keyword pattern. Defaults to "%".
+
+        Returns:
+            tuple | None: (dk_id, name, draft_group, positions_paid, start_date) if found, else None.
+        """
+        cur = self.conn.cursor()
+        try:
+            sql = (
+                "SELECT dk_id, name, draft_group, positions_paid, start_date "
+                "FROM contests "
+                "WHERE sport=? "
+                "  AND name LIKE ? "
+                "  AND entry_fee >= ? "
+                "  AND start_date > datetime('now', 'localtime') "
+                "  AND completed=0 "
+                "ORDER BY start_date ASC, entry_fee DESC, entries DESC "
+                "LIMIT 1"
+            )
+            cur.execute(sql, (sport, keyword, entry_fee))
+            row = cur.fetchone()
+            self.logger.debug("returning %s", row)
+            return row if row else None
+        except sqlite3.Error as err:
+            self.logger.error(
+                "sqlite error in get_next_upcoming_contest(): %s", err.args[0]
+            )
+            return None
+
+    def get_next_upcoming_contest_any(self, sport: str) -> tuple | None:
+        """
+        Get the next upcoming contest for a sport, regardless of criteria.
+
+        Args:
+            sport (str): Sport name.
+
+        Returns:
+            tuple | None: (dk_id, name, draft_group, positions_paid, start_date) if found, else None.
+        """
+        cur = self.conn.cursor()
+        try:
+            sql = (
+                "SELECT dk_id, name, draft_group, positions_paid, start_date "
+                "FROM contests "
+                "WHERE sport=? "
+                "  AND start_date > datetime('now', 'localtime') "
+                "  AND completed=0 "
+                "ORDER BY start_date ASC, entry_fee DESC, entries DESC "
+                "LIMIT 1"
+            )
+            cur.execute(sql, (sport,))
+            row = cur.fetchone()
+            self.logger.debug("returning %s", row)
+            return row if row else None
+        except sqlite3.Error as err:
+            self.logger.error(
+                "sqlite error in get_next_upcoming_contest_any(): %s", err.args[0]
+            )
+            return None

@@ -180,11 +180,44 @@ async def live(ctx: commands.Context):
     await ctx.send("\n".join(lines))
 
 
+@bot.command(name="upcoming")
+async def upcoming(ctx: commands.Context):
+    choices = _sport_choices()
+    contest_db = ContestDatabase(DB_PATH, logger=logger)
+    try:
+        lines = []
+        for sport_cls in choices.values():
+            upcoming_any = contest_db.get_next_upcoming_contest_any(sport_cls.name)
+            if not upcoming_any:
+                continue
+
+            upcoming_match = contest_db.get_next_upcoming_contest(
+                sport_cls.name, sport_cls.sheet_min_entry_fee, sport_cls.keyword
+            )
+            dk_id, name, _, _, start_date = (
+                upcoming_match if upcoming_match else upcoming_any
+            )
+            suffix = "" if upcoming_match else " (failed criteria)"
+            lines.append(
+                f"{sport_cls.name}: dk_id={dk_id}, name={name}, "
+                f"start_date={start_date}{suffix}"
+            )
+    finally:
+        contest_db.close()
+
+    if not lines:
+        return
+
+    await ctx.send("\n".join(lines))
+
+
 @bot.command(name="health")
 async def health(ctx: commands.Context):
     uptime = _format_uptime(time.time() - START_TIME)
     sys_uptime_sec = _system_uptime_seconds()
-    sys_uptime = _format_uptime(sys_uptime_sec) if sys_uptime_sec is not None else "n/a"
+    sys_uptime = (
+        _format_uptime(sys_uptime_sec) if sys_uptime_sec is not None else "n/a"
+    )
     await ctx.send(f"alive. bot uptime: {uptime}. host uptime: {sys_uptime}")
 
 
@@ -200,6 +233,7 @@ async def help_command(ctx: commands.Context):
             f"Sports: {allowed}"
         ),
         "!live -> shows all live contests across supported sports",
+        "!upcoming -> shows next upcoming contest per sport",
         "!sports -> lists supported sports",
     ]
     await ctx.send("\n".join(lines))

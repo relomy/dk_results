@@ -238,6 +238,7 @@ async def test_help_lists_commands(monkeypatch):
     assert "!contests <sport>" in message
     assert "NBA" in message and "NFL" in message
     assert "!live" in message
+    assert "!upcoming" in message
     assert "!sports" in message
 
 
@@ -247,3 +248,39 @@ async def test_sports_lists_supported(monkeypatch):
     ctx = FakeCtx()
     await discord_bot.sports(ctx)
     assert ctx.sent == ["Supported sports: NBA, NFL"]
+
+
+@pytest.mark.asyncio
+async def test_upcoming_lists_next_per_sport(monkeypatch):
+    monkeypatch.setattr(
+        discord_bot, "_sport_choices", lambda: {"nba": DummySport, "nfl": DummySportTwo}
+    )
+
+    class FakeContestDatabase:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def get_next_upcoming_contest_any(self, sport: str):
+            if sport == "NBA":
+                return (11, "AnyNBA", None, None, "2024-01-03")
+            if sport == "NFL":
+                return (21, "AnyNFL", None, None, "2024-01-04")
+            return None
+
+        def get_next_upcoming_contest(self, sport: str, entry_fee=25, keyword="%"):
+            if sport == "NBA":
+                return (10, "MatchNBA", None, None, "2024-01-02")
+            return None
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(discord_bot, "ContestDatabase", FakeContestDatabase)
+
+    ctx = FakeCtx()
+    await discord_bot.upcoming(ctx)
+
+    assert ctx.sent == [
+        "NBA: dk_id=10, name=MatchNBA, start_date=2024-01-02\n"
+        "NFL: dk_id=21, name=AnyNFL, start_date=2024-01-04 (failed criteria)"
+    ]
