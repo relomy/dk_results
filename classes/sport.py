@@ -30,6 +30,7 @@ class Sport:
     contest_restraint_day: Optional[date] = None
     contest_restraint_time: Optional[time] = None
     contest_restraint_type_id: Optional[int] = None
+    contest_restraint_game_type_id: Optional[int] = None
 
     allow_optimizer: bool = True
     allow_suffixless_draft_groups: bool = True
@@ -153,11 +154,12 @@ class NFLShowdownSport(Sport):
 
     suffixes = [r"\(\w{2,3} @ \w{2,3}\)"]
 
-    contest_restraint_time = time(20, 0)
+    # contest_restraint_time = time(20, 0)
+    contest_restraint_game_type_id = 96
 
     # flags
     allow_optimizer = False
-    allow_suffixless_draft_groups = False
+    allow_suffixless_draft_groups = True
 
 
 class NBASport(Sport):

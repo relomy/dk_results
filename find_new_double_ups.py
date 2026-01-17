@@ -118,6 +118,7 @@ def log_draft_group_event(
     tag: str,
     suffix: str | None,
     contest_type_id: int,
+    game_type_id: int,
     *,
     level: int = logging.INFO,
     reason: str | None = None,
@@ -136,7 +137,7 @@ def log_draft_group_event(
         level (int, optional): Logging level. Defaults to logging.INFO.
         reason (str | None, optional): Additional context for the action.
     """
-    message = "[%4s] %s: start date: [%s] dg/tag/suffix/typid: [%d]/[%s]/[%s]/[%d]"
+    message = "[%4s] %s: start date: [%s] dg/tag/suffix/typid/gameid: [%d]/[%s]/[%s]/[%d]/[%d]"
     args: tuple = (
         sport_obj.name,
         action,
@@ -145,6 +146,7 @@ def log_draft_group_event(
         tag,
         suffix,
         contest_type_id,
+        game_type_id,
     )
     if reason:
         message += " reason: %s"
@@ -167,6 +169,8 @@ def get_draft_groups_from_response(response: dict, sport_obj: Sport) -> list:
     skipped_dg_suffixes = []
     suffix_patterns = sport_obj.get_suffix_patterns()
     allow_suffixless = sport_obj.allow_suffixless_draft_groups
+    is_nfl_showdown = sport_obj.name == "NFLShowdown"
+    showdown_entries = []
 
     for draft_group in response["DraftGroups"]:
         sport = draft_group["Sport"]
@@ -175,6 +179,8 @@ def get_draft_groups_from_response(response: dict, sport_obj: Sport) -> list:
         draft_group_id = draft_group["DraftGroupId"]
         start_date_est = draft_group["StartDateEst"]
         contest_type_id = draft_group["ContestTypeId"]
+        game_type_id = draft_group["GameTypeId"]
+        game_type = draft_group["GameType"]
 
         if suffix is not None:
             suffix = suffix.strip() or None
@@ -197,6 +203,7 @@ def get_draft_groups_from_response(response: dict, sport_obj: Sport) -> list:
                     tag,
                     suffix,
                     contest_type_id,
+                    game_type_id,
                     level=logging.DEBUG,
                     reason="suffix required",
                 )
@@ -210,6 +217,7 @@ def get_draft_groups_from_response(response: dict, sport_obj: Sport) -> list:
                 tag,
                 suffix,
                 contest_type_id,
+                game_type_id,
             )
             response_draft_groups.append(draft_group_id)
             continue
@@ -230,8 +238,30 @@ def get_draft_groups_from_response(response: dict, sport_obj: Sport) -> list:
                 tag,
                 suffix,
                 contest_type_id,
+                game_type_id,
                 level=logging.DEBUG,
                 reason="suffix mismatch",
+            )
+            continue
+
+        if (
+            sport_obj.contest_restraint_game_type_id is not None
+            and game_type_id != sport_obj.contest_restraint_game_type_id
+        ):
+            log_draft_group_event(
+                "Skip",
+                sport_obj,
+                dt_start_date,
+                draft_group_id,
+                tag,
+                suffix,
+                contest_type_id,
+                game_type_id,
+                level=logging.DEBUG,
+                reason=(
+                    "game type constraint "
+                    f"(!={sport_obj.contest_restraint_game_type_id}, got {game_type_id})"
+                ),
             )
             continue
 
@@ -247,8 +277,16 @@ def get_draft_groups_from_response(response: dict, sport_obj: Sport) -> list:
                 tag,
                 suffix,
                 contest_type_id,
+                game_type_id,
                 level=logging.DEBUG,
                 reason=f"time constraint (<{sport_obj.contest_restraint_time})",
+            )
+            continue
+
+        if is_nfl_showdown:
+            start_key = dt_start_date.replace(second=0, microsecond=0)
+            showdown_entries.append(
+                (start_key, draft_group_id, tag, suffix, contest_type_id, dt_start_date)
             )
             continue
 
@@ -260,6 +298,7 @@ def get_draft_groups_from_response(response: dict, sport_obj: Sport) -> list:
             tag,
             suffix,
             contest_type_id,
+            game_type_id,
         )
         response_draft_groups.append(draft_group_id)
 
@@ -269,6 +308,45 @@ def get_draft_groups_from_response(response: dict, sport_obj: Sport) -> list:
             sport_obj.name,
             ", ".join(skipped_dg_suffixes),
         )
+
+    if is_nfl_showdown and showdown_entries:
+        showdown_counts = {}
+        for start_key, *_ in showdown_entries:
+            showdown_counts[start_key] = showdown_counts.get(start_key, 0) + 1
+
+        for (
+            start_key,
+            draft_group_id,
+            tag,
+            suffix,
+            contest_type_id,
+            dt_start_date,
+        ) in showdown_entries:
+            if showdown_counts[start_key] == 1:
+                log_draft_group_event(
+                    "Append",
+                    sport_obj,
+                    dt_start_date,
+                    draft_group_id,
+                    tag,
+                    suffix,
+                    contest_type_id,
+                    game_type_id,
+                )
+                response_draft_groups.append(draft_group_id)
+            else:
+                log_draft_group_event(
+                    "Skip",
+                    sport_obj,
+                    dt_start_date,
+                    draft_group_id,
+                    tag,
+                    suffix,
+                    contest_type_id,
+                    game_type_id,
+                    level=logging.DEBUG,
+                    reason="multiple NFLShowdown draft groups at same start time",
+                )
 
     return response_draft_groups
 

@@ -21,6 +21,9 @@ class Contest:
         self.attr = contest["attr"]
         self.is_guaranteed = False
         self.is_double_up = False
+        self.is_starred = False
+        self.game_type = contest["gameType"]
+        self.game_type_id = contest["gameTypeId"]
 
         self.start_dt = self.get_dt_from_timestamp(self.start_date)
 
@@ -29,6 +32,9 @@ class Contest:
 
         if "IsGuaranteed" in self.attr:
             self.is_guaranteed = self.attr["IsGuaranteed"]
+
+        if "IsStarred" in self.attr:
+            self.is_starred = self.attr["IsStarred"]
 
     @staticmethod
     def get_dt_from_timestamp(timestamp_str):
