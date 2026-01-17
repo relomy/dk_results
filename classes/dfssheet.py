@@ -5,6 +5,7 @@ import os
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 
+from .sport import get_lineup_range, get_new_lineup_range
 logging.config.fileConfig("logging.ini")
 
 
@@ -14,11 +15,9 @@ class Sheet:
     def __init__(self, logger=None):
         self.logger = logger or logging.getLogger(__name__)
 
-        # authorize class to use sheets API
-        self.service = self.setup_service()
-
         # unique ID for DFS Ownership/Value spreadsheet
         self.spreadsheet_id = os.getenv("SPREADSHEET_ID")
+        self.service = None
 
     def setup_service(self):
         """Sets up the service for the spreadsheet."""
@@ -35,8 +34,13 @@ class Sheet:
 
         return build("sheets", "v4", credentials=credentials, cache_discovery=False)
 
+    def _ensure_service(self):
+        if self.service is None:
+            self.service = self.setup_service()
+
     def find_sheet_id(self, title):
         """Find the spreadsheet ID based on title."""
+        self._ensure_service()
         sheet_metadata = (
             self.service.spreadsheets().get(spreadsheetId=self.spreadsheet_id).execute()
         )
@@ -50,6 +54,7 @@ class Sheet:
 
     def write_values_to_sheet_range(self, values, cell_range):
         """Write a set of values to a column in a spreadsheet."""
+        self._ensure_service()
         body = {"values": values}
         value_input_option = "USER_ENTERED"
         result = (
@@ -69,6 +74,7 @@ class Sheet:
 
     def clear_sheet_range(self, cell_range):
         """Clears (values only) a given cell_range."""
+        self._ensure_service()
         result = (
             self.service.spreadsheets()
             .values()
@@ -91,6 +97,7 @@ class Sheet:
     #     return result.get("values", [])
 
     def get_values_from_range(self, cell_range):
+        self._ensure_service()
         result = (
             self.service.spreadsheets()
             .values()
@@ -111,43 +118,6 @@ class Sheet:
 class DFSSheet(Sheet):
     """Methods and ranges specific to my "DFS" sheet object."""
 
-    LINEUP_RANGES = {
-        "NBA": "J3:V61",
-        "CFB": "J3:O99",
-        "NFL": "J3:V99",
-        "NFLShowdown": "J3:V66",
-        "GOLF": "L8:Z56",
-        "PGAMain": "L8:X56",
-        "PGAWeekend": "L3:Q41",
-        "PGAShowdown": "L3:Q41",
-        "TEN": "J3:V61",
-        "MLB": "J3:V71",
-        "XFL": "J3:V56",
-        "MMA": "J3:V61",
-        "LOL": "J3:V61",
-        "NAS": "J3:V61",
-        "USFL": "J3:V66",
-    }
-
-    NEW_LINEUP_RANGES = {
-        "NBA": "J3:W999",
-        "CFB": "J3:W999",
-        "NFL": "J3:W999",
-        "NFLAfternoon": "J3:W999",
-        "NFLShowdown": "J3:W999",
-        "GOLF": "L8:Z56",
-        "PGAMain": "L8:X56",
-        "PGAWeekend": "L3:Q41",
-        "PGAShowdown": "L3:Q41",
-        "TEN": "J3:W999",
-        "MLB": "J3:Z71",
-        "XFL": "J3:Z56",
-        "MMA": "J3:W999",
-        "LOL": "J3:W999",
-        "NAS": "J3:W999",
-        "USFL": "J3:W999",
-    }
-
     def __init__(self, sport):
         self.sport = sport
 
@@ -161,15 +131,11 @@ class DFSSheet(Sheet):
             self.sport, self.start_col, self.end_col
         )
 
+        self.columns = None
+        self.values = None
+
         # init Sheet (super) class
         super().__init__()
-
-        # get columns from first row
-        self.columns = self.get_values_from_range(
-            "{0}!{1}1:{2}1".format(self.sport, self.start_col, self.end_col)
-        )[0]
-
-        self.values = self.get_values_from_range(self.data_range)
 
         # if self.values:
         #     self.max_rows = len(self.values)
@@ -183,7 +149,7 @@ class DFSSheet(Sheet):
 
     def clear_lineups(self):
         """Clear lineups range of DFSsheet."""
-        lineups_range = self.NEW_LINEUP_RANGES[self.sport]
+        lineups_range = self._resolve_lineup_range(new=True)
         self.clear_sheet_range(f"{self.sport}!{lineups_range}")
 
     def write_players(self, values):
@@ -204,7 +170,7 @@ class DFSSheet(Sheet):
         self.write_values_to_sheet_range(values, cell_range)
 
     def write_lineup_range(self, values):
-        cell_range = f"{self.sport}!{self.LINEUP_RANGES[self.sport]}"
+        cell_range = f"{self.sport}!{self._resolve_lineup_range(new=False)}"
         self.write_values_to_sheet_range(values, cell_range)
 
     def add_last_updated(self, dt_updated):
@@ -274,7 +240,7 @@ class DFSSheet(Sheet):
         return values
 
     def write_vip_lineups(self, vips):
-        cell_range = self.LINEUP_RANGES[self.sport]
+        cell_range = self._resolve_lineup_range(new=False)
         lineup_mod = 5
         # sort VIPs based on name
         vips.sort(key=lambda x: x.name.lower())
@@ -324,7 +290,7 @@ class DFSSheet(Sheet):
         return values
 
     def write_new_vip_lineups(self, vip_lineups):
-        cell_range = self.NEW_LINEUP_RANGES[self.sport]
+        cell_range = self._resolve_lineup_range(new=True)
 
         # sort VIPs based on name
         vip_lineups.sort(key=lambda x: x["user"].lower())
@@ -341,9 +307,27 @@ class DFSSheet(Sheet):
         )
 
     def get_players(self):
+        self._ensure_loaded()
         return [row[self.columns.index("Name")] for row in self.values]
 
     def get_lineup_values(self):
         return self.get_values_from_range(
-            "{0}!{1}".format(self.sport, self.LINEUP_RANGES[self.sport])
+            "{0}!{1}".format(self.sport, self._resolve_lineup_range(new=False))
         )
+
+    def _resolve_lineup_range(self, *, new: bool) -> str:
+        if new:
+            cell_range = get_new_lineup_range(self.sport)
+        else:
+            cell_range = get_lineup_range(self.sport)
+        if not cell_range:
+            raise KeyError(f"Missing lineup range for sport '{self.sport}'")
+        return cell_range
+
+    def _ensure_loaded(self):
+        if self.columns is None:
+            self.columns = self.get_values_from_range(
+                "{0}!{1}1:{2}1".format(self.sport, self.start_col, self.end_col)
+            )[0]
+        if self.values is None:
+            self.values = self.get_values_from_range(self.data_range)
