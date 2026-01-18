@@ -190,6 +190,12 @@ def check_contests_for_completion(conn) -> None:
                         and new_status in COMPLETED_STATUSES
                     ) or (completed == 0 and new_completed == 1)
 
+                    if is_new_live and is_primary_live:
+                        logger.info(
+                            "live transition detected for %s dk_id=%s",
+                            sport_name,
+                            dk_id,
+                        )
                     if (
                         is_new_live
                         and is_primary_live
@@ -199,8 +205,24 @@ def check_contests_for_completion(conn) -> None:
                             f"Contest started: {sport_name} {name} "
                             f"(dk_id={dk_id}) start={start_date} url={_contest_url(dk_id)}"
                         )
+                        logger.info(
+                            "sending live notification for %s dk_id=%s",
+                            sport_name,
+                            dk_id,
+                        )
                         sender.send_message(message)
                         db_insert_notification(conn, dk_id, "live")
+                        logger.info(
+                            "live notification stored for %s dk_id=%s",
+                            sport_name,
+                            dk_id,
+                        )
+                    elif is_new_live and is_primary_live:
+                        logger.info(
+                            "live notification already sent for %s dk_id=%s",
+                            sport_name,
+                            dk_id,
+                        )
 
                     if is_new_completed:
                         if db_has_notification(
@@ -210,8 +232,30 @@ def check_contests_for_completion(conn) -> None:
                                 f"Contest ended: {sport_name} {name} "
                                 f"(dk_id={dk_id}) start={start_date} url={_contest_url(dk_id)}"
                             )
+                            logger.info(
+                                "sending completed notification for %s dk_id=%s",
+                                sport_name,
+                                dk_id,
+                            )
                             sender.send_message(message)
                             db_insert_notification(conn, dk_id, "completed")
+                            logger.info(
+                                "completed notification stored for %s dk_id=%s",
+                                sport_name,
+                                dk_id,
+                            )
+                        elif db_has_notification(conn, dk_id, "completed"):
+                            logger.info(
+                                "completed notification already sent for %s dk_id=%s",
+                                sport_name,
+                                dk_id,
+                            )
+                        elif not db_has_notification(conn, dk_id, "live"):
+                            logger.info(
+                                "skipping completed notification for %s dk_id=%s; live notification missing",
+                                sport_name,
+                                dk_id,
+                            )
             except Exception as error:
                 logger.error(error)
     finally:
