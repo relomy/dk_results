@@ -193,6 +193,27 @@ def get_draft_groups_from_response(response: dict, sport_obj: Sport) -> list:
 
         dt_start_date = datetime.datetime.fromisoformat(start_date_est[:-8])
 
+        if (
+            sport_obj.contest_restraint_game_type_id is not None
+            and game_type_id != sport_obj.contest_restraint_game_type_id
+        ):
+            log_draft_group_event(
+                "Skip",
+                sport_obj,
+                dt_start_date,
+                draft_group_id,
+                tag,
+                suffix,
+                contest_type_id,
+                game_type_id,
+                level=logging.DEBUG,
+                reason=(
+                    "game type constraint "
+                    f"(!={sport_obj.contest_restraint_game_type_id}, got {game_type_id})"
+                ),
+            )
+            continue
+
         if suffix is None:
             if not allow_suffixless:
                 log_draft_group_event(
@@ -245,27 +266,6 @@ def get_draft_groups_from_response(response: dict, sport_obj: Sport) -> list:
             continue
 
         if (
-            sport_obj.contest_restraint_game_type_id is not None
-            and game_type_id != sport_obj.contest_restraint_game_type_id
-        ):
-            log_draft_group_event(
-                "Skip",
-                sport_obj,
-                dt_start_date,
-                draft_group_id,
-                tag,
-                suffix,
-                contest_type_id,
-                game_type_id,
-                level=logging.DEBUG,
-                reason=(
-                    "game type constraint "
-                    f"(!={sport_obj.contest_restraint_game_type_id}, got {game_type_id})"
-                ),
-            )
-            continue
-
-        if (
             sport_obj.contest_restraint_time
             and dt_start_date.time() < sport_obj.contest_restraint_time
         ):
@@ -286,7 +286,15 @@ def get_draft_groups_from_response(response: dict, sport_obj: Sport) -> list:
         if is_nfl_showdown:
             start_key = dt_start_date.replace(second=0, microsecond=0)
             showdown_entries.append(
-                (start_key, draft_group_id, tag, suffix, contest_type_id, dt_start_date)
+                (
+                    start_key,
+                    draft_group_id,
+                    tag,
+                    suffix,
+                    contest_type_id,
+                    game_type_id,
+                    dt_start_date,
+                )
             )
             continue
 
@@ -320,6 +328,7 @@ def get_draft_groups_from_response(response: dict, sport_obj: Sport) -> list:
             tag,
             suffix,
             contest_type_id,
+            game_type_id,
             dt_start_date,
         ) in showdown_entries:
             if showdown_counts[start_key] == 1:
