@@ -86,7 +86,7 @@ def db_insert_notification(conn, dk_id: int, event: str) -> None:
 
 
 def _contest_url(dk_id: int) -> str:
-    return f"https://www.draftkings.com/contest/gamecenter/{dk_id}#/"
+    return f"<https://www.draftkings.com/contest/gamecenter/{dk_id}#/>"
 
 
 def check_contests_for_completion(conn) -> None:
