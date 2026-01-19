@@ -349,6 +349,19 @@ class Draftkings:
 
         # Plain CSV
         if ctype == "text/csv":
+            if cdir:
+                os.makedirs(cdir, exist_ok=True)
+                csv_path = os.path.join(
+                    cdir, f"contest-standings-{contest_id}.csv"
+                )
+                try:
+                    with open(csv_path, "wb") as fp:
+                        fp.write(r.content)
+                    self.logger.debug("wrote standings CSV to %s", csv_path)
+                except Exception:
+                    self.logger.warning(
+                        "Failed to write standings CSV to disk.", exc_info=True
+                    )
             if cdf:
                 try:
                     with open(cdf, "wb") as fp:
