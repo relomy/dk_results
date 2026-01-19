@@ -104,7 +104,9 @@ def write_players_to_sheet(
             "rank": vip.rank,
             "pts": vip.pts,
         }
-    player_salary_map = {name: player.salary for name, player in results.players.items()}
+    player_salary_map = {
+        name: player.salary for name, player in results.players.items()
+    }
     vip_lineups = dk.get_vip_lineups(
         dk_id,
         dg,
@@ -231,10 +233,23 @@ def process_sport(
     contest_list = dk.download_contest_rows(
         dk_id, timeout=30, cookies_dump_file=COOKIES_FILE, contest_dir=CONTEST_DIR
     )
+    if not contest_list:
+        logger.warning(
+            "Contest standings download failed or was empty for dk_id=%s; skipping.",
+            dk_id,
+        )
+        return
 
     sheet = DFSSheet(sport_name)
     logger.debug("Creating Results object Results(%s, %s, %s)", sport_name, dk_id, fn)
-    results = Results(sport_obj, dk_id, fn, positions_paid, vips=vips)
+    results = Results(
+        sport_obj,
+        dk_id,
+        fn,
+        positions_paid,
+        standings_rows=contest_list,
+        vips=vips,
+    )
     results.name = name
     results.positions_paid = positions_paid
 
