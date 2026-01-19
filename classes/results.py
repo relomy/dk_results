@@ -1,15 +1,13 @@
 """Create a Results object which contains the results for a given DraftKings contest."""
 
-import copy
 import csv
 import io
 import logging
 import os
-import unicodedata
 from datetime import datetime
 from typing import Type
 
-from .lineup import Lineup
+from .lineup import Lineup, normalize_name, parse_lineup_string
 from .player import Player
 from .sport import Sport
 from .user import User
@@ -26,6 +24,7 @@ class Results:
         positions_paid=None,
         salary_rows: list[list[str]] | None = None,
         standings_rows: list[list[str]] | None = None,
+        vips: list[str] | None = None,
         logger=None,
     ):
         self.logger = logger or logging.getLogger(__name__)
@@ -57,22 +56,12 @@ class Results:
                 f"DKSalaries_{self.sport_obj.sport_name}_{datetime.now():%A}.csv"
             )
 
-        self.parse_salary_csv(salary_csv_fn)
+        if salary_rows is not None:
+            self.parse_salary_rows(salary_rows)
+        else:
+            self.parse_salary_csv(salary_csv_fn)
 
-        self.vips = [
-            "aplewandowski",
-            "FlyntCoal",
-            "Cubbiesftw23",
-            "Mcoleman1902",
-            "cglenn91",
-            "tuck8989",
-            "Notorious",
-            "Bra3105",
-            "ChipotleAddict",
-            "papagates",
-            "EmpireMaker2",
-            "AdamLevitan",
-        ]
+        self.vips = list(vips) if vips else []
         self.vip_list = []  # list of VIPs found in standings CSV
 
         # contest_fn = 'contest-standings-73990354.csv'
@@ -82,7 +71,10 @@ class Results:
         )
 
         # this pulls the DK users and updates the players stats
-        self.parse_contest_standings_csv(contest_fn)
+        if standings_rows is not None:
+            self.parse_contest_standings_rows(standings_rows)
+        else:
+            self.parse_contest_standings_csv(contest_fn)
 
         for vip in self.vip_list:
             self.logger.debug("VIP: %s", vip)
@@ -94,83 +86,37 @@ class Results:
 
     def parse_lineup_string(self, lineup_str):
         """Parse VIP's lineup_str and return list of Players."""
-        player_list = []
-
-        splt = lineup_str.split(" ")
-
-        # list comp for indicies of positions in splt
-        indices = [i for i, pos in enumerate(splt) if pos in self.sport_obj.positions]
-        # list comp for ending indices in splt. for splicing, the second argument is exclusive
-        end_indices = [indices[i] for i in range(1, len(indices))]
-        # append size of splt as last index
-        end_indices.append(len(splt))
-        # self.logger.debug("indices: {}".format(indices))
-        # self.logger.debug("end_indices: {}".format(end_indices))
-        for i, index in enumerate(indices):
-            name_slice = slice(index + 1, end_indices[i])
-            pos_slice = slice(index, index + 1)
-            name = splt[name_slice]
-            position = splt[pos_slice][0]
-
-            if "LOCKED" in name:
-                name = "LOCKED 🔒"
-                player_list.append(Player(name, position, None, 0, None, None))
-            else:
-                # self.logger.debug(name)
-                name = " ".join(name)
-
-                # ensure name doesn't have any weird characters
-                name = self.strip_accents_and_periods(name)
-
-                if name in self.players:
-                    # check if position is different (FLEX, etc.)
-                    if position != self.players[name].pos:
-                        # create copy of local Player to update player's position for the sheet
-                        player_copy = copy.deepcopy(self.players[name])
-                        player_copy.pos = position
-                        player_list.append(player_copy)
-                    else:
-                        player_list.append(self.players[name])
-
-        # sort by DraftKings roster order (RB, RB, WR, WR, etc.), then name
-        sorted_list = sorted(
-            player_list, key=lambda x: (self.sport_obj.positions.index(x.pos), x.name)
-        )
-
-        return sorted_list
-
-    def strip_accents_and_periods(self, name):
-        """Strip accents from a given string and replace with letters without accents."""
-        return "".join(
-            # c.replace(".", "")
-            c
-            for c in unicodedata.normalize("NFD", name)
-            if unicodedata.category(c) != "Mn"
-        )
+        return parse_lineup_string(self.sport_obj, self.players, lineup_str)
 
     def parse_salary_csv(self, filename):
         """Parse CSV containing players and salary information."""
         with open(filename, mode="r") as fp:
             cr = csv.reader(fp, delimiter=",")
-            slate_list = list(cr)
+            self.parse_salary_rows(list(cr))
 
-            for row in slate_list[1:]:  # [1:] to skip header
-                if len(row) < 2:
-                    continue
-                # TODO: might use roster_pos in the future
-                # pos, _, name, _, roster_pos, salary, game_info, team_abbv, appg
-                pos, _, name, _, roster_pos, salary, game_info, team_abbv, _ = row
+    def parse_salary_rows(self, rows: list[list[str]]):
+        """Parse salary rows, including header row at index 0."""
+        for row in rows[1:]:  # [1:] to skip header
+            if len(row) < 2:
+                continue
+            # TODO: might use roster_pos in the future
+            # pos, _, name, _, roster_pos, salary, game_info, team_abbv, appg
+            pos, _, name, _, roster_pos, salary, game_info, team_abbv, _ = row
 
-                # ensure name doesn't have any weird characters
-                name = self.strip_accents_and_periods(name)
+            # ensure name doesn't have any weird characters
+            name = normalize_name(name)
 
-                self.players[name] = Player(
-                    name, pos, roster_pos, salary, game_info, team_abbv
-                )
+            self.players[name] = Player(
+                name, pos, roster_pos, salary, game_info, team_abbv
+            )
 
     def parse_contest_standings_csv(self, filename):
         """Parse CSV containing contest standings and player ownership."""
         standings = self.load_standings(filename)
+        self.parse_contest_standings_rows(standings)
+
+    def parse_contest_standings_rows(self, standings: list[list[str]]):
+        """Parse contest standings rows, including header row at index 0."""
 
         # showdown only
         showdown_captains = {}
@@ -242,7 +188,7 @@ class Results:
                     continue
 
                 name, pos, ownership, fpts = player_stats
-                name = self.strip_accents_and_periods(name)
+                name = normalize_name(name)
 
                 # if 'Jr.' in name:
                 #     name = name.replace('Jr.', 'Jr')

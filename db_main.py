@@ -197,6 +197,7 @@ def process_sport(
     contest_database: ContestDatabase,
     now: datetime.datetime,
     args: argparse.Namespace,
+    vips: list[str],
 ) -> None:
     """
     Process a single sport: download salary, pull contest, update sheet.
@@ -207,6 +208,7 @@ def process_sport(
         contest_database (ContestDatabase): Contest database instance.
         now (datetime.datetime): Current datetime.
         args (argparse.Namespace): Parsed command-line arguments.
+        vips (list[str]): VIP usernames loaded from vips.yaml.
     """
     if sport_name not in choices:
         raise Exception("Could not find matching Sport subclass")
@@ -232,7 +234,7 @@ def process_sport(
 
     sheet = DFSSheet(sport_name)
     logger.debug("Creating Results object Results(%s, %s, %s)", sport_name, dk_id, fn)
-    results = Results(sport_obj, dk_id, fn, positions_paid)
+    results = Results(sport_obj, dk_id, fn, positions_paid, vips=vips)
     results.name = name
     results.positions_paid = positions_paid
 
@@ -298,9 +300,10 @@ def main() -> None:
     parser.add_argument("-v", "--verbose", help="Increase verbosity")
     args = parser.parse_args()
     contest_database = ContestDatabase(DB_FILE)
+    vips = load_vips()
     now = datetime.datetime.now(timezone("US/Eastern"))
     for sport_name in args.sport:
-        process_sport(sport_name, choices, contest_database, now, args)
+        process_sport(sport_name, choices, contest_database, now, args, vips)
 
 
 if __name__ == "__main__":
