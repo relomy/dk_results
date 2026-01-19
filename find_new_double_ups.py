@@ -6,10 +6,10 @@ import logging
 import logging.config
 import sys
 from os import getenv
+from typing import Type
 
 import requests
 from dotenv import load_dotenv
-from type import Type
 
 from bot.webhook import DiscordWebhook as Discord
 from classes.contest import Contest
