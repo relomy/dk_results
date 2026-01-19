@@ -1,5 +1,6 @@
 import copy
 import unicodedata
+from typing import Type
 
 from classes.sport import Sport
 
@@ -9,7 +10,7 @@ from .player import Player
 class Lineup:
     """A representation of a list of Players"""
 
-    def __init__(self, sport_obj: Sport, players, lineup_str):
+    def __init__(self, sport_obj: Sport | Type[Sport], players, lineup_str):
         self.sport_obj = sport_obj
         self.players = players
 

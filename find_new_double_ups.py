@@ -9,6 +9,7 @@ from os import getenv
 
 import requests
 from dotenv import load_dotenv
+from type import Type
 
 from bot.webhook import DiscordWebhook as Discord
 from classes.contest import Contest
@@ -112,7 +113,7 @@ def get_contests_from_response(response: dict | list) -> list:
 
 def log_draft_group_event(
     action: str,
-    sport_obj: Sport,
+    sport_obj: Sport | Type[Sport],
     start_date: datetime.datetime,
     draft_group_id: int,
     tag: str,

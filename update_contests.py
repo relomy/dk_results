@@ -262,7 +262,7 @@ def check_contests_for_completion(conn) -> None:
         contest_db.close()
 
 
-def get_contest_data(dk_id) -> dict:
+def get_contest_data(dk_id) -> dict | None:
     try:
         dk = Draftkings()
         response_json = dk.get_contest_detail(dk_id)

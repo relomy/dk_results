@@ -7,6 +7,7 @@ import logging
 import os
 import unicodedata
 from datetime import datetime
+from typing import Type
 
 from .lineup import Lineup
 from .player import Player
@@ -19,10 +20,12 @@ class Results:
 
     def __init__(
         self,
-        sport_obj: Sport,
+        sport_obj: Sport | Type[Sport],
         contest_id: int,
         salary_csv_fn: str,
         positions_paid=None,
+        salary_rows: list[list[str]] | None = None,
+        standings_rows: list[list[str]] | None = None,
         logger=None,
     ):
         self.logger = logger or logging.getLogger(__name__)

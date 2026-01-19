@@ -1,5 +1,6 @@
 import logging
 import logging.config
+from typing import Type
 
 import pulp as pl
 
@@ -11,7 +12,7 @@ logging.config.fileConfig("logging.ini")
 class Optimizer:
     """Take a sport and list of players and solve for optimal lineup."""
 
-    def __init__(self, sport_obj: Sport, players, logger=None):
+    def __init__(self, sport_obj: Sport | Type[Sport], players, logger=None):
         self.logger = logger or logging.getLogger(__name__)
 
         self.sport_obj = sport_obj
