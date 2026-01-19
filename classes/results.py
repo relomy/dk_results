@@ -92,11 +92,13 @@ class Results:
         """Parse CSV containing players and salary information."""
         with open(filename, mode="r") as fp:
             cr = csv.reader(fp, delimiter=",")
-            self.parse_salary_rows(list(cr))
+            self.parse_salary_rows(cr)
 
-    def parse_salary_rows(self, rows: list[list[str]]):
+    def parse_salary_rows(self, rows):
         """Parse salary rows, including header row at index 0."""
-        for row in rows[1:]:  # [1:] to skip header
+        it = iter(rows)
+        next(it, None)
+        for row in it:
             if len(row) < 2:
                 continue
             # TODO: might use roster_pos in the future
@@ -112,18 +114,22 @@ class Results:
 
     def parse_contest_standings_csv(self, filename):
         """Parse CSV containing contest standings and player ownership."""
-        standings = self.load_standings(filename)
-        self.parse_contest_standings_rows(standings)
+        with open(filename, "rb") as csvfile:
+            lines = io.TextIOWrapper(csvfile, encoding="utf-8", newline="\n")
+            rdr = csv.reader(lines, delimiter=",")
+            self.parse_contest_standings_rows(rdr)
 
-    def parse_contest_standings_rows(self, standings: list[list[str]]):
+    def parse_contest_standings_rows(self, standings):
         """Parse contest standings rows, including header row at index 0."""
+        it = iter(standings)
+        next(it, None)
 
         # showdown only
         showdown_captains = {}
 
         # create a copy of player list
         # player_list = self.players
-        for row in standings[1:]:
+        for row in it:
             # catch empty rows
             if not row:
                 continue

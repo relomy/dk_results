@@ -1,3 +1,5 @@
+import pytest
+
 import classes.results as results_module
 from classes.sport import NFLSport
 
@@ -58,6 +60,23 @@ def test_results_accepts_injected_rows(monkeypatch):
         positions_paid=1,
         salary_rows=_sample_salary_rows(),
         standings_rows=_sample_standings_rows(),
+    )
+
+    assert "Tom Brady" in results.players
+    assert len(results.users) == 2
+
+
+def test_results_accepts_iterable_rows():
+    salary_rows = iter(_sample_salary_rows())
+    standings_rows = iter(_sample_standings_rows())
+
+    results = results_module.Results(
+        NFLSport,
+        contest_id=1,
+        salary_csv_fn="unused.csv",
+        positions_paid=1,
+        salary_rows=salary_rows,
+        standings_rows=standings_rows,
     )
 
     assert "Tom Brady" in results.players
