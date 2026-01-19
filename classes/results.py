@@ -5,7 +5,7 @@ import io
 import logging
 import os
 from datetime import datetime
-from typing import Type
+from typing import Iterable, Type
 
 from .lineup import Lineup, normalize_name, parse_lineup_string
 from .player import Player
@@ -84,21 +84,21 @@ class Results:
         # for k, v in self.players_dict.items():
         #     self.logger.debug("{}: {}".format(k, v))
 
-    def parse_lineup_string(self, lineup_str):
+    def parse_lineup_string(self, lineup_str: str) -> list[Player]:
         """Parse VIP's lineup_str and return list of Players."""
         return parse_lineup_string(self.sport_obj, self.players, lineup_str)
 
-    def parse_salary_csv(self, filename):
+    def parse_salary_csv(self, filename: str) -> None:
         """Parse CSV containing players and salary information."""
         with open(filename, mode="r") as fp:
             cr = csv.reader(fp, delimiter=",")
             self.parse_salary_rows(cr)
 
-    def parse_salary_rows(self, rows):
+    def parse_salary_rows(self, rows: Iterable[list[str]]) -> None:
         """Parse salary rows, including header row at index 0."""
-        it = iter(rows)
-        next(it, None)
-        for row in it:
+        rows_iter = iter(rows)
+        next(rows_iter, None)
+        for row in rows_iter:
             if len(row) < 2:
                 continue
             # TODO: might use roster_pos in the future
@@ -112,24 +112,24 @@ class Results:
                 name, pos, roster_pos, salary, game_info, team_abbv
             )
 
-    def parse_contest_standings_csv(self, filename):
+    def parse_contest_standings_csv(self, filename: str) -> None:
         """Parse CSV containing contest standings and player ownership."""
         with open(filename, "rb") as csvfile:
             lines = io.TextIOWrapper(csvfile, encoding="utf-8", newline="\n")
             rdr = csv.reader(lines, delimiter=",")
             self.parse_contest_standings_rows(rdr)
 
-    def parse_contest_standings_rows(self, standings):
+    def parse_contest_standings_rows(self, standings: Iterable[list[str]]) -> None:
         """Parse contest standings rows, including header row at index 0."""
-        it = iter(standings)
-        next(it, None)
+        standings_iter = iter(standings)
+        next(standings_iter, None)
 
         # showdown only
         showdown_captains = {}
 
         # create a copy of player list
         # player_list = self.players
-        for row in it:
+        for row in standings_iter:
             # catch empty rows
             if not row:
                 continue
@@ -232,7 +232,9 @@ class Results:
             for cpt in top_ten_cpts:
                 self.get_showdown_captain_percent(cpt, showdown_captains)
 
-    def add_player_to_dict(self, player, dictionary):
+    def add_player_to_dict(
+        self, player: Player, dictionary: dict[str, int]
+    ) -> dict[str, int]:
         if player.name not in dictionary:
             dictionary[player.name] = 0
 
@@ -241,15 +243,9 @@ class Results:
 
         return dictionary
 
-    # def add_to_showdown_dict(self, player):
-    #     if player.name not in self.showdown_captains:
-    #         # initialize player count to 1
-    #         self.showdown_captains[player.name] = 1
-
-    #     # add players
-    #     self.showdown_captains[player.name] += 1
-
-    def get_showdown_captain_percent(self, player, showdown_captains):
+    def get_showdown_captain_percent(
+        self, player: str, showdown_captains: dict[str, int]
+    ) -> None:
         percent = 0.0
         num_users = len(self.users)
         percent = float(showdown_captains[player] / num_users) * 100
@@ -259,14 +255,14 @@ class Results:
             )
         )
 
-    def load_standings(self, filename):
+    def load_standings(self, filename: str) -> list[list[str]]:
         """Load standings CSV and return list."""
         with open(filename, "rb") as csvfile:
             lines = io.TextIOWrapper(csvfile, encoding="utf-8", newline="\n")
             rdr = csv.reader(lines, delimiter=",")
             return list(rdr)
 
-    def players_to_values(self, sport):
+    def players_to_values(self, sport: str) -> list[list]:
         """Return list for DFSSheet values."""
         # sort players by ownership
         sorted_players = sorted(
@@ -281,5 +277,5 @@ class Results:
             if self.players[p].ownership > 0
         ]
 
-    def get_players(self):
+    def get_players(self) -> dict[str, Player]:
         return self.players
