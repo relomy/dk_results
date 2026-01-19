@@ -2,6 +2,7 @@
 
 import logging
 import logging.config
+from dataclasses import dataclass, field
 
 from .lineup import Lineup
 
@@ -9,22 +10,21 @@ from .lineup import Lineup
 logging.config.fileConfig("logging.ini")
 
 
+@dataclass
 class User:
     """Create a User object to represent a DraftKings user."""
 
-    def __init__(self, rank, player_id, name, pmr, pts, lineup_str):
-        self.rank = rank
-        self.player_id = player_id
-        self.name = name
-        self.pmr = pmr
-        self.pts = pts
-        self.lineup_str = lineup_str
+    rank: int | None
+    player_id: str
+    name: str
+    pmr: str
+    pts: float | None
+    lineup_str: str
+    lineup: list = field(default_factory=list)
+    lineupobj: Lineup | None = None
+    salary: int = 50000
 
-        self.lineup = []
-        self.lineupobj = None
-        self.salary = 50000
-
-        # self.lineup = lineup_str.split()
+    # self.lineup = lineup_str.split()
 
     def set_lineup(self, lineup):
         """Set lineup for User object."""

@@ -2,13 +2,34 @@
 
 import datetime
 import re
+from dataclasses import dataclass, field
 
 
+@dataclass
 class Contest:
     """Object representing a DraftKings contest from json."""
 
-    def __init__(self, contest, sport):
-        self.sport = sport
+    contest: dict = field(repr=False)
+    sport: str
+    start_date: str = field(init=False)
+    name: str = field(init=False)
+    id: int = field(init=False)
+    draft_group: int = field(init=False)
+    total_prizes: int = field(init=False)
+    entries: int = field(init=False)
+    entry_fee: int = field(init=False)
+    entry_count: int = field(init=False)
+    max_entry_count: int = field(init=False)
+    attr: dict = field(init=False, repr=False)
+    is_guaranteed: bool = field(init=False, default=False)
+    is_double_up: bool = field(init=False, default=False)
+    is_starred: bool = field(init=False, default=False)
+    game_type: str = field(init=False)
+    game_type_id: int = field(init=False)
+    start_dt: datetime.datetime = field(init=False)
+
+    def __post_init__(self):
+        contest = self.contest
         self.start_date = contest["sd"]
         self.name = contest["n"].strip()
         self.id = contest["id"]
@@ -19,9 +40,6 @@ class Contest:
         self.entry_count = contest["ec"]
         self.max_entry_count = contest["mec"]
         self.attr = contest["attr"]
-        self.is_guaranteed = False
-        self.is_double_up = False
-        self.is_starred = False
         self.game_type = contest["gameType"]
         self.game_type_id = contest["gameTypeId"]
 

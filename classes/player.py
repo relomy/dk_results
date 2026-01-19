@@ -2,43 +2,36 @@
 
 import logging
 import logging.config
+from dataclasses import dataclass, field
 
 # load the logging configuration
 logging.config.fileConfig("logging.ini")
 
 
+@dataclass
 class Player:
     """Create a Player object to represent an athlete for a given sport."""
 
-    def __init__(
-        self,
-        name: str,
-        pos: str,
-        roster_pos: str,
-        salary,
-        game_info: str,
-        team_abbv: str,
-        logger=None,
-    ):
-        self.logger = logger or logging.getLogger(__name__)
+    name: str
+    pos: str
+    roster_pos_raw: str | None
+    roster_pos: list[str] = field(init=False)
+    salary: int
+    game_info: str
+    team_abbv: str
+    logger: logging.Logger | None = field(default=None, repr=False, compare=False)
+    standings_pos: str = ""
+    ownership: float = 0.0
+    fpts: float = 0.0
+    value: float = 0.0
+    matchup_info: str = ""
 
-        self.name = name
-        self.pos = pos
-        self.roster_pos = roster_pos
-        if self.roster_pos:
-            self.roster_pos = self.roster_pos.split("/")
-        self.salary = int(salary)
-        self.game_info = game_info
-        self.team_abbv = team_abbv
-
-        # to be updated - update_stats
-        self.standings_pos = ""
-        self.ownership = 0.0
-        self.fpts = 0.0
-        self.value = 0.0
-
-        # to be updated - get_matchup_info
-        self.matchup_info = ""
+    def __post_init__(self):
+        self.logger = self.logger or logging.getLogger(__name__)
+        self.roster_pos = (
+            self.roster_pos_raw.split("/") if self.roster_pos_raw else []
+        )
+        self.salary = int(self.salary)
 
     def update_stats(self, pos, perc, fpts):
         """Update class variables from contest standings file (contest-standings-nnnnnnnn.csv)."""
