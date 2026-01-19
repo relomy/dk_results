@@ -86,7 +86,9 @@ async def test_contests_unknown_sport(monkeypatch):
 async def test_contests_returns_live_contest(monkeypatch):
     monkeypatch.setattr(discord_bot, "_sport_choices", lambda: {"nba": DummySport})
     monkeypatch.setattr(
-        discord_bot, "_fetch_live_contest", lambda sport_cls: (1, "Contest", None, None, "2024-01-01")
+        discord_bot,
+        "_fetch_live_contest",
+        lambda sport_cls: (1, "Contest", None, None, "2024-01-01"),
     )
 
     ctx = FakeCtx()
@@ -203,12 +205,15 @@ async def test_contests_no_contest_found(monkeypatch):
 @pytest.mark.asyncio
 async def test_on_command_error_unknown_command(monkeypatch):
     ctx = FakeCtx()
+
     # Should ignore CommandNotFound silently.
     async def _dummy(ctx):
         return None
 
     dummy_command = commands.Command(_dummy, name="fake")
-    await discord_bot.on_command_error(ctx, commands.CommandNotFound(f"Command {dummy_command} not found"))
+    await discord_bot.on_command_error(
+        ctx, commands.CommandNotFound(f"Command {dummy_command} not found")
+    )
     assert ctx.sent == []
 
 
@@ -227,7 +232,9 @@ def test_main_requires_token(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_help_lists_commands(monkeypatch):
-    monkeypatch.setattr(discord_bot, "_sport_choices", lambda: {"nba": DummySport, "nfl": DummySportTwo})
+    monkeypatch.setattr(
+        discord_bot, "_sport_choices", lambda: {"nba": DummySport, "nfl": DummySportTwo}
+    )
 
     ctx = FakeCtx()
     await discord_bot.help_command(ctx)
@@ -244,7 +251,9 @@ async def test_help_lists_commands(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_sports_lists_supported(monkeypatch):
-    monkeypatch.setattr(discord_bot, "_sport_choices", lambda: {"nba": DummySport, "nfl": DummySportTwo})
+    monkeypatch.setattr(
+        discord_bot, "_sport_choices", lambda: {"nba": DummySport, "nfl": DummySportTwo}
+    )
     ctx = FakeCtx()
     await discord_bot.sports(ctx)
     assert ctx.sent == ["Supported sports: NBA, NFL"]

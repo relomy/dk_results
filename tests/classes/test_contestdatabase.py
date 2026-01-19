@@ -89,7 +89,9 @@ def test_get_live_contest_is_deterministic_on_ties(contest_db):
         dk_id=5,
         entry_fee=20,
         entries=100,
-        start_date=(base_time - datetime.timedelta(hours=1)).strftime("%Y-%m-%d %H:%M:%S"),
+        start_date=(base_time - datetime.timedelta(hours=1)).strftime(
+            "%Y-%m-%d %H:%M:%S"
+        ),
     )
     _insert_contest(
         contest_db,
