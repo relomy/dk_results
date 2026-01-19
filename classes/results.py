@@ -279,8 +279,7 @@ class Results:
 
     def add_player_to_dict(self, player, dictionary):
         if player.name not in dictionary:
-            # initialize player count to 1
-            dictionary[player.name] = 1
+            dictionary[player.name] = 0
 
         # add players
         dictionary[player.name] += 1
