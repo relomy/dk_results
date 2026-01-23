@@ -1,7 +1,7 @@
 import logging
 import os
 import pickle
-from typing import List, Optional
+from typing import Any, Iterable, Optional
 
 from dotenv import load_dotenv
 from requests.cookies import RequestsCookieJar
@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 PICKLE_FILE = "pickled_cookies_works.txt"
 
 
-def get_rookie_cookies(domains: Optional[List[str]] = None):
+def get_rookie_cookies(domains: Optional[list[str]] = None) -> list[dict[str, Any]]:
     """Get cookies from rookiepy for given domains (defaults to draftkings.com)."""
     if domains is None:
         domains = ["draftkings.com"]
@@ -32,12 +32,12 @@ def get_rookie_cookies(domains: Optional[List[str]] = None):
     return cookies
 
 
-def cookies_to_dict(cookies) -> dict:
+def cookies_to_dict(cookies: Iterable[dict[str, Any]]) -> dict[str, str]:
     """Convert rookiepy cookies to a simple {name: value} dict."""
     return {cookie["name"]: cookie["value"] for cookie in cookies}
 
 
-def cookies_to_jar(cookies) -> RequestsCookieJar:
+def cookies_to_jar(cookies: Iterable[dict[str, Any]]) -> RequestsCookieJar:
     """Convert rookiepy cookies to RequestsCookieJar."""
     jar = RequestsCookieJar()
     for cookie in cookies:
@@ -50,7 +50,9 @@ def cookies_to_jar(cookies) -> RequestsCookieJar:
     return jar
 
 
-def load_cookies_from_pickle(filename: str = PICKLE_FILE):
+def load_cookies_from_pickle(
+    filename: str = PICKLE_FILE,
+) -> RequestsCookieJar | None:
     """Load pickled cookies if file exists."""
     if os.path.exists(filename):
         try:
@@ -61,7 +63,9 @@ def load_cookies_from_pickle(filename: str = PICKLE_FILE):
     return None
 
 
-def save_cookies_to_pickle(cookies, filename: str = PICKLE_FILE):
+def save_cookies_to_pickle(
+    cookies: Iterable[dict[str, Any]], filename: str = PICKLE_FILE
+) -> None:
     """Save cookies to pickle file."""
     try:
         with open(filename, "wb") as f:
@@ -70,7 +74,9 @@ def save_cookies_to_pickle(cookies, filename: str = PICKLE_FILE):
         logger.error(f"Failed to save cookies: {e}")
 
 
-def get_dk_cookies(use_pickle=False, domains=None):
+def get_dk_cookies(
+    use_pickle: bool = False, domains: Optional[list[str]] = None
+) -> tuple[dict[str, str], RequestsCookieJar]:
     """High-level method to get DK cookies (dict + jar), optionally from pickle."""
     cookies = None
     if use_pickle:

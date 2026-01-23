@@ -15,7 +15,9 @@ def normalize_name(name: str) -> str:
 
 
 def parse_lineup_string(
-    sport_obj: Sport | Type[Sport], players, lineup_str: str
+    sport_obj: Sport | Type[Sport],
+    players: dict[str, Player],
+    lineup_str: str,
 ) -> list[Player]:
     """Parse lineup_str and return list of Players."""
     player_list: list[Player] = []
@@ -39,7 +41,7 @@ def parse_lineup_string(
 
         if "LOCKED" in name:
             name = "LOCKED 🔒"
-            player_list.append(Player(name, position, None, 0, None, None))
+            player_list.append(Player(name, position, None, 0, "", ""))
         else:
             # self.logger.debug(name)
             name = " ".join(name)
@@ -69,13 +71,15 @@ def parse_lineup_string(
 class Lineup:
     """A representation of a list of Players"""
 
-    def __init__(self, sport_obj: Sport | Type[Sport], players, lineup_str: str):
+    def __init__(
+        self, sport_obj: Sport | Type[Sport], players: dict[str, Player], lineup_str: str
+    ) -> None:
         self.sport_obj = sport_obj
         self.players = players
 
         self.lineup = parse_lineup_string(self.sport_obj, self.players, lineup_str)
 
-    def __str__(self):
+    def __str__(self) -> str:
         str = ""
 
         for player in self.lineup:

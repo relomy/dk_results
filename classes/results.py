@@ -33,7 +33,8 @@ class Results:
         self.contest_id = contest_id
         self.players = {}  # dict for players found in salary and standings CSV
         self.users = []  # list of Users found in standings CSV
-        self.positions_paid = positions_paid
+        self.positions_paid: int | None = positions_paid
+        self.name: str = ""
 
         self.min_rank = 0
         self.min_cash_pts = 1000.0

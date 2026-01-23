@@ -8,7 +8,9 @@ logging.config.fileConfig("logging.ini")
 
 
 class ContestDatabase:
-    def __init__(self, sqlite3_database: str, logger=None) -> None:
+    def __init__(
+        self, sqlite3_database: str, logger: logging.Logger | None = None
+    ) -> None:
         """
         Initialize ContestDatabase with SQLite database file.
 
@@ -17,7 +19,7 @@ class ContestDatabase:
             logger (logging.Logger, optional): Logger instance.
         """
         self.logger = logger or logging.getLogger(__name__)
-        self.conn = sqlite3.connect(sqlite3_database)
+        self.conn: sqlite3.Connection = sqlite3.connect(sqlite3_database)
 
     def create_table(self) -> None:
         """

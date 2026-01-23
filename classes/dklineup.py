@@ -1,4 +1,5 @@
 import argparse
+from typing import Any
 
 import yaml
 
@@ -9,7 +10,7 @@ from classes.sport import Sport
 
 
 class DkLineup:
-    def __init__(self, dksession: DkSession, dk_id: int, draft_group: int):
+    def __init__(self, dksession: DkSession, dk_id: int, draft_group: int) -> None:
         self.dksession = dksession
         self.dk_id = dk_id
         self.draft_group = draft_group
@@ -28,13 +29,15 @@ class DkLineup:
             # Handle other exceptions as needed
             raise e
 
-    def get_leaderboard(self):
+    def get_leaderboard(self) -> list[dict[str, Any]]:
         response = self.dksession.session.get(
             f"https://api.draftkings.com/scores/v1/leaderboards/{self.dk_id}?format=json&embed=leaderboard"
         )
         return response.json()["leaderBoard"]
 
-    def get_vip_users(self, leaderboard):
+    def get_vip_users(
+        self, leaderboard: list[dict[str, Any]]
+    ) -> list[dict[str, Any]]:
         for user in leaderboard:
             if user["userName"] in self.vips:
                 print()
@@ -42,17 +45,17 @@ class DkLineup:
         found_users = [user for user in leaderboard if user["userName"] in self.vips]
         return found_users
 
-    def get_scorecard_for_user(self, entryKey: int):
+    def get_scorecard_for_user(self, entryKey: int) -> dict[str, Any]:
         response = self.dksession.session.get(
             f"https://api.draftkings.com/scores/v2/entries/{self.draft_group}/{entryKey}?format=json&embed=roster"
         )
         return response.json()
 
-    def get_lineups(self):
+    def get_lineups(self) -> list[dict[str, Any]]:
         leaderboard = self.get_leaderboard()
         vip_users = self.get_vip_users(leaderboard)
 
-        vip_lineups = []
+        vip_lineups: list[dict[str, Any]] = []
         for user in vip_users:
             scorecard = self.get_scorecard_for_user(user["entryKey"])
             userData = scorecard["entries"][0]
@@ -64,7 +67,7 @@ class DkLineup:
             }
             roster = userData["roster"]
 
-            players = []
+            players: list[dict[str, Any]] = []
             default_player = {
                 "pos": "",
                 "name": "LOCKED 🔒",

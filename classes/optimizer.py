@@ -5,6 +5,7 @@ from typing import Type
 import pulp as pl
 
 from .sport import Sport
+from .player import Player
 
 logging.config.fileConfig("logging.ini")
 
@@ -12,7 +13,12 @@ logging.config.fileConfig("logging.ini")
 class Optimizer:
     """Take a sport and list of players and solve for optimal lineup."""
 
-    def __init__(self, sport_obj: Sport | Type[Sport], players, logger=None):
+    def __init__(
+        self,
+        sport_obj: Sport | Type[Sport],
+        players: dict[str, Player],
+        logger: logging.Logger | None = None,
+    ) -> None:
         self.logger = logger or logging.getLogger(__name__)
 
         self.sport_obj = sport_obj
@@ -29,7 +35,7 @@ class Optimizer:
             players["FortyNiners "] = players["49ers "]
             del players["49ers "]
 
-    def get_optimal_lineup(self) -> dict():
+    def get_optimal_lineup(self) -> list[Player] | None:
         selected_players = self.create_decision_variables()
         self.define_objective(selected_players)
         self.define_budget_constraint(selected_players)
@@ -46,8 +52,8 @@ class Optimizer:
     #     return {
     #         player: pl.LpVariable(player, 0, 1, pl.LpInteger) for player in self.players
     #     }
-    def create_decision_variables(self):
-        selected_players = {}
+    def create_decision_variables(self) -> dict[tuple[str, str], pl.LpVariable]:
+        selected_players: dict[tuple[str, str], pl.LpVariable] = {}
         for player in self.players:
             selected_positions = self.players[player].roster_pos
             for pos in selected_positions:
@@ -56,7 +62,9 @@ class Optimizer:
                 )
         return selected_players
 
-    def define_budget_constraint(self, selected_players):
+    def define_budget_constraint(
+        self, selected_players: dict[tuple[str, str], pl.LpVariable]
+    ) -> None:
         budget = 50000
         total_salary = sum(
             self.players[player].salary * selected_players[(player, pos)]
@@ -65,7 +73,9 @@ class Optimizer:
         )
         self.prob += (total_salary <= budget, "Budget Constraint")
 
-    def define_player_count_constraint(self, selected_players):
+    def define_player_count_constraint(
+        self, selected_players: dict[tuple[str, str], pl.LpVariable]
+    ) -> None:
         for player in self.players:
             self.prob += (
                 sum(
@@ -76,7 +86,9 @@ class Optimizer:
                 f"Only one position for player {player}",
             )
 
-    def define_objective(self, selected_players):
+    def define_objective(
+        self, selected_players: dict[tuple[str, str], pl.LpVariable]
+    ) -> None:
         self.prob += (
             sum(
                 self.players[player].fpts * selected_players[(player, pos)]
@@ -86,26 +98,32 @@ class Optimizer:
             "Total Points",
         )
 
-    def define_position_constraints(self, selected_players):
+    def define_position_constraints(
+        self, selected_players: dict[tuple[str, str], pl.LpVariable]
+    ) -> None:
         for position in self.sport_obj.positions:
             x = self.create_position_constraint(selected_players, position)
             self.prob += x
 
-    def create_position_constraint(self, selected_players, position):
-        count = sum(
+    def create_position_constraint(
+        self, selected_players: dict[tuple[str, str], pl.LpVariable], position: str
+    ) -> pl.LpConstraint:
+        count = pl.lpSum(
             selected_players[(player, position)]  # use tuple as the key
             for player in self.players
             if position in self.players[player].roster_pos
         )
         return count == self.sport_obj.positions.count(position)
 
-    def solve_problem(self):
+    def solve_problem(self) -> None:
         pl.GLPK(msg=1).solve(self.prob)
 
-    def extract_optimal_lineup(self, selected_players):
-        optimal_players = []
+    def extract_optimal_lineup(
+        self, selected_players: dict[tuple[str, str], pl.LpVariable]
+    ) -> list[Player] | None:
+        optimal_players: list[Player] = []
         if self.prob.status == 1:
-            total_points = 0
+            total_points = 0.0
             total_salary = 0
             for player, var in selected_players.items():
                 if var.value() == 1:

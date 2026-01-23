@@ -6,7 +6,7 @@ import logging
 import logging.config
 import sys
 from os import getenv
-from typing import Type
+from typing import Optional, Type
 
 import requests
 from dotenv import load_dotenv
@@ -53,7 +53,9 @@ HEADERS = {
 }
 
 
-def send_discord_notification(bot: Discord, sport_name: str, message: str) -> None:
+def send_discord_notification(
+    bot: Discord | None, sport_name: str, message: str
+) -> None:
     """
     Send a notification message to Discord for a specific sport.
 
@@ -68,7 +70,7 @@ def send_discord_notification(bot: Discord, sport_name: str, message: str) -> No
     bot.send_message(f"{emoji} {message} {role}")
 
 
-def get_dk_lobby(sport: Sport, url: str) -> tuple[list, list]:
+def get_dk_lobby(sport: Type[Sport], url: str) -> tuple[list, list]:
     """
     Get contests and draft groups from the DraftKings lobby.
 
@@ -155,7 +157,7 @@ def log_draft_group_event(
     logger.log(level, message, *args)
 
 
-def get_draft_groups_from_response(response: dict, sport_obj: Sport) -> list:
+def get_draft_groups_from_response(response: dict, sport_obj: Type[Sport]) -> list:
     """
     Extract draft group IDs from the DraftKings lobby response.
 
@@ -489,7 +491,9 @@ def get_salary_date(draft_group: dict) -> datetime.date:
 
 
 def is_time_between(
-    begin_time: datetime.time, end_time: datetime.time, check_time: datetime.time = None
+    begin_time: datetime.time,
+    end_time: datetime.time,
+    check_time: Optional[datetime.time] = None,
 ) -> bool:
     """
     Check if a time is between two times.
@@ -503,7 +507,7 @@ def is_time_between(
         bool: True if check_time is between begin_time and end_time.
     """
     # If check time is not given, default to current UTC time
-    check_time = check_time or datetime.datetime.utcnow().time()
+    check_time = check_time or datetime.datetime.now(datetime.timezone.utc).time()
     if begin_time < end_time:
         # return check_time >= begin_time and check_time <= end_time
         return begin_time <= check_time <= end_time
@@ -535,7 +539,7 @@ def format_discord_messages(contests: list["Contest"]) -> str:
     )
 
 
-def parse_args(choices: dict[str, type]) -> argparse.Namespace:
+def parse_args(choices: dict[str, Type[Sport]]) -> argparse.Namespace:
     """
     Parse command-line arguments.
 
@@ -559,7 +563,10 @@ def parse_args(choices: dict[str, type]) -> argparse.Namespace:
 
 
 def process_sport(
-    sport_name: str, choices: dict[str, type], db: ContestDatabase, bot: Discord | None
+    sport_name: str,
+    choices: dict[str, Type[Sport]],
+    db: ContestDatabase,
+    bot: Discord | None,
 ) -> None:
     """
     Process contests for a given sport, compare with database, and send Discord notifications.
@@ -600,8 +607,8 @@ def main() -> None:
 
     Parses arguments, fetches contests, compares with database, and sends notifications.
     """
-    sportz = Sport.__subclasses__()
-    choices = dict({sport.name: sport for sport in sportz})
+    sportz: list[Type[Sport]] = Sport.__subclasses__()
+    choices: dict[str, Type[Sport]] = {sport.name: sport for sport in sportz}
 
     webhook = getenv("DISCORD_WEBHOOK")
     if not webhook:

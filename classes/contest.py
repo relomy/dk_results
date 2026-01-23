@@ -3,13 +3,14 @@
 import datetime
 import re
 from dataclasses import dataclass, field
+from typing import Any
 
 
 @dataclass
 class Contest:
     """Object representing a DraftKings contest from json."""
 
-    contest: dict = field(repr=False)
+    contest: dict[str, Any] = field(repr=False)
     sport: str
     start_date: str = field(init=False)
     name: str = field(init=False)
@@ -20,7 +21,7 @@ class Contest:
     entry_fee: int = field(init=False)
     entry_count: int = field(init=False)
     max_entry_count: int = field(init=False)
-    attr: dict = field(init=False, repr=False)
+    attr: dict[str, Any] = field(init=False, repr=False)
     is_guaranteed: bool = field(init=False, default=False)
     is_double_up: bool = field(init=False, default=False)
     is_starred: bool = field(init=False, default=False)
@@ -28,7 +29,7 @@ class Contest:
     game_type_id: int = field(init=False)
     start_dt: datetime.datetime = field(init=False)
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         contest = self.contest
         self.start_date = contest["sd"]
         self.name = contest["n"].strip()
@@ -55,10 +56,10 @@ class Contest:
             self.is_starred = self.attr["IsStarred"]
 
     @staticmethod
-    def get_dt_from_timestamp(timestamp_str):
+    def get_dt_from_timestamp(timestamp_str: str) -> datetime.datetime:
         """Convert timestamp to datetime object."""
         timestamp = float(re.findall(r"[^\d]*(\d+)[^\d]*", timestamp_str)[0])
         return datetime.datetime.fromtimestamp(timestamp / 1000)
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f"{vars(self)}"

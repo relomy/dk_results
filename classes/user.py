@@ -26,25 +26,25 @@ class User:
 
     # self.lineup = lineup_str.split()
 
-    def set_lineup(self, lineup):
+    def set_lineup(self, lineup: list) -> None:
         """Set lineup for User object."""
         for player in lineup:
             self.salary -= player.salary
 
         self.lineup = lineup
 
-    def set_lineup_obj(self, lineup: Lineup):
+    def set_lineup_obj(self, lineup: Lineup) -> None:
         self.lineupobj = lineup
 
         for player in lineup.lineup:
             self.salary -= player.salary
 
-    def __str__(self):
+    def __str__(self) -> str:
         return "[User]: Name: {} Rank: {} PMR: {} Pts: {} Salary: {} LU: {}".format(
             self.name, self.rank, self.pmr, self.pts, self.salary, self.lineup_str
         )
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return "User({}, {}, {}, {}, {})".format(
             self.name, self.rank, self.pmr, self.pts, self.lineup_str
         )

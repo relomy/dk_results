@@ -2,7 +2,7 @@
 
 import logging
 import logging.config
-from dataclasses import dataclass, field
+from dataclasses import InitVar, dataclass, field
 
 # load the logging configuration
 logging.config.fileConfig("logging.ini")
@@ -15,8 +15,9 @@ class Player:
     name: str
     pos: str
     roster_pos_raw: str | None
+    salary_raw: InitVar[int | str]
     roster_pos: list[str] = field(init=False)
-    salary: int
+    salary: int = field(init=False)
     game_info: str
     team_abbv: str
     logger: logging.Logger | None = field(default=None, repr=False, compare=False)
@@ -26,14 +27,14 @@ class Player:
     value: float = 0.0
     matchup_info: str = ""
 
-    def __post_init__(self):
+    def __post_init__(self, salary_raw: int | str) -> None:
         self.logger = self.logger or logging.getLogger(__name__)
         self.roster_pos = (
             self.roster_pos_raw.split("/") if self.roster_pos_raw else []
         )
-        self.salary = int(self.salary)
+        self.salary = int(salary_raw)
 
-    def update_stats(self, pos, perc, fpts):
+    def update_stats(self, pos: str, perc: str, fpts: str) -> None:
         """Update class variables from contest standings file (contest-standings-nnnnnnnn.csv)."""
         self.standings_pos = pos
         self.ownership = float(perc.replace("%", "")) / 100
@@ -47,7 +48,7 @@ class Player:
 
         self.matchup_info = self.get_matchup_info()
 
-    def get_matchup_info(self):
+    def get_matchup_info(self) -> str:
         """Format matchup_info if there's a home and away team."""
         # wth is this?
         # logger.debug(game_info)
@@ -77,7 +78,7 @@ class Player:
             matchup_info = "at {}".format(home_team)
         return matchup_info
 
-    def __str__(self):
+    def __str__(self) -> str:
         return "[Player] {} {} Sal: ${} - {:.4f} - {} pts Game_Info: {} Team_Abbv: {}".format(
             self.pos,
             self.name,
@@ -88,12 +89,12 @@ class Player:
             self.team_abbv,
         )
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return "Player({}, {}, {}, {}, {})".format(
             self.name, self.pos, self.salary, self.game_info, self.team_abbv
         )
 
-    def writeable(self, sport):
+    def writeable(self, sport: str) -> list:
         if sport in ["PGA", "GOLF"] or "PGA" in sport:
             return [self.pos, self.name, self.salary, self.ownership, self.fpts]
 

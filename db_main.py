@@ -5,6 +5,7 @@ import logging.config
 import os
 import pathlib
 from collections import OrderedDict
+from typing import Any
 
 import yaml
 from pytz import timezone
@@ -21,6 +22,9 @@ from classes.trainfinder import TrainFinder
 logging.config.fileConfig("logging.ini")
 
 logger = logging.getLogger(__name__)
+
+# typing helpers
+SportType = type[Sport]
 
 # Centralized constants
 CONTEST_DIR = "contests"
@@ -94,7 +98,7 @@ def write_players_to_sheet(
         )
         return
 
-    vip_entries = {}
+    vip_entries: dict[str, dict[str, Any] | str] = {}
     for vip in results.vip_list:
         if not vip.name or not vip.player_id:
             continue
@@ -104,10 +108,10 @@ def write_players_to_sheet(
             "rank": vip.rank,
             "pts": vip.pts,
         }
-    player_salary_map = {
+    player_salary_map: dict[str, int] = {
         name: player.salary for name, player in results.players.items()
     }
-    vip_lineups = dk.get_vip_lineups(
+    vip_lineups: list[dict] = dk.get_vip_lineups(
         dk_id,
         dg,
         vips,
@@ -130,14 +134,14 @@ def write_non_cashing_info(sheet: DFSSheet, results: Results) -> None:
     """
     if results.non_cashing_users > 0:
         logger.info("Writing non_cashing info")
-        info = [
+        info: list[list[Any]] = [
             ["Non-Cashing Info", ""],
             ["Users not cashing", results.non_cashing_users],
             ["Avg PMR Remaining", results.non_cashing_avg_pmr],
         ]
         if results.non_cashing_players:
             info.append(["Top 10 Own% Remaining", ""])
-            sorted_non_cashing_players = {
+            sorted_non_cashing_players: dict[str, int] = {
                 k: v
                 for k, v in sorted(
                     results.non_cashing_players.items(),
@@ -171,14 +175,16 @@ def write_train_info(sheet: DFSSheet, results: Results) -> None:
         logger.info(trainfinder.get_total_users_above_salary(SALARY_LIMIT))
         logger.info(f"total scores above salary ${SALARY_LIMIT}")
 
-        trains = trainfinder.get_users_above_salary_spent(SALARY_LIMIT)
+        trains: dict[str, dict[str, Any]] = trainfinder.get_users_above_salary_spent(
+            SALARY_LIMIT
+        )
         delete_keys = [key for key in trains if trains[key]["count"] == 1]
         for key in delete_keys:
             del trains[key]
-        sorted_trains = OrderedDict(
+        sorted_trains: OrderedDict[str, dict[str, Any]] = OrderedDict(
             sorted(trains.items(), key=lambda kv: kv[1]["count"], reverse=True)[:5]
         )
-        info = [
+        info: list[list[Any]] = [
             ["Rank", "Users", "Score", "PMR"],
         ]
         for k, v in sorted_trains.items():
@@ -195,7 +201,7 @@ def write_train_info(sheet: DFSSheet, results: Results) -> None:
 
 def process_sport(
     sport_name: str,
-    choices: dict[str, type],
+    choices: dict[str, SportType],
     contest_database: ContestDatabase,
     now: datetime.datetime,
     args: argparse.Namespace,
@@ -230,7 +236,7 @@ def process_sport(
         logger.info("Downloading salary file (draft_group: %d)", draft_group)
         dk.download_salary_csv(sport_name, draft_group, fn)
 
-    contest_list = dk.download_contest_rows(
+    contest_list: list[list[str]] | None = dk.download_contest_rows(
         dk_id, timeout=30, cookies_dump_file=COOKIES_FILE, contest_dir=CONTEST_DIR
     )
     if not contest_list:
@@ -242,7 +248,7 @@ def process_sport(
 
     sheet = DFSSheet(sport_name)
     logger.debug("Creating Results object Results(%s, %s, %s)", sport_name, dk_id, fn)
-    results = Results(
+    results: Results = Results(
         sport_obj,
         dk_id,
         fn,
@@ -260,9 +266,10 @@ def process_sport(
             p = results.get_players()
             optimizer = Optimizer(sport_obj, p)
             optimized_players = optimizer.get_optimal_lineup()
-            optimized_players.sort(
-                key=lambda x: (sport_obj.positions.index(x.pos), x.name)
-            )
+            if optimized_players:
+                optimized_players.sort(
+                    key=lambda x: (sport_obj.positions.index(x.pos), x.name)
+                )
             if optimized_players:
                 optimized_info = [
                     ["Pos", "Name", "Salary", "Pts", "Value", "Own%"],
@@ -296,8 +303,8 @@ def main() -> None:
     Use database and update Google Sheet with contest standings from DraftKings.
     """
     parser = argparse.ArgumentParser()
-    sportz = Sport.__subclasses__()
-    choices = dict({sport.name: sport for sport in sportz})
+    sportz: list[SportType] = Sport.__subclasses__()
+    choices: dict[str, SportType] = {sport.name: sport for sport in sportz}
     parser.add_argument(
         "-s",
         "--sport",

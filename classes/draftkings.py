@@ -9,7 +9,7 @@ import pickle
 import unicodedata
 import zipfile
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Optional
+from typing import Any, Optional
 
 import requests
 
@@ -66,7 +66,7 @@ class Draftkings:
         dk_id: int,
         timeout: Optional[int] = None,
         session: Optional[requests.Session] = None,  # <-- NEW
-    ) -> dict:
+    ) -> dict[str, Any]:
         """
         Fetch the leaderboard JSON for a contest id (dk_id).
         """
@@ -80,7 +80,9 @@ class Draftkings:
         r.raise_for_status()
         return r.json()
 
-    def get_contest_detail(self, dk_id: int, timeout: Optional[int] = None) -> dict:
+    def get_contest_detail(
+        self, dk_id: int, timeout: Optional[int] = None
+    ) -> dict[str, Any]:
         """
         Fetch contest detail JSON for a given contest id.
         """
@@ -92,7 +94,7 @@ class Draftkings:
 
     def get_lobby_contests(
         self, sport: str, *, live: bool = False, timeout: Optional[int] = None
-    ) -> dict | list:
+    ) -> dict[str, Any] | list[dict[str, Any]]:
         """
         Fetch lobby contests listing for a sport. If live=True, hits the live endpoint.
         Returns the decoded JSON (list or dict depending on DK response shape).
@@ -135,10 +137,10 @@ class Draftkings:
 
     def _fetch_user_lineup_worker(
         self,
-        user_dict: dict,
+        user_dict: dict[str, Any],
         dg: int,
         player_salary_map: dict[str, int] | None = None,
-    ) -> dict | None:
+    ) -> dict[str, Any] | None:
         entry_key = user_dict.get("entryKey")
         if not entry_key:
             return None
@@ -156,7 +158,7 @@ class Draftkings:
             return None
         roster = entries[0].get("roster", {})
         scorecards = roster.get("scorecards", [])
-        players = []
+        players: list[dict[str, Any]] = []
         for sc in scorecards:
             projection = sc.get("projection", {}) or {}
             percent = sc.get("percentDrafted")
@@ -210,10 +212,10 @@ class Draftkings:
         dk_id: int,
         dg: int,
         vips: list[str],
-        vip_entries: dict[str, dict | str] | None = None,
+        vip_entries: dict[str, dict[str, Any] | str] | None = None,
         player_salary_map: dict[str, int] | None = None,
         max_workers: int = 8,
-    ) -> list[dict]:
+    ) -> list[dict[str, Any]]:
         """
         Fetch VIP lineups concurrently and format for sheet usage.
         If vip_entries are provided (mapping user -> entry_key), those entries
@@ -222,7 +224,7 @@ class Draftkings:
         When player_salary_map is provided (name -> salary), the lineup rows include
         a salary/points value derived from that data.
         """
-        users_to_fetch: list[dict] = []
+        users_to_fetch: list[dict[str, Any]] = []
         if vip_entries:
             for vip_name, entry_data in vip_entries.items():
                 if isinstance(entry_data, dict):
@@ -260,7 +262,7 @@ class Draftkings:
             return []
 
         max_workers = min(max_workers, len(users_to_fetch)) or 1
-        vip_lineups: list[dict] = []
+        vip_lineups: list[dict[str, Any]] = []
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             futures = {
                 executor.submit(
@@ -299,7 +301,7 @@ class Draftkings:
         entry_key: str,
         timeout: Optional[int] = None,
         session: Optional[requests.Session] = None,  # <-- NEW
-    ) -> dict:
+    ) -> dict[str, Any]:
         """
         Fetch a single entry (scorecard/roster) JSON by draft group and entry key.
         """
@@ -390,7 +392,7 @@ class Draftkings:
 
         return None
 
-    def download_salary_csv(self, sport, draft_group, filename):
+    def download_salary_csv(self, sport: str, draft_group: int, filename: str) -> None:
         """Given a filename and CSV URL, request download of CSV file and save to filename."""
         contest_types = {
             "GOLF": 9,  # temporary, decide if i want PGA or GOLF

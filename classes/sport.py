@@ -1,6 +1,6 @@
 import re
 from datetime import date, time
-from typing import Optional
+from typing import Iterator, Optional, Type
 
 
 class Sport:
@@ -60,7 +60,7 @@ class Sport:
         return cls._compiled_suffix_patterns
 
 
-def _iter_named_sports():
+def _iter_named_sports() -> Iterator[tuple[str, Type[Sport]]]:
     for sport_cls in Sport.__subclasses__():
         name = getattr(sport_cls, "name", "")
         if isinstance(name, str) and name:

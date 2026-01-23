@@ -1,17 +1,22 @@
 import logging
 import logging.config
+from typing import Any
+
+from .user import User
 
 
 class TrainFinder:
-    def __init__(self, Users, logger=None):
+    def __init__(
+        self, Users: list[User], logger: logging.Logger | None = None
+    ) -> None:
         self.logger = logger or logging.getLogger(__name__)
 
         self.Users = Users
 
-    def get_total_users(self):
+    def get_total_users(self) -> int:
         return len(self.Users)
 
-    def get_total_users_above_salary(self, salary):
+    def get_total_users_above_salary(self, salary: int) -> int:
         count = 0
 
         for user in self.Users:
@@ -20,10 +25,10 @@ class TrainFinder:
 
         return count
 
-    def get_users_above_salary_spent(self, salary):
+    def get_users_above_salary_spent(self, salary: int) -> dict[str, dict[str, Any]]:
         # users { data }
         # data: { pmr pts lineup count }
-        return_users = {}
+        return_users: dict[str, dict[str, Any]] = {}
 
         for user in self.Users:
             if user.salary <= salary:

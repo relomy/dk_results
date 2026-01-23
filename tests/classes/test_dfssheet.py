@@ -1,6 +1,8 @@
 import datetime
 import sys
 import types
+from types import SimpleNamespace
+from typing import Any, cast
 
 import pytest
 
@@ -17,15 +19,15 @@ def _install_google_stubs():
     google_module = types.ModuleType("google")
     google_oauth2 = types.ModuleType("google.oauth2")
     google_service_account = types.ModuleType("google.oauth2.service_account")
-    google_service_account.Credentials = _FakeCredentials
+    cast(Any, google_service_account).Credentials = _FakeCredentials
 
     googleapiclient = types.ModuleType("googleapiclient")
     googleapiclient_discovery = types.ModuleType("googleapiclient.discovery")
-    googleapiclient_discovery.build = lambda *args, **kwargs: None
+    cast(Any, googleapiclient_discovery).build = lambda *args, **kwargs: None
 
-    google_module.oauth2 = google_oauth2
-    google_oauth2.service_account = google_service_account
-    googleapiclient.discovery = googleapiclient_discovery
+    cast(Any, google_module).oauth2 = google_oauth2
+    cast(Any, google_oauth2).service_account = google_service_account
+    cast(Any, googleapiclient).discovery = googleapiclient_discovery
 
     sys.modules.setdefault("google", google_module)
     sys.modules.setdefault("google.oauth2", google_oauth2)
@@ -198,12 +200,13 @@ def test_dfssheet_vip_lineups_non_golf(fake_sheet_service, sheet_classes):
     sheet = DFSSheet("NBA")
     vips = []
     for idx in range(6):
-        vip = type("Vip", (), {})()
-        vip.name = f"user{idx}"
-        vip.pmr = 1.1
-        vip.rank = idx + 1
-        vip.pts = 100.0
-        vip.lineup = [_make_player(name=f"P{idx}", pos="PG")]
+        vip = SimpleNamespace(
+            name=f"user{idx}",
+            pmr=1.1,
+            rank=idx + 1,
+            pts=100.0,
+            lineup=[_make_player(name=f"P{idx}", pos="PG")],
+        )
         vips.append(vip)
 
     sheet.write_vip_lineups(vips)
@@ -214,12 +217,13 @@ def test_dfssheet_vip_lineups_non_golf(fake_sheet_service, sheet_classes):
 def test_dfssheet_vip_lineups_golf(fake_sheet_service, sheet_classes):
     DFSSheet, _ = sheet_classes
     sheet = DFSSheet("GOLF")
-    vip = type("Vip", (), {})()
-    vip.name = "golfer"
-    vip.pmr = 2.2
-    vip.rank = 1
-    vip.pts = 200.0
-    vip.lineup = [_make_player(name="G1", pos="G")]
+    vip = SimpleNamespace(
+        name="golfer",
+        pmr=2.2,
+        rank=1,
+        pts=200.0,
+        lineup=[_make_player(name="G1", pos="G")],
+    )
     sheet.write_vip_lineups([vip])
     recorder = fake_sheet_service[1]
     assert recorder["update"]["range"].startswith("GOLF!")
@@ -291,12 +295,13 @@ def test_dfssheet_write_columns_and_players(fake_sheet_service, sheet_classes):
 def test_dfssheet_build_values_for_vip_lineup(fake_sheet_service, sheet_classes):
     DFSSheet, _ = sheet_classes
     sheet = DFSSheet("NBA")
-    vip = type("Vip", (), {})()
-    vip.name = "vip"
-    vip.pmr = 1.0
-    vip.rank = 2
-    vip.pts = 150.0
-    vip.lineup = [_make_player(name="P1", pos="PG")]
+    vip = SimpleNamespace(
+        name="vip",
+        pmr=1.0,
+        rank=2,
+        pts=150.0,
+        lineup=[_make_player(name="P1", pos="PG")],
+    )
 
     values = sheet.build_values_for_vip_lineup(vip)
     assert values[0][:3] == ["vip", None, "PMR"]

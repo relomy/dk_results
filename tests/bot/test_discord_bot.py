@@ -1,4 +1,5 @@
 import types
+from typing import cast
 
 import pytest
 from discord.ext import commands
@@ -13,6 +14,10 @@ class FakeCtx:
 
     async def send(self, message: str):
         self.sent.append(message)
+
+
+def _ctx(ctx: FakeCtx) -> commands.Context:
+    return cast(commands.Context, ctx)
 
 
 class DummySport:
@@ -34,7 +39,7 @@ async def test_health_reports_bot_and_host_uptime(monkeypatch):
     monkeypatch.setattr(discord_bot, "_system_uptime_seconds", lambda: 200)
 
     ctx = FakeCtx()
-    await discord_bot.health(ctx)
+    await discord_bot.health(_ctx(ctx))
 
     assert ctx.sent == ["alive. bot uptime: 16m 40s. host uptime: 3m 20s"]
 
@@ -67,7 +72,7 @@ async def test_contests_requires_sport(monkeypatch):
     monkeypatch.setattr(discord_bot, "_sport_choices", lambda: {"nba": DummySport})
 
     ctx = FakeCtx()
-    await discord_bot.contests(ctx)
+    await discord_bot.contests(_ctx(ctx))
 
     assert ctx.sent == ["Pick a sport: NBA"]
 
@@ -77,7 +82,7 @@ async def test_contests_unknown_sport(monkeypatch):
     monkeypatch.setattr(discord_bot, "_sport_choices", lambda: {"nba": DummySport})
 
     ctx = FakeCtx()
-    await discord_bot.contests(ctx, "nfl")
+    await discord_bot.contests(_ctx(ctx), "nfl")
 
     assert ctx.sent == ["Unknown sport 'nfl'. Allowed options: NBA"]
 
@@ -92,7 +97,7 @@ async def test_contests_returns_live_contest(monkeypatch):
     )
 
     ctx = FakeCtx()
-    await discord_bot.contests(ctx, "nba")
+    await discord_bot.contests(_ctx(ctx), "nba")
 
     assert ctx.sent == [
         "NBA: dk_id=1, name=Contest, start_date=2024-01-01, url=<https://www.draftkings.com/contest/gamecenter/1#/>"
@@ -125,7 +130,7 @@ async def test_live_lists_all_live_contests(monkeypatch):
     monkeypatch.setattr(discord_bot, "ContestDatabase", FakeContestDatabase)
 
     ctx = FakeCtx()
-    await discord_bot.live(ctx)
+    await discord_bot.live(_ctx(ctx))
 
     assert captured["sports"] == ["NBA", "NFL"]
     assert captured.get("closed") is True
@@ -154,7 +159,7 @@ async def test_live_no_contests(monkeypatch):
     monkeypatch.setattr(discord_bot, "ContestDatabase", FakeContestDatabase)
 
     ctx = FakeCtx()
-    await discord_bot.live(ctx)
+    await discord_bot.live(_ctx(ctx))
 
     assert ctx.sent == ["No live contests found."]
 
@@ -163,7 +168,7 @@ async def test_live_no_contests(monkeypatch):
 async def test_limit_to_channel_allows_when_not_set(monkeypatch):
     monkeypatch.setattr(discord_bot, "ALLOWED_CHANNEL_ID", None)
     ctx = FakeCtx()
-    assert await discord_bot.limit_to_channel(ctx) is True
+    assert await discord_bot.limit_to_channel(_ctx(ctx)) is True
 
 
 @pytest.mark.asyncio
@@ -171,7 +176,7 @@ async def test_limit_to_channel_blocks_other_channels(monkeypatch):
     monkeypatch.setattr(discord_bot, "ALLOWED_CHANNEL_ID", 123)
     ctx = FakeCtx()
     ctx.channel.id = 999
-    assert await discord_bot.limit_to_channel(ctx) is False
+    assert await discord_bot.limit_to_channel(_ctx(ctx)) is False
 
 
 def test_channel_id_from_env_valid(monkeypatch):
@@ -197,7 +202,7 @@ async def test_contests_no_contest_found(monkeypatch):
     monkeypatch.setattr(discord_bot, "_fetch_live_contest", lambda sport_cls: None)
 
     ctx = FakeCtx()
-    await discord_bot.contests(ctx, "nba")
+    await discord_bot.contests(_ctx(ctx), "nba")
 
     assert ctx.sent == ["No live contest found for NBA."]
 
@@ -212,7 +217,7 @@ async def test_on_command_error_unknown_command(monkeypatch):
 
     dummy_command = commands.Command(_dummy, name="fake")
     await discord_bot.on_command_error(
-        ctx, commands.CommandNotFound(f"Command {dummy_command} not found")
+        _ctx(ctx), commands.CommandNotFound(f"Command {dummy_command} not found")
     )
     assert ctx.sent == []
 
@@ -220,7 +225,7 @@ async def test_on_command_error_unknown_command(monkeypatch):
 @pytest.mark.asyncio
 async def test_on_command_error_other_error(monkeypatch):
     ctx = FakeCtx()
-    await discord_bot.on_command_error(ctx, RuntimeError("boom"))
+    await discord_bot.on_command_error(_ctx(ctx), RuntimeError("boom"))
     assert ctx.sent == ["Something went wrong running that command."]
 
 
@@ -237,7 +242,7 @@ async def test_help_lists_commands(monkeypatch):
     )
 
     ctx = FakeCtx()
-    await discord_bot.help_command(ctx)
+    await discord_bot.help_command(_ctx(ctx))
 
     message = ctx.sent[0]
     assert "!sankayadead" in message
@@ -255,7 +260,7 @@ async def test_sports_lists_supported(monkeypatch):
         discord_bot, "_sport_choices", lambda: {"nba": DummySport, "nfl": DummySportTwo}
     )
     ctx = FakeCtx()
-    await discord_bot.sports(ctx)
+    await discord_bot.sports(_ctx(ctx))
     assert ctx.sent == ["Supported sports: NBA, NFL"]
 
 
@@ -287,7 +292,7 @@ async def test_upcoming_lists_next_per_sport(monkeypatch):
     monkeypatch.setattr(discord_bot, "ContestDatabase", FakeContestDatabase)
 
     ctx = FakeCtx()
-    await discord_bot.upcoming(ctx)
+    await discord_bot.upcoming(_ctx(ctx))
 
     assert ctx.sent == [
         "NBA: dk_id=10, name=MatchNBA, start_date=2024-01-02\n"

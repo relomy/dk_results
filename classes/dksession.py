@@ -1,8 +1,10 @@
 import logging
 import logging.config
 import pickle
+from typing import Any
 
 import requests
+from requests.cookies import RequestsCookieJar
 
 from classes.cookieservice import get_dk_cookies
 
@@ -16,10 +18,10 @@ class DkSession:
         _, cookies = get_dk_cookies()
         self.session = self.setup_session(cookies)
 
-    def get_session(self):
+    def get_session(self) -> requests.Session:
         return self.session
 
-    def cj_from_pickle(self, filename):
+    def cj_from_pickle(self, filename: str) -> RequestsCookieJar | bool:
         try:
             with open(filename, "rb") as fp:
                 return pickle.load(fp)
@@ -27,13 +29,13 @@ class DkSession:
             logger.error("File %s not found [%s]", filename, err)
             return False
 
-    def setup_session(self, cookies):
+    def setup_session(self, cookies: RequestsCookieJar) -> requests.Session:
         session = requests.Session()
 
         for cookie in cookies:
             # if the cookies already exists from a legitimate fresh session, clear them out
             if cookie.name in session.cookies:
-                logger.debug("removing %s from 'cookies' -- ", cookie.name, end="")
+                logger.debug("removing %s from 'cookies'", cookie.name)
                 cookies.clear(cookie.domain, cookie.path, cookie.name)
             else:
                 if not cookie.expires:
