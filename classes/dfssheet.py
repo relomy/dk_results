@@ -287,7 +287,7 @@ class DFSSheet(Sheet):
     ) -> list[list[Any]]:
         values = [[user["user"], None, "PMR", user["pmr"], None, None, None, None]]
         values.append(
-            ["Pos", "Name", "Salary", "Own", "Pts", "Value", "RT Proj", "Time", "Stats"]
+            ["Pos", "Name", "Own", "Salary", "Pts", "Value", "RT Proj", "Time", "Stats"]
         )
         for player in players:
             name = player.get("name", "") or ""
