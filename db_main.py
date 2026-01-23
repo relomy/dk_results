@@ -169,10 +169,11 @@ def write_train_info(sheet: DFSSheet, results: Results) -> None:
     """
     if results and results.users:
         trainfinder = TrainFinder(results.users)
-        logger.info("total users:")
-        logger.info(trainfinder.get_total_users())
-        logger.info(f"total users above salary ${SALARY_LIMIT}")
-        logger.info(trainfinder.get_total_users_above_salary(SALARY_LIMIT))
+        logger.info("total users: %d", trainfinder.get_total_users())
+        logger.info(
+            f"total users above salary ${SALARY_LIMIT}: %d",
+            trainfinder.get_total_users_above_salary(SALARY_LIMIT),
+        )
         logger.info(f"total scores above salary ${SALARY_LIMIT}")
 
         trains: dict[str, dict[str, Any]] = trainfinder.get_users_above_salary_spent(

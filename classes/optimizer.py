@@ -4,8 +4,8 @@ from typing import Type
 
 import pulp as pl
 
-from .sport import Sport
 from .player import Player
+from .sport import Sport
 
 logging.config.fileConfig("logging.ini")
 
@@ -47,11 +47,6 @@ class Optimizer:
         return self.extract_optimal_lineup(selected_players)
 
     # Helper methods
-
-    # def create_decision_variables(self):
-    #     return {
-    #         player: pl.LpVariable(player, 0, 1, pl.LpInteger) for player in self.players
-    #     }
     def create_decision_variables(self) -> dict[tuple[str, str], pl.LpVariable]:
         selected_players: dict[tuple[str, str], pl.LpVariable] = {}
         for player in self.players:
@@ -116,7 +111,7 @@ class Optimizer:
         return count == self.sport_obj.positions.count(position)
 
     def solve_problem(self) -> None:
-        pl.GLPK(msg=1).solve(self.prob)
+        pl.GLPK(msg=0).solve(self.prob)
 
     def extract_optimal_lineup(
         self, selected_players: dict[tuple[str, str], pl.LpVariable]
