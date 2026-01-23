@@ -159,6 +159,7 @@ class Draftkings:
         roster = entries[0].get("roster", {})
         scorecards = roster.get("scorecards", [])
         players: list[dict[str, Any]] = []
+        total_salary = 0
         for sc in scorecards:
             projection = sc.get("projection", {}) or {}
             percent = sc.get("percentDrafted")
@@ -166,6 +167,8 @@ class Draftkings:
             display_name = sc.get("displayName", "") or "LOCKED 🔒"
             salary_val = self._lookup_salary(display_name, player_salary_map)
             salary_display = str(salary_val) if salary_val is not None else ""
+            if salary_val is not None:
+                total_salary += salary_val
             pts_raw = sc.get("score", "") or ""
             pts_display = str(pts_raw)
             value = ""
@@ -204,6 +207,7 @@ class Draftkings:
             "pmr": user_dict.get("timeRemaining", ""),
             "rank": user_dict.get("rank", ""),
             "pts": user_dict.get("fantasyPoints", ""),
+            "salary": total_salary,
             "players": players,
         }
 
@@ -353,9 +357,7 @@ class Draftkings:
         if ctype == "text/csv":
             if cdir:
                 os.makedirs(cdir, exist_ok=True)
-                csv_path = os.path.join(
-                    cdir, f"contest-standings-{contest_id}.csv"
-                )
+                csv_path = os.path.join(cdir, f"contest-standings-{contest_id}.csv")
                 try:
                     with open(csv_path, "wb") as fp:
                         fp.write(r.content)

@@ -1,12 +1,13 @@
 import logging
 import logging.config
 import os
-from typing import Any, Iterable
+from typing import Any
 
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 
 from .sport import get_lineup_range, get_new_lineup_range
+
 logging.config.fileConfig("logging.ini")
 
 
@@ -194,7 +195,9 @@ class DFSSheet(Sheet):
         values = [["Last Updated", "", dt_updated.strftime("%Y-%m-%d %H:%M:%S")]]
         self.write_values_to_sheet_range(values, cell_range)
 
-    def add_contest_details(self, contest_name: str, positions_paid: int | None) -> None:
+    def add_contest_details(
+        self, contest_name: str, positions_paid: int | None
+    ) -> None:
         """Update timestamp for sheet."""
         cell_range = f"{self.sport}!X1:Y1"
         values = [[positions_paid, contest_name]]
@@ -283,27 +286,41 @@ class DFSSheet(Sheet):
         self, user: dict[str, Any], players: list[dict[str, Any]]
     ) -> list[list[Any]]:
         values = [[user["user"], None, "PMR", user["pmr"], None, None, None, None]]
-        values.append(["Pos", "Name", "Own", "Pts", "Value", "RT Proj", "Time", "Stats"])
-        for d in players:
-            name = d.get("name", "") or ""
-            value_icon = d.get("valueIcon")
+        values.append(
+            ["Pos", "Name", "Salary", "Own", "Pts", "Value", "RT Proj", "Time", "Stats"]
+        )
+        for player in players:
+            name = player.get("name", "") or ""
+            value_icon = player.get("valueIcon")
             if value_icon == "fire":
                 name += " 🔥"
             elif value_icon == "ice":
                 name += " ❄️"
             values.append(
                 [
-                    d.get("pos", ""),
+                    player.get("pos", ""),
                     name,
-                    d.get("ownership", ""),
-                    d.get("pts", ""),
-                    d.get("value", ""),
-                    d.get("rtProj", ""),
-                    d.get("timeStatus", ""),
-                    d.get("stats", ""),
+                    player.get("ownership", ""),
+                    player.get("salary", ""),
+                    player.get("pts", ""),
+                    player.get("value", ""),
+                    player.get("rtProj", ""),
+                    player.get("timeStatus", ""),
+                    player.get("stats", ""),
                 ]
             )
-        values.append(["rank", user["rank"], None, user["pts"], None, None, None, None])
+        values.append(
+            [
+                "rank",
+                user.get("rank", ""),
+                user.get("salary", ""),
+                user.get("pts", ""),
+                None,
+                None,
+                None,
+                None,
+            ]
+        )
         return values
 
     def write_new_vip_lineups(self, vip_lineups: list[dict[str, Any]]) -> None:
