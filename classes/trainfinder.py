@@ -6,9 +6,7 @@ from .user import User
 
 
 class TrainFinder:
-    def __init__(
-        self, Users: list[User], logger: logging.Logger | None = None
-    ) -> None:
+    def __init__(self, Users: list[User], logger: logging.Logger | None = None) -> None:
         self.logger = logger or logging.getLogger(__name__)
 
         self.Users = Users
@@ -33,7 +31,7 @@ class TrainFinder:
         for user in self.Users:
             if user.salary <= salary:
                 key = f"{user.pts}-{user.pmr}"
-                if not key in return_users:
+                if key not in return_users:
                     return_users[key] = {
                         "pos": 0,
                         "pmr": 0.0,
