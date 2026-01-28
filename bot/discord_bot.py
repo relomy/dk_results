@@ -157,14 +157,9 @@ def _format_contest_row(row: tuple, sport_name: str, sheet_link: str | None) -> 
     dk_id, name, _, _, start_date = row
     # Wrap URL in angle brackets to prevent Discord from embedding a preview.
     url = f"<https://www.draftkings.com/contest/gamecenter/{dk_id}#/>"
-    sheet_part = f"📊 Sheet: {sheet_link}" if sheet_link else "📊 Sheet: n/a"
-    return "\n".join(
-        [
-            f"{_sport_emoji(sport_name)} {sport_name} — {name}",
-            f"• 🕒 {start_date}",
-            f"• 🔗 DK: {url}",
-            f"• {sheet_part}",
-        ]
+    return (
+        f"sport={sport_name}: dk_id={dk_id}, name={name}, "
+        f"start_date={start_date}, url={url}"
     )
 
 
@@ -314,17 +309,9 @@ async def upcoming(ctx: commands.Context):
                 upcoming_match if upcoming_match else upcoming_any
             )
             suffix = "" if upcoming_match else " (failed criteria)"
-            sheet_link = _sheet_link(_sport_sheet_title(sport_cls))
-            sheet_part = f"📊 Sheet: {sheet_link}" if sheet_link else "📊 Sheet: n/a"
             lines.append(
-                "\n".join(
-                    [
-                        f"{_sport_emoji(sport_cls.name)} {sport_cls.name} — {name}",
-                        f"• 🕒 {start_date}{suffix}",
-                        f"• 🔗 DK: <https://www.draftkings.com/contest/gamecenter/{dk_id}#/>",
-                        f"• {sheet_part}",
-                    ]
-                )
+                f"{sport_cls.name}: name={name}, "
+                f"start_date={start_date}{suffix}, url=<https://www.draftkings.com/contest/gamecenter/{dk_id}#/>"
             )
     finally:
         contest_db.close()
