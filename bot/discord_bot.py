@@ -2,7 +2,10 @@ import logging
 import logging.config
 import os
 import time
+from pathlib import Path
 from typing import Optional, Type, TypeAlias
+
+import yaml
 
 import discord  # noqa: E402
 from discord.ext import commands
@@ -17,9 +20,47 @@ COMMAND_PREFIX = "!"
 DB_PATH = os.getenv("CONTESTS_DB_PATH", "contests.db")
 BOT_TOKEN = os.getenv("DISCORD_BOT_TOKEN")
 START_TIME = time.time()
+SPREADSHEET_ID = os.getenv("SPREADSHEET_ID")
+SHEET_GIDS_FILE = os.getenv("SHEET_GIDS_FILE", "sheet_gids.yaml")
 
 
 SportType: TypeAlias = Type[Sport]
+
+
+def _load_sheet_gid_map() -> dict[str, int]:
+    if not SHEET_GIDS_FILE:
+        return {}
+    path = Path(SHEET_GIDS_FILE)
+    if not path.is_file():
+        return {}
+    try:
+        data = yaml.safe_load(path.read_text()) or {}
+    except Exception:
+        logger.warning("Failed to load sheet gid map from %s", path)
+        return {}
+    if not isinstance(data, dict):
+        return {}
+    gids: dict[str, int] = {}
+    for key, value in data.items():
+        if isinstance(key, str) and isinstance(value, int):
+            gids[key] = value
+    return gids
+
+
+SHEET_GID_MAP = _load_sheet_gid_map()
+
+
+def _sheet_link(sheet_title: str) -> str | None:
+    if not SPREADSHEET_ID:
+        return None
+    gid = SHEET_GID_MAP.get(sheet_title)
+    if gid is None:
+        return None
+    return f"<https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}/edit#gid={gid}>"
+
+
+def _sport_sheet_title(sport_cls: SportType) -> str:
+    return getattr(sport_cls, "sheet_name", None) or sport_cls.name
 
 
 def _channel_id_from_env() -> Optional[int]:
@@ -55,11 +96,14 @@ def _allowed_sports_label(choices: dict[str, SportType]) -> str:
     return ", ".join(sorted(names))
 
 
-def _format_contest_row(row: tuple, sport_name: str) -> str:
+def _format_contest_row(row: tuple, sport_name: str, sheet_link: str | None) -> str:
     dk_id, name, _, _, start_date = row
     # Wrap URL in angle brackets to prevent Discord from embedding a preview.
     url = f"<https://www.draftkings.com/contest/gamecenter/{dk_id}#/>"
-    return f"{sport_name}: dk_id={dk_id}, name={name}, start_date={start_date}, url={url}"
+    sheet = f", sheet={sheet_link}" if sheet_link else ""
+    return (
+        f"{sport_name}: dk_id={dk_id}, name={name}, start_date={start_date}, url={url}{sheet}"
+    )
 
 
 def _fetch_live_contest(sport_cls: SportType) -> Optional[tuple]:
@@ -151,7 +195,8 @@ async def contests(ctx: commands.Context, sport: Optional[str] = None):
         await ctx.send(f"No live contest found for {sport_choice.name}.")
         return
 
-    await ctx.send(_format_contest_row(contest, sport_choice.name))
+    sheet_link = _sheet_link(_sport_sheet_title(sport_choice))
+    await ctx.send(_format_contest_row(contest, sport_choice.name, sheet_link))
 
 
 @bot.command(name="live")
@@ -173,8 +218,10 @@ async def live(ctx: commands.Context):
     for dk_id, name, _, _, start_date, sport in rows:
         # Wrap URL in angle brackets to prevent Discord from embedding a preview.
         url = f"<https://www.draftkings.com/contest/gamecenter/{dk_id}#/>"
+        sheet_link = _sheet_link(sport)
+        sheet = f", sheet={sheet_link}" if sheet_link else ""
         lines.append(
-            f"{sport}: dk_id={dk_id}, name={name}, start_date={start_date}, url={url}"
+            f"{sport}: dk_id={dk_id}, name={name}, start_date={start_date}, url={url}{sheet}"
         )
 
     await ctx.send("\n".join(lines))
@@ -198,9 +245,11 @@ async def upcoming(ctx: commands.Context):
                 upcoming_match if upcoming_match else upcoming_any
             )
             suffix = "" if upcoming_match else " (failed criteria)"
+            sheet_link = _sheet_link(_sport_sheet_title(sport_cls))
+            sheet = f", sheet={sheet_link}" if sheet_link else ""
             lines.append(
                 f"{sport_cls.name}: dk_id={dk_id}, name={name}, "
-                f"start_date={start_date}{suffix}"
+                f"start_date={start_date}{suffix}{sheet}"
             )
     finally:
         contest_db.close()
