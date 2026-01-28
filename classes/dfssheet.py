@@ -35,23 +35,6 @@ class Sheet:
         )
 
         return build("sheets", "v4", credentials=credentials, cache_discovery=False)
-
-
-def fetch_sheet_gids(spreadsheet_id: str) -> dict[str, int]:
-    """Return a mapping of sheet title -> gid for the given spreadsheet."""
-    sheet = Sheet()
-    service = sheet.setup_service()
-    sheet_metadata = service.spreadsheets().get(spreadsheetId=spreadsheet_id).execute()
-    sheets = sheet_metadata.get("sheets", [])
-    gids: dict[str, int] = {}
-    for entry in sheets:
-        props = entry.get("properties", {})
-        title = props.get("title")
-        sheet_id = props.get("sheetId")
-        if isinstance(title, str) and isinstance(sheet_id, int):
-            gids[title] = sheet_id
-    return gids
-
     def _ensure_service(self) -> None:
         if self.service is None:
             self.service = self.setup_service()
@@ -383,3 +366,19 @@ class DFSSheet(Sheet):
             )[0]
         if self.values is None:
             self.values = self.get_values_from_range(self.data_range)
+
+
+def fetch_sheet_gids(spreadsheet_id: str) -> dict[str, int]:
+    """Return a mapping of sheet title -> gid for the given spreadsheet."""
+    sheet = Sheet()
+    service = sheet.setup_service()
+    sheet_metadata = service.spreadsheets().get(spreadsheetId=spreadsheet_id).execute()
+    sheets = sheet_metadata.get("sheets", [])
+    gids: dict[str, int] = {}
+    for entry in sheets:
+        props = entry.get("properties", {})
+        title = props.get("title")
+        sheet_id = props.get("sheetId")
+        if isinstance(title, str) and isinstance(sheet_id, int):
+            gids[title] = sheet_id
+    return gids
