@@ -1,3 +1,4 @@
+import datetime
 import logging
 import logging.config
 import os
@@ -188,6 +189,31 @@ def _format_uptime(seconds: float) -> str:
     return " ".join(parts)
 
 
+def _format_time_until(start_date: str) -> str | None:
+    try:
+        start_dt = datetime.datetime.fromisoformat(start_date)
+    except (TypeError, ValueError):
+        return None
+    now = datetime.datetime.now(start_dt.tzinfo)
+    delta = start_dt - now
+    if delta.total_seconds() <= 0:
+        return None
+    seconds = int(delta.total_seconds())
+    minutes, sec = divmod(seconds, 60)
+    hours, minutes = divmod(minutes, 60)
+    days, hours = divmod(hours, 24)
+    parts = []
+    if days:
+        parts.append(f"{days}d")
+    if hours:
+        parts.append(f"{hours}h")
+    if minutes:
+        parts.append(f"{minutes}m")
+    if not parts:
+        parts.append(f"{sec}s")
+    return f"⏳ {''.join(parts)}"
+
+
 def _system_uptime_seconds() -> Optional[float]:
     try:
         with open("/proc/uptime", "r") as f:
@@ -309,9 +335,12 @@ async def upcoming(ctx: commands.Context):
                 upcoming_match if upcoming_match else upcoming_any
             )
             suffix = "" if upcoming_match else " (failed criteria)"
+            relative = _format_time_until(str(start_date))
+            relative_part = f" ({relative})" if relative else ""
             lines.append(
                 f"{sport_cls.name}: name={name}, "
-                f"start_date={start_date}{suffix}, url=<https://www.draftkings.com/contest/gamecenter/{dk_id}#/>"
+                f"start_date={start_date}{relative_part}{suffix}, "
+                f"url=<https://www.draftkings.com/contest/gamecenter/{dk_id}#/>"
             )
     finally:
         contest_db.close()

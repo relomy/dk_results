@@ -125,10 +125,30 @@ def _format_contest_announcement(
     url = _contest_url(dk_id)
     sheet_link = _sheet_link(sport_name)
     sheet_part = f"📊 Sheet: {sheet_link}" if sheet_link else "📊 Sheet: n/a"
+    relative = None
+    start_dt = _parse_start_date(start_date)
+    if start_dt:
+        delta = start_dt - datetime.datetime.now(start_dt.tzinfo)
+        if delta.total_seconds() > 0:
+            seconds = int(delta.total_seconds())
+            minutes, sec = divmod(seconds, 60)
+            hours, minutes = divmod(minutes, 60)
+            days, hours = divmod(hours, 24)
+            parts = []
+            if days:
+                parts.append(f"{days}d")
+            if hours:
+                parts.append(f"{hours}h")
+            if minutes:
+                parts.append(f"{minutes}m")
+            if not parts:
+                parts.append(f"{sec}s")
+            relative = "".join(parts)
+    relative_part = f" (⏳ {relative})" if relative else ""
     return "\n".join(
         [
             f"{prefix}: {_sport_emoji(sport_name)} {sport_name} — {contest_name}",
-            f"• 🕒 {start_date}",
+            f"• 🕒 {start_date}{relative_part}",
             f"• 🔗 DK: {url}",
             f"• {sheet_part}",
         ]
@@ -201,17 +221,17 @@ def check_contests_for_completion(conn) -> None:
     sport_choices = _sport_choices()
 
     try:
-            for (
-                dk_id,
-                draft_group,
-                entries,
+        for (
+            dk_id,
+            draft_group,
+            entries,
             positions_paid,
             status,
             completed,
             name,
             start_date,
-                sport_name,
-            ) in incomplete_contests:
+            sport_name,
+        ) in incomplete_contests:
             start_dt = _parse_start_date(start_date)
             if (
                 sender
