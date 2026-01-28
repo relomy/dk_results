@@ -19,9 +19,16 @@ class _FakeResponse:
 class _FakeSession:
     def __init__(self, response: _FakeResponse):
         self._response = response
+        self.headers = {}
+        self.cookies = _FakeCookies()
 
     def get(self, *_args, **_kwargs):
         return self._response
+
+
+class _FakeCookies:
+    def get_dict(self):
+        return {}
 
 
 def test_download_contest_rows_writes_csv(tmp_path):
@@ -42,3 +49,42 @@ def test_download_contest_rows_writes_csv(tmp_path):
     assert expected_path.exists()
     assert expected_path.read_bytes() == csv_bytes
     assert rows == [["col1", "col2"], ["1", "2"]]
+
+
+def test_fetch_user_lineup_worker_adds_salary_total(monkeypatch):
+    dk = Draftkings(session=_FakeSession(_FakeResponse(content=b"", headers={})))
+
+    def fake_get_entry(_dg, _entry_key, timeout=None, session=None):
+        return {
+            "entries": [
+                {
+                    "roster": {
+                        "scorecards": [
+                            {
+                                "displayName": "Player A",
+                                "rosterPosition": "RB",
+                                "score": "10",
+                                "percentDrafted": 50,
+                                "projection": {},
+                            },
+                            {
+                                "displayName": "Player B",
+                                "rosterPosition": "WR",
+                                "score": "5",
+                                "percentDrafted": 20,
+                                "projection": {},
+                            },
+                        ]
+                    }
+                }
+            ]
+        }
+
+    monkeypatch.setattr(dk, "get_entry", fake_get_entry)
+
+    result = dk._fetch_user_lineup_worker(
+        {"entryKey": "abc", "userName": "vip"}, 1, {"Player A": 4000, "Player B": 3500}
+    )
+
+    assert result is not None
+    assert result["salary"] == 7500

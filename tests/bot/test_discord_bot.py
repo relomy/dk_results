@@ -1,3 +1,4 @@
+import datetime
 import types
 from typing import cast
 
@@ -18,6 +19,15 @@ class FakeCtx:
 
 def _ctx(ctx: FakeCtx) -> commands.Context:
     return cast(commands.Context, ctx)
+
+
+def test_format_time_until_future():
+    now = datetime.datetime.now().replace(microsecond=0)
+    future = now + datetime.timedelta(minutes=13, seconds=30)
+    past = now - datetime.timedelta(minutes=1)
+
+    assert discord_bot._format_time_until(future.isoformat(sep=" ")) == "⏳ 13m"
+    assert discord_bot._format_time_until(past.isoformat(sep=" ")) is None
 
 
 class DummySport:
@@ -93,14 +103,14 @@ async def test_contests_returns_live_contest(monkeypatch):
     monkeypatch.setattr(
         discord_bot,
         "_fetch_live_contest",
-        lambda sport_cls: (1, "Contest", None, None, "2024-01-01"),
+        lambda sport_cls: (1, "Contest", None, None, "2000-01-01"),
     )
 
     ctx = FakeCtx()
     await discord_bot.contests(_ctx(ctx), "nba")
 
     assert ctx.sent == [
-        "NBA: dk_id=1, name=Contest, start_date=2024-01-01, url=<https://www.draftkings.com/contest/gamecenter/1#/>"
+        "sport=NBA: dk_id=1, name=Contest, start_date=2000-01-01, url=<https://www.draftkings.com/contest/gamecenter/1#/>"
     ]
 
 
@@ -120,8 +130,8 @@ async def test_live_lists_all_live_contests(monkeypatch):
         def get_live_contests(self, sports=None, entry_fee=25, keyword="%"):
             captured["sports"] = sports
             return [
-                (1, "ContestA", None, None, "2024-01-01", "NBA"),
-                (2, "ContestB", None, None, "2024-01-02", "NFL"),
+                (1, "ContestA", None, None, "2000-01-01", "NBA"),
+                (2, "ContestB", None, None, "2000-01-02", "NFL"),
             ]
 
         def close(self):
@@ -135,8 +145,14 @@ async def test_live_lists_all_live_contests(monkeypatch):
     assert captured["sports"] == ["NBA", "NFL"]
     assert captured.get("closed") is True
     assert ctx.sent == [
-        "NBA: dk_id=1, name=ContestA, start_date=2024-01-01, url=<https://www.draftkings.com/contest/gamecenter/1#/>\n"
-        "NFL: dk_id=2, name=ContestB, start_date=2024-01-02, url=<https://www.draftkings.com/contest/gamecenter/2#/>"
+        "🏀 NBA — ContestA\n"
+        "• 🕒 2000-01-01\n"
+        "• 🔗 DK: <https://www.draftkings.com/contest/gamecenter/1#/>\n"
+        "• 📊 Sheet: n/a\n"
+        "🏈 NFL — ContestB\n"
+        "• 🕒 2000-01-02\n"
+        "• 🔗 DK: <https://www.draftkings.com/contest/gamecenter/2#/>\n"
+        "• 📊 Sheet: n/a"
     ]
 
 
@@ -276,14 +292,14 @@ async def test_upcoming_lists_next_per_sport(monkeypatch):
 
         def get_next_upcoming_contest_any(self, sport: str):
             if sport == "NBA":
-                return (11, "AnyNBA", None, None, "2024-01-03")
+                return (11, "AnyNBA", None, None, "2000-01-03")
             if sport == "NFL":
-                return (21, "AnyNFL", None, None, "2024-01-04")
+                return (21, "AnyNFL", None, None, "2000-01-04")
             return None
 
         def get_next_upcoming_contest(self, sport: str, entry_fee=25, keyword="%"):
             if sport == "NBA":
-                return (10, "MatchNBA", None, None, "2024-01-02")
+                return (10, "MatchNBA", None, None, "2000-01-02")
             return None
 
         def close(self):
@@ -295,6 +311,6 @@ async def test_upcoming_lists_next_per_sport(monkeypatch):
     await discord_bot.upcoming(_ctx(ctx))
 
     assert ctx.sent == [
-        "NBA: dk_id=10, name=MatchNBA, start_date=2024-01-02\n"
-        "NFL: dk_id=21, name=AnyNFL, start_date=2024-01-04 (failed criteria)"
+        "NBA: name=MatchNBA, start_date=2000-01-02, url=<https://www.draftkings.com/contest/gamecenter/10#/>\n"
+        "NFL: name=AnyNFL, start_date=2000-01-04 (failed criteria), url=<https://www.draftkings.com/contest/gamecenter/21#/>"
     ]

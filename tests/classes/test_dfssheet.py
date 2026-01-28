@@ -326,6 +326,7 @@ def test_dfssheet_build_values_for_new_vip_lineup(fake_sheet_service, sheet_clas
         "Pos",
         "Name",
         "Own",
+        "Salary",
         "Pts",
         "Value",
         "RT Proj",
