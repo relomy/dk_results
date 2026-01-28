@@ -1,12 +1,16 @@
+import datetime
 import logging
 import logging.config
 import os
 import sqlite3
+from pathlib import Path
+from typing import Any
 
 from bot.discord_rest import DiscordRest
 from classes.contestdatabase import ContestDatabase
 from classes.draftkings import Draftkings
 from classes.sport import Sport
+import yaml
 
 # load the logging configuration
 logging.config.fileConfig("logging.ini")
@@ -16,6 +20,30 @@ logger = logging.getLogger(__name__)
 COMPLETED_STATUSES = ["COMPLETED", "CANCELLED"]
 DB_FILE = os.getenv("CONTESTS_DB_PATH", "contests.db")
 DISCORD_NOTIFICATIONS_ENABLED = os.getenv("DISCORD_NOTIFICATIONS_ENABLED", "true")
+SPREADSHEET_ID = os.getenv("SPREADSHEET_ID")
+SHEET_GIDS_FILE = os.getenv("SHEET_GIDS_FILE", "sheet_gids.yaml")
+CONTEST_WARNING_MINUTES = int(os.getenv("CONTEST_WARNING_MINUTES", "15"))
+
+SPORT_EMOJI = {
+    "CFB": "🏈",
+    "GOLF": "⛳",
+    "LOL": "🎮",
+    "MLB": "⚾",
+    "MMA": "🥊",
+    "NAS": "🏎️",
+    "NBA": "🏀",
+    "NFL": "🏈",
+    "NFLAfternoon": "🏈",
+    "NFLShowdown": "🏈",
+    "NHL": "🏒",
+    "PGAMain": "⛳",
+    "PGAShowdown": "⛳",
+    "PGAWeekend": "⛳",
+    "SOC": "⚽",
+    "TEN": "🎾",
+    "USFL": "🏈",
+    "XFL": "🏈",
+}
 
 
 def _is_notifications_enabled() -> bool:
@@ -49,6 +77,62 @@ def _build_discord_sender() -> DiscordRest | None:
         logger.warning("DISCORD_CHANNEL_ID is not a valid integer: %s", channel_id_raw)
         return None
     return DiscordRest(token, channel_id)
+
+
+def _load_sheet_gid_map() -> dict[str, int]:
+    if not SHEET_GIDS_FILE:
+        return {}
+    path = Path(SHEET_GIDS_FILE)
+    if not path.is_file():
+        return {}
+    try:
+        data = yaml.safe_load(path.read_text()) or {}
+    except Exception:
+        logger.warning("Failed to load sheet gid map from %s", path)
+        return {}
+    if not isinstance(data, dict):
+        return {}
+    gids: dict[str, int] = {}
+    for key, value in data.items():
+        if isinstance(key, str) and isinstance(value, int):
+            gids[key] = value
+    return gids
+
+
+SHEET_GID_MAP = _load_sheet_gid_map()
+
+
+def _sheet_link(sheet_title: str) -> str | None:
+    if not SPREADSHEET_ID:
+        return None
+    gid = SHEET_GID_MAP.get(sheet_title)
+    if gid is None:
+        return None
+    return f"<https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}/edit#gid={gid}>"
+
+
+def _sport_emoji(sport_name: str) -> str:
+    return SPORT_EMOJI.get(sport_name, "🏟️")
+
+
+def _format_contest_announcement(
+    prefix: str,
+    sport_name: str,
+    contest_name: str,
+    start_date: str,
+    dk_id: int,
+) -> str:
+    url = _contest_url(dk_id)
+    sheet_link = _sheet_link(sport_name)
+    sheet_part = f"📊 Sheet: {sheet_link}" if sheet_link else "📊 Sheet: n/a"
+    return "\n".join(
+        [
+            f"{prefix}: {_sport_emoji(sport_name)} {sport_name} — {contest_name}",
+            f"• 🕒 {start_date}",
+            f"• 🔗 DK: {url}",
+            f"• {sheet_part}",
+        ]
+    )
 
 
 def create_notifications_table(conn) -> None:
@@ -89,6 +173,17 @@ def _contest_url(dk_id: int) -> str:
     return f"<https://www.draftkings.com/contest/gamecenter/{dk_id}#/>"
 
 
+def _parse_start_date(start_date: Any) -> datetime.datetime | None:
+    if not start_date:
+        return None
+    if isinstance(start_date, datetime.datetime):
+        return start_date
+    try:
+        return datetime.datetime.fromisoformat(str(start_date))
+    except (TypeError, ValueError):
+        return None
+
+
 def check_contests_for_completion(conn) -> None:
     """Check each contest for completion/positions_paid data."""
     create_notifications_table(conn)
@@ -106,17 +201,46 @@ def check_contests_for_completion(conn) -> None:
     sport_choices = _sport_choices()
 
     try:
-        for (
-            dk_id,
-            draft_group,
-            entries,
+            for (
+                dk_id,
+                draft_group,
+                entries,
             positions_paid,
             status,
             completed,
             name,
             start_date,
-            sport_name,
-        ) in incomplete_contests:
+                sport_name,
+            ) in incomplete_contests:
+            start_dt = _parse_start_date(start_date)
+            if (
+                sender
+                and start_dt
+                and datetime.datetime.now() < start_dt
+                and datetime.datetime.now()
+                >= start_dt - datetime.timedelta(minutes=CONTEST_WARNING_MINUTES)
+            ):
+                warning_key = "warning"
+                if not db_has_notification(conn, dk_id, warning_key):
+                    message = _format_contest_announcement(
+                        "Contest starting soon",
+                        sport_name,
+                        name,
+                        str(start_date),
+                        dk_id,
+                    )
+                    logger.info(
+                        "sending warning notification for %s dk_id=%s",
+                        sport_name,
+                        dk_id,
+                    )
+                    sender.send_message(message)
+                    db_insert_notification(conn, dk_id, warning_key)
+                    logger.info(
+                        "warning notification stored for %s dk_id=%s",
+                        sport_name,
+                        dk_id,
+                    )
             if positions_paid is not None and draft_group in skip_draft_groups:
                 logger.debug(
                     "dk_id: {} positions_paid: {}".format(dk_id, positions_paid)
@@ -201,9 +325,12 @@ def check_contests_for_completion(conn) -> None:
                         and is_primary_live
                         and not db_has_notification(conn, dk_id, "live")
                     ):
-                        message = (
-                            f"Contest started: {sport_name} {name} "
-                            f"(dk_id={dk_id}) start={start_date} url={_contest_url(dk_id)}"
+                        message = _format_contest_announcement(
+                            "Contest started",
+                            sport_name,
+                            name,
+                            str(start_date),
+                            dk_id,
                         )
                         logger.info(
                             "sending live notification for %s dk_id=%s",
@@ -228,9 +355,12 @@ def check_contests_for_completion(conn) -> None:
                         if db_has_notification(
                             conn, dk_id, "live"
                         ) and not db_has_notification(conn, dk_id, "completed"):
-                            message = (
-                                f"Contest ended: {sport_name} {name} "
-                                f"(dk_id={dk_id}) start={start_date} url={_contest_url(dk_id)}"
+                            message = _format_contest_announcement(
+                                "Contest ended",
+                                sport_name,
+                                name,
+                                str(start_date),
+                                dk_id,
                             )
                             logger.info(
                                 "sending completed notification for %s dk_id=%s",
