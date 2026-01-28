@@ -21,6 +21,7 @@ BOT_TOKEN = os.getenv("DISCORD_BOT_TOKEN")
 START_TIME = time.time()
 SPREADSHEET_ID = os.getenv("SPREADSHEET_ID")
 SHEET_GIDS_FILE = os.getenv("SHEET_GIDS_FILE", "sheet_gids.yaml")
+DISCORD_LOG_FILE = os.getenv("DISCORD_LOG_FILE")
 
 
 SportType: TypeAlias = Type[Sport]
@@ -54,6 +55,27 @@ def _load_sheet_gid_map() -> dict[str, int]:
 
 SHEET_GID_MAP = _load_sheet_gid_map()
 
+SPORT_EMOJI = {
+    "CFB": "🏈",
+    "GOLF": "⛳",
+    "LOL": "🎮",
+    "MLB": "⚾",
+    "MMA": "🥊",
+    "NAS": "🏎️",
+    "NBA": "🏀",
+    "NFL": "🏈",
+    "NFLAfternoon": "🏈",
+    "NFLShowdown": "🏈",
+    "NHL": "🏒",
+    "PGAMain": "⛳",
+    "PGAShowdown": "⛳",
+    "PGAWeekend": "⛳",
+    "SOC": "⚽",
+    "TEN": "🎾",
+    "USFL": "🏈",
+    "XFL": "🏈",
+}
+
 
 def _sheet_link(sheet_title: str) -> str | None:
     if not SPREADSHEET_ID:
@@ -68,6 +90,34 @@ def _sheet_link(sheet_title: str) -> str | None:
 
 def _sport_sheet_title(sport_cls: SportType) -> str:
     return getattr(sport_cls, "sheet_name", None) or sport_cls.name
+
+
+def _sport_emoji(sport_name: str) -> str:
+    return SPORT_EMOJI.get(sport_name, "🏟️")
+
+
+def _configure_discord_log_file() -> None:
+    log_path = (
+        Path(DISCORD_LOG_FILE)
+        if DISCORD_LOG_FILE
+        else Path(__file__).resolve().parents[1] / "logs" / "discord_bot.log"
+    )
+    try:
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        handler = logging.FileHandler(log_path, mode="a")
+        handler.setLevel(logging.DEBUG)
+        formatter = logging.Formatter(
+            "%(asctime)s %(name)s %(levelname)5s %(message)s", "%Y-%m-%d %H:%M:%S"
+        )
+        handler.setFormatter(formatter)
+        logger.addHandler(handler)
+        logger.propagate = False
+        logger.info("Discord bot file logging initialized at %s", log_path)
+    except Exception:
+        logger.exception("Failed to initialize Discord bot file logging.")
+
+
+_configure_discord_log_file()
 
 
 def _channel_id_from_env() -> Optional[int]:
@@ -107,8 +157,11 @@ def _format_contest_row(row: tuple, sport_name: str, sheet_link: str | None) -> 
     dk_id, name, _, _, start_date = row
     # Wrap URL in angle brackets to prevent Discord from embedding a preview.
     url = f"<https://www.draftkings.com/contest/gamecenter/{dk_id}#/>"
-    sheet = f", sheet={sheet_link}" if sheet_link else ""
-    return f"{sport_name}: dk_id={dk_id}, name={name}, start_date={start_date}, url={url}{sheet}"
+    sheet_part = f"📊 Sheet: {sheet_link}" if sheet_link else "📊 Sheet: n/a"
+    return (
+        f"{_sport_emoji(sport_name)} {sport_name} | 🆔 {dk_id} | 🏟️ {name} | "
+        f"🕒 {start_date} | 🔗 DK: {url} | {sheet_part}"
+    )
 
 
 def _fetch_live_contest(sport_cls: SportType) -> Optional[tuple]:
@@ -224,9 +277,10 @@ async def live(ctx: commands.Context):
         # Wrap URL in angle brackets to prevent Discord from embedding a preview.
         url = f"<https://www.draftkings.com/contest/gamecenter/{dk_id}#/>"
         sheet_link = _sheet_link(sport)
-        sheet = f", sheet={sheet_link}" if sheet_link else ""
+        sheet_part = f"📊 Sheet: {sheet_link}" if sheet_link else "📊 Sheet: n/a"
         lines.append(
-            f"sport={sport}: dk_id={dk_id}, name={name}, start_date={start_date}, url={url}{sheet}"
+            f"{_sport_emoji(sport)} {sport} | 🆔 {dk_id} | 🏟️ {name} | "
+            f"🕒 {start_date} | 🔗 DK: {url} | {sheet_part}"
         )
 
     await ctx.send("\n".join(lines))
@@ -251,10 +305,11 @@ async def upcoming(ctx: commands.Context):
             )
             suffix = "" if upcoming_match else " (failed criteria)"
             sheet_link = _sheet_link(_sport_sheet_title(sport_cls))
-            sheet = f", sheet={sheet_link}" if sheet_link else ""
+            sheet_part = f"📊 Sheet: {sheet_link}" if sheet_link else "📊 Sheet: n/a"
             lines.append(
-                f"{sport_cls.name}: dk_id={dk_id}, name={name}, "
-                f"start_date={start_date}{suffix}{sheet}"
+                f"{_sport_emoji(sport_cls.name)} {sport_cls.name} | 🆔 {dk_id} | 🏟️ {name} | "
+                f"🕒 {start_date}{suffix} | 🔗 DK: <https://www.draftkings.com/contest/gamecenter/{dk_id}#/> | "
+                f"{sheet_part}"
             )
     finally:
         contest_db.close()
