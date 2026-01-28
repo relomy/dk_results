@@ -35,6 +35,7 @@ class Sheet:
         )
 
         return build("sheets", "v4", credentials=credentials, cache_discovery=False)
+
     def _ensure_service(self) -> None:
         if self.service is None:
             self.service = self.setup_service()
@@ -312,9 +313,9 @@ class DFSSheet(Sheet):
             [
                 "rank",
                 user.get("rank", ""),
+                None,
                 user.get("salary", ""),
                 user.get("pts", ""),
-                None,
                 None,
                 None,
                 None,
