@@ -5,9 +5,8 @@ import time
 from pathlib import Path
 from typing import Optional, Type, TypeAlias
 
-import yaml
-
 import discord  # noqa: E402
+import yaml
 from discord.ext import commands
 
 from classes.contestdatabase import ContestDatabase
@@ -29,9 +28,11 @@ SportType: TypeAlias = Type[Sport]
 
 def _load_sheet_gid_map() -> dict[str, int]:
     if not SHEET_GIDS_FILE:
+        logger.info("SHEET_GIDS_FILE not set; sheet links disabled.")
         return {}
     path = Path(SHEET_GIDS_FILE)
     if not path.is_file():
+        logger.info("Sheet gid map not found at %s; sheet links disabled.", path)
         return {}
     try:
         data = yaml.safe_load(path.read_text()) or {}
@@ -39,11 +40,15 @@ def _load_sheet_gid_map() -> dict[str, int]:
         logger.warning("Failed to load sheet gid map from %s", path)
         return {}
     if not isinstance(data, dict):
+        logger.warning("Sheet gid map at %s did not contain a dict.", path)
         return {}
     gids: dict[str, int] = {}
     for key, value in data.items():
         if isinstance(key, str) and isinstance(value, int):
             gids[key] = value
+        else:
+            logger.debug("Skipping invalid gid entry %r -> %r", key, value)
+    logger.info("Loaded %d sheet gid entries from %s", len(gids), path)
     return gids
 
 
@@ -52,9 +57,11 @@ SHEET_GID_MAP = _load_sheet_gid_map()
 
 def _sheet_link(sheet_title: str) -> str | None:
     if not SPREADSHEET_ID:
+        logger.debug("SPREADSHEET_ID not set; cannot build sheet link.")
         return None
     gid = SHEET_GID_MAP.get(sheet_title)
     if gid is None:
+        logger.debug("No gid found for sheet title %s.", sheet_title)
         return None
     return f"<https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}/edit#gid={gid}>"
 
@@ -101,9 +108,7 @@ def _format_contest_row(row: tuple, sport_name: str, sheet_link: str | None) -> 
     # Wrap URL in angle brackets to prevent Discord from embedding a preview.
     url = f"<https://www.draftkings.com/contest/gamecenter/{dk_id}#/>"
     sheet = f", sheet={sheet_link}" if sheet_link else ""
-    return (
-        f"{sport_name}: dk_id={dk_id}, name={name}, start_date={start_date}, url={url}{sheet}"
-    )
+    return f"{sport_name}: dk_id={dk_id}, name={name}, start_date={start_date}, url={url}{sheet}"
 
 
 def _fetch_live_contest(sport_cls: SportType) -> Optional[tuple]:
@@ -221,7 +226,7 @@ async def live(ctx: commands.Context):
         sheet_link = _sheet_link(sport)
         sheet = f", sheet={sheet_link}" if sheet_link else ""
         lines.append(
-            f"{sport}: dk_id={dk_id}, name={name}, start_date={start_date}, url={url}{sheet}"
+            f"sport={sport}: dk_id={dk_id}, name={name}, start_date={start_date}, url={url}{sheet}"
         )
 
     await ctx.send("\n".join(lines))
@@ -264,9 +269,7 @@ async def upcoming(ctx: commands.Context):
 async def health(ctx: commands.Context):
     uptime = _format_uptime(time.time() - START_TIME)
     sys_uptime_sec = _system_uptime_seconds()
-    sys_uptime = (
-        _format_uptime(sys_uptime_sec) if sys_uptime_sec is not None else "n/a"
-    )
+    sys_uptime = _format_uptime(sys_uptime_sec) if sys_uptime_sec is not None else "n/a"
     await ctx.send(f"alive. bot uptime: {uptime}. host uptime: {sys_uptime}")
 
 
