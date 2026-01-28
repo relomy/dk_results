@@ -158,9 +158,13 @@ def _format_contest_row(row: tuple, sport_name: str, sheet_link: str | None) -> 
     # Wrap URL in angle brackets to prevent Discord from embedding a preview.
     url = f"<https://www.draftkings.com/contest/gamecenter/{dk_id}#/>"
     sheet_part = f"📊 Sheet: {sheet_link}" if sheet_link else "📊 Sheet: n/a"
-    return (
-        f"{_sport_emoji(sport_name)} {sport_name} | 🆔 {dk_id} | 🏟️ {name} | "
-        f"🕒 {start_date} | 🔗 DK: {url} | {sheet_part}"
+    return "\n".join(
+        [
+            f"{_sport_emoji(sport_name)} {sport_name} — {name}",
+            f"• 🕒 {start_date}",
+            f"• 🔗 DK: {url}",
+            f"• {sheet_part}",
+        ]
     )
 
 
@@ -279,8 +283,14 @@ async def live(ctx: commands.Context):
         sheet_link = _sheet_link(sport)
         sheet_part = f"📊 Sheet: {sheet_link}" if sheet_link else "📊 Sheet: n/a"
         lines.append(
-            f"{_sport_emoji(sport)} {sport} | 🆔 {dk_id} | 🏟️ {name} | "
-            f"🕒 {start_date} | 🔗 DK: {url} | {sheet_part}"
+            "\n".join(
+                [
+                    f"{_sport_emoji(sport)} {sport} — {name}",
+                    f"• 🕒 {start_date}",
+                    f"• 🔗 DK: {url}",
+                    f"• {sheet_part}",
+                ]
+            )
         )
 
     await ctx.send("\n".join(lines))
@@ -307,9 +317,14 @@ async def upcoming(ctx: commands.Context):
             sheet_link = _sheet_link(_sport_sheet_title(sport_cls))
             sheet_part = f"📊 Sheet: {sheet_link}" if sheet_link else "📊 Sheet: n/a"
             lines.append(
-                f"{_sport_emoji(sport_cls.name)} {sport_cls.name} | 🆔 {dk_id} | 🏟️ {name} | "
-                f"🕒 {start_date}{suffix} | 🔗 DK: <https://www.draftkings.com/contest/gamecenter/{dk_id}#/> | "
-                f"{sheet_part}"
+                "\n".join(
+                    [
+                        f"{_sport_emoji(sport_cls.name)} {sport_cls.name} — {name}",
+                        f"• 🕒 {start_date}{suffix}",
+                        f"• 🔗 DK: <https://www.draftkings.com/contest/gamecenter/{dk_id}#/>",
+                        f"• {sheet_part}",
+                    ]
+                )
             )
     finally:
         contest_db.close()
