@@ -207,6 +207,33 @@ def _parse_start_date(start_date: Any) -> datetime.datetime | None:
 def check_contests_for_completion(conn) -> None:
     """Check each contest for completion/positions_paid data."""
     create_notifications_table(conn)
+    sender = _build_discord_sender()
+
+    if sender:
+        warning_contests = db_get_warning_contests(conn, CONTEST_WARNING_MINUTES)
+        for dk_id, name, start_date, sport_name in warning_contests:
+            warning_key = "warning"
+            if not db_has_notification(conn, dk_id, warning_key):
+                message = _format_contest_announcement(
+                    "Contest starting soon",
+                    sport_name,
+                    name,
+                    str(start_date),
+                    dk_id,
+                )
+                logger.info(
+                    "sending warning notification for %s dk_id=%s",
+                    sport_name,
+                    dk_id,
+                )
+                sender.send_message(message)
+                db_insert_notification(conn, dk_id, warning_key)
+                logger.info(
+                    "warning notification stored for %s dk_id=%s",
+                    sport_name,
+                    dk_id,
+                )
+
     incomplete_contests = db_get_incomplete_contests(conn)
 
     # if there are no incomplete contests, return
@@ -216,7 +243,6 @@ def check_contests_for_completion(conn) -> None:
     logger.debug("found %i incomplete contests", len(incomplete_contests))
 
     skip_draft_groups = []
-    sender = _build_discord_sender()
     contest_db = ContestDatabase(DB_FILE, logger=logger)
     sport_choices = _sport_choices()
 
@@ -232,35 +258,6 @@ def check_contests_for_completion(conn) -> None:
             start_date,
             sport_name,
         ) in incomplete_contests:
-            start_dt = _parse_start_date(start_date)
-            if (
-                sender
-                and start_dt
-                and datetime.datetime.now() < start_dt
-                and datetime.datetime.now()
-                >= start_dt - datetime.timedelta(minutes=CONTEST_WARNING_MINUTES)
-            ):
-                warning_key = "warning"
-                if not db_has_notification(conn, dk_id, warning_key):
-                    message = _format_contest_announcement(
-                        "Contest starting soon",
-                        sport_name,
-                        name,
-                        str(start_date),
-                        dk_id,
-                    )
-                    logger.info(
-                        "sending warning notification for %s dk_id=%s",
-                        sport_name,
-                        dk_id,
-                    )
-                    sender.send_message(message)
-                    db_insert_notification(conn, dk_id, warning_key)
-                    logger.info(
-                        "warning notification stored for %s dk_id=%s",
-                        sport_name,
-                        dk_id,
-                    )
             if positions_paid is not None and draft_group in skip_draft_groups:
                 logger.debug(
                     "dk_id: {} positions_paid: {}".format(dk_id, positions_paid)
@@ -484,6 +481,27 @@ def db_get_incomplete_contests(conn):
         )
 
     return None
+
+
+def db_get_warning_contests(conn, warning_minutes: int) -> list[tuple]:
+    """Get contests starting soon for warning notifications."""
+    cur = conn.cursor()
+    try:
+        sql = (
+            "SELECT dk_id, name, start_date, sport "
+            "FROM contests "
+            "WHERE start_date > datetime('now', 'localtime') "
+            "  AND start_date <= datetime('now', 'localtime', ?) "
+            "  AND (positions_paid IS NULL OR completed = 0)"
+        )
+        cur.execute(sql, (f"+{warning_minutes} minutes",))
+        return cur.fetchall()
+    except sqlite3.Error as err:
+        logger.error(
+            "sqlite error [db_get_warning_contests()]: %s",
+            err.args[0],
+        )
+    return []
 
 
 def main():
