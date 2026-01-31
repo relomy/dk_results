@@ -210,27 +210,43 @@ def check_contests_for_completion(conn) -> None:
     sender = _build_discord_sender()
 
     if sender:
-        warning_contests = db_get_warning_contests(conn, CONTEST_WARNING_MINUTES)
-        for dk_id, name, start_date, sport_name in warning_contests:
+        for sport_cls in _sport_choices().values():
+            upcoming_match = db_get_next_upcoming_contest(
+                conn,
+                sport_cls.name,
+                sport_cls.sheet_min_entry_fee,
+                sport_cls.keyword,
+            )
+            upcoming_any = db_get_next_upcoming_contest_any(conn, sport_cls.name)
+            row = upcoming_match or upcoming_any
+            if not row:
+                continue
+            dk_id, name, _draft_group, _positions_paid, start_date = row
+            start_dt = _parse_start_date(start_date)
+            if not start_dt:
+                continue
+            now = datetime.datetime.now(start_dt.tzinfo)
+            if not (now < start_dt <= now + datetime.timedelta(minutes=CONTEST_WARNING_MINUTES)):
+                continue
             warning_key = "warning"
             if not db_has_notification(conn, dk_id, warning_key):
                 message = _format_contest_announcement(
                     "Contest starting soon",
-                    sport_name,
+                    sport_cls.name,
                     name,
                     str(start_date),
                     dk_id,
                 )
                 logger.info(
                     "sending warning notification for %s dk_id=%s",
-                    sport_name,
+                    sport_cls.name,
                     dk_id,
                 )
                 sender.send_message(message)
                 db_insert_notification(conn, dk_id, warning_key)
                 logger.info(
                     "warning notification stored for %s dk_id=%s",
-                    sport_name,
+                    sport_cls.name,
                     dk_id,
                 )
 
@@ -483,25 +499,56 @@ def db_get_incomplete_contests(conn):
     return None
 
 
-def db_get_warning_contests(conn, warning_minutes: int) -> list[tuple]:
-    """Get contests starting soon for warning notifications."""
+def db_get_next_upcoming_contest(
+    conn, sport: str, entry_fee: int = 25, keyword: str = "%"
+) -> tuple | None:
+    """Get the next upcoming contest matching criteria."""
     cur = conn.cursor()
     try:
         sql = (
-            "SELECT dk_id, name, start_date, sport "
+            "SELECT dk_id, name, draft_group, positions_paid, start_date "
             "FROM contests "
-            "WHERE start_date > datetime('now', 'localtime') "
-            "  AND start_date <= datetime('now', 'localtime', ?) "
-            "  AND (positions_paid IS NULL OR completed = 0)"
+            "WHERE sport=? "
+            "  AND name LIKE ? "
+            "  AND entry_fee >= ? "
+            "  AND start_date > datetime('now', 'localtime') "
+            "  AND completed=0 "
+            "ORDER BY start_date ASC, entry_fee DESC, entries DESC "
+            "LIMIT 1"
         )
-        cur.execute(sql, (f"+{warning_minutes} minutes",))
-        return cur.fetchall()
+        cur.execute(sql, (sport, keyword, entry_fee))
+        row = cur.fetchone()
+        logger.debug("returning %s", row)
+        return row if row else None
     except sqlite3.Error as err:
         logger.error(
-            "sqlite error [db_get_warning_contests()]: %s",
-            err.args[0],
+            "sqlite error in db_get_next_upcoming_contest(): %s", err.args[0]
         )
-    return []
+        return None
+
+
+def db_get_next_upcoming_contest_any(conn, sport: str) -> tuple | None:
+    """Get the next upcoming contest for a sport, regardless of criteria."""
+    cur = conn.cursor()
+    try:
+        sql = (
+            "SELECT dk_id, name, draft_group, positions_paid, start_date "
+            "FROM contests "
+            "WHERE sport=? "
+            "  AND start_date > datetime('now', 'localtime') "
+            "  AND completed=0 "
+            "ORDER BY start_date ASC, entry_fee DESC, entries DESC "
+            "LIMIT 1"
+        )
+        cur.execute(sql, (sport,))
+        row = cur.fetchone()
+        logger.debug("returning %s", row)
+        return row if row else None
+    except sqlite3.Error as err:
+        logger.error(
+            "sqlite error in db_get_next_upcoming_contest_any(): %s", err.args[0]
+        )
+        return None
 
 
 def main():

@@ -50,7 +50,19 @@ def test_warning_notification_sent_for_upcoming_contest(monkeypatch):
     )
     update_contests.create_notifications_table(conn)
 
+    class DummySport:
+        name = "NBA"
+        sheet_min_entry_fee = 25
+        keyword = "%"
+
+    monkeypatch.setattr(
+        update_contests, "_sport_choices", lambda: {"nba": DummySport}
+    )
+
     start_date = (datetime.datetime.now() + datetime.timedelta(minutes=10)).strftime(
+        "%Y-%m-%d %H:%M:%S"
+    )
+    later_start = (datetime.datetime.now() + datetime.timedelta(minutes=12)).strftime(
         "%Y-%m-%d %H:%M:%S"
     )
     conn.execute(
@@ -60,7 +72,16 @@ def test_warning_notification_sent_for_upcoming_contest(monkeypatch):
             positions_paid, entry_fee, entry_count, max_entry_count, completed, status
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
-        (123, "NBA", "Test Contest", start_date, 1, 0, 0, None, 0, 0, 0, 0, None),
+        (123, "NBA", "Test Contest", start_date, 1, 0, 0, None, 25, 0, 0, 0, None),
+    )
+    conn.execute(
+        """
+        INSERT INTO contests (
+            dk_id, sport, name, start_date, draft_group, total_prizes, entries,
+            positions_paid, entry_fee, entry_count, max_entry_count, completed, status
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (124, "NBA", "Later Contest", later_start, 2, 0, 0, None, 25, 0, 0, 0, None),
     )
     conn.commit()
 
@@ -79,4 +100,6 @@ def test_warning_notification_sent_for_upcoming_contest(monkeypatch):
     assert len(sender.messages) == 1
     assert "Contest starting soon" in sender.messages[0]
     assert "NBA" in sender.messages[0]
+    assert "Test Contest" in sender.messages[0]
     assert update_contests.db_has_notification(conn, 123, "warning") is True
+    assert update_contests.db_has_notification(conn, 124, "warning") is False
