@@ -25,6 +25,10 @@ def test_format_contest_announcement_adds_relative_time():
 
     assert "(⏳ 13m)" in msg
     assert "Contest starting soon" in msg
+    assert "🔗 DK: [123]" in msg
+    assert "📊 Sheet: [NBA]" in msg
+
+    print("\n---\n", msg, "\n---\n")
 
 
 def test_warning_notification_sent_for_upcoming_contest(monkeypatch):
@@ -55,9 +59,7 @@ def test_warning_notification_sent_for_upcoming_contest(monkeypatch):
         sheet_min_entry_fee = 25
         keyword = "%"
 
-    monkeypatch.setattr(
-        update_contests, "_sport_choices", lambda: {"nba": DummySport}
-    )
+    monkeypatch.setattr(update_contests, "_sport_choices", lambda: {"nba": DummySport})
 
     start_date = (datetime.datetime.now() + datetime.timedelta(minutes=10)).strftime(
         "%Y-%m-%d %H:%M:%S"

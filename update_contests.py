@@ -6,11 +6,12 @@ import sqlite3
 from pathlib import Path
 from typing import Any
 
+import yaml
+
 from bot.discord_rest import DiscordRest
 from classes.contestdatabase import ContestDatabase
 from classes.draftkings import Draftkings
 from classes.sport import Sport
-import yaml
 
 # load the logging configuration
 logging.config.fileConfig("logging.ini")
@@ -124,7 +125,9 @@ def _format_contest_announcement(
 ) -> str:
     url = _contest_url(dk_id)
     sheet_link = _sheet_link(sport_name)
-    sheet_part = f"📊 Sheet: {sheet_link}" if sheet_link else "📊 Sheet: n/a"
+    sheet_part = (
+        f"📊 Sheet: [{sport_name}]({sheet_link})" if sheet_link else "📊 Sheet: n/a"
+    )
     relative = None
     start_dt = _parse_start_date(start_date)
     if start_dt:
@@ -149,7 +152,7 @@ def _format_contest_announcement(
         [
             f"{prefix}: {_sport_emoji(sport_name)} {sport_name} — {contest_name}",
             f"• 🕒 {start_date}{relative_part}",
-            f"• 🔗 DK: {url}",
+            f"• 🔗 DK: [{dk_id}]({url})",
             f"• {sheet_part}",
         ]
     )
@@ -226,7 +229,11 @@ def check_contests_for_completion(conn) -> None:
             if not start_dt:
                 continue
             now = datetime.datetime.now(start_dt.tzinfo)
-            if not (now < start_dt <= now + datetime.timedelta(minutes=CONTEST_WARNING_MINUTES)):
+            if not (
+                now
+                < start_dt
+                <= now + datetime.timedelta(minutes=CONTEST_WARNING_MINUTES)
+            ):
                 continue
             warning_key = "warning"
             if not db_has_notification(conn, dk_id, warning_key):
@@ -521,9 +528,7 @@ def db_get_next_upcoming_contest(
         logger.debug("returning %s", row)
         return row if row else None
     except sqlite3.Error as err:
-        logger.error(
-            "sqlite error in db_get_next_upcoming_contest(): %s", err.args[0]
-        )
+        logger.error("sqlite error in db_get_next_upcoming_contest(): %s", err.args[0])
         return None
 
 
