@@ -123,8 +123,72 @@ def test_warning_notification_sent_for_upcoming_contest(monkeypatch):
     update_contests.check_contests_for_completion(conn)
 
     assert len(sender.messages) == 1
-    assert "Contest starting soon" in sender.messages[0]
+    assert "Contest starting soon (25m)" in sender.messages[0]
     assert "NBA" in sender.messages[0]
     assert "Test Contest" in sender.messages[0]
-    assert update_contests.db_has_notification(conn, 123, "warning") is True
-    assert update_contests.db_has_notification(conn, 124, "warning") is False
+    assert update_contests.db_has_notification(conn, 123, "warning:25") is True
+    assert update_contests.db_has_notification(conn, 124, "warning:25") is False
+
+
+def test_warning_notifications_sent_for_multiple_thresholds(monkeypatch):
+    conn = sqlite3.connect(":memory:")
+    conn.execute(
+        """
+        CREATE TABLE contests (
+            dk_id INTEGER PRIMARY KEY,
+            sport varchar(10) NOT NULL,
+            name varchar(50) NOT NULL,
+            start_date datetime NOT NULL,
+            draft_group INTEGER NOT NULL,
+            total_prizes INTEGER NOT NULL,
+            entries INTEGER NOT NULL,
+            positions_paid INTEGER,
+            entry_fee INTEGER NOT NULL,
+            entry_count INTEGER NOT NULL,
+            max_entry_count INTEGER NOT NULL,
+            completed INTEGER NOT NULL DEFAULT 0,
+            status TEXT
+        );
+        """
+    )
+    update_contests.create_notifications_table(conn)
+
+    class DummySport:
+        name = "NBA"
+        sheet_min_entry_fee = 25
+        keyword = "%"
+
+    monkeypatch.setattr(update_contests, "_sport_choices", lambda: {"nba": DummySport})
+    monkeypatch.setattr(update_contests, "_warning_schedule_for", lambda _sport: [25, 5])
+
+    start_date = (datetime.datetime.now() + datetime.timedelta(minutes=3)).strftime(
+        "%Y-%m-%d %H:%M:%S"
+    )
+    conn.execute(
+        """
+        INSERT INTO contests (
+            dk_id, sport, name, start_date, draft_group, total_prizes, entries,
+            positions_paid, entry_fee, entry_count, max_entry_count, completed, status
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (123, "NBA", "Test Contest", start_date, 1, 0, 0, None, 25, 0, 0, 0, None),
+    )
+    conn.commit()
+
+    class FakeSender:
+        def __init__(self):
+            self.messages = []
+
+        def send_message(self, message: str) -> None:
+            self.messages.append(message)
+
+    sender = FakeSender()
+    monkeypatch.setattr(update_contests, "_build_discord_sender", lambda: sender)
+
+    update_contests.check_contests_for_completion(conn)
+
+    assert len(sender.messages) == 2
+    assert any("(25m)" in message for message in sender.messages)
+    assert any("(5m)" in message for message in sender.messages)
+    assert update_contests.db_has_notification(conn, 123, "warning:25") is True
+    assert update_contests.db_has_notification(conn, 123, "warning:5") is True

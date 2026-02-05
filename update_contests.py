@@ -289,32 +289,37 @@ def check_contests_for_completion(conn) -> None:
             if not start_dt:
                 continue
             now = datetime.datetime.now(start_dt.tzinfo)
-            if not (
-                now
-                < start_dt
-                <= now + datetime.timedelta(minutes=CONTEST_WARNING_MINUTES)
-            ):
-                continue
-            warning_key = "warning"
-            if not db_has_notification(conn, dk_id, warning_key):
+            # This script runs every 10 minutes via cron, so warnings use windows
+            # rather than requiring an exact timestamp match.
+            schedule = _warning_schedule_for(sport_cls.name)
+            for warning_minutes in schedule:
+                if not (
+                    now < start_dt <= now + datetime.timedelta(minutes=warning_minutes)
+                ):
+                    continue
+                warning_key = f"warning:{warning_minutes}"
+                if db_has_notification(conn, dk_id, warning_key):
+                    continue
                 message = _format_contest_announcement(
-                    "Contest starting soon",
+                    f"Contest starting soon ({warning_minutes}m)",
                     sport_cls.name,
                     name,
                     str(start_date),
                     dk_id,
                 )
                 logger.info(
-                    "sending warning notification for %s dk_id=%s",
+                    "sending warning notification for %s dk_id=%s (%sm)",
                     sport_cls.name,
                     dk_id,
+                    warning_minutes,
                 )
                 sender.send_message(message)
                 db_insert_notification(conn, dk_id, warning_key)
                 logger.info(
-                    "warning notification stored for %s dk_id=%s",
+                    "warning notification stored for %s dk_id=%s (%sm)",
                     sport_cls.name,
                     dk_id,
+                    warning_minutes,
                 )
 
     incomplete_contests = db_get_incomplete_contests(conn)
