@@ -13,7 +13,9 @@ def test_parse_start_date_handles_str_and_datetime():
     assert update_contests._parse_start_date("bad-date") is None
 
 
-def test_format_contest_announcement_adds_relative_time():
+def test_format_contest_announcement_adds_relative_time(monkeypatch):
+    monkeypatch.setattr(update_contests, "SPREADSHEET_ID", "test-sheet")
+    monkeypatch.setattr(update_contests, "SHEET_GID_MAP", {"NBA": 123})
     now = datetime.datetime.now().replace(microsecond=0)
     start_date = now + datetime.timedelta(minutes=13, seconds=30)
 
@@ -33,7 +35,7 @@ def test_format_contest_announcement_adds_relative_time():
     print("\n---\n", msg, "\n---\n")
 
 
-def test_load_warning_schedule_map_normalizes_and_logs(tmp_path, monkeypatch, caplog):
+def test_load_warning_schedule_map_normalizes_and_logs(tmp_path, monkeypatch):
     schedule_path = tmp_path / "contest_warning_schedules.yaml"
     schedule_path.write_text(
         yaml.safe_dump(
@@ -46,12 +48,18 @@ def test_load_warning_schedule_map_normalizes_and_logs(tmp_path, monkeypatch, ca
     )
     monkeypatch.setenv("CONTEST_WARNING_SCHEDULE_FILE", str(schedule_path))
 
+    captured = []
+    monkeypatch.setattr(
+        update_contests.logger,
+        "warning",
+        lambda message, *args: captured.append(message % args if args else message),
+    )
     schedules = update_contests._load_warning_schedule_map()
 
     assert schedules["default"] == [25]
     assert schedules["nba"] == [30, 60]
     assert "nfl" not in schedules
-    assert any("warning schedule" in record.message.lower() for record in caplog.records)
+    assert any("warning schedule" in message.lower() for message in captured)
 
 
 def test_warning_notification_sent_for_upcoming_contest(monkeypatch):
