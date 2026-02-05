@@ -273,6 +273,7 @@ def check_contests_for_completion(conn) -> None:
     sender = _build_discord_sender()
 
     if sender:
+        logged_schedules: set[str] = set()
         for sport_cls in _sport_choices().values():
             upcoming_match = db_get_next_upcoming_contest(
                 conn,
@@ -292,6 +293,16 @@ def check_contests_for_completion(conn) -> None:
             # This script runs every 10 minutes via cron, so warnings use windows
             # rather than requiring an exact timestamp match.
             schedule = _warning_schedule_for(sport_cls.name)
+            schedule_key = sport_cls.name.lower()
+            if schedule_key not in logged_schedules:
+                source = "sport" if schedule_key in WARNING_SCHEDULES else "default"
+                logger.debug(
+                    "warning schedule for %s: %s (source=%s)",
+                    sport_cls.name,
+                    schedule,
+                    source,
+                )
+                logged_schedules.add(schedule_key)
             for warning_minutes in schedule:
                 if not (
                     now < start_dt <= now + datetime.timedelta(minutes=warning_minutes)
@@ -299,6 +310,12 @@ def check_contests_for_completion(conn) -> None:
                     continue
                 warning_key = f"warning:{warning_minutes}"
                 if db_has_notification(conn, dk_id, warning_key):
+                    logger.debug(
+                        "warning already sent for %s dk_id=%s (%sm)",
+                        sport_cls.name,
+                        dk_id,
+                        warning_minutes,
+                    )
                     continue
                 message = _format_contest_announcement(
                     f"Contest starting soon ({warning_minutes}m)",
@@ -613,7 +630,8 @@ def db_get_next_upcoming_contest_any(conn, sport: str) -> tuple | None:
         )
         cur.execute(sql, (sport,))
         row = cur.fetchone()
-        logger.debug("returning %s", row)
+        if row is not None:
+            logger.debug("returning %s", row)
         return row if row else None
     except sqlite3.Error as err:
         logger.error(
