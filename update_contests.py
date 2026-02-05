@@ -23,7 +23,10 @@ DB_FILE = os.getenv("CONTESTS_DB_PATH", "contests.db")
 DISCORD_NOTIFICATIONS_ENABLED = os.getenv("DISCORD_NOTIFICATIONS_ENABLED", "true")
 SPREADSHEET_ID = os.getenv("SPREADSHEET_ID")
 SHEET_GIDS_FILE = os.getenv("SHEET_GIDS_FILE", "sheet_gids.yaml")
-CONTEST_WARNING_MINUTES = int(os.getenv("CONTEST_WARNING_MINUTES", "15"))
+CONTEST_WARNING_MINUTES = int(os.getenv("CONTEST_WARNING_MINUTES", "25"))
+WARNING_SCHEDULE_FILE_ENV = "CONTEST_WARNING_SCHEDULE_FILE"
+DEFAULT_WARNING_SCHEDULE_FILE = "contest_warning_schedules.yaml"
+_DEFAULT_WARNING_SCHEDULE = [CONTEST_WARNING_MINUTES]
 
 SPORT_EMOJI = {
     "CFB": "🏈",
@@ -101,6 +104,63 @@ def _load_sheet_gid_map() -> dict[str, int]:
 
 
 SHEET_GID_MAP = _load_sheet_gid_map()
+
+
+def _normalize_warning_schedule(items: Any, *, key: str) -> list[int]:
+    """Normalize a schedule list, logging and dropping invalid entries."""
+    if not isinstance(items, list):
+        logger.warning("Invalid warning schedule for %s; expected list.", key)
+        return []
+    normalized: set[int] = set()
+    invalid = 0
+    for item in items:
+        if isinstance(item, int) and item > 0:
+            normalized.add(item)
+        else:
+            invalid += 1
+    if invalid:
+        logger.warning(
+            "Dropped %d invalid warning schedule entries for %s.", invalid, key
+        )
+    return sorted(normalized)
+
+
+def _load_warning_schedule_map() -> dict[str, list[int]]:
+    """Load per-sport warning schedules from YAML."""
+    schedule_path = os.getenv(WARNING_SCHEDULE_FILE_ENV, DEFAULT_WARNING_SCHEDULE_FILE)
+    path = Path(schedule_path)
+    if not path.is_file():
+        return {"default": _DEFAULT_WARNING_SCHEDULE}
+    try:
+        data = yaml.safe_load(path.read_text()) or {}
+    except Exception:
+        logger.warning("Failed to load warning schedules from %s", path)
+        return {"default": _DEFAULT_WARNING_SCHEDULE}
+    if not isinstance(data, dict):
+        logger.warning("Warning schedule file at %s did not contain a dict.", path)
+        return {"default": _DEFAULT_WARNING_SCHEDULE}
+    schedules: dict[str, list[int]] = {}
+    for key, value in data.items():
+        if not isinstance(key, str) or not key:
+            logger.warning("Ignoring invalid warning schedule key: %s", key)
+            continue
+        normalized = _normalize_warning_schedule(value, key=key)
+        if normalized:
+            schedules[key.lower()] = normalized
+    if "default" not in schedules:
+        schedules["default"] = _DEFAULT_WARNING_SCHEDULE
+    return schedules
+
+
+WARNING_SCHEDULES = _load_warning_schedule_map()
+
+
+def _warning_schedule_for(sport_name: str) -> list[int]:
+    """Return warning schedule for a sport, falling back to default."""
+    key = sport_name.lower()
+    return WARNING_SCHEDULES.get(key) or WARNING_SCHEDULES.get(
+        "default", _DEFAULT_WARNING_SCHEDULE
+    )
 
 
 def _sheet_link(sheet_title: str) -> str | None:

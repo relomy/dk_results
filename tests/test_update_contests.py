@@ -1,6 +1,8 @@
 import datetime
 import sqlite3
 
+import yaml
+
 import update_contests
 
 
@@ -29,6 +31,27 @@ def test_format_contest_announcement_adds_relative_time():
     assert "📊 Sheet: [NBA]" in msg
 
     print("\n---\n", msg, "\n---\n")
+
+
+def test_load_warning_schedule_map_normalizes_and_logs(tmp_path, monkeypatch, caplog):
+    schedule_path = tmp_path / "contest_warning_schedules.yaml"
+    schedule_path.write_text(
+        yaml.safe_dump(
+            {
+                "default": [25, "bad", -5, 25],
+                "NBA": [60, 30, 30],
+                "NFL": "oops",
+            }
+        )
+    )
+    monkeypatch.setenv("CONTEST_WARNING_SCHEDULE_FILE", str(schedule_path))
+
+    schedules = update_contests._load_warning_schedule_map()
+
+    assert schedules["default"] == [25]
+    assert schedules["nba"] == [30, 60]
+    assert "nfl" not in schedules
+    assert any("warning schedule" in record.message.lower() for record in caplog.records)
 
 
 def test_warning_notification_sent_for_upcoming_contest(monkeypatch):
