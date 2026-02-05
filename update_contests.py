@@ -590,7 +590,8 @@ def db_get_next_upcoming_contest(
         )
         cur.execute(sql, (sport, keyword, entry_fee))
         row = cur.fetchone()
-        logger.debug("returning %s", row)
+        if row is not None:
+            logger.debug("returning %s", row)
         return row if row else None
     except sqlite3.Error as err:
         logger.error("sqlite error in db_get_next_upcoming_contest(): %s", err.args[0])
