@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from pathlib import Path
+from types import SimpleNamespace
 from typing import cast
 
+import pytest
 from requests.sessions import Session
 
 from classes.draftkings import Draftkings
@@ -88,3 +90,256 @@ def test_fetch_user_lineup_worker_adds_salary_total(monkeypatch):
 
     assert result is not None
     assert result["salary"] == 7500
+
+
+class _Response:
+    def __init__(self, *, json_data=None, status_code=200, headers=None, content=b""):
+        self._json = json_data or {}
+        self.status_code = status_code
+        self.headers = headers or {}
+        self.content = content
+        self.url = "https://example.test"
+        self.text = (
+            content.decode("utf-8", errors="ignore")
+            if isinstance(content, bytes)
+            else str(content)
+        )
+
+    def raise_for_status(self):
+        if self.status_code >= 400:
+            raise RuntimeError("bad")
+
+    def json(self):
+        return self._json
+
+
+class _Session:
+    def __init__(self, response: _Response):
+        self._response = response
+        self.headers = {"X": "Y"}
+        self.cookies = _Cookies()
+        self.last = None
+
+    def get(self, url, timeout=None):
+        self.last = (url, timeout)
+        return self._response
+
+
+class _Cookies:
+    def __init__(self):
+        self._items = [
+            SimpleNamespace(name="a", value="1", domain="example.com", path="/")
+        ]
+
+    def get_dict(self):
+        raise RuntimeError("boom")
+
+    def __iter__(self):
+        return iter(self._items)
+
+
+def test_clone_auth_to_fallbacks_on_cookie_error():
+    response = _Response(json_data={})
+    session = _Session(response)
+    dk = Draftkings(session=session)
+
+    target = Session()
+    dk.clone_auth_to(target)
+
+    assert target.headers["X"] == "Y"
+    assert target.cookies.get("a") == "1"
+
+
+def test_get_leaderboard_uses_timeout_and_session():
+    response = _Response(json_data={"ok": True})
+    session = _Session(response)
+    dk = Draftkings(session=session)
+
+    assert dk.get_leaderboard(123) == {"ok": True}
+    assert "leaderboards" in session.last[0]
+
+
+def test_get_entry_uses_session():
+    response = _Response(json_data={"entries": []})
+    session = _Session(response)
+    dk = Draftkings(session=session)
+
+    assert dk.get_entry(1, "abc") == {"entries": []}
+    assert "entries" in session.last[0]
+
+
+def test_normalize_and_lookup_salary():
+    dk = Draftkings(session=_Session(_Response()))
+    assert dk._normalize_name("José") == "Jose"
+    assert dk._normalize_name(123) == ""
+
+    assert dk._lookup_salary("José", {"Jose": 100}) == 100
+    assert dk._lookup_salary("", {"Jose": 100}) is None
+
+
+def test_fetch_user_lineup_worker_missing_entry_key():
+    dk = Draftkings(session=_Session(_Response()))
+    assert dk._fetch_user_lineup_worker({"userName": "vip"}, 1) is None
+
+
+def test_fetch_user_lineup_worker_handles_invalid_scores(monkeypatch):
+    dk = Draftkings(session=_Session(_Response()))
+
+    def fake_get_entry(_dg, _entry_key, timeout=None, session=None):
+        return {
+            "entries": [
+                {
+                    "roster": {
+                        "scorecards": [
+                            {
+                                "displayName": "Player A",
+                                "rosterPosition": "RB",
+                                "score": "bad",
+                                "percentDrafted": 50,
+                                "projection": {"realTimeProjection": "bad"},
+                            }
+                        ]
+                    }
+                }
+            ]
+        }
+
+    monkeypatch.setattr(dk, "get_entry", fake_get_entry)
+
+    result = dk._fetch_user_lineup_worker(
+        {"entryKey": "abc", "userName": "vip"},
+        1,
+        {"Player A": 4000},
+    )
+
+    assert result is not None
+    assert result["players"][0]["value"] == ""
+    assert result["players"][0]["rtProj"] == "bad"
+
+
+def test_get_vip_lineups_with_entries(monkeypatch):
+    dk = Draftkings(session=_Session(_Response()))
+
+    monkeypatch.setattr(
+        dk,
+        "_fetch_user_lineup_worker",
+        lambda *_args, **_kwargs: {"user": "vip", "players": []},
+    )
+
+    result = dk.get_vip_lineups(
+        1,
+        2,
+        ["vip"],
+        vip_entries={"vip": {"entry_key": "abc"}},
+    )
+
+    assert result == [{"user": "vip", "players": []}]
+
+
+def test_get_vip_lineups_handles_worker_exception(monkeypatch):
+    dk = Draftkings(session=_Session(_Response()))
+
+    def boom(*_args, **_kwargs):
+        raise RuntimeError("bad")
+
+    monkeypatch.setattr(dk, "_fetch_user_lineup_worker", boom)
+
+    result = dk.get_vip_lineups(
+        1,
+        2,
+        ["vip"],
+        vip_entries={"vip": {"entry_key": "abc"}},
+    )
+
+    assert result == []
+
+
+def test_download_contest_rows_html_returns_none():
+    response = _Response(headers={"Content-Type": "text/html"})
+    session = _Session(response)
+    dk = Draftkings(session=session)
+
+    assert dk.download_contest_rows(1) is None
+
+
+def test_download_contest_rows_bad_zip_returns_none():
+    response = _Response(
+        headers={"Content-Type": "application/octet-stream"},
+        content=b"not-zip",
+    )
+    session = _Session(response)
+    dk = Draftkings(session=session)
+
+    assert dk.download_contest_rows(1) is None
+
+
+def test_download_contest_rows_zip_reads_csv(tmp_path):
+    import io
+    import zipfile
+
+    csv_bytes = b"col1,col2\n1,2\n"
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as zf:
+        zf.writestr("file.csv", csv_bytes)
+
+    response = _Response(
+        headers={"Content-Type": "application/zip"},
+        content=buf.getvalue(),
+    )
+    session = _Session(response)
+    dk = Draftkings(session=session)
+
+    rows = dk.download_contest_rows(1, contest_dir=str(tmp_path))
+    assert rows == [["col1", "col2"], ["1", "2"]]
+
+
+def test_download_contest_rows_skips_cookie_dump_error(tmp_path, monkeypatch):
+    csv_bytes = b"col1,col2\n1,2\n"
+    response = _Response(headers={"Content-Type": "text/csv"}, content=csv_bytes)
+    session = _Session(response)
+    dk = Draftkings(session=session)
+
+    cookie_dir = tmp_path / "cookies"
+    cookie_dir.mkdir()
+
+    rows = dk.download_contest_rows(
+        1,
+        contest_dir=str(tmp_path),
+        cookies_dump_file=str(cookie_dir),
+    )
+    assert rows == [["col1", "col2"], ["1", "2"]]
+
+
+def test_download_contest_rows_warns_on_write_error(monkeypatch):
+    csv_bytes = b"col1,col2\n1,2\n"
+    response = _Response(headers={"Content-Type": "text/csv"}, content=csv_bytes)
+    session = _Session(response)
+    dk = Draftkings(session=session)
+
+    def boom(*_args, **_kwargs):
+        raise OSError("nope")
+
+    monkeypatch.setattr("builtins.open", boom)
+
+    rows = dk.download_contest_rows(1, contest_dir="contests")
+    assert rows == [["col1", "col2"], ["1", "2"]]
+
+
+def test_download_salary_csv_raises_on_non_200(tmp_path):
+    response = _Response(status_code=500)
+    session = _Session(response)
+    dk = Draftkings(session=session)
+
+    with pytest.raises(Exception):
+        dk.download_salary_csv("NBA", 123, str(tmp_path / "salary.csv"))
+
+
+def test_download_salary_csv_writes_file(tmp_path):
+    response = _Response(status_code=200, content=b"csv")
+    session = _Session(response)
+    dk = Draftkings(session=session)
+
+    path = tmp_path / "salary.csv"
+    dk.download_salary_csv("NBA", 123, str(path))
+
+    assert path.read_text().strip() == "csv"
