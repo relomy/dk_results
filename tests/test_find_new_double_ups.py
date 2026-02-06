@@ -1,8 +1,11 @@
 import argparse
 import datetime
+import runpy
+import sys
 import types
 
 import pytest
+from requests.cookies import RequestsCookieJar
 
 from classes.contest import Contest
 from classes.sport import NFLShowdownSport, NFLSport, Sport
@@ -11,12 +14,14 @@ from find_new_double_ups import (
     contest_meets_criteria,
     format_discord_messages,
     get_contests_from_response,
+    get_dk_lobby,
     get_double_ups,
     get_draft_groups_from_response,
     get_salary_date,
     get_stats,
     is_time_between,
     log_draft_group_event,
+    parse_args,
     process_sport,
     send_discord_notification,
     set_quiet_verbosity,
@@ -388,3 +393,99 @@ def test_process_sport_sends_notification(monkeypatch):
 
     assert db.inserted
     assert bot.sent
+
+
+def test_get_dk_lobby_uses_requests(monkeypatch):
+    class DummySport(Sport):
+        name = "NBA"
+
+    class FakeResp:
+        def json(self):
+            return {"Contests": [], "DraftGroups": []}
+
+    monkeypatch.setattr("find_new_double_ups.requests.get", lambda *_a, **_k: FakeResp())
+
+    contests, draft_groups, resp = get_dk_lobby(DummySport, "http://example")
+    assert contests == []
+    assert draft_groups == []
+    assert resp == {"Contests": [], "DraftGroups": []}
+
+
+def test_get_draft_groups_allows_suffixless():
+    class DummySport(Sport):
+        name = "TEST"
+        allow_suffixless_draft_groups = True
+
+    response = {
+        "DraftGroups": [
+            {
+                "DraftGroupTag": "Featured",
+                "ContestStartTimeSuffix": None,
+                "DraftGroupId": 1,
+                "StartDateEst": "2024-02-01T12:30:00.000-05:00",
+                "ContestTypeId": 1,
+                "GameTypeId": 1,
+            }
+        ]
+    }
+    assert get_draft_groups_from_response(response, DummySport) == [1]
+
+
+def test_get_stats_counts_duplicate_dubs():
+    contests = [Contest(_contest_payload(1), "NBA"), Contest(_contest_payload(2), "NBA")]
+    stats = get_stats(contests)
+    date_key = contests[0].start_dt.strftime("%Y-%m-%d")
+    assert stats[date_key]["dubs"][10] == 2
+
+
+def test_is_time_between_standard_range():
+    assert is_time_between(datetime.time(9, 0), datetime.time(17, 0), datetime.time(12, 0))
+    assert not is_time_between(
+        datetime.time(9, 0), datetime.time(17, 0), datetime.time(8, 0)
+    )
+
+
+def test_parse_args_parses_sport_and_quiet(monkeypatch):
+    monkeypatch.setattr(sys, "argv", ["prog", "-s", "NFL", "-q"])
+    args = parse_args({"NFL": NFLSport})
+    assert args.sport == ["NFL"]
+    assert args.quiet is True
+
+
+def test_main_executes_with_fakes(monkeypatch, tmp_path):
+    fake_cookieservice = types.ModuleType("classes.cookieservice")
+    fake_cookieservice.get_dk_cookies = lambda *_a, **_k: ({}, RequestsCookieJar())
+
+    class FakeDB:
+        def __init__(self, *_a, **_k):
+            pass
+
+        def create_table(self):
+            return None
+
+        def sync_draft_group_start_dates(self, *_a, **_k):
+            return 0
+
+        def compare_contests(self, *_a, **_k):
+            return []
+
+        def insert_contests(self, *_a, **_k):
+            return None
+
+        def close(self):
+            return None
+
+    fake_contestdatabase = types.ModuleType("classes.contestdatabase")
+    fake_contestdatabase.ContestDatabase = FakeDB
+
+    class FakeResp:
+        def json(self):
+            return {"Contests": [], "DraftGroups": []}
+
+    monkeypatch.setitem(sys.modules, "classes.cookieservice", fake_cookieservice)
+    monkeypatch.setitem(sys.modules, "classes.contestdatabase", fake_contestdatabase)
+    monkeypatch.setattr("requests.get", lambda *_a, **_k: FakeResp())
+    monkeypatch.setenv("DISCORD_WEBHOOK", "")
+    monkeypatch.setattr(sys, "argv", ["prog", "-s", "NFL"])
+
+    runpy.run_module("find_new_double_ups", run_name="__main__")
