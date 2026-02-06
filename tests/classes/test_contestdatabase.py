@@ -1,7 +1,9 @@
 import datetime
+import sqlite3
 
 import pytest
 
+from classes.contest import Contest
 from classes.contestdatabase import ContestDatabase
 
 
@@ -150,3 +152,155 @@ def test_sync_draft_group_start_dates_updates_only_changed_groups(contest_db):
         (2, "2024-01-01 00:00:00"),
         (3, "2024-01-03 12:00:00"),
     ]
+
+
+def _contest_payload(dk_id: int):
+    return {
+        "sd": "1700000000000",
+        "n": "Contest",
+        "id": dk_id,
+        "dg": 1,
+        "po": 0,
+        "m": 0,
+        "a": 5,
+        "ec": 0,
+        "mec": 1,
+        "attr": {"IsDoubleUp": True, "IsGuaranteed": True},
+        "gameType": "Classic",
+        "gameTypeId": 1,
+    }
+
+
+def test_compare_contests_empty_returns(contest_db):
+    assert contest_db.compare_contests([]) == []
+
+
+def test_compare_contests_filters_existing(contest_db):
+    contest = Contest(_contest_payload(101), "NBA")
+    contest_db.insert_contests([contest])
+
+    contests = [
+        Contest(_contest_payload(101), "NBA"),
+        Contest(_contest_payload(202), "NBA"),
+    ]
+    assert contest_db.compare_contests(contests) == [202]
+
+
+def test_insert_contests_writes_rows(contest_db):
+    contests = [Contest(_contest_payload(303), "NBA")]
+    contest_db.insert_contests(contests)
+    rows = list(contest_db.conn.execute("SELECT dk_id FROM contests"))
+    assert rows == [(303,)]
+
+
+def test_sync_draft_group_start_dates_empty_input(contest_db):
+    assert contest_db.sync_draft_group_start_dates({}) == 0
+
+
+def test_sync_draft_group_start_dates_no_rows(contest_db):
+    updates = contest_db.sync_draft_group_start_dates({10: datetime.datetime.now()})
+    assert updates == 0
+
+
+def test_sync_draft_group_start_dates_handles_invalid_existing_date(contest_db):
+    contest_db.conn.execute(
+        "INSERT INTO contests (dk_id, sport, name, start_date, draft_group, total_prizes, entries, entry_fee, entry_count, max_entry_count, completed) "
+        "VALUES (1, 'NBA', 'Contest', 'bad-date', 10, 0, 0, 5, 0, 1, 0)"
+    )
+    contest_db.conn.commit()
+
+    updates = contest_db.sync_draft_group_start_dates(
+        {10: datetime.datetime(2024, 1, 2, 0, 0, 0)}
+    )
+
+    assert updates == 1
+
+
+def test_get_live_contest_sqlite_error(monkeypatch):
+    db = ContestDatabase(":memory:")
+
+    class BoomCursor:
+        def execute(self, *_args, **_kwargs):
+            raise sqlite3.Error("boom")
+
+    class BoomConn:
+        def cursor(self):
+            return BoomCursor()
+
+    db.conn = BoomConn()
+    assert db.get_live_contest("NBA") is None
+
+
+def test_get_live_contests_sqlite_error(monkeypatch):
+    db = ContestDatabase(":memory:")
+
+    class BoomCursor:
+        def execute(self, *_args, **_kwargs):
+            raise sqlite3.Error("boom")
+
+    class BoomConn:
+        def cursor(self):
+            return BoomCursor()
+
+    db.conn = BoomConn()
+    assert db.get_live_contests() == []
+
+
+def test_get_next_upcoming_contest_returns_row(contest_db):
+    future = (datetime.datetime.now() + datetime.timedelta(days=1)).strftime(
+        "%Y-%m-%d %H:%M:%S"
+    )
+    contest_db.conn.execute(
+        "INSERT INTO contests (dk_id, sport, name, start_date, draft_group, total_prizes, entries, entry_fee, entry_count, max_entry_count, completed) "
+        "VALUES (1, 'NBA', 'Contest', ?, 10, 0, 0, 25, 0, 1, 0)",
+        (future,),
+    )
+    contest_db.conn.commit()
+
+    row = contest_db.get_next_upcoming_contest("NBA")
+    assert row[0] == 1
+
+
+def test_get_next_upcoming_contest_any_returns_row(contest_db):
+    future = (datetime.datetime.now() + datetime.timedelta(days=1)).strftime(
+        "%Y-%m-%d %H:%M:%S"
+    )
+    contest_db.conn.execute(
+        "INSERT INTO contests (dk_id, sport, name, start_date, draft_group, total_prizes, entries, entry_fee, entry_count, max_entry_count, completed) "
+        "VALUES (2, 'NBA', 'Contest', ?, 11, 0, 0, 25, 0, 1, 0)",
+        (future,),
+    )
+    contest_db.conn.commit()
+
+    row = contest_db.get_next_upcoming_contest_any("NBA")
+    assert row[0] == 2
+
+
+def test_get_next_upcoming_contest_sqlite_error(monkeypatch):
+    db = ContestDatabase(":memory:")
+
+    class BoomCursor:
+        def execute(self, *_args, **_kwargs):
+            raise sqlite3.Error("boom")
+
+    class BoomConn:
+        def cursor(self):
+            return BoomCursor()
+
+    db.conn = BoomConn()
+    assert db.get_next_upcoming_contest("NBA") is None
+
+
+def test_get_next_upcoming_contest_any_sqlite_error(monkeypatch):
+    db = ContestDatabase(":memory:")
+
+    class BoomCursor:
+        def execute(self, *_args, **_kwargs):
+            raise sqlite3.Error("boom")
+
+    class BoomConn:
+        def cursor(self):
+            return BoomCursor()
+
+    db.conn = BoomConn()
+    assert db.get_next_upcoming_contest_any("NBA") is None
