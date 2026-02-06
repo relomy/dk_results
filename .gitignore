@@ -1,3 +1,6 @@
+# ignore uv.lock since it is already tracked
+uv.lock
+
 # package-specific
 .vscode/
 salary/
@@ -146,4 +149,6 @@ dmypy.json
 # Pyre type checker
 .pyre/
 .aider*
+
+# worktrees
 .worktrees/
