@@ -50,6 +50,10 @@ used in CLI/bot choices (`classes/sport.py:Sport`, `db_main.py:main`,
 
 Environment variables are read directly in code (see referenced symbols below).
 
+Sample config files are provided to copy/adapt:
+`.env.sample`, `client_secret.json.sample`, `sheet_gids.yaml.sample`,
+`vips.yaml.sample` (see files in repo root).
+
 | Variable | Used by | Notes |
 | --- | --- | --- |
 | `CONTESTS_DB_PATH` | `update_contests.py:DB_FILE`, `bot/discord_bot.py:DB_PATH` | Defaults to `contests.db` in those modules. |
@@ -75,6 +79,8 @@ to load environment defaults (`find_new_double_ups.py:load_dotenv`,
   `ContestDatabase.create_table()` (`classes/contestdatabase.py:ContestDatabase.create_table`)
   and a `contest_notifications` table created by `update_contests.py` for de-duplication
   (`update_contests.py:create_notifications_table`).
+- Sample config templates live alongside the real files and are safe to share:
+  `client_secret.json.sample`, `sheet_gids.yaml.sample`, and `vips.yaml.sample`.
 - `contest_warning_schedules.yaml` defines per-sport warning schedules; keys are
   normalized to lowercase and fall back to `default` (`update_contests.py:_load_warning_schedule_map`,
   `update_contests.py:_warning_schedule_for`, `contest_warning_schedules.yaml`).
