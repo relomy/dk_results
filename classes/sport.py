@@ -4,11 +4,7 @@ from typing import Iterator, Optional, Type
 
 
 class Sport:
-    """An object to represent a DFS sport from DraftKings.
-
-    Args:
-        object (_type_): _description_
-    """
+    """Base configuration for a DraftKings DFS sport."""
 
     sport_name: str = ""
     name: str = ""
@@ -68,6 +64,7 @@ def _iter_named_sports() -> Iterator[tuple[str, Type[Sport]]]:
 
 
 def get_lineup_range(sport_name: str) -> str | None:
+    """Return the lineup range for a sport name, if configured."""
     ranges: dict[str, str] = {}
     for name, sport_cls in _iter_named_sports():
         lineup_range = getattr(sport_cls, "lineup_range", None)
@@ -77,6 +74,7 @@ def get_lineup_range(sport_name: str) -> str | None:
 
 
 def get_new_lineup_range(sport_name: str) -> str | None:
+    """Return the new lineup range for a sport name, if configured."""
     ranges: dict[str, str] = {}
     for name, sport_cls in _iter_named_sports():
         lineup_range = getattr(sport_cls, "new_lineup_range", None)
@@ -86,11 +84,7 @@ def get_new_lineup_range(sport_name: str) -> str | None:
 
 
 class NFLSport(Sport):
-    """NFL
-
-    Args:
-        Sport (_type_): _description_
-    """
+    """NFL sport configuration."""
 
     name = "NFL"
     sheet_name = "NFL"
@@ -110,11 +104,7 @@ class NFLSport(Sport):
 
 
 class NFLAfternoonSport(Sport):
-    """NFL
-
-    Args:
-        Sport (_type_): _description_
-    """
+    """NFL afternoon sport configuration."""
 
     name = "NFLAfternoon"
     sheet_name = "NFLAfternoon"
@@ -134,11 +124,7 @@ class NFLAfternoonSport(Sport):
 
 
 class NFLShowdownSport(Sport):
-    """NFL
-
-    Args:
-        Sport (_type_): _description_
-    """
+    """NFL showdown sport configuration."""
 
     name = "NFLShowdown"
     sheet_name = "NFLShowdown"
@@ -163,11 +149,7 @@ class NFLShowdownSport(Sport):
 
 
 class NBASport(Sport):
-    """NBA
-
-    Args:
-        Sport (_type_): _description_
-    """
+    """NBA sport configuration."""
 
     name = "NBA"
     sheet_name = "NBA"
@@ -190,11 +172,7 @@ class NBASport(Sport):
 
 
 class CFBSport(Sport):
-    """CFB
-
-    Args:
-        Sport (_type_): _description_
-    """
+    """CFB sport configuration."""
 
     name = "CFB"
     sheet_name = "CFB"
@@ -216,11 +194,7 @@ class CFBSport(Sport):
 
 
 class GolfSport(Sport):
-    """GOLF/PGA
-
-    Args:
-        Sport (_type_): _description_
-    """
+    """GOLF/PGA sport configuration."""
 
     name = "GOLF"
     sheet_name = "GOLF"
@@ -276,11 +250,7 @@ class WeekendGolfSport(Sport):
 
 
 class MLBSport(Sport):
-    """MLB
-
-    Args:
-        Sport (_type_): _description_
-    """
+    """MLB sport configuration."""
 
     name = "MLB"
     sheet_name = "MLB"
@@ -291,11 +261,7 @@ class MLBSport(Sport):
 
 
 class NascarSport(Sport):
-    """NASCAR
-
-    Args:
-        Sport (_type_): _description_
-    """
+    """NASCAR sport configuration."""
 
     name = "NAS"
     sheet_name = "NAS"
@@ -306,11 +272,7 @@ class NascarSport(Sport):
 
 
 class TennisSport(Sport):
-    """Tennis
-
-    Args:
-        Sport (_type_): _description_
-    """
+    """Tennis sport configuration."""
 
     name = "TEN"
     sheet_name = "TEN"
