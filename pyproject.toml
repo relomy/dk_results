@@ -21,7 +21,8 @@ include = ["bot", "classes"]
 [dependency-groups]
 dev = [
     "pytest",
-    "pytest-asyncio"
+    "pytest-asyncio",
+    "pytest-cov"
 ]
 lint = [
     "ruff"
