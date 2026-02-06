@@ -6,13 +6,8 @@ requires-python = ">=3.12, <3.13"
 
 dependencies = [
     "google-api-python-client",
-    "oauth2client",
     "pytz",
     "requests",
-    "selenium",
-    "beautifulsoup4",
-    "google-auth-httplib2",
-    "google-auth-oauthlib",
     "pulp",
     "rookiepy",
     "pyyaml",
@@ -25,12 +20,14 @@ include = ["bot", "classes"]
 
 [dependency-groups]
 dev = [
-    "rope",
     "pytest",
     "pytest-asyncio"
 ]
 lint = [
     "ruff"
+]
+type = [
+    "ty"
 ]
 
 [tool.pip]
