@@ -1,4 +1,11 @@
+import csv
+import datetime
+
+import pytest
+
 import classes.results as results_module
+from classes.player import Player
+from classes.results import Results
 from classes.sport import NFLSport
 
 
@@ -285,3 +292,133 @@ def test_lineup_built_when_rows_exist(monkeypatch):
     )
 
     assert CounterLineup.calls == 1
+
+
+class DummySport:
+    name = "NFLShowdown"
+    sport_name = "NFLShowdown"
+    positions = ["CPT", "FLEX"]
+
+
+def _salary_rows():
+    return [
+        [
+            "Position",
+            "",
+            "Name",
+            "",
+            "Roster Pos",
+            "Salary",
+            "Game Info",
+            "Team",
+            "APPG",
+        ],
+        ["CPT", "", "Captain", "", "CPT", "5000", "AAA@BBB 7:00PM", "AAA", "0"],
+        ["FLEX", "", "Final Guy", "", "FLEX", "4000", "Final", "BBB", "0"],
+    ]
+
+
+def _standings_rows():
+    return [
+        ["Rank", "EntryId", "User", "PMR", "Points", "Lineup"],
+        [
+            "2",
+            "1",
+            "VIP",
+            "10",
+            "5",
+            "CPT Captain FLEX Final Guy",
+            "",
+            "Missing",
+            "CPT",
+            "50%",
+            "10",
+        ],
+    ]
+
+
+def test_results_uses_default_salary_filename(monkeypatch):
+    captured = {}
+
+    class FixedDateTime(datetime.datetime):
+        @classmethod
+        def now(cls):
+            return cls(2024, 1, 1)
+
+    monkeypatch.setattr("classes.results.datetime", FixedDateTime)
+
+    def fake_parse_salary_csv(self, filename):
+        captured["filename"] = filename
+
+    def fake_parse_contest_standings_rows(self, rows):
+        return None
+
+    monkeypatch.setattr(Results, "parse_salary_csv", fake_parse_salary_csv)
+    monkeypatch.setattr(
+        Results, "parse_contest_standings_rows", fake_parse_contest_standings_rows
+    )
+
+    Results(DummySport(), 1, "", standings_rows=[])
+
+    assert captured["filename"] == "DKSalaries_NFLShowdown_Monday.csv"
+
+
+def test_parse_salary_rows_skips_short_rows():
+    results = Results(
+        DummySport(), 1, "", salary_rows=_salary_rows(), standings_rows=_standings_rows()
+    )
+    results.parse_salary_rows([[], ["X"]])
+    assert "Captain" in results.players
+
+
+def test_parse_contest_standings_rows_handles_non_cashing_and_showdown():
+    results = Results(
+        DummySport(),
+        1,
+        "",
+        positions_paid=1,
+        salary_rows=_salary_rows(),
+        standings_rows=_standings_rows(),
+        vips=["VIP"],
+    )
+
+    assert results.vip_list
+    assert results.non_cashing_users == 1
+    assert results.non_cashing_avg_pmr > 0
+    assert "Captain" in results.non_cashing_players
+
+
+def test_get_showdown_captain_percent_prints(capsys):
+    results = Results(
+        DummySport(), 1, "", salary_rows=_salary_rows(), standings_rows=_standings_rows()
+    )
+    results.get_showdown_captain_percent("Captain", {"Captain": 1})
+    assert "Captain" in capsys.readouterr().out
+
+
+def test_load_standings(tmp_path):
+    path = tmp_path / "standings.csv"
+    path.write_text("a,b\n1,2\n")
+    results = Results(
+        DummySport(), 1, "", salary_rows=_salary_rows(), standings_rows=_standings_rows()
+    )
+    rows = results.load_standings(str(path))
+    assert rows == [["a", "b"], ["1", "2"]]
+
+
+def test_players_to_values_filters_by_ownership():
+    results = Results(
+        DummySport(), 1, "", salary_rows=_salary_rows(), standings_rows=_standings_rows()
+    )
+    results.players["Captain"].ownership = 0.5
+    results.players["Final Guy"].ownership = 0.0
+
+    values = results.players_to_values("NFLShowdown")
+    assert len(values) == 1
+
+
+def test_get_players_returns_dict():
+    results = Results(
+        DummySport(), 1, "", salary_rows=_salary_rows(), standings_rows=_standings_rows()
+    )
+    assert results.get_players() is results.players
