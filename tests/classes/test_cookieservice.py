@@ -1,4 +1,5 @@
 import os
+import pickle
 
 from requests.cookies import RequestsCookieJar
 
@@ -69,6 +70,17 @@ def test_save_cookies_to_pickle_error(monkeypatch):
 
     monkeypatch.setattr("builtins.open", boom)
     cookieservice.save_cookies_to_pickle([{"name": "a", "value": "1"}])
+
+
+def test_save_cookies_to_pickle_success(tmp_path):
+    cookies = [{"name": "a", "value": "1", "domain": "example.com", "path": "/"}]
+    path = tmp_path / "cookies.pkl"
+
+    cookieservice.save_cookies_to_pickle(cookies, filename=str(path))
+
+    assert path.exists()
+    with open(path, "rb") as f:
+        assert pickle.load(f) == cookies
 
 
 def test_get_dk_cookies_uses_pickle(monkeypatch):

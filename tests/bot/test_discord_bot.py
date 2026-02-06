@@ -1,4 +1,5 @@
 import datetime
+import runpy
 import types
 from typing import cast
 
@@ -75,6 +76,21 @@ def test_system_uptime_seconds_parses(monkeypatch):
     monkeypatch.setattr("builtins.open", fake_open)
 
     assert discord_bot._system_uptime_seconds() == pytest.approx(123.45)
+
+
+def test_module_main_executes(monkeypatch, tmp_path):
+    captured = {}
+    monkeypatch.setenv("DISCORD_BOT_TOKEN", "tok")
+    monkeypatch.setenv("DISCORD_LOG_FILE", str(tmp_path / "discord.log"))
+
+    def fake_run(self, token):
+        captured["token"] = token
+
+    monkeypatch.setattr("discord.ext.commands.Bot.run", fake_run)
+
+    runpy.run_module("bot.discord_bot", run_name="__main__")
+
+    assert captured["token"] == "tok"
 
 
 @pytest.mark.asyncio

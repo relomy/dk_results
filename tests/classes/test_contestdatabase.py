@@ -202,6 +202,23 @@ def test_sync_draft_group_start_dates_no_rows(contest_db):
     assert updates == 0
 
 
+def test_sync_draft_group_start_dates_skips_none(contest_db):
+    _insert_contest(
+        contest_db,
+        dk_id=1,
+        draft_group=10,
+        start_date="2024-01-01 00:00:00",
+    )
+
+    updates = contest_db.sync_draft_group_start_dates({10: None})
+
+    assert updates == 0
+    row = contest_db.conn.execute(
+        "SELECT start_date FROM contests WHERE dk_id=1"
+    ).fetchone()
+    assert row == ("2024-01-01 00:00:00",)
+
+
 def test_sync_draft_group_start_dates_handles_invalid_existing_date(contest_db):
     contest_db.conn.execute(
         "INSERT INTO contests (dk_id, sport, name, start_date, draft_group, total_prizes, entries, entry_fee, entry_count, max_entry_count, completed) "
