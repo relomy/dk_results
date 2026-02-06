@@ -5,6 +5,7 @@ from types import SimpleNamespace
 from typing import cast
 
 import pytest
+from requests.cookies import RequestsCookieJar
 from requests.sessions import Session
 
 from classes.draftkings import Draftkings
@@ -343,3 +344,185 @@ def test_download_salary_csv_writes_file(tmp_path):
     dk.download_salary_csv("NBA", 123, str(path))
 
     assert path.read_text().strip() == "csv"
+
+
+def test_clone_auth_to_ignores_cookie_set_errors():
+    class SourceCookies:
+        def get_dict(self):
+            raise RuntimeError("boom")
+
+        def __iter__(self):
+            return iter(
+                [SimpleNamespace(name="a", value="1", domain="example.com", path="/")]
+            )
+
+    class TargetCookies:
+        def __init__(self):
+            self.calls = 0
+
+        def set(self, *_args, **_kwargs):
+            self.calls += 1
+            raise RuntimeError("nope")
+
+    class SourceSession:
+        def __init__(self):
+            self.headers = {"X": "Y"}
+            self.cookies = SourceCookies()
+
+    class TargetSession:
+        def __init__(self):
+            self.headers = {}
+            self.cookies = TargetCookies()
+
+    dk = Draftkings(session=SourceSession())
+    target = TargetSession()
+
+    dk.clone_auth_to(target)
+
+    assert target.headers["X"] == "Y"
+    assert target.cookies.calls == 1
+
+
+def test_get_contest_detail_uses_session():
+    called = {}
+
+    class Response:
+        def __init__(self):
+            self.status_code = 200
+
+        def raise_for_status(self):
+            called["raised"] = True
+
+        def json(self):
+            return {"ok": True}
+
+    class Sess:
+        def get(self, url, timeout=None):
+            called["url"] = url
+            called["timeout"] = timeout
+            return Response()
+
+    dk = Draftkings(session=Sess())
+    assert dk.get_contest_detail(123) == {"ok": True}
+    assert "contests/v1/contests/123" in called["url"]
+    assert called["raised"] is True
+
+
+def test_get_lobby_contests_live_uses_url():
+    called = {}
+
+    class Response:
+        def raise_for_status(self):
+            called["raised"] = True
+
+        def json(self):
+            return {"ok": True}
+
+    class Sess:
+        def get(self, url, timeout=None):
+            called["url"] = url
+            called["timeout"] = timeout
+            return Response()
+
+    dk = Draftkings(session=Sess())
+    assert dk.get_lobby_contests("NBA", live=True) == {"ok": True}
+    assert "getlivecontests" in called["url"]
+
+
+def test_lookup_salary_blank_and_missing_normalized():
+    dk = Draftkings(session=_Session(_Response()))
+    assert dk._lookup_salary("   ", {"A": 1}) is None
+    assert dk._lookup_salary("José", {"Joe": 1}) is None
+
+
+def test_fetch_user_lineup_worker_no_entries(monkeypatch):
+    dk = Draftkings(session=_Session(_Response()))
+
+    def fake_get_entry(_dg, _entry_key, timeout=None, session=None):
+        return {"entries": []}
+
+    monkeypatch.setattr(dk, "get_entry", fake_get_entry)
+
+    assert dk._fetch_user_lineup_worker({"entryKey": "abc"}, 1) is None
+
+
+def test_get_vip_lineups_skips_empty_entry_key():
+    dk = Draftkings(session=_Session(_Response()))
+    assert dk.get_vip_lineups(1, 2, ["vip"], vip_entries={"vip": ""}) == []
+
+
+def test_get_vip_lineups_leaderboard_path(monkeypatch):
+    dk = Draftkings(session=_Session(_Response()))
+
+    monkeypatch.setattr(
+        dk,
+        "get_leaderboard",
+        lambda *_args, **_kwargs: {"leaderBoard": [{"userName": "vip"}]},
+    )
+    monkeypatch.setattr(
+        dk,
+        "_fetch_user_lineup_worker",
+        lambda *_args, **_kwargs: {"user": "vip", "players": []},
+    )
+
+    result = dk.get_vip_lineups(1, 2, ["vip"])
+    assert result == [{"user": "vip", "players": []}]
+
+
+def test_get_vip_lineups_result_none(monkeypatch):
+    dk = Draftkings(session=_Session(_Response()))
+    monkeypatch.setattr(dk, "_fetch_user_lineup_worker", lambda *_args, **_kwargs: None)
+
+    assert dk.get_vip_lineups(1, 2, ["vip"], vip_entries={"vip": "abc"}) == []
+
+
+def test_get_vip_lineups_error_logs_swallows(monkeypatch):
+    dk = Draftkings(session=_Session(_Response()))
+
+    def boom(*_args, **_kwargs):
+        raise RuntimeError("bad")
+
+    monkeypatch.setattr(dk, "_fetch_user_lineup_worker", boom)
+    monkeypatch.setattr(
+        dk.logger,
+        "error",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("log")),
+    )
+    assert dk.get_vip_lineups(1, 2, ["vip"], vip_entries={"vip": "abc"}) == []
+
+
+def test_download_contest_rows_writes_cookie_dump(tmp_path):
+    csv_bytes = b"col1,col2\n1,2\n"
+    response = _Response(headers={"Content-Type": "text/csv"}, content=csv_bytes)
+    session = _Session(response)
+    session.cookies = RequestsCookieJar()
+    session.cookies.set("a", "1", domain="example.com", path="/")
+
+    dk = Draftkings(session=session)
+    cookie_file = tmp_path / "cookies.pkl"
+
+    dk.download_contest_rows(
+        1,
+        contest_dir=str(tmp_path),
+        cookies_dump_file=str(cookie_file),
+    )
+
+    assert cookie_file.exists()
+
+
+def test_download_contest_rows_empty_zip_returns_none():
+    import io
+    import zipfile
+
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w"):
+        pass
+
+    response = _Response(
+        headers={"Content-Type": "application/zip"},
+        content=buf.getvalue(),
+    )
+    session = _Session(response)
+    dk = Draftkings(session=session)
+
+    assert dk.download_contest_rows(1) is None
