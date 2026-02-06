@@ -4,6 +4,11 @@ Operational tooling for DraftKings contest tracking, Google Sheets updates, and 
 notifications (see `db_main.py:main`, `update_contests.py:check_contests_for_completion`,
 `find_new_double_ups.py:main`, `bot/discord_bot.py:main`).
 
+## Shared Infrastructure
+
+- Google Sheets + Discord primitives are provided by `dfs_common`.
+- Local development expects `dfs_common` as a sibling directory (see `pyproject.toml:[tool.uv.sources]`).
+
 ## Runtime Entry Points (Externally Scheduled)
 
 Scheduling is external to this repo (cron/systemd/etc). Each entry point exposes a
