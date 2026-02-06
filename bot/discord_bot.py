@@ -29,6 +29,7 @@ SportType: TypeAlias = Type[Sport]
 
 
 def _load_sheet_gid_map() -> dict[str, int]:
+    """Load a sheet title -> gid map from the configured YAML file."""
     if not SHEET_GIDS_FILE:
         logger.info("SHEET_GIDS_FILE not set; sheet links disabled.")
         return {}
@@ -79,6 +80,7 @@ SPORT_EMOJI = {
 
 
 def _sheet_link(sheet_title: str) -> str | None:
+    """Return a Discord-safe Google Sheets link for a sheet title."""
     if not SPREADSHEET_ID:
         logger.debug("SPREADSHEET_ID not set; cannot build sheet link.")
         return None
@@ -90,14 +92,17 @@ def _sheet_link(sheet_title: str) -> str | None:
 
 
 def _sport_sheet_title(sport_cls: SportType) -> str:
+    """Resolve a display sheet title for a Sport subclass."""
     return getattr(sport_cls, "sheet_name", None) or sport_cls.name
 
 
 def _sport_emoji(sport_name: str) -> str:
+    """Return an emoji for a sport name, or a default."""
     return SPORT_EMOJI.get(sport_name, "🏟️")
 
 
 def _configure_discord_log_file() -> None:
+    """Configure file logging for the Discord bot."""
     log_path = (
         Path(DISCORD_LOG_FILE)
         if DISCORD_LOG_FILE
@@ -122,6 +127,7 @@ _configure_discord_log_file()
 
 
 def _channel_id_from_env() -> Optional[int]:
+    """Return the allowed Discord channel ID, if configured."""
     raw_channel_id = os.getenv("DISCORD_CHANNEL_ID")
     if not raw_channel_id:
         return None
@@ -140,6 +146,7 @@ bot = commands.Bot(command_prefix=COMMAND_PREFIX, intents=intents, help_command=
 
 
 def _sport_choices() -> dict[str, SportType]:
+    """Return a mapping of lowercased sport names to Sport subclasses."""
     choices: dict[str, SportType] = {}
     for sport in Sport.__subclasses__():
         name = getattr(sport, "name", None)
@@ -150,11 +157,13 @@ def _sport_choices() -> dict[str, SportType]:
 
 
 def _allowed_sports_label(choices: dict[str, SportType]) -> str:
+    """Return a human-friendly, sorted list of sport names."""
     names: list[str] = [sport_cls.name for sport_cls in choices.values()]
     return ", ".join(sorted(names))
 
 
 def _format_contest_row(row: tuple, sport_name: str, sheet_link: str | None) -> str:
+    """Format a single contest row for Discord output."""
     dk_id, name, _, _, start_date = row
     # Wrap URL in angle brackets to prevent Discord from embedding a preview.
     url = f"<https://www.draftkings.com/contest/gamecenter/{dk_id}#/>"
@@ -165,6 +174,7 @@ def _format_contest_row(row: tuple, sport_name: str, sheet_link: str | None) -> 
 
 
 def _fetch_live_contest(sport_cls: SportType) -> Optional[tuple]:
+    """Fetch a live contest matching a sport's criteria from the database."""
     contest_db = ContestDatabase(DB_PATH, logger=logger)
     try:
         return contest_db.get_live_contest(
@@ -175,6 +185,7 @@ def _fetch_live_contest(sport_cls: SportType) -> Optional[tuple]:
 
 
 def _format_uptime(seconds: float) -> str:
+    """Format a duration in seconds into a compact human string."""
     minutes, sec = divmod(int(seconds), 60)
     hours, minutes = divmod(minutes, 60)
     days, hours = divmod(hours, 24)
@@ -190,6 +201,7 @@ def _format_uptime(seconds: float) -> str:
 
 
 def _format_time_until(start_date: str) -> str | None:
+    """Return a short human string for time remaining until start_date."""
     try:
         start_dt = datetime.datetime.fromisoformat(start_date)
     except (TypeError, ValueError):
@@ -215,6 +227,7 @@ def _format_time_until(start_date: str) -> str | None:
 
 
 def _system_uptime_seconds() -> Optional[float]:
+    """Return system uptime in seconds if /proc/uptime is available."""
     try:
         with open("/proc/uptime", "r") as f:
             first_field = f.read().split()[0]
@@ -225,6 +238,7 @@ def _system_uptime_seconds() -> Optional[float]:
 
 @bot.check
 async def limit_to_channel(ctx: commands.Context) -> bool:
+    """Restrict commands to a single configured channel when set."""
     if ALLOWED_CHANNEL_ID is None:
         return True
     channel = getattr(ctx, "channel", None)
@@ -232,12 +246,14 @@ async def limit_to_channel(ctx: commands.Context) -> bool:
 
 
 @bot.event
-async def on_ready():
+async def on_ready() -> None:
+    """Log the bot connection event."""
     logger.info("Discord bot logged in as %s", bot.user)
 
 
 @bot.event
-async def on_command_error(ctx: commands.Context, error: Exception):
+async def on_command_error(ctx: commands.Context, error: Exception) -> None:
+    """Handle command errors and send a generic failure message."""
     if isinstance(error, commands.CheckFailure):
         # Silently ignore commands from other channels.
         return
@@ -249,12 +265,14 @@ async def on_command_error(ctx: commands.Context, error: Exception):
 
 
 @bot.command(name="sankayadead")
-async def sankayadead(ctx: commands.Context):
+async def sankayadead(ctx: commands.Context) -> None:
+    """Simple liveness response."""
     await ctx.send("ya man")
 
 
 @bot.command(name="contests")
-async def contests(ctx: commands.Context, sport: Optional[str] = None):
+async def contests(ctx: commands.Context, sport: Optional[str] = None) -> None:
+    """Show one live contest for the requested sport."""
     choices = _sport_choices()
     if not sport:
         await ctx.send(f"Pick a sport: {_allowed_sports_label(choices)}")
@@ -283,7 +301,8 @@ async def contests(ctx: commands.Context, sport: Optional[str] = None):
 
 
 @bot.command(name="live")
-async def live(ctx: commands.Context):
+async def live(ctx: commands.Context) -> None:
+    """Show all live contests across supported sports."""
     choices = _sport_choices()
     allowed_sports: list[str] = [sport_cls.name for sport_cls in choices.values()]
 
@@ -318,7 +337,8 @@ async def live(ctx: commands.Context):
 
 
 @bot.command(name="upcoming")
-async def upcoming(ctx: commands.Context):
+async def upcoming(ctx: commands.Context) -> None:
+    """Show the next upcoming contest per sport."""
     choices = _sport_choices()
     contest_db = ContestDatabase(DB_PATH, logger=logger)
     try:
@@ -352,7 +372,8 @@ async def upcoming(ctx: commands.Context):
 
 
 @bot.command(name="health")
-async def health(ctx: commands.Context):
+async def health(ctx: commands.Context) -> None:
+    """Report bot uptime and host uptime if available."""
     uptime = _format_uptime(time.time() - START_TIME)
     sys_uptime_sec = _system_uptime_seconds()
     sys_uptime = _format_uptime(sys_uptime_sec) if sys_uptime_sec is not None else "n/a"
@@ -360,7 +381,8 @@ async def health(ctx: commands.Context):
 
 
 @bot.command(name="help")
-async def help_command(ctx: commands.Context):
+async def help_command(ctx: commands.Context) -> None:
+    """Show a list of available bot commands."""
     choices = _sport_choices()
     allowed = _allowed_sports_label(choices)
     lines = [
@@ -378,13 +400,15 @@ async def help_command(ctx: commands.Context):
 
 
 @bot.command(name="sports")
-async def sports(ctx: commands.Context):
+async def sports(ctx: commands.Context) -> None:
+    """List supported sports."""
     choices = _sport_choices()
     allowed = _allowed_sports_label(choices)
     await ctx.send(f"Supported sports: {allowed}")
 
 
-def main():
+def main() -> None:
+    """Start the Discord bot process."""
     if not BOT_TOKEN:
         raise RuntimeError(
             "DISCORD_BOT_TOKEN is not set. Set it before starting the Discord bot."
