@@ -234,7 +234,8 @@ def print_cron_job(contest, sport):
         f"Download CSV for this slate:\n{dl_str} -s {sport} -dg {contest.draft_group} -f {file_str}\n"
     )
     print(
-        f"{dict_sports[sport]['get_interval']} {cron_str} {get_str} -s {sport} -i {contest.id} -dg {contest.draft_group} >> {out_str}"
+        f"{dict_sports[sport]['get_interval']} {cron_str} {get_str} -s {sport} "
+        f"-i {contest.id} -dg {contest.draft_group} >> {out_str}"
     )
 
 
@@ -335,7 +336,8 @@ def print_stats(contests):
                 for entry_fee, inner_dict in sorted(values["dubs"].items()):
                     # inner_dict has 'count' and 'largest' keys
                     print(
-                        f"     ${entry_fee}: {inner_dict['count']} contest(s) (largest entry count: {inner_dict['largest']})"
+                        f"     ${entry_fee}: {inner_dict['count']} contest(s) "
+                        f"(largest entry count: {inner_dict['largest']})"
                     )
 
 

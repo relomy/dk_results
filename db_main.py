@@ -285,7 +285,8 @@ def process_sport(
                         player.ownership,
                     ]
                     logger.info(
-                        f"Player [{player.pos}]: {player.name} Score: {player.fpts} Salary: {player.salary} Value {player.value} Own: {player.ownership}"
+                        f"Player [{player.pos}]: {player.name} Score: {player.fpts} Salary: "
+                        f"{player.salary} Value {player.value} Own: {player.ownership}"
                     )
                     optimized_info.append(row)
                 sheet.add_optimal_lineup(optimized_info)

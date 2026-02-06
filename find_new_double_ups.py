@@ -181,14 +181,12 @@ def get_draft_groups_from_response(response: dict, sport_obj: Type[Sport]) -> li
     showdown_entries = []
 
     for draft_group in response["DraftGroups"]:
-        sport = draft_group["Sport"]
         tag = draft_group["DraftGroupTag"]
         suffix = draft_group["ContestStartTimeSuffix"]
         draft_group_id = draft_group["DraftGroupId"]
         start_date_est = draft_group["StartDateEst"]
         contest_type_id = draft_group["ContestTypeId"]
         game_type_id = draft_group["GameTypeId"]
-        game_type = draft_group["GameType"]
 
         if suffix is not None:
             suffix = suffix.strip() or None
@@ -577,7 +575,8 @@ def format_discord_messages(contests: list["Contest"]) -> str:
         str: Formatted message string.
     """
     return "\n".join(
-        f"New dub found! [{c.start_dt:%Y-%m-%d}] Name: {c.name} ID: {c.id} Entry Fee: {c.entry_fee} Entries: {c.entries}"
+        f"New dub found! [{c.start_dt:%Y-%m-%d}] Name: {c.name} ID: {c.id} "
+        f"Entry Fee: {c.entry_fee} Entries: {c.entries}"
         for c in contests
     )
 

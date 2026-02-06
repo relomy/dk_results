@@ -1,5 +1,3 @@
-import pytest
-
 import classes.results as results_module
 from classes.sport import NFLSport
 
