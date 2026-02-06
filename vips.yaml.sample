@@ -1,0 +1,4 @@
+# List of VIP usernames. Used by db_main.py:load_vips and classes/dklineup.py.
+
+- ExampleVIPUser1
+- ExampleVIPUser2

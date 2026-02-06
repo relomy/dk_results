@@ -1,0 +1,5 @@
+# Map of sheet title -> gid (integer). Used to build sheet links in
+# update_contests.py:_load_sheet_gid_map and bot/discord_bot.py:_load_sheet_gid_map.
+
+NBA: 123456789
+NFL: 987654321
