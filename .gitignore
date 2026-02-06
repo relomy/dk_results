@@ -5,6 +5,8 @@ uv.lock
 .vscode/
 salary/
 contests/
+sheet_gids.yaml
+vips.yaml
 
 # specific files
 .DS_Store
@@ -152,3 +154,6 @@ dmypy.json
 
 # worktrees
 .worktrees/
+
+# agents
+AGENTS.md
