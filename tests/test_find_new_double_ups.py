@@ -489,3 +489,55 @@ def test_main_executes_with_fakes(monkeypatch, tmp_path):
     monkeypatch.setattr(sys, "argv", ["prog", "-s", "NFL"])
 
     runpy.run_module("find_new_double_ups", run_name="__main__")
+
+
+def test_get_stats_counts_multiple_entry_fees():
+    contest1 = _contest_payload(1)
+    contest2 = _contest_payload(2)
+    contest2["a"] = 25
+    contests = [Contest(contest1, "NBA"), Contest(contest2, "NBA")]
+
+    stats = get_stats(contests)
+    date_key = contests[0].start_dt.strftime("%Y-%m-%d")
+
+    assert stats[date_key]["dubs"][10] == 1
+    assert stats[date_key]["dubs"][25] == 1
+
+
+def test_main_with_webhook_and_quiet(monkeypatch):
+    fake_cookieservice = types.ModuleType("classes.cookieservice")
+    fake_cookieservice.get_dk_cookies = lambda *_a, **_k: ({}, RequestsCookieJar())
+
+    class FakeDB:
+        def __init__(self, *_a, **_k):
+            pass
+
+        def create_table(self):
+            return None
+
+        def sync_draft_group_start_dates(self, *_a, **_k):
+            return 0
+
+        def compare_contests(self, *_a, **_k):
+            return []
+
+        def insert_contests(self, *_a, **_k):
+            return None
+
+        def close(self):
+            return None
+
+    fake_contestdatabase = types.ModuleType("classes.contestdatabase")
+    fake_contestdatabase.ContestDatabase = FakeDB
+
+    class FakeResp:
+        def json(self):
+            return {"Contests": [], "DraftGroups": []}
+
+    monkeypatch.setitem(sys.modules, "classes.cookieservice", fake_cookieservice)
+    monkeypatch.setitem(sys.modules, "classes.contestdatabase", fake_contestdatabase)
+    monkeypatch.setattr("requests.get", lambda *_a, **_k: FakeResp())
+    monkeypatch.setenv("DISCORD_WEBHOOK", "https://example.test/hook")
+    monkeypatch.setattr(sys, "argv", ["prog", "-s", "NFL", "-q"])
+
+    runpy.run_module("find_new_double_ups", run_name="__main__")
