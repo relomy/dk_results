@@ -12,7 +12,8 @@ dependencies = [
     "rookiepy",
     "pyyaml",
     "dotenv",
-    "discord"
+    "discord",
+    "dfs-common @ ../dfs_common"
 ]
 
 [tool.setuptools.packages.find]
