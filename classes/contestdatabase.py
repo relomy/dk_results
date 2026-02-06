@@ -1,3 +1,4 @@
+import datetime
 import logging
 import logging.config
 import sqlite3
@@ -111,6 +112,58 @@ class ContestDatabase:
         Close the database connection.
         """
         self.conn.close()
+
+    def sync_draft_group_start_dates(
+        self, draft_group_start_dates: dict[int, datetime.datetime]
+    ) -> int:
+        """
+        Update start_date for contests in draft groups when the start time changes.
+
+        Args:
+            draft_group_start_dates (dict[int, datetime.datetime]): Draft group IDs
+                mapped to their latest start datetime.
+
+        Returns:
+            int: Number of draft groups updated.
+        """
+        if not draft_group_start_dates:
+            return 0
+
+        draft_group_ids = sorted(draft_group_start_dates.keys())
+        cur = self.conn.cursor()
+        sql = "SELECT draft_group, start_date FROM contests WHERE draft_group IN ({})".format(
+            ", ".join("?" for _ in draft_group_ids)
+        )
+        cur.execute(sql, draft_group_ids)
+        rows = cur.fetchall()
+        if not rows:
+            return 0
+
+        groups_to_update: dict[int, str] = {}
+        for draft_group, start_date in rows:
+            new_dt = draft_group_start_dates.get(draft_group)
+            if new_dt is None:
+                continue
+            new_dt = new_dt.replace(microsecond=0)
+            try:
+                existing_dt = datetime.datetime.fromisoformat(str(start_date)).replace(
+                    microsecond=0
+                )
+            except (TypeError, ValueError):
+                existing_dt = None
+            if existing_dt != new_dt:
+                groups_to_update[draft_group] = new_dt.isoformat(sep=" ")
+
+        updates = 0
+        for draft_group, new_dt_str in groups_to_update.items():
+            cur.execute(
+                "UPDATE contests SET start_date=? WHERE draft_group=? AND start_date!=?",
+                (new_dt_str, draft_group, new_dt_str),
+            )
+            if cur.rowcount:
+                updates += 1
+        self.conn.commit()
+        return updates
 
     def get_live_contest(
         self, sport: str, entry_fee: int = 25, keyword: str = "%"
