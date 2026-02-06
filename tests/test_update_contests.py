@@ -1,6 +1,7 @@
 import datetime
 import sqlite3
 
+import pytest
 import yaml
 
 import update_contests
@@ -273,3 +274,242 @@ def test_warning_logs_schedule_and_skip(monkeypatch):
 
     assert any("warning schedule for NBA" in msg for msg in captured)
     assert any("warning already sent" in msg.lower() for msg in captured)
+
+
+def test_is_notifications_enabled_false(monkeypatch):
+    monkeypatch.setattr(update_contests, "DISCORD_NOTIFICATIONS_ENABLED", "false")
+    assert update_contests._is_notifications_enabled() is False
+
+
+def test_sport_choices_filters_invalid():
+    class DummySport(update_contests.Sport):
+        name = ""
+
+    choices = update_contests._sport_choices()
+    assert "" not in choices
+
+
+def test_build_discord_sender_disabled(monkeypatch):
+    monkeypatch.setattr(update_contests, "DISCORD_NOTIFICATIONS_ENABLED", "false")
+    assert update_contests._build_discord_sender() is None
+
+
+def test_build_discord_sender_missing_config(monkeypatch):
+    monkeypatch.setattr(update_contests, "DISCORD_NOTIFICATIONS_ENABLED", "true")
+    monkeypatch.delenv("DISCORD_BOT_TOKEN", raising=False)
+    monkeypatch.delenv("DISCORD_CHANNEL_ID", raising=False)
+    assert update_contests._build_discord_sender() is None
+
+
+def test_build_discord_sender_invalid_channel(monkeypatch):
+    monkeypatch.setattr(update_contests, "DISCORD_NOTIFICATIONS_ENABLED", "true")
+    monkeypatch.setenv("DISCORD_BOT_TOKEN", "tok")
+    monkeypatch.setenv("DISCORD_CHANNEL_ID", "bad")
+    assert update_contests._build_discord_sender() is None
+
+
+def test_load_sheet_gid_map_missing_file(tmp_path, monkeypatch):
+    monkeypatch.setattr(update_contests, "SHEET_GIDS_FILE", str(tmp_path / "missing.yaml"))
+    assert update_contests._load_sheet_gid_map() == {}
+
+
+def test_normalize_warning_schedule_non_list():
+    assert update_contests._normalize_warning_schedule("bad", key="nba") == []
+
+
+def test_warning_schedule_for_fallback(monkeypatch):
+    monkeypatch.setattr(update_contests, "WARNING_SCHEDULES", {"default": [10]})
+    assert update_contests._warning_schedule_for("NBA") == [10]
+
+
+def test_sheet_link_missing(monkeypatch):
+    monkeypatch.setattr(update_contests, "SPREADSHEET_ID", None)
+    assert update_contests._sheet_link("NBA") is None
+
+
+def test_sport_emoji_default():
+    assert update_contests._sport_emoji("UNKNOWN") == "🏟️"
+
+
+def test_format_contest_announcement_seconds_only(monkeypatch):
+    class FixedDateTime(datetime.datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return cls(2024, 1, 1, 0, 0, 0, tzinfo=tz)
+
+    monkeypatch.setattr(update_contests.datetime, "datetime", FixedDateTime)
+
+    message = update_contests._format_contest_announcement(
+        "Contest starting soon",
+        "NBA",
+        "Contest",
+        "2024-01-01 00:00:05",
+        123,
+    )
+    assert "(⏳ 5s)" in message
+
+
+def test_create_and_has_notification():
+    conn = sqlite3.connect(":memory:")
+    update_contests.create_notifications_table(conn)
+    update_contests.db_insert_notification(conn, 1, "live")
+    assert update_contests.db_has_notification(conn, 1, "live") is True
+
+
+def test_db_insert_notification_handles_error():
+    class BoomConn:
+        def cursor(self):
+            raise sqlite3.Error("boom")
+
+    update_contests.db_insert_notification(BoomConn(), 1, "live")
+
+
+def test_check_contests_for_completion_live_and_completed(monkeypatch):
+    conn = sqlite3.connect(":memory:")
+    conn.execute(
+        """
+        CREATE TABLE contests (
+            dk_id INTEGER PRIMARY KEY,
+            sport varchar(10) NOT NULL,
+            name varchar(50) NOT NULL,
+            start_date datetime NOT NULL,
+            draft_group INTEGER NOT NULL,
+            total_prizes INTEGER NOT NULL,
+            entries INTEGER NOT NULL,
+            positions_paid INTEGER,
+            entry_fee INTEGER NOT NULL,
+            entry_count INTEGER NOT NULL,
+            max_entry_count INTEGER NOT NULL,
+            completed INTEGER NOT NULL DEFAULT 0,
+            status TEXT
+        );
+        """
+    )
+
+    now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    conn.execute(
+        "INSERT INTO contests (dk_id, sport, name, start_date, draft_group, total_prizes, entries, positions_paid, entry_fee, entry_count, max_entry_count, completed, status) "
+        "VALUES (1, 'NBA', 'Contest1', ?, 10, 0, 0, NULL, 25, 0, 1, 0, 'UPCOMING')",
+        (now,),
+    )
+    conn.execute(
+        "INSERT INTO contests (dk_id, sport, name, start_date, draft_group, total_prizes, entries, positions_paid, entry_fee, entry_count, max_entry_count, completed, status) "
+        "VALUES (2, 'NBA', 'Contest2', ?, 11, 0, 0, NULL, 25, 0, 1, 0, 'LIVE')",
+        (now,),
+    )
+    conn.commit()
+
+    update_contests.db_insert_notification(conn, 2, "live")
+
+    class DummySport:
+        name = "NBA"
+        sheet_min_entry_fee = 25
+        keyword = "%"
+
+    class FakeSender:
+        def __init__(self):
+            self.messages = []
+
+        def send_message(self, message: str) -> None:
+            self.messages.append(message)
+
+    sender = FakeSender()
+
+    monkeypatch.setattr(update_contests, "_build_discord_sender", lambda: sender)
+    monkeypatch.setattr(update_contests, "_warning_schedule_for", lambda _sport: [])
+    monkeypatch.setattr(update_contests, "_sport_choices", lambda: {"NBA": DummySport})
+
+    class FakeContestDB:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def get_live_contest(self, *_args, **_kwargs):
+            return (1, "Contest1", None, None, now)
+
+        def close(self):
+            return None
+
+    monkeypatch.setattr(update_contests, "ContestDatabase", FakeContestDB)
+
+    def fake_get_contest_data(dk_id):
+        if dk_id == 1:
+            return {
+                "completed": 0,
+                "status": "LIVE",
+                "entries": 0,
+                "positions_paid": 10,
+            }
+        return {
+            "completed": 1,
+            "status": "COMPLETED",
+            "entries": 0,
+            "positions_paid": 10,
+        }
+
+    monkeypatch.setattr(update_contests, "get_contest_data", fake_get_contest_data)
+
+    update_contests.check_contests_for_completion(conn)
+
+    assert any("Contest started" in msg for msg in sender.messages)
+    assert any("Contest ended" in msg for msg in sender.messages)
+
+
+def test_get_contest_data_returns_none_on_bad_status(monkeypatch):
+    class FakeDK:
+        def get_contest_detail(self, dk_id):
+            return {
+                "contestDetail": {
+                    "payoutSummary": [{"maxPosition": 1}],
+                    "contestStateDetail": "POSTPONED",
+                    "maximumEntries": 0,
+                }
+            }
+
+    monkeypatch.setattr(update_contests, "Draftkings", FakeDK)
+
+    assert update_contests.get_contest_data(1) is None
+
+
+def test_db_update_contest_success():
+    conn = sqlite3.connect(":memory:")
+    conn.execute(
+        "CREATE TABLE contests (dk_id INTEGER PRIMARY KEY, positions_paid INTEGER, status TEXT, completed INTEGER)"
+    )
+    conn.execute(
+        "INSERT INTO contests (dk_id, positions_paid, status, completed) VALUES (1, NULL, 'LIVE', 0)"
+    )
+    conn.commit()
+
+    update_contests.db_update_contest(conn, [10, "COMPLETED", 1, 1])
+
+
+def test_db_get_incomplete_contests_error(monkeypatch):
+    class BoomConn:
+        def cursor(self):
+            raise sqlite3.Error("boom")
+
+    assert update_contests.db_get_incomplete_contests(BoomConn()) is None
+
+
+def test_db_get_next_upcoming_contest_error(monkeypatch):
+    class BoomConn:
+        def cursor(self):
+            raise sqlite3.Error("boom")
+
+    assert update_contests.db_get_next_upcoming_contest(BoomConn(), "NBA") is None
+
+
+def test_db_get_next_upcoming_contest_any_error(monkeypatch):
+    class BoomConn:
+        def cursor(self):
+            raise sqlite3.Error("boom")
+
+    assert update_contests.db_get_next_upcoming_contest_any(BoomConn(), "NBA") is None
+
+
+def test_main_handles_sqlite_error(monkeypatch):
+    def boom(_path):
+        raise sqlite3.Error("boom")
+
+    monkeypatch.setattr(update_contests.sqlite3, "connect", boom)
+    update_contests.main()
