@@ -41,9 +41,9 @@ class Sheet:
     def _ensure_service(self) -> None:
         self._client.service
 
-    def find_sheet_id(self, title: str) -> int | None:
+    def find_sheet_id(self, title: str, *, partial: bool = False) -> int | None:
         """Find the spreadsheet ID based on title."""
-        return self._client.find_sheet_id(title)
+        return self._client.find_sheet_id(title, partial=partial)
 
     def write_values_to_sheet_range(
         self, values: list[list[Any]], cell_range: str

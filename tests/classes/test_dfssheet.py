@@ -176,23 +176,18 @@ def test_sheet_write_values_and_clear(fake_sheet_service, sheet_classes):
 
 def test_sheet_write_values_delegates_to_client(monkeypatch):
     from classes import dfssheet as dfssheet_module
+    from dfs_common import sheets as common_sheets
 
     calls = {}
 
-    class _Client:
-        def write_values(self, values, cell_range, value_input_option="USER_ENTERED"):
-            calls["values"] = values
-            calls["range"] = cell_range
-            calls["option"] = value_input_option
+    def fake_write(self, values, cell_range, value_input_option="USER_ENTERED"):
+        calls["values"] = values
+        calls["range"] = cell_range
+        calls["option"] = value_input_option
 
-    class _Service:
-        def spreadsheets(self):
-            raise AssertionError("service should not be used directly")
-
-    monkeypatch.setattr(dfssheet_module.Sheet, "setup_service", lambda self: _Service())
+    monkeypatch.setattr(common_sheets.SheetClient, "write_values", fake_write)
     monkeypatch.setenv("SPREADSHEET_ID", "sheet123")
     sheet = dfssheet_module.Sheet()
-    sheet._client = _Client()
 
     sheet.write_values_to_sheet_range([["a"]], "NBA!A1")
 
