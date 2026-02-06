@@ -1,7 +1,6 @@
 import logging
 import logging.config
 import pickle
-from typing import Any
 
 import requests
 from requests.cookies import RequestsCookieJar
@@ -14,22 +13,27 @@ logger = logging.getLogger(__name__)
 
 
 class DkSession:
+    """Create and hold an authenticated DraftKings requests.Session."""
+
     def __init__(self) -> None:
         _, cookies = get_dk_cookies()
         self.session = self.setup_session(cookies)
 
     def get_session(self) -> requests.Session:
+        """Return the configured requests session."""
         return self.session
 
-    def cj_from_pickle(self, filename: str) -> RequestsCookieJar | bool:
+    def cj_from_pickle(self, filename: str) -> RequestsCookieJar | None:
+        """Load a RequestsCookieJar from a pickle file if present."""
         try:
             with open(filename, "rb") as fp:
                 return pickle.load(fp)
         except FileNotFoundError as err:
             logger.error("File %s not found [%s]", filename, err)
-            return False
+            return None
 
     def setup_session(self, cookies: RequestsCookieJar) -> requests.Session:
+        """Create a requests.Session and populate it with cookies."""
         session = requests.Session()
 
         for cookie in cookies:

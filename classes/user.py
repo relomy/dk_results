@@ -34,6 +34,7 @@ class User:
         self.lineup = lineup
 
     def set_lineup_obj(self, lineup: Lineup) -> None:
+        """Attach a Lineup object and update remaining salary."""
         self.lineupobj = lineup
 
         for player in lineup.lineup:

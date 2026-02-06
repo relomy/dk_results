@@ -14,18 +14,18 @@ from .user import User
 
 
 class Results:
-    """Create a Results object which contains the results for a given DraftKings contest."""
+    """Parse salary and standings data for a DraftKings contest."""
 
     def __init__(
         self,
         sport_obj: Sport | Type[Sport],
         contest_id: int,
         salary_csv_fn: str,
-        positions_paid=None,
+        positions_paid: int | None = None,
         salary_rows: list[list[str]] | None = None,
         standings_rows: list[list[str]] | None = None,
         vips: list[str] | None = None,
-        logger=None,
+        logger: logging.Logger | None = None,
     ):
         self.logger = logger or logging.getLogger(__name__)
 

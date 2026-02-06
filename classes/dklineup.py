@@ -10,6 +10,8 @@ from classes.sport import Sport
 
 
 class DkLineup:
+    """Fetch VIP lineups for a contest and write them to a sheet."""
+
     def __init__(self, dksession: DkSession, dk_id: int, draft_group: int) -> None:
         self.dksession = dksession
         self.dk_id = dk_id
@@ -30,6 +32,7 @@ class DkLineup:
             raise e
 
     def get_leaderboard(self) -> list[dict[str, Any]]:
+        """Return leaderboard entries for the configured contest."""
         response = self.dksession.session.get(
             f"https://api.draftkings.com/scores/v1/leaderboards/{self.dk_id}?format=json&embed=leaderboard"
         )
@@ -38,6 +41,7 @@ class DkLineup:
     def get_vip_users(
         self, leaderboard: list[dict[str, Any]]
     ) -> list[dict[str, Any]]:
+        """Filter leaderboard entries to VIP users from vips.yaml."""
         for user in leaderboard:
             if user["userName"] in self.vips:
                 print()
@@ -46,12 +50,14 @@ class DkLineup:
         return found_users
 
     def get_scorecard_for_user(self, entryKey: int) -> dict[str, Any]:
+        """Fetch a scorecard for a leaderboard entry key."""
         response = self.dksession.session.get(
             f"https://api.draftkings.com/scores/v2/entries/{self.draft_group}/{entryKey}?format=json&embed=roster"
         )
         return response.json()
 
     def get_lineups(self) -> list[dict[str, Any]]:
+        """Return VIP lineup payloads suitable for writing to a sheet."""
         leaderboard = self.get_leaderboard()
         vip_users = self.get_vip_users(leaderboard)
 

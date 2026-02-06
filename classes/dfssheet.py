@@ -1,6 +1,7 @@
 import logging
 import logging.config
 import os
+from datetime import datetime
 from typing import Any
 
 from google.oauth2 import service_account
@@ -104,6 +105,7 @@ class Sheet:
     #     return result.get("values", [])
 
     def get_values_from_range(self, cell_range: str) -> list[list[Any]]:
+        """Fetch values from a given sheet range."""
         self._ensure_service()
         assert self.service is not None
         result = (
@@ -186,10 +188,11 @@ class DFSSheet(Sheet):
         self.write_values_to_sheet_range(values, cell_range)
 
     def write_lineup_range(self, values: list[list[Any]]) -> None:
+        """Write values to the configured lineup range."""
         cell_range = f"{self.sport}!{self._resolve_lineup_range(new=False)}"
         self.write_values_to_sheet_range(values, cell_range)
 
-    def add_last_updated(self, dt_updated) -> None:
+    def add_last_updated(self, dt_updated: datetime) -> None:
         """Update timestamp for sheet."""
         cell_range = f"{self.sport}!L1:Q1"
         values = [["Last Updated", "", dt_updated.strftime("%Y-%m-%d %H:%M:%S")]]

@@ -3,6 +3,7 @@
 import logging
 import logging.config
 from dataclasses import InitVar, dataclass, field
+from typing import Any
 
 # load the logging configuration
 logging.config.fileConfig("logging.ini")
@@ -94,7 +95,7 @@ class Player:
             self.name, self.pos, self.salary, self.game_info, self.team_abbv
         )
 
-    def writeable(self, sport: str) -> list:
+    def writeable(self, sport: str) -> list[Any]:
         if sport in ["PGA", "GOLF"] or "PGA" in sport:
             return [self.pos, self.name, self.salary, self.ownership, self.fpts]
 
