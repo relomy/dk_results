@@ -6,6 +6,7 @@ from typing import Any, cast
 
 import pytest
 
+from classes import dfssheet as dfssheet_module
 from classes.player import Player
 
 
@@ -335,3 +336,65 @@ def test_dfssheet_build_values_for_new_vip_lineup(fake_sheet_service, sheet_clas
     ]
     assert values[2][1] == "A 🔥"
     assert values[3][1] == "B ❄️"
+
+
+def test_sheet_setup_service_uses_credentials(monkeypatch):
+    captured = {}
+
+    def fake_from_file(path, scopes):
+        captured["path"] = path
+        captured["scopes"] = scopes
+        return object()
+
+    def fake_build(api, version, credentials, cache_discovery=False):
+        captured["build"] = (api, version, credentials, cache_discovery)
+        return "service"
+
+    monkeypatch.setattr(
+        dfssheet_module.service_account.Credentials,
+        "from_service_account_file",
+        staticmethod(fake_from_file),
+    )
+    monkeypatch.setattr(dfssheet_module, "build", fake_build)
+
+    sheet = dfssheet_module.Sheet()
+    service = sheet.setup_service()
+
+    assert service == "service"
+    assert captured["path"].endswith("client_secret.json")
+
+
+def test_fetch_sheet_gids_filters_entries(monkeypatch):
+    class FakeRequest:
+        def __init__(self, payload):
+            self.payload = payload
+
+        def execute(self):
+            return self.payload
+
+    class FakeSpreadsheets:
+        def __init__(self, payload):
+            self.payload = payload
+
+        def get(self, spreadsheetId):
+            return FakeRequest(self.payload)
+
+    class FakeService:
+        def __init__(self, payload):
+            self.payload = payload
+
+        def spreadsheets(self):
+            return FakeSpreadsheets(self.payload)
+
+    payload = {
+        "sheets": [
+            {"properties": {"title": "NBA", "sheetId": 10}},
+            {"properties": {"title": 123, "sheetId": "bad"}},
+        ]
+    }
+    fake_service = FakeService(payload)
+
+    monkeypatch.setattr(dfssheet_module.Sheet, "setup_service", lambda self: fake_service)
+
+    gids = dfssheet_module.fetch_sheet_gids("sheet")
+    assert gids == {"NBA": 10}
