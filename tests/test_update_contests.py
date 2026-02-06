@@ -91,6 +91,7 @@ def test_warning_notification_sent_for_upcoming_contest(monkeypatch):
         keyword = "%"
 
     monkeypatch.setattr(update_contests, "_sport_choices", lambda: {"nba": DummySport})
+    monkeypatch.setattr(update_contests, "WARNING_SCHEDULES", {"default": [25]})
 
     start_date = (datetime.datetime.now() + datetime.timedelta(minutes=10)).strftime(
         "%Y-%m-%d %H:%M:%S"
@@ -167,7 +168,7 @@ def test_warning_notifications_sent_for_multiple_thresholds(monkeypatch):
         keyword = "%"
 
     monkeypatch.setattr(update_contests, "_sport_choices", lambda: {"nba": DummySport})
-    monkeypatch.setattr(update_contests, "_warning_schedule_for", lambda _sport: [25, 5])
+    monkeypatch.setattr(update_contests, "WARNING_SCHEDULES", {"default": [25, 5]})
 
     start_date = (datetime.datetime.now() + datetime.timedelta(minutes=3)).strftime(
         "%Y-%m-%d %H:%M:%S"
