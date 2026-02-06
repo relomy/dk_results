@@ -126,3 +126,27 @@ def test_get_live_contests_discovers_sports_when_not_provided(contest_db):
     assert rows == [
         (12, "Contest", 1, None, "2024-01-01 00:00:00", "NBA"),
     ]
+
+
+def test_sync_draft_group_start_dates_updates_only_changed_groups(contest_db):
+    _insert_contest(contest_db, dk_id=1, draft_group=10, start_date="2024-01-01 00:00:00")
+    _insert_contest(contest_db, dk_id=2, draft_group=10, start_date="2024-01-01 00:00:00")
+    _insert_contest(contest_db, dk_id=3, draft_group=20, start_date="2024-01-02 00:00:00")
+
+    updates = contest_db.sync_draft_group_start_dates(
+        {
+            10: datetime.datetime(2024, 1, 1, 0, 0, 0),
+            20: datetime.datetime(2024, 1, 3, 12, 0, 0),
+        }
+    )
+
+    assert updates == 1
+
+    rows = list(
+        contest_db.conn.execute("SELECT dk_id, start_date FROM contests ORDER BY dk_id")
+    )
+    assert rows == [
+        (1, "2024-01-01 00:00:00"),
+        (2, "2024-01-01 00:00:00"),
+        (3, "2024-01-03 12:00:00"),
+    ]

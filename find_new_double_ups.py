@@ -6,7 +6,7 @@ import logging
 import logging.config
 import sys
 from os import getenv
-from typing import Optional, Type
+from typing import Any, Optional, Type
 
 import requests
 from dotenv import load_dotenv
@@ -70,7 +70,9 @@ def send_discord_notification(
     bot.send_message(f"{emoji} {message} {role}")
 
 
-def get_dk_lobby(sport: Type[Sport], url: str) -> tuple[list, list]:
+def get_dk_lobby(
+    sport: Type[Sport], url: str
+) -> tuple[list[dict[str, Any]], list[int], dict[str, Any] | list[Any]]:
     """
     Get contests and draft groups from the DraftKings lobby.
 
@@ -79,7 +81,8 @@ def get_dk_lobby(sport: Type[Sport], url: str) -> tuple[list, list]:
         url (str): URL to fetch contests.
 
     Returns:
-        tuple[list, list]: List of contests and list of draft groups.
+        tuple[list[dict], list[int], dict | list]: List of contests, list of draft
+            group IDs, and the raw lobby response.
     """
     # set cookies based on Chrome session
     # logger.debug(url)
@@ -89,10 +92,12 @@ def get_dk_lobby(sport: Type[Sport], url: str) -> tuple[list, list]:
     contests = get_contests_from_response(response)
     draft_groups = get_draft_groups_from_response(response, sport)
 
-    return contests, draft_groups
+    return contests, draft_groups, response
 
 
-def get_contests_from_response(response: dict | list) -> list:
+def get_contests_from_response(
+    response: dict[str, Any] | list[dict[str, Any]]
+) -> list[dict[str, Any]]:
     """
     Extract contests from the DraftKings lobby response.
 
@@ -363,6 +368,44 @@ def get_draft_groups_from_response(response: dict, sport_obj: Type[Sport]) -> li
     return response_draft_groups
 
 
+def build_draft_group_start_map(
+    draft_groups: list[dict[str, Any]], allowed_ids: set[int]
+) -> dict[int, datetime.datetime]:
+    """
+    Build a draft_group -> start datetime map for allowed draft groups.
+
+    Args:
+        draft_groups (list[dict]): Draft groups from the lobby response.
+        allowed_ids (set[int]): Draft group IDs to include.
+
+    Returns:
+        dict[int, datetime.datetime]: Draft group IDs mapped to start datetimes
+            (timezone offset trimmed to match existing storage format).
+    """
+    if not draft_groups or not allowed_ids:
+        return {}
+
+    start_map: dict[int, datetime.datetime] = {}
+    for draft_group in draft_groups:
+        draft_group_id = draft_group.get("DraftGroupId")
+        if draft_group_id is None or draft_group_id not in allowed_ids:
+            continue
+        start_date_est = draft_group.get("StartDateEst")
+        if not start_date_est:
+            continue
+        try:
+            start_map[draft_group_id] = datetime.datetime.fromisoformat(
+                start_date_est[:-8]
+            )
+        except (TypeError, ValueError):
+            logger.debug(
+                "invalid StartDateEst for dg_id=%s: %s",
+                draft_group_id,
+                start_date_est,
+            )
+    return start_map
+
+
 def valid_date(date_string: str) -> datetime.datetime:
     """
     Validate and parse a date string in YYYY-MM-DD format.
@@ -582,7 +625,7 @@ def process_sport(
     sport_obj = choices[sport_name]
     primary_sport = sport_obj.get_primary_sport()
     url = LOBBY_URL_TEMPLATE.format(sport=primary_sport)
-    response_contests, draft_groups = get_dk_lobby(sport_obj, url)
+    response_contests, draft_groups, response = get_dk_lobby(sport_obj, url)
     contests = [Contest(c, sport_obj.name) for c in response_contests]
     double_ups = get_double_ups(
         contests,
@@ -591,6 +634,16 @@ def process_sport(
         entries=sport_obj.dub_min_entries,
     )
     db.create_table()
+    allowed_ids = set(draft_groups)
+    start_map = build_draft_group_start_map(
+        response.get("DraftGroups", []), allowed_ids
+    )
+    if start_map:
+        updated_groups = db.sync_draft_group_start_dates(start_map)
+        if updated_groups:
+            logger.info("updated %d draft_group start_date values", updated_groups)
+        else:
+            logger.debug("no draft_group start_date updates needed")
     new_contest_ids = db.compare_contests(double_ups)
 
     if new_contest_ids:
