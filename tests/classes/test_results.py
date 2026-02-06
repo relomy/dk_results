@@ -422,3 +422,31 @@ def test_get_players_returns_dict():
         DummySport(), 1, "", salary_rows=_salary_rows(), standings_rows=_standings_rows()
     )
     assert results.get_players() is results.players
+
+
+def test_results_parses_files_and_skips_empty_row(tmp_path, monkeypatch):
+    class DummySport:
+        name = "NFL"
+        sport_name = "NFL"
+        positions = ["QB"]
+
+    salary_csv = tmp_path / "salary.csv"
+    salary_csv.write_text(
+        "Position,,Name,,Roster Pos,Salary,Game Info,Team,APPG\n"
+        "QB,,Player A,,QB,5000,AAA@BBB 7:00PM,AAA,0\n"
+    )
+
+    contests_dir = tmp_path / "contests"
+    contests_dir.mkdir()
+    standings_file = contests_dir / "contest-standings-1.csv"
+    standings_file.write_text(
+        "Rank,EntryId,User,PMR,Points,Lineup\n"
+        "\n"
+        "1,1,User,0,0,QB Player A\n"
+    )
+
+    monkeypatch.chdir(tmp_path)
+
+    results = Results(DummySport(), 1, str(salary_csv), standings_rows=None)
+
+    assert "Player A" in results.players
