@@ -121,10 +121,10 @@ class ContestDatabase:
 
         Args:
             draft_group_start_dates (dict[int, datetime.datetime]): Draft group IDs
-                mapped to their latest start datetime.
+                mapped to their latest start datetime (naive, seconds precision).
 
         Returns:
-            int: Number of draft groups updated.
+            int: Number of draft groups updated (not rows updated).
         """
         if not draft_group_start_dates:
             return 0

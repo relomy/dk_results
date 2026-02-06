@@ -6,7 +6,7 @@ import logging
 import logging.config
 import sys
 from os import getenv
-from typing import Optional, Type
+from typing import Any, Optional, Type
 
 import requests
 from dotenv import load_dotenv
@@ -70,7 +70,9 @@ def send_discord_notification(
     bot.send_message(f"{emoji} {message} {role}")
 
 
-def get_dk_lobby(sport: Type[Sport], url: str) -> tuple[list, list, dict]:
+def get_dk_lobby(
+    sport: Type[Sport], url: str
+) -> tuple[list[dict[str, Any]], list[int], dict[str, Any] | list[Any]]:
     """
     Get contests and draft groups from the DraftKings lobby.
 
@@ -79,7 +81,8 @@ def get_dk_lobby(sport: Type[Sport], url: str) -> tuple[list, list, dict]:
         url (str): URL to fetch contests.
 
     Returns:
-        tuple[list, list]: List of contests and list of draft groups.
+        tuple[list[dict], list[int], dict | list]: List of contests, list of draft
+            group IDs, and the raw lobby response.
     """
     # set cookies based on Chrome session
     # logger.debug(url)
@@ -92,7 +95,9 @@ def get_dk_lobby(sport: Type[Sport], url: str) -> tuple[list, list, dict]:
     return contests, draft_groups, response
 
 
-def get_contests_from_response(response: dict | list) -> list:
+def get_contests_from_response(
+    response: dict[str, Any] | list[dict[str, Any]]
+) -> list[dict[str, Any]]:
     """
     Extract contests from the DraftKings lobby response.
 
@@ -364,7 +369,7 @@ def get_draft_groups_from_response(response: dict, sport_obj: Type[Sport]) -> li
 
 
 def build_draft_group_start_map(
-    draft_groups: list[dict], allowed_ids: set[int]
+    draft_groups: list[dict[str, Any]], allowed_ids: set[int]
 ) -> dict[int, datetime.datetime]:
     """
     Build a draft_group -> start datetime map for allowed draft groups.
@@ -374,7 +379,8 @@ def build_draft_group_start_map(
         allowed_ids (set[int]): Draft group IDs to include.
 
     Returns:
-        dict[int, datetime.datetime]: Draft group IDs mapped to start datetimes.
+        dict[int, datetime.datetime]: Draft group IDs mapped to start datetimes
+            (timezone offset trimmed to match existing storage format).
     """
     if not draft_groups or not allowed_ids:
         return {}
