@@ -10,6 +10,30 @@
 
 ---
 
+## Status (2026-02-06)
+
+Completed:
+- Created `dfs_common` repo at `/Users/alewando/Documents/Repo/dfs-workspace/dfs_common` with `sheets` and `discord` primitives + tests.
+- Added `dfs-common` dependency and `[tool.uv.sources]` to `dk_results`, `nba_sheet`, `read_datagolf`.
+- Migrated `read_datagolf` Sheets helpers to delegate to `dfs_common.sheets`.
+- Migrated `dk_results` Sheets + webhook senders to delegate to `dfs_common`.
+- Migrated `nba_sheet` Sheets + webhook sender to delegate to `dfs_common`.
+- Added contract tests in `dk_results` and `read_datagolf`, updated `nba_sheet` tests.
+- Updated README docs in all three repos to note `dfs_common` usage.
+- Tagged `dfs_common` as `v0.1.0`.
+
+Deviations from plan:
+- `dfs_common` lives under `/Users/alewando/Documents/Repo/dfs-workspace/dfs_common` (not `/Users/alewando/Documents/Repo/dfs_common`) due to workspace write constraints.
+- `dfs_common` and `read_datagolf` now require Python `>=3.9`.
+- Dependency wiring uses `[tool.uv.sources] dfs-common = { path = "../dfs_common" }` instead of inline `@ file://` paths.
+- `read_datagolf` needed packaging metadata for uv extras: added `[build-system]` and `[tool.setuptools] py-modules = [...]`.
+
+Tests run:
+- `dk_results`: `uv run pytest` (74 passed)
+- `nba_sheet`: `uv run pytest` (114 passed)
+- `read_datagolf`: `uv run pytest` (1 passed)
+- `dfs_common`: `uv run pytest -q` (3 passed)
+
 ### Task 1: Initialize `dfs_common` Repo Skeleton
 
 **Files:**
