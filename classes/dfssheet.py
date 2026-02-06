@@ -4,8 +4,7 @@ import os
 from datetime import datetime
 from typing import Any
 
-from google.oauth2 import service_account
-from googleapiclient.discovery import build
+from dfs_common.sheets import SheetClient, service_account_provider
 
 from .sport import get_lineup_range, get_new_lineup_range
 
@@ -20,80 +19,41 @@ class Sheet:
 
         # unique ID for DFS Ownership/Value spreadsheet
         self.spreadsheet_id = os.getenv("SPREADSHEET_ID")
-        self.service: Any | None = None
+        self._client = SheetClient(
+            spreadsheet_id=self.spreadsheet_id,
+            credentials_provider=self.setup_service,
+            logger=self.logger,
+        )
 
     def setup_service(self) -> Any:
         """Sets up the service for the spreadsheet."""
-        scopes = [
-            "https://www.googleapis.com/auth/spreadsheets",
-            "https://www.googleapis.com/auth/drive",
-        ]
-        directory = "."
-        secret_file = os.path.join(directory, "client_secret.json")
+        provider = service_account_provider("client_secret.json")
+        return provider()
 
-        credentials = service_account.Credentials.from_service_account_file(
-            secret_file, scopes=scopes
-        )
+    @property
+    def service(self) -> Any:
+        return self._client._service
 
-        return build("sheets", "v4", credentials=credentials, cache_discovery=False)
+    @service.setter
+    def service(self, value: Any) -> None:
+        self._client._service = value
 
     def _ensure_service(self) -> None:
-        if self.service is None:
-            self.service = self.setup_service()
+        self._client.service
 
     def find_sheet_id(self, title: str) -> int | None:
         """Find the spreadsheet ID based on title."""
-        self._ensure_service()
-        assert self.service is not None
-        sheet_metadata = (
-            self.service.spreadsheets().get(spreadsheetId=self.spreadsheet_id).execute()
-        )
-        sheets = sheet_metadata.get("sheets", "")
-        for sheet in sheets:
-            if title in sheet["properties"]["title"]:
-                # logger.debug("Sheet ID for %s is %s", title, sheet["properties"]["sheetId"])
-                return sheet["properties"]["sheetId"]
-
-        return None
+        return self._client.find_sheet_id(title)
 
     def write_values_to_sheet_range(
         self, values: list[list[Any]], cell_range: str
     ) -> None:
         """Write a set of values to a column in a spreadsheet."""
-        self._ensure_service()
-        assert self.service is not None
-        body = {"values": values}
-        value_input_option = "USER_ENTERED"
-        result = (
-            self.service.spreadsheets()
-            .values()
-            .update(
-                spreadsheetId=self.spreadsheet_id,
-                range=cell_range,
-                valueInputOption=value_input_option,
-                body=body,
-            )
-            .execute()
-        )
-        self.logger.info(
-            "%s cells updated for [%s].", cell_range, result.get("updatedCells")
-        )
+        self._client.write_values(values, cell_range, value_input_option="USER_ENTERED")
 
     def clear_sheet_range(self, cell_range: str) -> None:
         """Clears (values only) a given cell_range."""
-        self._ensure_service()
-        assert self.service is not None
-        result = (
-            self.service.spreadsheets()
-            .values()
-            .clear(
-                spreadsheetId=self.spreadsheet_id,
-                range=cell_range,
-                body={},  # must be empty
-            )
-            .execute()
-        )
-        self.logger.info("Range %s cleared.", result.get("clearedRange"))
+        self._client.clear_range(cell_range)
 
     # def get_values_from_self_range(self):
     #     result = (
@@ -106,15 +66,7 @@ class Sheet:
 
     def get_values_from_range(self, cell_range: str) -> list[list[Any]]:
         """Fetch values from a given sheet range."""
-        self._ensure_service()
-        assert self.service is not None
-        result = (
-            self.service.spreadsheets()
-            .values()
-            .get(spreadsheetId=self.spreadsheet_id, range=cell_range)
-            .execute()
-        )
-        return result.get("values", [])
+        return self._client.get_values(cell_range)
 
     # def sheet_letter_to_index(self, letter):
     #     """1-indexed"""
