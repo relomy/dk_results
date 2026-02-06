@@ -13,7 +13,7 @@ dependencies = [
     "pyyaml",
     "dotenv",
     "discord",
-    "dfs-common @ ../dfs_common"
+    "dfs-common"
 ]
 
 [tool.setuptools.packages.find]
@@ -36,3 +36,6 @@ allow-prereleases = true
 
 [tool.uv]
 default-groups = "all"
+
+[tool.uv.sources]
+dfs-common = { path = "../dfs_common" }

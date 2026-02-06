@@ -117,6 +117,29 @@ wheels = [
 ]
 
 [[package]]
+name = "dfs-common"
+version = "0.1.0"
+source = { directory = "../dfs_common" }
+dependencies = [
+    { name = "google-api-python-client" },
+    { name = "google-auth" },
+    { name = "requests" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "google-api-python-client" },
+    { name = "google-auth" },
+    { name = "requests" },
+]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "pytest" },
+    { name = "ruff" },
+]
+
+[[package]]
 name = "discord"
 version = "2.3.2"
 source = { registry = "https://pypi.org/simple" }
@@ -145,6 +168,7 @@ name = "dk-results"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
+    { name = "dfs-common" },
     { name = "discord" },
     { name = "dotenv" },
     { name = "google-api-python-client" },
@@ -169,6 +193,7 @@ type = [
 
 [package.metadata]
 requires-dist = [
+    { name = "dfs-common", directory = "../dfs_common" },
     { name = "discord" },
     { name = "dotenv" },
     { name = "google-api-python-client" },
