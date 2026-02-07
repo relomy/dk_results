@@ -537,14 +537,12 @@ def get_contest_data(dk_id) -> dict | None:
                 "entries": entries,
                 "positions_paid": positions_paid,
             }
-    except Exception as req_ex:
-        logger.error(f"Request error: {req_ex}")
     except ValueError as val_err:
         logger.error(f"JSON decoding error: {val_err}")
     except KeyError as key_err:
         logger.error(f"Key error: {key_err}")
-    except Exception as ex:
-        logger.error(f"An unexpected error occurred: {ex}")
+    except Exception as req_ex:
+        logger.error(f"Request error: {req_ex}")
 
     return None
 

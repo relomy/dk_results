@@ -767,6 +767,26 @@ def test_get_contest_data_request_error(monkeypatch):
     assert update_contests.get_contest_data(1) is None
 
 
+def test_get_contest_data_value_error(monkeypatch):
+    class FakeDK:
+        def get_contest_detail(self, dk_id):
+            raise ValueError("bad json")
+
+    monkeypatch.setattr(update_contests, "Draftkings", FakeDK)
+
+    assert update_contests.get_contest_data(1) is None
+
+
+def test_get_contest_data_key_error(monkeypatch):
+    class FakeDK:
+        def get_contest_detail(self, dk_id):
+            return {}
+
+    monkeypatch.setattr(update_contests, "Draftkings", FakeDK)
+
+    assert update_contests.get_contest_data(1) is None
+
+
 def test_db_update_contest_handles_error():
     class BoomCursor:
         def execute(self, *_a, **_k):
