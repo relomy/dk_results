@@ -8,8 +8,8 @@ from typing import Any
 
 import yaml
 
+import contests_state
 from bot.discord_rest import DiscordRest
-from classes.contestdatabase import ContestDatabase
 from classes.draftkings import Draftkings
 from classes.sport import Sport
 
@@ -19,7 +19,6 @@ logger = logging.getLogger(__name__)
 
 # constants
 COMPLETED_STATUSES = ["COMPLETED", "CANCELLED"]
-DB_FILE = os.getenv("CONTESTS_DB_PATH", "contests.db")
 DISCORD_NOTIFICATIONS_ENABLED = os.getenv("DISCORD_NOTIFICATIONS_ENABLED", "true")
 SPREADSHEET_ID = os.getenv("SPREADSHEET_ID")
 SHEET_GIDS_FILE = os.getenv("SHEET_GIDS_FILE", "sheet_gids.yaml")
@@ -218,6 +217,10 @@ def _format_contest_announcement(
     )
 
 
+def _contests_db_path() -> str:
+    return str(contests_state.contests_db_path())
+
+
 def create_notifications_table(conn) -> None:
     sql = """
     CREATE TABLE IF NOT EXISTS contest_notifications (
@@ -349,170 +352,165 @@ def check_contests_for_completion(conn) -> None:
     logger.debug("found %i incomplete contests", len(incomplete_contests))
 
     skip_draft_groups = []
-    contest_db = ContestDatabase(DB_FILE, logger=logger)
     sport_choices = _sport_choices()
 
-    try:
-        for (
-            dk_id,
-            draft_group,
-            entries,
-            positions_paid,
-            status,
-            completed,
+    for (
+        dk_id,
+        draft_group,
+        entries,
+        positions_paid,
+        status,
+        completed,
+        name,
+        start_date,
+        sport_name,
+    ) in incomplete_contests:
+        if positions_paid is not None and draft_group in skip_draft_groups:
+            logger.debug("dk_id: {} positions_paid: {}".format(dk_id, positions_paid))
+            logger.debug(
+                "skipping %s because we've already updated %d [skipped draft groups %s]",
+                name,
+                draft_group,
+                " ".join(str(dg) for dg in skip_draft_groups),
+            )
+            continue
+
+        # navigate to the gamecenter URL
+        logger.debug(
+            "getting contest data for %s [id: %i start: %s dg: %d]",
             name,
+            dk_id,
             start_date,
-            sport_name,
-        ) in incomplete_contests:
-            if positions_paid is not None and draft_group in skip_draft_groups:
-                logger.debug(
-                    "dk_id: {} positions_paid: {}".format(dk_id, positions_paid)
-                )
-                logger.debug(
-                    "skipping %s because we've already updated %d [skipped draft groups %s]",
-                    name,
-                    draft_group,
-                    " ".join(str(dg) for dg in skip_draft_groups),
-                )
+            draft_group,
+        )
+
+        try:
+            contest_data = get_contest_data(dk_id)
+
+            if contest_data is None:
                 continue
 
-            # navigate to the gamecenter URL
             logger.debug(
-                "getting contest data for %s [id: %i start: %s dg: %d]",
-                name,
-                dk_id,
-                start_date,
-                draft_group,
+                "existing: status: %s entries: %s positions_paid: %s",
+                status,
+                entries,
+                positions_paid,
             )
+            logger.debug(contest_data)
 
-            try:
-                contest_data = get_contest_data(dk_id)
+            new_status = contest_data["status"]
+            new_completed = contest_data["completed"]
 
-                if contest_data is None:
-                    continue
-
-                logger.debug(
-                    "existing: status: %s entries: %s positions_paid: %s",
-                    status,
-                    entries,
-                    positions_paid,
+            # if contest data is different, update it
+            if (
+                positions_paid != contest_data["positions_paid"]
+                or status != new_status
+                or completed != new_completed
+            ):
+                db_update_contest(
+                    conn,
+                    [
+                        contest_data["positions_paid"],
+                        new_status,
+                        new_completed,
+                        dk_id,
+                    ],
                 )
-                logger.debug(contest_data)
+            else:
+                # if contest data is the same, don't update other contests in the same draft group
+                skip_draft_groups.append(draft_group)
+                logger.debug("contest data is the same, not updating")
 
-                new_status = contest_data["status"]
-                new_completed = contest_data["completed"]
+            if sender and sport_name in sport_choices:
+                sport_cls = sport_choices[sport_name]
+                live_row = db_get_live_contest(
+                    conn,
+                    sport_cls.name,
+                    sport_cls.sheet_min_entry_fee,
+                    sport_cls.keyword,
+                )
+                is_primary_live = bool(live_row and live_row[0] == dk_id)
 
-                # if contest data is different, update it
+                is_new_live = status != "LIVE" and new_status == "LIVE"
+                is_new_completed = (
+                    status not in COMPLETED_STATUSES
+                    and new_status in COMPLETED_STATUSES
+                ) or (completed == 0 and new_completed == 1)
+
+                if is_new_live and is_primary_live:
+                    logger.info(
+                        "live transition detected for %s dk_id=%s",
+                        sport_name,
+                        dk_id,
+                    )
                 if (
-                    positions_paid != contest_data["positions_paid"]
-                    or status != new_status
-                    or completed != new_completed
+                    is_new_live
+                    and is_primary_live
+                    and not db_has_notification(conn, dk_id, "live")
                 ):
-                    db_update_contest(
-                        conn,
-                        [
-                            contest_data["positions_paid"],
-                            new_status,
-                            new_completed,
-                            dk_id,
-                        ],
+                    message = _format_contest_announcement(
+                        "Contest started",
+                        sport_name,
+                        name,
+                        str(start_date),
+                        dk_id,
                     )
-                else:
-                    # if contest data is the same, don't update other contests in the same draft group
-                    skip_draft_groups.append(draft_group)
-                    logger.debug("contest data is the same, not updating")
-
-                if sender and sport_name in sport_choices:
-                    sport_cls = sport_choices[sport_name]
-                    live_row = contest_db.get_live_contest(
-                        sport_cls.name,
-                        sport_cls.sheet_min_entry_fee,
-                        sport_cls.keyword,
+                    logger.info(
+                        "sending live notification for %s dk_id=%s",
+                        sport_name,
+                        dk_id,
                     )
-                    is_primary_live = bool(live_row and live_row[0] == dk_id)
+                    sender.send_message(message)
+                    db_insert_notification(conn, dk_id, "live")
+                    logger.info(
+                        "live notification stored for %s dk_id=%s",
+                        sport_name,
+                        dk_id,
+                    )
+                elif is_new_live and is_primary_live:
+                    logger.info(
+                        "live notification already sent for %s dk_id=%s",
+                        sport_name,
+                        dk_id,
+                    )
 
-                    is_new_live = status != "LIVE" and new_status == "LIVE"
-                    is_new_completed = (
-                        status not in COMPLETED_STATUSES
-                        and new_status in COMPLETED_STATUSES
-                    ) or (completed == 0 and new_completed == 1)
-
-                    if is_new_live and is_primary_live:
-                        logger.info(
-                            "live transition detected for %s dk_id=%s",
-                            sport_name,
-                            dk_id,
-                        )
-                    if (
-                        is_new_live
-                        and is_primary_live
-                        and not db_has_notification(conn, dk_id, "live")
-                    ):
+                if is_new_completed:
+                    if db_has_notification(
+                        conn, dk_id, "live"
+                    ) and not db_has_notification(conn, dk_id, "completed"):
                         message = _format_contest_announcement(
-                            "Contest started",
+                            "Contest ended",
                             sport_name,
                             name,
                             str(start_date),
                             dk_id,
                         )
                         logger.info(
-                            "sending live notification for %s dk_id=%s",
+                            "sending completed notification for %s dk_id=%s",
                             sport_name,
                             dk_id,
                         )
                         sender.send_message(message)
-                        db_insert_notification(conn, dk_id, "live")
+                        db_insert_notification(conn, dk_id, "completed")
                         logger.info(
-                            "live notification stored for %s dk_id=%s",
+                            "completed notification stored for %s dk_id=%s",
                             sport_name,
                             dk_id,
                         )
-                    elif is_new_live and is_primary_live:
+                    elif db_has_notification(conn, dk_id, "completed"):
                         logger.info(
-                            "live notification already sent for %s dk_id=%s",
+                            "completed notification already sent for %s dk_id=%s",
                             sport_name,
                             dk_id,
                         )
-
-                    if is_new_completed:
-                        if db_has_notification(
-                            conn, dk_id, "live"
-                        ) and not db_has_notification(conn, dk_id, "completed"):
-                            message = _format_contest_announcement(
-                                "Contest ended",
-                                sport_name,
-                                name,
-                                str(start_date),
-                                dk_id,
-                            )
-                            logger.info(
-                                "sending completed notification for %s dk_id=%s",
-                                sport_name,
-                                dk_id,
-                            )
-                            sender.send_message(message)
-                            db_insert_notification(conn, dk_id, "completed")
-                            logger.info(
-                                "completed notification stored for %s dk_id=%s",
-                                sport_name,
-                                dk_id,
-                            )
-                        elif db_has_notification(conn, dk_id, "completed"):
-                            logger.info(
-                                "completed notification already sent for %s dk_id=%s",
-                                sport_name,
-                                dk_id,
-                            )
-                        elif not db_has_notification(conn, dk_id, "live"):
-                            logger.info(
-                                "skipping completed notification for %s dk_id=%s; live notification missing",
-                                sport_name,
-                                dk_id,
-                            )
-            except Exception as error:
-                logger.error(error)
-    finally:
-        contest_db.close()
+                    elif not db_has_notification(conn, dk_id, "live"):
+                        logger.info(
+                            "skipping completed notification for %s dk_id=%s; live notification missing",
+                            sport_name,
+                            dk_id,
+                        )
+        except Exception as error:
+            logger.error(error)
 
 
 def get_contest_data(dk_id) -> dict | None:
@@ -560,6 +558,39 @@ def db_update_contest(conn, contest_to_update) -> None:
         logger.info("Total %d records updated successfully!", cur.rowcount)
     except sqlite3.Error as err:
         logger.error("sqlite error: %s", err.args[0])
+
+
+def db_get_live_contest(
+    conn, sport: str, entry_fee: int = 25, keyword: str = "%"
+) -> tuple | None:
+    """Get a live contest matching the criteria."""
+    cur = conn.cursor()
+    try:
+        base_sql = (
+            "SELECT dk_id, name, draft_group, positions_paid, start_date "
+            "FROM contests "
+            "WHERE sport=? "
+            "  AND name LIKE ? "
+            "  AND start_date <= datetime('now', 'localtime') "
+            "  AND completed=0 "
+        )
+
+        ordering = " ORDER BY entry_fee DESC, entries DESC, start_date DESC, dk_id DESC LIMIT 1"
+
+        cur.execute(base_sql + "  AND entry_fee >= ?" + ordering, (sport, keyword, entry_fee))
+        row = cur.fetchone()
+        if row:
+            logger.debug("returning %s", row)
+            return row
+
+        cur.execute(base_sql + "  AND entry_fee < ?" + ordering, (sport, keyword, entry_fee))
+        row = cur.fetchone()
+        if row:
+            logger.debug("returning %s", row)
+        return row
+    except sqlite3.Error as err:
+        logger.error("sqlite error in db_get_live_contest(): %s", err.args[0])
+        return None
 
 
 def db_get_incomplete_contests(conn):
@@ -641,7 +672,8 @@ def db_get_next_upcoming_contest_any(conn, sport: str) -> tuple | None:
 
 def main():
     try:
-        conn = sqlite3.connect(DB_FILE)
+        contests_state.ensure_schema()
+        conn = sqlite3.connect(_contests_db_path())
         check_contests_for_completion(conn)
     except sqlite3.Error as sql_error:
         logger.error(f"SQLite error: {sql_error}")

@@ -16,13 +16,13 @@ from classes.contest import Contest
 from classes.contestdatabase import ContestDatabase
 from classes.cookieservice import get_dk_cookies
 from classes.sport import Sport
+import contests_state
 from discord_roles import DISCORD_ROLE_MAP
 
 load_dotenv()
 
 # Centralized constants
 LOBBY_URL_TEMPLATE = "https://www.draftkings.com/lobby/getcontests?sport={sport}"
-DB_FILE = "contests.db"
 LOGGING_CONFIG_FILE = "logging.ini"
 DEFAULT_MIN_ENTRY_FEE = 5
 DEFAULT_MAX_ENTRY_FEE = 50
@@ -649,7 +649,7 @@ def process_sport(
         matching_contests = [c for c in contests if c.id in new_contest_ids]
         discord_message = format_discord_messages(matching_contests)
         logger.info(discord_message)
-        db.insert_contests(matching_contests)
+        contests_state.upsert_contests(matching_contests)
         send_discord_notification(bot, sport_obj.name, discord_message)
 
 
@@ -675,8 +675,10 @@ def main() -> None:
     if args.quiet:
         set_quiet_verbosity()
 
+    db_path = str(contests_state.contests_db_path())
+    contests_state.ensure_schema()
     # create connection to database file
-    db = ContestDatabase(DB_FILE)
+    db = ContestDatabase(db_path)
     try:
         for sport_name in args.sport:
             process_sport(sport_name, choices, db, bot)

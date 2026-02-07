@@ -10,6 +10,7 @@ import discord  # noqa: E402
 import yaml
 from discord.ext import commands
 
+import contests_state
 from classes.contestdatabase import ContestDatabase
 from classes.sport import Sport
 
@@ -17,7 +18,6 @@ logging.config.fileConfig("logging.ini")
 logger = logging.getLogger(__name__)
 
 COMMAND_PREFIX = "!"
-DB_PATH = os.getenv("CONTESTS_DB_PATH", "contests.db")
 BOT_TOKEN = os.getenv("DISCORD_BOT_TOKEN")
 START_TIME = time.time()
 SPREADSHEET_ID = os.getenv("SPREADSHEET_ID")
@@ -173,9 +173,13 @@ def _format_contest_row(row: tuple, sport_name: str, sheet_link: str | None) -> 
     )
 
 
+def _db_path() -> str:
+    return str(contests_state.contests_db_path())
+
+
 def _fetch_live_contest(sport_cls: SportType) -> tuple | None:
     """Fetch a live contest matching a sport's criteria from the database."""
-    contest_db = ContestDatabase(DB_PATH, logger=logger)
+    contest_db = ContestDatabase(_db_path(), logger=logger)
     try:
         return contest_db.get_live_contest(
             sport_cls.name, sport_cls.sheet_min_entry_fee, sport_cls.keyword
@@ -306,7 +310,7 @@ async def live(ctx: commands.Context) -> None:
     choices = _sport_choices()
     allowed_sports: list[str] = [sport_cls.name for sport_cls in choices.values()]
 
-    contest_db = ContestDatabase(DB_PATH, logger=logger)
+    contest_db = ContestDatabase(_db_path(), logger=logger)
     try:
         rows = contest_db.get_live_contests(sports=allowed_sports)
     finally:
@@ -340,7 +344,7 @@ async def live(ctx: commands.Context) -> None:
 async def upcoming(ctx: commands.Context) -> None:
     """Show the next upcoming contest per sport."""
     choices = _sport_choices()
-    contest_db = ContestDatabase(DB_PATH, logger=logger)
+    contest_db = ContestDatabase(_db_path(), logger=logger)
     try:
         lines = []
         for sport_cls in choices.values():

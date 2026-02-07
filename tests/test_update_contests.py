@@ -420,17 +420,11 @@ def test_check_contests_for_completion_live_and_completed(monkeypatch):
     monkeypatch.setattr(update_contests, "_warning_schedule_for", lambda _sport: [])
     monkeypatch.setattr(update_contests, "_sport_choices", lambda: {"NBA": DummySport})
 
-    class FakeContestDB:
-        def __init__(self, *args, **kwargs):
-            pass
-
-        def get_live_contest(self, *_args, **_kwargs):
-            return (1, "Contest1", None, None, now)
-
-        def close(self):
-            return None
-
-    monkeypatch.setattr(update_contests, "ContestDatabase", FakeContestDB)
+    monkeypatch.setattr(
+        update_contests,
+        "db_get_live_contest",
+        lambda *_a, **_k: (1, "Contest1", None, None, now),
+    )
 
     def fake_get_contest_data(dk_id):
         if dk_id == 1:
@@ -513,6 +507,7 @@ def test_main_handles_sqlite_error(monkeypatch):
         raise sqlite3.Error("boom")
 
     monkeypatch.setattr(update_contests.sqlite3, "connect", boom)
+    monkeypatch.setenv("DFS_STATE_DIR", "/tmp")
     update_contests.main()
 
 
@@ -633,14 +628,7 @@ def test_check_contests_for_completion_sends_warning(monkeypatch):
 def test_check_contests_for_completion_skip_branches(monkeypatch):
     conn = sqlite3.connect(":memory:")
 
-    class FakeContestDB:
-        def __init__(self, *args, **kwargs):
-            pass
-
-        def close(self):
-            return None
-
-    monkeypatch.setattr(update_contests, "ContestDatabase", FakeContestDB)
+    monkeypatch.setattr(update_contests, "db_get_live_contest", lambda *_a, **_k: None)
     monkeypatch.setattr(update_contests, "_build_discord_sender", lambda: None)
     monkeypatch.setattr(update_contests, "_sport_choices", lambda: {})
 
@@ -683,17 +671,11 @@ def test_check_contests_for_completion_notification_branches(monkeypatch):
 
     sender = FakeSender()
 
-    class FakeContestDB:
-        def __init__(self, *args, **kwargs):
-            pass
-
-        def get_live_contest(self, *_a, **_k):
-            return (1, "Contest", None, None, "2024-01-01 00:00:00")
-
-        def close(self):
-            return None
-
-    monkeypatch.setattr(update_contests, "ContestDatabase", FakeContestDB)
+    monkeypatch.setattr(
+        update_contests,
+        "db_get_live_contest",
+        lambda *_a, **_k: (1, "Contest", None, None, "2024-01-01 00:00:00"),
+    )
     monkeypatch.setattr(update_contests, "_build_discord_sender", lambda: sender)
     monkeypatch.setattr(update_contests, "_sport_choices", lambda: {"NBA": DummySport})
     monkeypatch.setattr(
@@ -1004,14 +986,7 @@ def test_check_contests_for_completion_warning_outside_window(monkeypatch):
 def test_check_contests_for_completion_logs_exception(monkeypatch):
     conn = sqlite3.connect(":memory:")
 
-    class FakeContestDB:
-        def __init__(self, *args, **kwargs):
-            pass
-
-        def close(self):
-            return None
-
-    monkeypatch.setattr(update_contests, "ContestDatabase", FakeContestDB)
+    monkeypatch.setattr(update_contests, "db_get_live_contest", lambda *_a, **_k: None)
     monkeypatch.setattr(update_contests, "_build_discord_sender", lambda: None)
     monkeypatch.setattr(update_contests, "_sport_choices", lambda: {})
     monkeypatch.setattr(
@@ -1042,6 +1017,8 @@ def test_main_happy_path(monkeypatch):
         "check_contests_for_completion",
         lambda c: called.setdefault("ok", True),
     )
+    monkeypatch.setenv("DFS_STATE_DIR", "/tmp")
+    monkeypatch.setattr(update_contests.contests_state, "ensure_schema", lambda: None)
 
     update_contests.main()
 

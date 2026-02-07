@@ -2,7 +2,8 @@
 name = "dk_results"
 version = "0.1.0"
 description = ""
-requires-python = ">=3.12"
+# NOTE: rookiepy has no wheels for Python >=3.13; keep <3.13 to avoid source build failures.
+requires-python = ">=3.12,<3.13"
 
 dependencies = [
     "google-api-python-client",
