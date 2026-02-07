@@ -9,6 +9,7 @@ import pickle
 import unicodedata
 import zipfile
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from pathlib import Path
 from typing import Any, Optional
 
 import requests
@@ -434,6 +435,7 @@ class Draftkings:
             )
 
         # dump html to file to avoid multiple requests
-        with open(filename, "w") as outfile:
+        Path(filename).parent.mkdir(parents=True, exist_ok=True)
+        with open(filename, "w", encoding="utf-8") as outfile:
             self.logger.debug("Writing r.text to %s", filename)
-            print(response.text, file=outfile)
+            outfile.write(response.text)

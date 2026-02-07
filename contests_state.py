@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 from dfs_common import contests, state
@@ -10,7 +11,9 @@ _UNSET = object()
 
 
 def contests_db_path() -> Path:
-    return state.contests_db_path()
+    path = state.contests_db_path()
+    logging.getLogger(__name__).info("Using contests DB at %s", path)
+    return path
 
 
 def ensure_schema() -> Path:

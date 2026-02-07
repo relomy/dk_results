@@ -78,6 +78,11 @@ Both `find_new_double_ups.py` and `classes/cookieservice.py` call `dotenv.load_d
 to load environment defaults (`find_new_double_ups.py:load_dotenv`,
 `classes/cookieservice.py:load_dotenv`).
 
+Google Sheets access uses the shared `dfs_common` helpers that expect a
+`client_secret.json` service account file located in the repository root. The guard in
+`dfs_common.sheets.service_account_provider` raises immediately if that file is missing,
+so place the credential file at the repo root before running `db_main.py` or the other writers.
+
 ## Data Files and Artifacts
 
 - `contests.db` lives under `DFS_STATE_DIR` and stores shared contest state.
