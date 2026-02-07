@@ -4,7 +4,7 @@ import logging.config
 import os
 import time
 from pathlib import Path
-from typing import Optional, Type, TypeAlias
+
 
 import discord  # noqa: E402
 import yaml
@@ -25,7 +25,7 @@ SHEET_GIDS_FILE = os.getenv("SHEET_GIDS_FILE", "sheet_gids.yaml")
 DISCORD_LOG_FILE = os.getenv("DISCORD_LOG_FILE")
 
 
-SportType: TypeAlias = Type[Sport]
+type SportType = type[Sport]
 
 
 def _load_sheet_gid_map() -> dict[str, int]:
@@ -126,7 +126,7 @@ def _configure_discord_log_file() -> None:
 _configure_discord_log_file()
 
 
-def _channel_id_from_env() -> Optional[int]:
+def _channel_id_from_env() -> int | None:
     """Return the allowed Discord channel ID, if configured."""
     raw_channel_id = os.getenv("DISCORD_CHANNEL_ID")
     if not raw_channel_id:
@@ -173,7 +173,7 @@ def _format_contest_row(row: tuple, sport_name: str, sheet_link: str | None) -> 
     )
 
 
-def _fetch_live_contest(sport_cls: SportType) -> Optional[tuple]:
+def _fetch_live_contest(sport_cls: SportType) -> tuple | None:
     """Fetch a live contest matching a sport's criteria from the database."""
     contest_db = ContestDatabase(DB_PATH, logger=logger)
     try:
@@ -226,7 +226,7 @@ def _format_time_until(start_date: str) -> str | None:
     return f"⏳ {''.join(parts)}"
 
 
-def _system_uptime_seconds() -> Optional[float]:
+def _system_uptime_seconds() -> float | None:
     """Return system uptime in seconds if /proc/uptime is available."""
     try:
         with open("/proc/uptime", "r") as f:
@@ -271,7 +271,7 @@ async def sankayadead(ctx: commands.Context) -> None:
 
 
 @bot.command(name="contests")
-async def contests(ctx: commands.Context, sport: Optional[str] = None) -> None:
+async def contests(ctx: commands.Context, sport: str | None = None) -> None:
     """Show one live contest for the requested sport."""
     choices = _sport_choices()
     if not sport:

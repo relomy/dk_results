@@ -1,6 +1,6 @@
 import re
+from collections.abc import Iterator
 from datetime import date, time
-from typing import Iterator, Optional, Type
 
 
 class Sport:
@@ -23,10 +23,10 @@ class Sport:
     _compiled_suffix_patterns: list[re.Pattern] | None = None
     _suffix_patterns_cache_key: tuple[str, ...] | None = None
 
-    contest_restraint_day: Optional[date] = None
-    contest_restraint_time: Optional[time] = None
-    contest_restraint_type_id: Optional[int] = None
-    contest_restraint_game_type_id: Optional[int] = None
+    contest_restraint_day: date | None = None
+    contest_restraint_time: time | None = None
+    contest_restraint_type_id: int | None = None
+    contest_restraint_game_type_id: int | None = None
 
     allow_optimizer: bool = True
     allow_suffixless_draft_groups: bool = True
@@ -56,7 +56,7 @@ class Sport:
         return cls._compiled_suffix_patterns
 
 
-def _iter_named_sports() -> Iterator[tuple[str, Type[Sport]]]:
+def _iter_named_sports() -> Iterator[tuple[str, type[Sport]]]:
     for sport_cls in Sport.__subclasses__():
         name = getattr(sport_cls, "name", "")
         if isinstance(name, str) and name:
