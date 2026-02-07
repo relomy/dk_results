@@ -56,12 +56,12 @@ used in CLI/bot choices (`classes/sport.py:Sport`, `db_main.py:main`,
 Environment variables are read directly in code (see referenced symbols below).
 
 Sample config files are provided to copy/adapt:
-`.env.sample`, `client_secret.json.sample`, `sheet_gids.yaml.sample`,
+`.env.example`, `client_secret.json.sample`, `sheet_gids.yaml.sample`,
 `vips.yaml.sample` (see files in repo root).
 
 | Variable | Used by | Notes |
 | --- | --- | --- |
-| `DFS_STATE_DIR` | `contests_state.contests_db_path`, `update_contests.py:_contests_db_path`, `bot/discord_bot.py:_db_path` | Required. Shared state directory containing `contests.sqlite`. |
+| `DFS_STATE_DIR` | `contests_state.contests_db_path`, `update_contests.py:_contests_db_path`, `bot/discord_bot.py:_db_path` | Required. Shared state directory containing `contests.db`. |
 | `DISCORD_NOTIFICATIONS_ENABLED` | `update_contests.py:DISCORD_NOTIFICATIONS_ENABLED` | Controls whether `update_contests.py` sends notifications. |
 | `DISCORD_BOT_TOKEN` | `update_contests.py:_build_discord_sender`, `bot/discord_bot.py:BOT_TOKEN` | Required for bot-based notifications and the Discord service. |
 | `DISCORD_CHANNEL_ID` | `update_contests.py:_build_discord_sender`, `bot/discord_bot.py:ALLOWED_CHANNEL_ID` | Required for bot-based notifications; also gates allowed channel. |
@@ -80,7 +80,7 @@ to load environment defaults (`find_new_double_ups.py:load_dotenv`,
 
 ## Data Files and Artifacts
 
-- `contests.sqlite` lives under `DFS_STATE_DIR` and stores shared contest state.
+- `contests.db` lives under `DFS_STATE_DIR` and stores shared contest state.
   The `contests` table schema is managed by `dfs_common` via `contests_state.ensure_schema`,
   and `contest_notifications` is created by `update_contests.py` for de-duplication
   (`update_contests.py:create_notifications_table`).
