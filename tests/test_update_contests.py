@@ -824,3 +824,225 @@ def test_module_main_executes(monkeypatch):
 
     monkeypatch.setattr("sqlite3.connect", boom)
     runpy.run_module("update_contests", run_name="__main__")
+
+
+def test_build_discord_sender_success_path(monkeypatch):
+    monkeypatch.setattr(update_contests, "DISCORD_NOTIFICATIONS_ENABLED", "true")
+    monkeypatch.setenv("DISCORD_BOT_TOKEN", "tok")
+    monkeypatch.setenv("DISCORD_CHANNEL_ID", "123")
+
+    sender = update_contests._build_discord_sender()
+
+    assert isinstance(sender, update_contests.DiscordRest)
+    assert sender.token == "tok"
+    assert sender.channel_id == 123
+
+
+def test_load_sheet_gid_map_unset(monkeypatch):
+    monkeypatch.setattr(update_contests, "SHEET_GIDS_FILE", "")
+    assert update_contests._load_sheet_gid_map() == {}
+
+
+def test_load_sheet_gid_map_safe_load_error(tmp_path, monkeypatch):
+    path = tmp_path / "gids.yaml"
+    path.write_text("NBA: 10\n")
+    monkeypatch.setattr(update_contests, "SHEET_GIDS_FILE", str(path))
+
+    def boom(_text):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(update_contests.yaml, "safe_load", boom)
+
+    assert update_contests._load_sheet_gid_map() == {}
+
+
+def test_load_sheet_gid_map_non_dict(tmp_path, monkeypatch):
+    path = tmp_path / "gids.yaml"
+    path.write_text("- 1\n")
+    monkeypatch.setattr(update_contests, "SHEET_GIDS_FILE", str(path))
+    monkeypatch.setattr(update_contests.yaml, "safe_load", lambda _text: ["bad"])
+
+    assert update_contests._load_sheet_gid_map() == {}
+
+
+def test_load_warning_schedule_map_non_dict(tmp_path, monkeypatch):
+    path = tmp_path / "sched.yaml"
+    path.write_text("- 1\n")
+    monkeypatch.setenv(update_contests.WARNING_SCHEDULE_FILE_ENV, str(path))
+    monkeypatch.setattr(update_contests.yaml, "safe_load", lambda _text: ["bad"])
+
+    result = update_contests._load_warning_schedule_map()
+
+    assert result == {"default": update_contests._DEFAULT_WARNING_SCHEDULE}
+
+
+def test_parse_start_date_datetime():
+    dt = datetime.datetime(2024, 1, 1, 0, 0, 0)
+    assert update_contests._parse_start_date(dt) is dt
+
+
+def test_parse_start_date_empty_returns_none():
+    assert update_contests._parse_start_date(None) is None
+
+
+def test_check_contests_for_completion_warning_path(monkeypatch):
+    conn = sqlite3.connect(":memory:")
+
+    class DummySport:
+        name = "NBA"
+        sheet_min_entry_fee = 25
+        keyword = "%"
+
+    class FakeSender:
+        def __init__(self):
+            self.messages = []
+
+        def send_message(self, message: str):
+            self.messages.append(message)
+
+    sender = FakeSender()
+
+    start_date = (datetime.datetime.now() + datetime.timedelta(minutes=5)).strftime(
+        "%Y-%m-%d %H:%M:%S"
+    )
+
+    monkeypatch.setattr(update_contests, "_build_discord_sender", lambda: sender)
+    monkeypatch.setattr(update_contests, "_sport_choices", lambda: {"NBA": DummySport})
+    monkeypatch.setattr(update_contests, "_warning_schedule_for", lambda _sport: [10])
+    monkeypatch.setattr(update_contests, "db_has_notification", lambda *_a, **_k: False)
+    monkeypatch.setattr(update_contests, "db_get_incomplete_contests", lambda _c: [])
+    monkeypatch.setattr(
+        update_contests,
+        "db_get_next_upcoming_contest",
+        lambda *_a, **_k: (1, "Contest", None, None, start_date),
+    )
+    monkeypatch.setattr(
+        update_contests,
+        "db_get_next_upcoming_contest_any",
+        lambda *_a, **_k: None,
+    )
+
+    update_contests.check_contests_for_completion(conn)
+
+    assert sender.messages
+
+
+def test_check_contests_for_completion_skips_missing_start_dt(monkeypatch):
+    conn = sqlite3.connect(":memory:")
+
+    class DummySport:
+        name = "NBA"
+        sheet_min_entry_fee = 25
+        keyword = "%"
+
+    class FakeSender:
+        def __init__(self):
+            self.messages = []
+
+        def send_message(self, message: str):
+            self.messages.append(message)
+
+    sender = FakeSender()
+
+    monkeypatch.setattr(update_contests, "_build_discord_sender", lambda: sender)
+    monkeypatch.setattr(update_contests, "_sport_choices", lambda: {"NBA": DummySport})
+    monkeypatch.setattr(update_contests, "db_get_incomplete_contests", lambda _c: [])
+    monkeypatch.setattr(
+        update_contests,
+        "db_get_next_upcoming_contest",
+        lambda *_a, **_k: (1, "Contest", None, None, None),
+    )
+    monkeypatch.setattr(
+        update_contests, "db_get_next_upcoming_contest_any", lambda *_a, **_k: None
+    )
+
+    update_contests.check_contests_for_completion(conn)
+
+    assert sender.messages == []
+
+
+def test_check_contests_for_completion_warning_outside_window(monkeypatch):
+    conn = sqlite3.connect(":memory:")
+
+    class DummySport:
+        name = "NBA"
+        sheet_min_entry_fee = 25
+        keyword = "%"
+
+    class FakeSender:
+        def __init__(self):
+            self.messages = []
+
+        def send_message(self, message: str):
+            self.messages.append(message)
+
+    sender = FakeSender()
+
+    start_date = (datetime.datetime.now() + datetime.timedelta(hours=2)).strftime(
+        "%Y-%m-%d %H:%M:%S"
+    )
+
+    monkeypatch.setattr(update_contests, "_build_discord_sender", lambda: sender)
+    monkeypatch.setattr(update_contests, "_sport_choices", lambda: {"NBA": DummySport})
+    monkeypatch.setattr(update_contests, "_warning_schedule_for", lambda _sport: [5])
+    monkeypatch.setattr(update_contests, "db_has_notification", lambda *_a, **_k: False)
+    monkeypatch.setattr(update_contests, "db_get_incomplete_contests", lambda _c: [])
+    monkeypatch.setattr(
+        update_contests,
+        "db_get_next_upcoming_contest",
+        lambda *_a, **_k: (1, "Contest", None, None, start_date),
+    )
+    monkeypatch.setattr(
+        update_contests, "db_get_next_upcoming_contest_any", lambda *_a, **_k: None
+    )
+
+    update_contests.check_contests_for_completion(conn)
+
+    assert sender.messages == []
+
+
+def test_check_contests_for_completion_logs_exception(monkeypatch):
+    conn = sqlite3.connect(":memory:")
+
+    class FakeContestDB:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def close(self):
+            return None
+
+    monkeypatch.setattr(update_contests, "ContestDatabase", FakeContestDB)
+    monkeypatch.setattr(update_contests, "_build_discord_sender", lambda: None)
+    monkeypatch.setattr(update_contests, "_sport_choices", lambda: {})
+    monkeypatch.setattr(
+        update_contests,
+        "db_get_incomplete_contests",
+        lambda _c: [
+            (1, 10, 0, None, "LIVE", 0, "Contest", "2024-01-01 00:00:00", "NBA")
+        ],
+    )
+
+    def boom(_dk_id):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(update_contests, "get_contest_data", boom)
+
+    update_contests.check_contests_for_completion(conn)
+
+
+def test_main_happy_path(monkeypatch):
+    called = {}
+
+    class FakeConn:
+        pass
+
+    monkeypatch.setattr(update_contests.sqlite3, "connect", lambda _p: FakeConn())
+    monkeypatch.setattr(
+        update_contests,
+        "check_contests_for_completion",
+        lambda c: called.setdefault("ok", True),
+    )
+
+    update_contests.main()
+
+    assert called["ok"] is True
