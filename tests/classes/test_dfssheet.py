@@ -365,28 +365,22 @@ def test_dfssheet_build_values_for_new_vip_lineup(fake_sheet_service, sheet_clas
 def test_sheet_setup_service_uses_credentials(monkeypatch):
     captured = {}
 
-    def fake_from_file(path, scopes):
+    def fake_provider(path, scopes=None):
         captured["path"] = path
-        captured["scopes"] = scopes
-        return object()
+        captured["scopes"] = list(scopes or [])
 
-    def fake_build(api, version, credentials, cache_discovery=False):
-        captured["build"] = (api, version, credentials, cache_discovery)
-        return "service"
+        def _service():
+            return "service"
 
-    monkeypatch.setattr(
-        dfssheet_module.service_account.Credentials,
-        "from_service_account_file",
-        staticmethod(fake_from_file),
-    )
-    monkeypatch.setattr(dfssheet_module, "build", fake_build)
+        return _service
+
+    monkeypatch.setattr(dfssheet_module, "service_account_provider", fake_provider)
 
     sheet = dfssheet_module.Sheet()
     service = sheet.setup_service()
 
     assert service == "service"
     assert captured["path"].endswith("client_secret.json")
-
 
 def test_fetch_sheet_gids_filters_entries(monkeypatch):
     class FakeRequest:
