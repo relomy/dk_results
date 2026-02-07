@@ -1,5 +1,4 @@
 import logging
-import logging.config
 import pickle
 
 import requests
@@ -7,8 +6,6 @@ from requests.cookies import RequestsCookieJar
 
 from classes.cookieservice import get_dk_cookies
 
-# load the logging configuration
-logging.config.fileConfig("logging.ini")
 logger = logging.getLogger(__name__)
 
 
