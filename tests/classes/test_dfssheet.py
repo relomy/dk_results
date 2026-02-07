@@ -383,36 +383,17 @@ def test_sheet_setup_service_uses_credentials(monkeypatch):
     assert captured["path"].endswith("client_secret.json")
 
 def test_fetch_sheet_gids_filters_entries(monkeypatch):
-    class FakeRequest:
-        def __init__(self, payload):
-            self.payload = payload
+    captured = {}
 
-        def execute(self):
-            return self.payload
+    def fake_get_sheet_gids(service, spreadsheet_id):
+        captured["service"] = service
+        captured["spreadsheet_id"] = spreadsheet_id
+        return {"NBA": 10}
 
-    class FakeSpreadsheets:
-        def __init__(self, payload):
-            self.payload = payload
-
-        def get(self, spreadsheetId):
-            return FakeRequest(self.payload)
-
-    class FakeService:
-        def __init__(self, payload):
-            self.payload = payload
-
-        def spreadsheets(self):
-            return FakeSpreadsheets(self.payload)
-
-    payload = {
-        "sheets": [
-            {"properties": {"title": "NBA", "sheetId": 10}},
-            {"properties": {"title": 123, "sheetId": "bad"}},
-        ]
-    }
-    fake_service = FakeService(payload)
-
-    monkeypatch.setattr(dfssheet_module.Sheet, "setup_service", lambda self: fake_service)
+    monkeypatch.setattr(dfssheet_module.Sheet, "setup_service", lambda self: "service")
+    monkeypatch.setattr(dfssheet_module, "get_sheet_gids", fake_get_sheet_gids)
 
     gids = dfssheet_module.fetch_sheet_gids("sheet")
+
     assert gids == {"NBA": 10}
+    assert captured == {"service": "service", "spreadsheet_id": "sheet"}

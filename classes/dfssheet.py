@@ -4,7 +4,7 @@ import os
 from datetime import datetime
 from typing import Any
 
-from dfs_common.sheets import SheetClient, service_account_provider
+from dfs_common.sheets import SheetClient, get_sheet_gids, service_account_provider
 
 from .sport import get_lineup_range, get_new_lineup_range
 
@@ -328,13 +328,4 @@ def fetch_sheet_gids(spreadsheet_id: str) -> dict[str, int]:
     """Return a mapping of sheet title -> gid for the given spreadsheet."""
     sheet = Sheet()
     service = sheet.setup_service()
-    sheet_metadata = service.spreadsheets().get(spreadsheetId=spreadsheet_id).execute()
-    sheets = sheet_metadata.get("sheets", [])
-    gids: dict[str, int] = {}
-    for entry in sheets:
-        props = entry.get("properties", {})
-        title = props.get("title")
-        sheet_id = props.get("sheetId")
-        if isinstance(title, str) and isinstance(sheet_id, int):
-            gids[title] = sheet_id
-    return gids
+    return get_sheet_gids(service, spreadsheet_id)
