@@ -99,6 +99,7 @@ def test_process_sport_syncs_draft_group_start_dates(monkeypatch):
             return None
 
     monkeypatch.setattr("find_new_double_ups.get_dk_lobby", fake_get_dk_lobby)
+    monkeypatch.setattr("contests_state.upsert_contests", lambda *_a, **_k: None)
     db = FakeDB()
 
     process_sport("NFL", {"NFL": NFLSport}, db, None)
