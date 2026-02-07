@@ -126,6 +126,7 @@ celerybeat-schedule
 
 # Environments
 .env
+.env.bot
 .venv
 env/
 venv/

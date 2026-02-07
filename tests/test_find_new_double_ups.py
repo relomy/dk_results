@@ -5,28 +5,32 @@ import sys
 import types
 
 import pytest
+from dfs_common.discord import WebhookSender
 from requests.cookies import RequestsCookieJar
 
+import find_new_double_ups as find_mod
 from classes.contest import Contest
 from classes.sport import NFLShowdownSport, NFLSport, Sport
 from find_new_double_ups import (
-    build_draft_group_start_map,
-    contest_meets_criteria,
-    format_discord_messages,
-    get_contests_from_response,
-    get_dk_lobby,
-    get_double_ups,
-    get_draft_groups_from_response,
-    get_salary_date,
-    get_stats,
-    is_time_between,
-    log_draft_group_event,
     parse_args,
     process_sport,
     send_discord_notification,
     set_quiet_verbosity,
-    valid_date,
 )
+from lobby.common import get_salary_date, is_time_between, valid_date
+from lobby.double_ups import contest_meets_criteria, get_double_ups, get_stats
+from lobby.fetch import get_dk_lobby
+from lobby.formatting import format_discord_messages
+from lobby.parsing import (
+    build_draft_group_start_map,
+    get_contests_from_response,
+    get_draft_groups_from_response,
+    log_draft_group_event,
+)
+
+
+def test_find_new_double_ups_exposes_webhook_sender():
+    assert find_mod.WebhookSender is WebhookSender
 
 
 def test_build_draft_group_start_map_filters_and_parses():
@@ -73,7 +77,7 @@ def test_process_sport_syncs_draft_group_start_dates(monkeypatch):
         },
     ]
 
-    def fake_get_dk_lobby(_sport, _url):
+    def fake_get_dk_lobby(_sport, _url, **_kwargs):
         response = {"DraftGroups": draft_groups}
         return [contest], [111, 222], response
 
@@ -95,6 +99,7 @@ def test_process_sport_syncs_draft_group_start_dates(monkeypatch):
             return None
 
     monkeypatch.setattr("find_new_double_ups.get_dk_lobby", fake_get_dk_lobby)
+    monkeypatch.setattr("contests_state.upsert_contests", lambda *_a, **_k: None)
     db = FakeDB()
 
     process_sport("NFL", {"NFL": NFLSport}, db, None)
@@ -144,11 +149,7 @@ def test_get_contests_from_response_list_and_dict():
     assert get_contests_from_response({"Contests": [1]}) == [1]
 
 
-def test_get_contests_from_response_invalid(monkeypatch):
-    monkeypatch.setattr(
-        "find_new_double_ups.sys.exit",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(SystemExit()),
-    )
+def test_get_contests_from_response_invalid():
     with pytest.raises(SystemExit):
         get_contests_from_response({"Other": []})
 
@@ -159,7 +160,7 @@ def test_log_draft_group_event_includes_reason(monkeypatch):
     def fake_log(level, msg, *args):
         captured.append(msg % args)
 
-    monkeypatch.setattr("find_new_double_ups.logger.log", fake_log)
+    monkeypatch.setattr("lobby.parsing.logger.log", fake_log)
 
     class DummySport(Sport):
         name = "TEST"
@@ -345,7 +346,7 @@ def test_process_sport_sends_notification(monkeypatch):
     contest = _contest_payload(1)
     draft_groups = [10]
 
-    def fake_get_dk_lobby(_sport, _url):
+    def fake_get_dk_lobby(_sport, _url, **_kwargs):
         response = {
             "DraftGroups": [
                 {
@@ -408,7 +409,7 @@ def test_get_dk_lobby_uses_requests(monkeypatch):
         def json(self):
             return {"Contests": [], "DraftGroups": []}
 
-    monkeypatch.setattr("find_new_double_ups.requests.get", lambda *_a, **_k: FakeResp())
+    monkeypatch.setattr("lobby.fetch.requests.get", lambda *_a, **_k: FakeResp())
 
     contests, draft_groups, resp = get_dk_lobby(DummySport, "http://example")
     assert contests == []

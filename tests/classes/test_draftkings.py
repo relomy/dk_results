@@ -17,6 +17,11 @@ class _FakeResponse:
         self.headers = headers
         self.status_code = 200
         self.url = "https://example.test/contest/export"
+        self.text = (
+            content.decode("utf-8", errors="ignore")
+            if isinstance(content, bytes)
+            else str(content)
+        )
 
 
 class _FakeSession:
@@ -52,6 +57,24 @@ def test_download_contest_rows_writes_csv(tmp_path):
     assert expected_path.exists()
     assert expected_path.read_bytes() == csv_bytes
     assert rows == [["col1", "col2"], ["1", "2"]]
+
+
+def test_download_salary_csv_creates_directory(tmp_path):
+    salary_path = tmp_path / "salary" / "GOLF" / "DKSalaries_GOLF_Saturday.csv"
+    response = _FakeResponse(content=b"name,value\n", headers={"Content-Type": "text/csv"})
+
+    class SalarySession:
+        def __init__(self, response: _FakeResponse):
+            self._response = response
+
+        def get(self, *args, **kwargs):
+            return self._response
+
+    dk = Draftkings(session=SalarySession(response))
+    dk.download_salary_csv("GOLF", 1, str(salary_path))
+
+    assert salary_path.exists()
+    assert salary_path.read_bytes() == b"name,value\n"
 
 
 def test_fetch_user_lineup_worker_adds_salary_total(monkeypatch):

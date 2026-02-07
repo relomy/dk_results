@@ -39,24 +39,15 @@ import argparse
 import datetime
 
 from classes.contest import Contest
-from classes.draftkings import Draftkings
+from lobby.common import valid_date
+from lobby.double_ups import get_stats
+from lobby.fetch import get_lobby_response
+from lobby.parsing import get_contests_from_response
 
 
 def get_contests(sport: str, live: bool = False):
-    dk = Draftkings()
-    response = dk.get_lobby_contests(sport, live=live)
-    response_contests = {}
-    if isinstance(response, list):
-        print("response is a list")
-        response_contests = response
-    elif "Contests" in response:
-        print("response is a dict")
-        response_contests = response["Contests"]
-    else:
-        print("response isn't a dict or a list??? exiting")
-        exit()
-
-    return response_contests
+    response = get_lobby_response(sport, live=live)
+    return get_contests_from_response(response)
 
 
 def get_largest_contest(contests, dt, entry_fee=25, query=None, exclude=None):
@@ -268,63 +259,8 @@ def print_sql_insert(contest):
     value_str = "', '".join([str(v) for v in values])
     print(f"INSERT INTO contests ({', '.join(fields)}) VALUES ('{value_str}')")
 
-
-def valid_date(date_string):
-    """Check date argument to determine if it is a valid.
-
-    Arguments
-    ---------
-        date_string {string} -- date from argument
-
-    Raises
-    ------
-        argparse.ArgumentTypeError:
-
-    Returns
-    -------
-        {datetime.datetime} -- YYYY-MM-DD format
-
-    """
-    try:
-        return datetime.datetime.strptime(date_string, "%Y-%m-%d")
-    except ValueError:
-        msg = "Not a valid date: '{0}'.".format(date_string)
-        raise argparse.ArgumentTypeError(msg)
-
-
-def get_stats(contests):
-    stats = {}
-    for c in contests:
-        start_date = c.start_dt.strftime("%Y-%m-%d")
-
-        # initialize stats[start_date] if it doesn't exist
-        if start_date not in stats:
-            stats[start_date] = {"count": 0}
-
-        stats[start_date]["count"] += 1
-
-        # keep track of single-entry double-ups
-        if c.max_entry_count == 1 and c.is_guaranteed and c.is_double_up:
-            # initialize stats[start_date]["dubs"] if it doesn't exist
-            if "dubs" not in stats[start_date]:
-                stats[start_date]["dubs"] = {}
-
-            # initialize stats[start_date]["dubs"][c.entry_fee] if it doesn't exist
-            if c.entry_fee not in stats[start_date]["dubs"]:
-                stats[start_date]["dubs"][c.entry_fee] = {"count": 0, "largest": 0}
-
-            # add 1 to contest
-            stats[start_date]["dubs"][c.entry_fee]["count"] += 1
-
-            # if contest entries is larger than what we have, set largest to entries
-            if c.entries > stats[start_date]["dubs"][c.entry_fee]["largest"]:
-                stats[start_date]["dubs"][c.entry_fee]["largest"] = c.entries
-
-    return stats
-
-
 def print_stats(contests):
-    stats = get_stats(contests)
+    stats = get_stats(contests, include_largest=True)
 
     if stats:
         print("Breakdown per date:")

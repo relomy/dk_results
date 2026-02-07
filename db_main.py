@@ -12,7 +12,8 @@ from zoneinfo import ZoneInfo
 
 import contests_state
 from classes.contestdatabase import ContestDatabase
-from classes.dfssheet import DFSSheet
+from classes.dfs_sheet_service import DfsSheetService
+from classes.sheets_service import build_dfs_sheet_service
 from classes.draftkings import Draftkings
 from classes.optimizer import Optimizer
 from classes.results import Results
@@ -61,7 +62,7 @@ def load_vips() -> list[str]:
 
 
 def write_players_to_sheet(
-    sheet: DFSSheet,
+    sheet: DfsSheetService,
     results: Results,
     sport_name: str,
     now: datetime.datetime,
@@ -72,7 +73,7 @@ def write_players_to_sheet(
     Write player values and contest details to the sheet.
 
     Args:
-        sheet (DFSSheet): Sheet object.
+        sheet (DfsSheetService): Sheet object.
         results (Results): Results object.
         sport_name (str): Sport name.
         now (datetime.datetime): Current datetime.
@@ -124,12 +125,12 @@ def write_players_to_sheet(
         sheet.write_new_vip_lineups(vip_lineups)
 
 
-def write_non_cashing_info(sheet: DFSSheet, results: Results) -> None:
+def write_non_cashing_info(sheet: DfsSheetService, results: Results) -> None:
     """
     Write non-cashing user info to the sheet.
 
     Args:
-        sheet (DFSSheet): Sheet object.
+        sheet (DfsSheetService): Sheet object.
         results (Results): Results object.
     """
     if results.non_cashing_users > 0:
@@ -159,12 +160,12 @@ def write_non_cashing_info(sheet: DFSSheet, results: Results) -> None:
         sheet.add_non_cashing_info(info)
 
 
-def write_train_info(sheet: DFSSheet, results: Results) -> None:
+def write_train_info(sheet: DfsSheetService, results: Results) -> None:
     """
     Write train info to the sheet.
 
     Args:
-        sheet (DFSSheet): Sheet object.
+        sheet (DfsSheetService): Sheet object.
         results (Results): Results object.
     """
     if results and results.users:
@@ -247,7 +248,7 @@ def process_sport(
         )
         return
 
-    sheet = DFSSheet(sport_name)
+    sheet = build_dfs_sheet_service(sport_name)
     logger.debug("Creating Results object Results(%s, %s, %s)", sport_name, dk_id, fn)
     results: Results = Results(
         sport_obj,

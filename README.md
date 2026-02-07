@@ -9,6 +9,16 @@ notifications (see `db_main.py:main`, `update_contests.py:check_contests_for_com
 - Google Sheets + Discord primitives are provided by `dfs_common`.
 - Local development expects `dfs_common` as a sibling directory (see `pyproject.toml:[tool.uv.sources]`).
 
+## Sheet Service
+
+Construct the sheet service with the repo helper so entry points only need one import:
+
+```python
+from classes.sheets_service import build_dfs_sheet_service
+
+sheet = build_dfs_sheet_service("NBA")
+```
+
 ## Runtime Entry Points (Externally Scheduled)
 
 Scheduling is external to this repo (cron/systemd/etc). Each entry point exposes a
@@ -16,15 +26,15 @@ Scheduling is external to this repo (cron/systemd/etc). Each entry point exposes
 `find_new_double_ups.py:main`, `update_contests.py:main`, `bot/discord_bot.py:main`).
 
 - `db_main.py` updates Google Sheets for a live contest per sport by downloading salary
-  and standings CSVs, constructing `Results`, and writing via `DFSSheet`
+  and standings CSVs, constructing `Results`, and writing via `DfsSheetService`
   (`db_main.py:process_sport`, `classes/draftkings.py:download_salary_csv`,
   `classes/draftkings.py:download_contest_rows`, `classes/results.py:Results`,
-  `classes/dfssheet.py:DFSSheet`).
+  `classes/dfs_sheet_service.py:DfsSheetService`).
 - `find_new_double_ups.py` polls the DraftKings lobby, filters double-up contests using
   sport-specific thresholds, compares against the database, inserts new contests, and
   sends Discord webhook notifications (`find_new_double_ups.py:process_sport`,
   `find_new_double_ups.py:get_double_ups`, `classes/contestdatabase.py:insert_contests`,
-  `bot/webhook.py:DiscordWebhook`).
+  `dfs_common/discord.py:WebhookSender`).
 - `update_contests.py` updates contest status and `positions_paid` for entries already
   in the database and sends Discord bot notifications for warning/live/completed events,
   with de-duplication tracked in a notifications table
@@ -56,27 +66,32 @@ used in CLI/bot choices (`classes/sport.py:Sport`, `db_main.py:main`,
 Environment variables are read directly in code (see referenced symbols below).
 
 Sample config files are provided to copy/adapt:
-`.env.sample`, `client_secret.json.sample`, `sheet_gids.yaml.sample`,
+`.env.example`, `client_secret.json.sample`, `sheet_gids.yaml.sample`,
 `vips.yaml.sample` (see files in repo root).
 
-| Variable | Used by | Notes |
-| --- | --- | --- |
-| `DFS_STATE_DIR` | `contests_state.contests_db_path`, `update_contests.py:_contests_db_path`, `bot/discord_bot.py:_db_path` | Required. Shared state directory containing `contests.sqlite`. |
-| `DISCORD_NOTIFICATIONS_ENABLED` | `update_contests.py:DISCORD_NOTIFICATIONS_ENABLED` | Controls whether `update_contests.py` sends notifications. |
-| `DISCORD_BOT_TOKEN` | `update_contests.py:_build_discord_sender`, `bot/discord_bot.py:BOT_TOKEN` | Required for bot-based notifications and the Discord service. |
-| `DISCORD_CHANNEL_ID` | `update_contests.py:_build_discord_sender`, `bot/discord_bot.py:ALLOWED_CHANNEL_ID` | Required for bot-based notifications; also gates allowed channel. |
-| `DISCORD_WEBHOOK` | `find_new_double_ups.py:main` | Enables webhook-based notifications for double-ups. |
-| `SPREADSHEET_ID` | `classes/dfssheet.py:Sheet.__init__`, `update_contests.py:SPREADSHEET_ID`, `bot/discord_bot.py:SPREADSHEET_ID`, `generate_sheet_gids.py:main` | Required for Google Sheets access and sheet link generation. |
-| `SHEET_GIDS_FILE` | `update_contests.py:SHEET_GIDS_FILE`, `bot/discord_bot.py:SHEET_GIDS_FILE` | Defaults to `sheet_gids.yaml` in those modules. |
-| `CONTEST_WARNING_MINUTES` | `update_contests.py:CONTEST_WARNING_MINUTES` | Default warning minutes used if schedule file missing. |
-| `CONTEST_WARNING_SCHEDULE_FILE` | `update_contests.py:WARNING_SCHEDULE_FILE_ENV` | Defaults to `contest_warning_schedules.yaml`. |
-| `DISCORD_LOG_FILE` | `bot/discord_bot.py:DISCORD_LOG_FILE` | Optional file path for bot logs. |
-| `DK_PLATFORM` | `classes/cookieservice.py:get_rookie_cookies` | Controls cookie source path behavior. |
-| `COOKIES_DB_PATH` | `classes/cookieservice.py:get_rookie_cookies` | Optional Chromium cookie DB path for DK cookies. |
+| Variable                        | Used by                                                                                                                                                      | Notes                                                             |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------- |
+| `DFS_STATE_DIR`                 | `contests_state.contests_db_path`, `update_contests.py:_contests_db_path`, `bot/discord_bot.py:_db_path`                                                     | Required. Shared state directory containing `contests.db`.        |
+| `DISCORD_NOTIFICATIONS_ENABLED` | `update_contests.py:DISCORD_NOTIFICATIONS_ENABLED`                                                                                                           | Controls whether `update_contests.py` sends notifications.        |
+| `DISCORD_BOT_TOKEN`             | `update_contests.py:_build_discord_sender`, `bot/discord_bot.py:BOT_TOKEN`                                                                                   | Required for bot-based notifications and the Discord service.     |
+| `DISCORD_CHANNEL_ID`            | `update_contests.py:_build_discord_sender`, `bot/discord_bot.py:ALLOWED_CHANNEL_ID`                                                                          | Required for bot-based notifications; also gates allowed channel. |
+| `DISCORD_WEBHOOK`               | `find_new_double_ups.py:main`                                                                                                                                | Enables webhook-based notifications for double-ups.               |
+| `SPREADSHEET_ID`                | `classes/sheets_service.py:build_dfs_sheet_service`, `update_contests.py:SPREADSHEET_ID`, `bot/discord_bot.py:SPREADSHEET_ID`, `generate_sheet_gids.py:main` | Required for Google Sheets access and sheet link generation.      |
+| `SHEET_GIDS_FILE`               | `update_contests.py:SHEET_GIDS_FILE`, `bot/discord_bot.py:SHEET_GIDS_FILE`                                                                                   | Defaults to `sheet_gids.yaml` in those modules.                   |
+| `CONTEST_WARNING_MINUTES`       | `update_contests.py:CONTEST_WARNING_MINUTES`                                                                                                                 | Default warning minutes used if schedule file missing.            |
+| `CONTEST_WARNING_SCHEDULE_FILE` | `update_contests.py:WARNING_SCHEDULE_FILE_ENV`                                                                                                               | Defaults to `contest_warning_schedules.yaml`.                     |
+| `DISCORD_LOG_FILE`              | `bot/discord_bot.py:DISCORD_LOG_FILE`                                                                                                                        | Optional file path for bot logs.                                  |
+| `DK_PLATFORM`                   | `classes/cookieservice.py:get_rookie_cookies`                                                                                                                | Controls cookie source path behavior.                             |
+| `COOKIES_DB_PATH`               | `classes/cookieservice.py:get_rookie_cookies`                                                                                                                | Optional Chromium cookie DB path for DK cookies.                  |
 
 Both `find_new_double_ups.py` and `classes/cookieservice.py` call `dotenv.load_dotenv()`
 to load environment defaults (`find_new_double_ups.py:load_dotenv`,
 `classes/cookieservice.py:load_dotenv`).
+
+Google Sheets access uses the shared `dfs_common` helpers that expect a
+`client_secret.json` service account file located in the repository root. The guard in
+`dfs_common.sheets.service_account_provider` raises immediately if that file is missing,
+so place the credential file at the repo root before running `db_main.py` or the other writers.
 
 ## Data Files and Artifacts
 
@@ -92,9 +107,9 @@ to load environment defaults (`find_new_double_ups.py:load_dotenv`,
 - `sheet_gids.yaml` is a YAML mapping of sheet title to numeric gid; used for building
   sheet links (`update_contests.py:_load_sheet_gid_map`, `bot/discord_bot.py:_load_sheet_gid_map`).
   It can be generated via `generate_sheet_gids.py` (`generate_sheet_gids.py:main`,
-  `classes/dfssheet.py:fetch_sheet_gids`).
+  `classes/sheets_service.py:fetch_sheet_gids`).
 - `client_secret.json` is required for Google Sheets service account auth
-  (`classes/dfssheet.py:Sheet.setup_service`).
+  (`classes/sheets_service.py:build_dfs_sheet_service`).
 - `vips.yaml` is an optional list of VIP usernames used by `db_main.py`
   (`db_main.py:load_vips`).
 - `salary/` and `contests/` are used to store downloaded CSVs for salary and standings
@@ -123,4 +138,4 @@ default: [25]
 
 Logging is configured via `logging.ini` and loaded by most modules using
 `logging.config.fileConfig()` (`update_contests.py`, `db_main.py`,
-`classes/contestdatabase.py`, `classes/dfssheet.py`).
+`classes/contestdatabase.py`, `classes/dfs_sheet_service.py`).

@@ -20,6 +20,8 @@ class ContestDatabase:
             logger (logging.Logger, optional): Logger instance.
         """
         self.logger = logger or logging.getLogger(__name__)
+        self.sqlite_path = sqlite3_database
+        self.logger.info("Connecting to contests DB %s", self.sqlite_path)
         self.conn: sqlite3.Connection = sqlite3.connect(sqlite3_database)
 
     def create_table(self) -> None:
@@ -205,7 +207,11 @@ class ContestDatabase:
             self.logger.debug("returning %s", row)
             return row
         except sqlite3.Error as err:
-            self.logger.error("sqlite error in get_live_contest(): %s", err.args[0])
+            self.logger.error(
+                "sqlite error in get_live_contest() (%s): %s",
+                self.sqlite_path,
+                err.args[0],
+            )
 
     def get_live_contests(
         self, sports: list[str] | None = None, entry_fee: int = 25, keyword: str = "%"
