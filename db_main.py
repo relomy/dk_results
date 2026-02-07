@@ -12,9 +12,8 @@ from zoneinfo import ZoneInfo
 
 import contests_state
 from classes.contestdatabase import ContestDatabase
-from classes.dfs_sheet_repository import DfsSheetRepository
 from classes.dfs_sheet_service import DfsSheetService
-from classes.sheets_service import make_sheet_client
+from classes.sheets_service import build_dfs_sheet_service
 from classes.draftkings import Draftkings
 from classes.optimizer import Optimizer
 from classes.results import Results
@@ -249,9 +248,7 @@ def process_sport(
         )
         return
 
-    client = make_sheet_client()
-    repo = DfsSheetRepository(client)
-    sheet = DfsSheetService(repo, sport_name)
+    sheet = build_dfs_sheet_service(sport_name)
     logger.debug("Creating Results object Results(%s, %s, %s)", sport_name, dk_id, fn)
     results: Results = Results(
         sport_obj,

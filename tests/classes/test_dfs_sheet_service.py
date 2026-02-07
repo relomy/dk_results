@@ -7,6 +7,7 @@ from dfs_common.sheets import SheetClient
 
 from classes.dfs_sheet_repository import DfsSheetRepository
 from classes.dfs_sheet_service import DfsSheetService
+from classes.sheets_service import build_dfs_sheet_service
 
 
 class FakeService:
@@ -163,3 +164,12 @@ def test_write_new_vip_lineups_writes_range():
     )
 
     assert service.updated[0][0] == "NBA!J3:W999"
+
+
+def test_build_dfs_sheet_service_uses_injected_service():
+    service = FakeService()
+    sheet = build_dfs_sheet_service("NBA", service=service, spreadsheet_id="sheet-id")
+
+    sheet.write_column("A", [["X"]])
+
+    assert service.updated[0][0] == "NBA!A2:A"
