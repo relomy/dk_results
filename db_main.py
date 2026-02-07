@@ -10,6 +10,7 @@ from typing import Any
 import yaml
 from zoneinfo import ZoneInfo
 
+import contests_state
 from classes.contestdatabase import ContestDatabase
 from classes.dfssheet import DFSSheet
 from classes.draftkings import Draftkings
@@ -29,7 +30,6 @@ SportType = type[Sport]
 # Centralized constants
 CONTEST_DIR = "contests"
 SALARY_DIR = "salary"
-DB_FILE = "contests.db"
 SALARY_LIMIT = 40000
 COOKIES_FILE = "pickled_cookies_works.txt"
 
@@ -323,7 +323,7 @@ def main() -> None:
     )
     parser.add_argument("-v", "--verbose", help="Increase verbosity")
     args = parser.parse_args()
-    contest_database = ContestDatabase(DB_FILE)
+    contest_database = ContestDatabase(str(contests_state.contests_db_path()))
     vips = load_vips()
     now = datetime.datetime.now(ZoneInfo("America/New_York"))
     for sport_name in args.sport:

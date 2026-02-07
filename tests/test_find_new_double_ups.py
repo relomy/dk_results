@@ -388,10 +388,15 @@ def test_process_sport_sends_notification(monkeypatch):
 
     db = FakeDB()
     bot = FakeBot()
+    monkeypatch.setenv("DFS_STATE_DIR", "/tmp")
+    recorded = []
+    monkeypatch.setattr(
+        "contests_state.upsert_contests", lambda contests: recorded.extend(contests)
+    )
 
     process_sport("NBA", {"NBA": DummySport}, db, bot)
 
-    assert db.inserted
+    assert recorded
     assert bot.sent
 
 
@@ -486,6 +491,8 @@ def test_main_executes_with_fakes(monkeypatch, tmp_path):
     monkeypatch.setitem(sys.modules, "classes.contestdatabase", fake_contestdatabase)
     monkeypatch.setattr("requests.get", lambda *_a, **_k: FakeResp())
     monkeypatch.setenv("DISCORD_WEBHOOK", "")
+    monkeypatch.setenv("DFS_STATE_DIR", str(tmp_path))
+    monkeypatch.setattr("contests_state.upsert_contests", lambda *_a, **_k: None)
     monkeypatch.setattr(sys, "argv", ["prog", "-s", "NFL"])
 
     runpy.run_module("find_new_double_ups", run_name="__main__")
@@ -538,6 +545,8 @@ def test_main_with_webhook_and_quiet(monkeypatch):
     monkeypatch.setitem(sys.modules, "classes.contestdatabase", fake_contestdatabase)
     monkeypatch.setattr("requests.get", lambda *_a, **_k: FakeResp())
     monkeypatch.setenv("DISCORD_WEBHOOK", "https://example.test/hook")
+    monkeypatch.setenv("DFS_STATE_DIR", "/tmp")
+    monkeypatch.setattr("contests_state.upsert_contests", lambda *_a, **_k: None)
     monkeypatch.setattr(sys, "argv", ["prog", "-s", "NFL", "-q"])
 
     runpy.run_module("find_new_double_ups", run_name="__main__")

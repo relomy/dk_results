@@ -3,6 +3,7 @@ from typing import Any
 
 import yaml
 
+import contests_state
 from classes.contestdatabase import ContestDatabase
 from classes.dfssheet import DFSSheet
 from classes.dksession import DkSession
@@ -149,7 +150,7 @@ if __name__ == "__main__":
         nargs="+",
     )
 
-    contest_database = ContestDatabase("contests.db")
+    contest_database = ContestDatabase(str(contests_state.contests_db_path()))
 
     args = parser.parse_args()
 

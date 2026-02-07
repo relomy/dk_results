@@ -1,4 +1,5 @@
 import datetime
+import os
 import runpy
 import types
 from typing import cast
@@ -7,6 +8,8 @@ import pytest
 from discord.ext import commands
 
 from bot import discord_bot
+
+os.environ.setdefault("DFS_STATE_DIR", "/tmp")
 
 
 class FakeCtx:
