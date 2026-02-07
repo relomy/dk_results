@@ -5,7 +5,9 @@ import yaml
 
 import contests_state
 from classes.contestdatabase import ContestDatabase
-from classes.dfssheet import DFSSheet
+from classes.dfs_sheet_repository import DfsSheetRepository
+from classes.dfs_sheet_service import DfsSheetService
+from classes.sheets_service import make_sheet_client
 from classes.dksession import DkSession
 from classes.sport import Sport
 
@@ -175,5 +177,7 @@ if __name__ == "__main__":
         dkl = DkLineup(dksession, dk_id, draft_group)
         lineups = dkl.get_lineups()
 
-        sheet = DFSSheet(sport_name)
+        client = make_sheet_client()
+        repo = DfsSheetRepository(client)
+        sheet = DfsSheetService(repo, sport_name)
         sheet.write_new_vip_lineups(lineups)
