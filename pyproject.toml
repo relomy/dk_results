@@ -6,7 +6,6 @@ requires-python = ">=3.12"
 
 dependencies = [
     "google-api-python-client",
-    "pytz",
     "requests",
     "pulp",
     "rookiepy",

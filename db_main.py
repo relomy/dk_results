@@ -8,7 +8,7 @@ from collections import OrderedDict
 from typing import Any
 
 import yaml
-from pytz import timezone
+from zoneinfo import ZoneInfo
 
 from classes.contestdatabase import ContestDatabase
 from classes.dfssheet import DFSSheet
@@ -325,7 +325,7 @@ def main() -> None:
     args = parser.parse_args()
     contest_database = ContestDatabase(DB_FILE)
     vips = load_vips()
-    now = datetime.datetime.now(timezone("US/Eastern"))
+    now = datetime.datetime.now(ZoneInfo("America/New_York"))
     for sport_name in args.sport:
         process_sport(sport_name, choices, contest_database, now, args, vips)
 
