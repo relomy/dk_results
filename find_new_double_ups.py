@@ -11,11 +11,11 @@ from typing import Any, Optional, Type
 import requests
 from dotenv import load_dotenv
 
-from bot.webhook import DiscordWebhook as Discord
 from classes.contest import Contest
 from classes.contestdatabase import ContestDatabase
 from classes.cookieservice import get_dk_cookies
 from classes.sport import Sport
+from dfs_common.discord import WebhookSender
 import contests_state
 from discord_roles import DISCORD_ROLE_MAP
 
@@ -54,13 +54,13 @@ HEADERS = {
 
 
 def send_discord_notification(
-    bot: Discord | None, sport_name: str, message: str
+    bot: WebhookSender | None, sport_name: str, message: str
 ) -> None:
     """
     Send a notification message to Discord for a specific sport.
 
     Args:
-        bot (Discord): Discord bot instance.
+        bot (WebhookSender): Discord webhook sender instance.
         sport_name (str): Name of the sport.
         message (str): Message to send.
     """
@@ -608,7 +608,7 @@ def process_sport(
     sport_name: str,
     choices: dict[str, Type[Sport]],
     db: ContestDatabase,
-    bot: Discord | None,
+    bot: WebhookSender | None,
 ) -> None:
     """
     Process contests for a given sport, compare with database, and send Discord notifications.
@@ -617,7 +617,7 @@ def process_sport(
         sport_name (str): Name of the sport.
         choices (dict[str, type]): Dictionary mapping sport names to Sport subclasses.
         db (ContestDatabase): Contest database instance.
-        bot (Discord | None): Discord bot instance or None.
+        bot (WebhookSender | None): Discord webhook sender instance or None.
     """
     if sport_name not in choices:
         raise Exception("Could not find matching Sport subclass")
@@ -667,7 +667,7 @@ def main() -> None:
         logger.warning("DISCORD_WEBHOOK is not set. Discord notifications disabled.")
         bot = None
     else:
-        bot = Discord(webhook)
+        bot = WebhookSender(webhook)
 
     # parse arguments
     args = parse_args(choices)

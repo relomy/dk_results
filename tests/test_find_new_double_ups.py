@@ -9,6 +9,8 @@ from requests.cookies import RequestsCookieJar
 
 from classes.contest import Contest
 from classes.sport import NFLShowdownSport, NFLSport, Sport
+from dfs_common.discord import WebhookSender
+import find_new_double_ups as find_mod
 from find_new_double_ups import (
     build_draft_group_start_map,
     contest_meets_criteria,
@@ -27,6 +29,10 @@ from find_new_double_ups import (
     set_quiet_verbosity,
     valid_date,
 )
+
+
+def test_find_new_double_ups_exposes_webhook_sender():
+    assert find_mod.WebhookSender is WebhookSender
 
 
 def test_build_draft_group_start_map_filters_and_parses():

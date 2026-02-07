@@ -34,7 +34,7 @@ Scheduling is external to this repo (cron/systemd/etc). Each entry point exposes
   sport-specific thresholds, compares against the database, inserts new contests, and
   sends Discord webhook notifications (`find_new_double_ups.py:process_sport`,
   `find_new_double_ups.py:get_double_ups`, `classes/contestdatabase.py:insert_contests`,
-  `bot/webhook.py:DiscordWebhook`).
+  `dfs_common/discord.py:WebhookSender`).
 - `update_contests.py` updates contest status and `positions_paid` for entries already
   in the database and sends Discord bot notifications for warning/live/completed events,
   with de-duplication tracked in a notifications table
