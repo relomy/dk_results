@@ -133,8 +133,11 @@ def fake_sheet_service(monkeypatch):
             {"properties": {"title": "GOLF", "sheetId": 20}},
         ],
     )
-    monkeypatch.setattr(dfssheet_module, "build", lambda *args, **kwargs: service)
-    monkeypatch.setattr(dfssheet_module.Sheet, "setup_service", lambda self: service)
+    monkeypatch.setattr(
+        dfssheet_module,
+        "service_account_provider",
+        lambda *args, **kwargs: (lambda: service),
+    )
     monkeypatch.setenv("SPREADSHEET_ID", "sheet123")
     return service, recorder
 
@@ -170,6 +173,27 @@ def test_sheet_write_values_and_clear(fake_sheet_service, sheet_classes):
     recorder = fake_sheet_service[1]
     assert recorder["update"]["range"] == "NBA!A2:B2"
     assert recorder["clear"]["range"] == "NBA!A2:B2"
+
+
+def test_sheet_write_values_delegates_to_client(monkeypatch):
+    from classes import dfssheet as dfssheet_module
+    from dfs_common import sheets as common_sheets
+
+    calls = {}
+
+    def fake_write(self, values, cell_range, value_input_option="USER_ENTERED"):
+        calls["values"] = values
+        calls["range"] = cell_range
+        calls["option"] = value_input_option
+
+    monkeypatch.setattr(common_sheets.SheetClient, "write_values", fake_write)
+    monkeypatch.setenv("SPREADSHEET_ID", "sheet123")
+    sheet = dfssheet_module.Sheet()
+
+    sheet.write_values_to_sheet_range([["a"]], "NBA!A1")
+
+    assert calls["range"] == "NBA!A1"
+    assert calls["option"] == "USER_ENTERED"
 
 
 def test_sheet_get_values(sheet_classes):
