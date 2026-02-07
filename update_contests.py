@@ -241,15 +241,16 @@ def db_has_notification(conn, dk_id: int, event: str) -> bool:
 
 
 def db_insert_notification(conn, dk_id: int, event: str) -> None:
-    cur = conn.cursor()
     try:
+        create_notifications_table(conn)
+        cur = conn.cursor()
         cur.execute(
             "INSERT OR IGNORE INTO contest_notifications (dk_id, event) VALUES (?, ?)",
             (dk_id, event),
         )
         conn.commit()
-    except sqlite3.Error as err:
-        logger.error("sqlite error inserting notification: %s", err.args[0])
+    except (sqlite3.Error, AttributeError) as err:
+        logger.error("sqlite error inserting notification: %s", err)
 
 
 def _contest_url(dk_id: int) -> str:
@@ -536,14 +537,12 @@ def get_contest_data(dk_id) -> dict | None:
                 "entries": entries,
                 "positions_paid": positions_paid,
             }
-    except Exception as req_ex:
-        logger.error(f"Request error: {req_ex}")
     except ValueError as val_err:
         logger.error(f"JSON decoding error: {val_err}")
     except KeyError as key_err:
         logger.error(f"Key error: {key_err}")
-    except Exception as ex:
-        logger.error(f"An unexpected error occurred: {ex}")
+    except Exception as req_ex:
+        logger.error(f"Request error: {req_ex}")
 
     return None
 
@@ -565,10 +564,10 @@ def db_update_contest(conn, contest_to_update) -> None:
 
 def db_get_incomplete_contests(conn):
     """Get the incomplete contests from the database."""
-    # get cursor
-    cur = conn.cursor()
-
     try:
+        # get cursor
+        cur = conn.cursor()
+
         # execute SQL command
         sql = (
             "SELECT dk_id, draft_group, entries, positions_paid, status, completed, name, start_date, sport "
@@ -592,8 +591,8 @@ def db_get_next_upcoming_contest(
     conn, sport: str, entry_fee: int = 25, keyword: str = "%"
 ) -> tuple | None:
     """Get the next upcoming contest matching criteria."""
-    cur = conn.cursor()
     try:
+        cur = conn.cursor()
         sql = (
             "SELECT dk_id, name, draft_group, positions_paid, start_date "
             "FROM contests "
@@ -617,8 +616,8 @@ def db_get_next_upcoming_contest(
 
 def db_get_next_upcoming_contest_any(conn, sport: str) -> tuple | None:
     """Get the next upcoming contest for a sport, regardless of criteria."""
-    cur = conn.cursor()
     try:
+        cur = conn.cursor()
         sql = (
             "SELECT dk_id, name, draft_group, positions_paid, start_date "
             "FROM contests "

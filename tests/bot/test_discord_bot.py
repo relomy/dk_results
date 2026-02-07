@@ -1,4 +1,5 @@
 import datetime
+import runpy
 import types
 from typing import cast
 
@@ -75,6 +76,21 @@ def test_system_uptime_seconds_parses(monkeypatch):
     monkeypatch.setattr("builtins.open", fake_open)
 
     assert discord_bot._system_uptime_seconds() == pytest.approx(123.45)
+
+
+def test_module_main_executes(monkeypatch, tmp_path):
+    captured = {}
+    monkeypatch.setenv("DISCORD_BOT_TOKEN", "tok")
+    monkeypatch.setenv("DISCORD_LOG_FILE", str(tmp_path / "discord.log"))
+
+    def fake_run(self, token):
+        captured["token"] = token
+
+    monkeypatch.setattr("discord.ext.commands.Bot.run", fake_run)
+
+    runpy.run_module("bot.discord_bot", run_name="__main__")
+
+    assert captured["token"] == "tok"
 
 
 @pytest.mark.asyncio
@@ -314,3 +330,267 @@ async def test_upcoming_lists_next_per_sport(monkeypatch):
         "NBA: name=MatchNBA, start_date=2000-01-02, url=<https://www.draftkings.com/contest/gamecenter/10#/>\n"
         "NFL: name=AnyNFL, start_date=2000-01-04 (failed criteria), url=<https://www.draftkings.com/contest/gamecenter/21#/>"
     ]
+
+
+def test_load_sheet_gid_map_requires_env(monkeypatch):
+    monkeypatch.setattr(discord_bot, "SHEET_GIDS_FILE", "")
+    assert discord_bot._load_sheet_gid_map() == {}
+
+
+def test_load_sheet_gid_map_missing_file(tmp_path, monkeypatch):
+    monkeypatch.setattr(discord_bot, "SHEET_GIDS_FILE", str(tmp_path / "missing.yaml"))
+    assert discord_bot._load_sheet_gid_map() == {}
+
+
+def test_load_sheet_gid_map_invalid_yaml(tmp_path, monkeypatch):
+    path = tmp_path / "gids.yaml"
+    path.write_text("bad")
+    monkeypatch.setattr(discord_bot, "SHEET_GIDS_FILE", str(path))
+
+    def boom(_text):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(discord_bot.yaml, "safe_load", boom)
+    assert discord_bot._load_sheet_gid_map() == {}
+
+
+def test_load_sheet_gid_map_non_dict(tmp_path, monkeypatch):
+    path = tmp_path / "gids.yaml"
+    path.write_text("- 1")
+    monkeypatch.setattr(discord_bot, "SHEET_GIDS_FILE", str(path))
+    monkeypatch.setattr(discord_bot.yaml, "safe_load", lambda _text: ["not-dict"])
+    assert discord_bot._load_sheet_gid_map() == {}
+
+
+def test_load_sheet_gid_map_filters_invalid_entries(tmp_path, monkeypatch):
+    path = tmp_path / "gids.yaml"
+    path.write_text("ignored")
+    monkeypatch.setattr(discord_bot, "SHEET_GIDS_FILE", str(path))
+    monkeypatch.setattr(
+        discord_bot.yaml,
+        "safe_load",
+        lambda _text: {"NBA": 10, 1: "bad", "NFL": "oops"},
+    )
+    assert discord_bot._load_sheet_gid_map() == {"NBA": 10}
+
+
+def test_sheet_link_requires_spreadsheet_id(monkeypatch):
+    monkeypatch.setattr(discord_bot, "SPREADSHEET_ID", None)
+    monkeypatch.setattr(discord_bot, "SHEET_GID_MAP", {"NBA": 123})
+    assert discord_bot._sheet_link("NBA") is None
+
+
+def test_sheet_link_missing_gid(monkeypatch):
+    monkeypatch.setattr(discord_bot, "SPREADSHEET_ID", "sheet")
+    monkeypatch.setattr(discord_bot, "SHEET_GID_MAP", {"NBA": 123})
+    assert discord_bot._sheet_link("NFL") is None
+
+
+def test_sheet_link_builds_url(monkeypatch):
+    monkeypatch.setattr(discord_bot, "SPREADSHEET_ID", "sheet")
+    monkeypatch.setattr(discord_bot, "SHEET_GID_MAP", {"NBA": 123})
+    assert (
+        discord_bot._sheet_link("NBA")
+        == "<https://docs.google.com/spreadsheets/d/sheet/edit#gid=123>"
+    )
+
+
+def test_sport_sheet_title_prefers_sheet_name():
+    class DummySport:
+        name = "NBA"
+        sheet_name = "NBA Sheet"
+
+    class DummySportNoSheet:
+        name = "NFL"
+
+    assert discord_bot._sport_sheet_title(DummySport) == "NBA Sheet"
+    assert discord_bot._sport_sheet_title(DummySportNoSheet) == "NFL"
+
+
+def test_sport_emoji_default():
+    assert discord_bot._sport_emoji("UNKNOWN") == "🏟️"
+
+
+def test_configure_discord_log_file_handles_exception(monkeypatch):
+    class BoomHandler:
+        def __init__(self, *args, **kwargs):
+            raise RuntimeError("boom")
+
+    monkeypatch.setattr(discord_bot.logging, "FileHandler", BoomHandler)
+    discord_bot._configure_discord_log_file()
+
+
+def test_sport_choices_includes_named():
+    class DummySport(discord_bot.Sport):
+        name = "DummySport"
+
+    choices = discord_bot._sport_choices()
+    assert "dummysport" in choices
+
+
+def test_fetch_live_contest_closes_db(monkeypatch):
+    captured = {}
+
+    class FakeDB:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def get_live_contest(self, _name, _fee, _keyword):
+            return (1, "Contest", None, None, "2000-01-01")
+
+        def close(self):
+            captured["closed"] = True
+
+    class DummySport:
+        name = "NBA"
+        sheet_min_entry_fee = 5
+        keyword = "%"
+
+    monkeypatch.setattr(discord_bot, "ContestDatabase", FakeDB)
+
+    assert discord_bot._fetch_live_contest(DummySport) == (
+        1,
+        "Contest",
+        None,
+        None,
+        "2000-01-01",
+    )
+    assert captured.get("closed") is True
+
+
+def test_format_time_until_seconds_only(monkeypatch):
+    class FixedDateTime(datetime.datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return cls(2024, 1, 1, 0, 0, 0, tzinfo=tz)
+
+    monkeypatch.setattr(discord_bot.datetime, "datetime", FixedDateTime)
+
+    assert discord_bot._format_time_until("2024-01-01 00:00:05") == "⏳ 5s"
+
+
+def test_format_time_until_days_hours(monkeypatch):
+    class FixedDateTime(datetime.datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return cls(2024, 1, 1, 0, 0, 0, tzinfo=tz)
+
+    monkeypatch.setattr(discord_bot.datetime, "datetime", FixedDateTime)
+
+    assert discord_bot._format_time_until("2024-01-02 02:03:00") == "⏳ 1d2h3m"
+
+
+def test_format_time_until_invalid():
+    assert discord_bot._format_time_until(None) is None
+
+
+def test_system_uptime_seconds_missing_file(monkeypatch):
+    def boom(*_args, **_kwargs):
+        raise FileNotFoundError("nope")
+
+    monkeypatch.setattr("builtins.open", boom)
+    assert discord_bot._system_uptime_seconds() is None
+
+
+@pytest.mark.asyncio
+async def test_on_ready_logs(monkeypatch):
+    messages: list[str] = []
+
+    def fake_info(msg, *args):
+        messages.append(msg % args if args else msg)
+
+    monkeypatch.setattr(discord_bot.logger, "info", fake_info)
+    await discord_bot.on_ready()
+    assert any("Discord bot logged in" in msg for msg in messages)
+
+
+@pytest.mark.asyncio
+async def test_on_command_error_check_failure():
+    ctx = types.SimpleNamespace(sent=[])
+
+    async def _send(message: str):
+        ctx.sent.append(message)
+
+    ctx.send = _send
+
+    await discord_bot.on_command_error(ctx, discord_bot.commands.CheckFailure())
+    assert ctx.sent == []
+
+
+@pytest.mark.asyncio
+async def test_sankayadead_sends():
+    ctx = types.SimpleNamespace(sent=[])
+
+    async def _send(message: str):
+        ctx.sent.append(message)
+
+    ctx.send = _send
+
+    await discord_bot.sankayadead(ctx)
+    assert ctx.sent == ["ya man"]
+
+
+@pytest.mark.asyncio
+async def test_contests_invalid_sport_config(monkeypatch):
+    class DummySport:
+        name = None
+        sheet_min_entry_fee = 5
+        keyword = "%"
+
+    monkeypatch.setattr(discord_bot, "_sport_choices", lambda: {"nba": DummySport})
+
+    ctx = types.SimpleNamespace(sent=[])
+
+    async def _send(message: str):
+        ctx.sent.append(message)
+
+    ctx.send = _send
+
+    await discord_bot.contests(ctx, "nba")
+    assert ctx.sent == ["Invalid sport configuration."]
+
+
+@pytest.mark.asyncio
+async def test_upcoming_returns_without_lines(monkeypatch):
+    class DummySport:
+        name = "NBA"
+        sheet_min_entry_fee = 5
+        keyword = "%"
+
+    class FakeDB:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def get_next_upcoming_contest_any(self, _sport):
+            return None
+
+        def get_next_upcoming_contest(self, _sport, entry_fee=25, keyword="%"):
+            return None
+
+        def close(self):
+            return None
+
+    monkeypatch.setattr(discord_bot, "_sport_choices", lambda: {"nba": DummySport})
+    monkeypatch.setattr(discord_bot, "ContestDatabase", FakeDB)
+
+    ctx = types.SimpleNamespace(sent=[])
+
+    async def _send(message: str):
+        ctx.sent.append(message)
+
+    ctx.send = _send
+
+    await discord_bot.upcoming(ctx)
+    assert ctx.sent == []
+
+
+def test_main_runs_bot(monkeypatch):
+    captured = {}
+    monkeypatch.setattr(discord_bot, "BOT_TOKEN", "tok")
+
+    def fake_run(token):
+        captured["token"] = token
+
+    monkeypatch.setattr(discord_bot.bot, "run", fake_run)
+    discord_bot.main()
+    assert captured["token"] == "tok"

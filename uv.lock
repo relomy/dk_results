@@ -206,7 +206,7 @@ requires-dist = [
 dev = [
     { name = "pytest" },
     { name = "pytest-asyncio" },
-    { name = "pytest-cov", specifier = ">=7.0" },
+    { name = "pytest-cov" },
 ]
 lint = [{ name = "ruff" }]
 type = [{ name = "ty" }]

@@ -22,7 +22,7 @@ include = ["bot", "classes"]
 dev = [
     "pytest",
     "pytest-asyncio",
-    "pytest-cov>=7.0"     
+    "pytest-cov"
 ]
 lint = [
     "ruff"
