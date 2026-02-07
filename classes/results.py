@@ -264,7 +264,7 @@ class Results:
             return list(rdr)
 
     def players_to_values(self, sport: str) -> list[list]:
-        """Return list for DFSSheet values."""
+        """Return list for DfsSheetService values."""
         # sort players by ownership
         sorted_players = sorted(
             self.players, key=lambda x: self.players[x].ownership, reverse=True
