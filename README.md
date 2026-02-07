@@ -9,6 +9,16 @@ notifications (see `db_main.py:main`, `update_contests.py:check_contests_for_com
 - Google Sheets + Discord primitives are provided by `dfs_common`.
 - Local development expects `dfs_common` as a sibling directory (see `pyproject.toml:[tool.uv.sources]`).
 
+## Sheet Service
+
+Construct the sheet service with the repo helper so entry points only need one import:
+
+```python
+from classes.sheets_service import build_dfs_sheet_service
+
+sheet = build_dfs_sheet_service("NBA")
+```
+
 ## Runtime Entry Points (Externally Scheduled)
 
 Scheduling is external to this repo (cron/systemd/etc). Each entry point exposes a
@@ -66,7 +76,7 @@ Sample config files are provided to copy/adapt:
 | `DISCORD_BOT_TOKEN` | `update_contests.py:_build_discord_sender`, `bot/discord_bot.py:BOT_TOKEN` | Required for bot-based notifications and the Discord service. |
 | `DISCORD_CHANNEL_ID` | `update_contests.py:_build_discord_sender`, `bot/discord_bot.py:ALLOWED_CHANNEL_ID` | Required for bot-based notifications; also gates allowed channel. |
 | `DISCORD_WEBHOOK` | `find_new_double_ups.py:main` | Enables webhook-based notifications for double-ups. |
-| `SPREADSHEET_ID` | `classes/sheets_service.py:make_sheet_client`, `update_contests.py:SPREADSHEET_ID`, `bot/discord_bot.py:SPREADSHEET_ID`, `generate_sheet_gids.py:main` | Required for Google Sheets access and sheet link generation. |
+| `SPREADSHEET_ID` | `classes/sheets_service.py:build_dfs_sheet_service`, `update_contests.py:SPREADSHEET_ID`, `bot/discord_bot.py:SPREADSHEET_ID`, `generate_sheet_gids.py:main` | Required for Google Sheets access and sheet link generation. |
 | `SHEET_GIDS_FILE` | `update_contests.py:SHEET_GIDS_FILE`, `bot/discord_bot.py:SHEET_GIDS_FILE` | Defaults to `sheet_gids.yaml` in those modules. |
 | `CONTEST_WARNING_MINUTES` | `update_contests.py:CONTEST_WARNING_MINUTES` | Default warning minutes used if schedule file missing. |
 | `CONTEST_WARNING_SCHEDULE_FILE` | `update_contests.py:WARNING_SCHEDULE_FILE_ENV` | Defaults to `contest_warning_schedules.yaml`. |
@@ -99,7 +109,7 @@ so place the credential file at the repo root before running `db_main.py` or the
   It can be generated via `generate_sheet_gids.py` (`generate_sheet_gids.py:main`,
   `classes/sheets_service.py:fetch_sheet_gids`).
 - `client_secret.json` is required for Google Sheets service account auth
-  (`classes/sheets_service.py:make_sheet_client`).
+  (`classes/sheets_service.py:build_dfs_sheet_service`).
 - `vips.yaml` is an optional list of VIP usernames used by `db_main.py`
   (`db_main.py:load_vips`).
 - `salary/` and `contests/` are used to store downloaded CSVs for salary and standings
