@@ -122,7 +122,7 @@ def write_players_to_sheet(
     if vip_lineups:
         logger.info("Writing API vip_lineups to sheet")
         sheet.clear_lineups()
-        sheet.write_new_vip_lineups(vip_lineups)
+        sheet.write_vip_lineups(vip_lineups)
 
 
 def write_non_cashing_info(sheet: DfsSheetService, results: Results) -> None:

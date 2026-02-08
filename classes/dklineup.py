@@ -177,4 +177,4 @@ if __name__ == "__main__":
         lineups = dkl.get_lineups()
 
         sheet = build_dfs_sheet_service(sport_name)
-        sheet.write_new_vip_lineups(lineups)
+        sheet.write_vip_lineups(lineups)

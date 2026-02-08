@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 import datetime
-from types import SimpleNamespace
-
 from dfs_common.sheets import SheetClient
 
 from classes.dfs_sheet_repository import DfsSheetRepository
@@ -88,13 +86,11 @@ def test_service_clear_and_write_methods():
     sheet.write_players([["A"]])
     sheet.write_column("F", [["B"]])
     sheet.write_columns("F", "J", [["C", "D", "E", "F", "G"]])
-    sheet.write_lineup_range([["X"]])
 
     assert service.cleared == ["NBA!A2:H", "NBA!J3:W999"]
     assert service.updated[0][0] == "NBA!A2:H"
     assert service.updated[1][0] == "NBA!F2:F"
     assert service.updated[2][0] == "NBA!F2:J"
-    assert service.updated[3][0] == "NBA!J3:V61"
 
 
 def test_service_header_writes():
@@ -120,17 +116,6 @@ def test_service_header_writes():
     assert "NBA!X25:AC35" in ranges
 
 
-def test_get_lineup_values():
-    values_by_range = {
-        "NBA!A1:H1": [["Name"]],
-        "NBA!A2:H": [["Alice"]],
-        "NBA!J3:V61": [["L1"]],
-    }
-    sheet, _service = _make_service("NBA", values_by_range=values_by_range)
-
-    assert sheet.get_lineup_values() == [["L1"]]
-
-
 def test_write_vip_lineups_writes_range():
     values_by_range = {
         "NBA!A1:H1": [["Name"]],
@@ -138,22 +123,7 @@ def test_write_vip_lineups_writes_range():
     }
     sheet, service = _make_service("NBA", values_by_range=values_by_range)
 
-    player = SimpleNamespace(name="P1", pos="PG", salary=1, fpts=2, value=3, ownership=4)
-    vip = SimpleNamespace(name="vipA", pmr=1, lineup=[player], rank=1, pts=10)
-
-    sheet.write_vip_lineups([vip])
-
-    assert service.updated[0][0] == "NBA!J3:V61"
-
-
-def test_write_new_vip_lineups_writes_range():
-    values_by_range = {
-        "NBA!A1:H1": [["Name"]],
-        "NBA!A2:H": [["Alice"]],
-    }
-    sheet, service = _make_service("NBA", values_by_range=values_by_range)
-
-    sheet.write_new_vip_lineups(
+    sheet.write_vip_lineups(
         [
             {
                 "user": "vipA",

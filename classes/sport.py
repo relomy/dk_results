@@ -14,7 +14,6 @@ class Sport:
     keyword: str = "%"
 
     lineup_range: str | None = None
-    new_lineup_range: str | None = None
 
     dub_min_entry_fee: int = 5
     dub_min_entries: int = 125
@@ -73,23 +72,12 @@ def get_lineup_range(sport_name: str) -> str | None:
     return ranges.get(sport_name)
 
 
-def get_new_lineup_range(sport_name: str) -> str | None:
-    """Return the new lineup range for a sport name, if configured."""
-    ranges: dict[str, str] = {}
-    for name, sport_cls in _iter_named_sports():
-        lineup_range = getattr(sport_cls, "new_lineup_range", None)
-        if lineup_range:
-            ranges[name] = lineup_range
-    return ranges.get(sport_name)
-
-
 class NFLSport(Sport):
     """NFL sport configuration."""
 
     name = "NFL"
     sheet_name = "NFL"
-    lineup_range = "J3:V99"
-    new_lineup_range = "J3:W999"
+    lineup_range = "J3:W999"
 
     # optimizer
     positions = ["QB", "RB", "RB", "WR", "WR", "WR", "TE", "FLEX", "DST"]
@@ -108,8 +96,7 @@ class NFLAfternoonSport(Sport):
 
     name = "NFLAfternoon"
     sheet_name = "NFLAfternoon"
-    lineup_range = "J3:V99"
-    new_lineup_range = "J3:W999"
+    lineup_range = "J3:W999"
 
     suffixes = [r"\(Afternoon Only\)"]
 
@@ -128,8 +115,7 @@ class NFLShowdownSport(Sport):
 
     name = "NFLShowdown"
     sheet_name = "NFLShowdown"
-    lineup_range = "J3:V66"
-    new_lineup_range = "J3:W999"
+    lineup_range = "J3:W999"
 
     dub_min_entry_fee = 25
     dub_min_entries = 125
@@ -156,8 +142,7 @@ class NBASport(Sport):
     name = "NBA"
     sheet_name = "NBA"
 
-    lineup_range = "J3:V61"
-    new_lineup_range = "J3:W999"
+    lineup_range = "J3:W999"
     dub_min_entry_fee = 2
     dub_min_entries = 100
 
@@ -178,8 +163,7 @@ class CFBSport(Sport):
 
     name = "CFB"
     sheet_name = "CFB"
-    lineup_range = "J3:O99"
-    new_lineup_range = "J3:W999"
+    lineup_range = "J3:W999"
 
     sheet_min_entry_fee = 5
     dub_min_entry_fee = 2
@@ -201,7 +185,6 @@ class GolfSport(Sport):
     name = "GOLF"
     sheet_name = "GOLF"
     lineup_range = "L8:Z56"
-    new_lineup_range = "L8:Z56"
 
     sheet_min_entry_fee = 10
     dub_min_entry_fee = 2
@@ -221,7 +204,6 @@ class PGAMainSport(Sport):
     name = "PGAMain"
     sport_name = "GOLF"
     lineup_range = "L8:X56"
-    new_lineup_range = "L8:X56"
 
     positions = ["G"]
 
@@ -229,8 +211,7 @@ class PGAMainSport(Sport):
 class PGAWeekendSport(Sport):
     name = "PGAWeekend"
     sport_name = "GOLF"
-    lineup_range = "L3:Q41"
-    new_lineup_range = "L3:T999"
+    lineup_range = "L3:T999"
 
     positions = ["G"]
     suffixes = [r"\(Weekend PGA TOUR\)"]
@@ -240,8 +221,7 @@ class PGAWeekendSport(Sport):
 class PGAShowdownSport(Sport):
     name = "PGAShowdown"
     sport_name = "GOLF"
-    lineup_range = "L3:Q41"
-    new_lineup_range = "L3:T999"
+    lineup_range = "L3:T999"
 
     positions = ["G"]
     suffixes = [r"\(Round [1-4] PGA TOUR\)", r"\(Round [1-4] TOUR\)"]
@@ -260,8 +240,7 @@ class MLBSport(Sport):
 
     name = "MLB"
     sheet_name = "MLB"
-    lineup_range = "J3:V71"
-    new_lineup_range = "J3:Z71"
+    lineup_range = "J3:Z71"
 
     positions = ["P", "C", "1B", "2B", "3B", "SS", "OF"]
 
@@ -271,8 +250,7 @@ class NascarSport(Sport):
 
     name = "NAS"
     sheet_name = "NAS"
-    lineup_range = "J3:V61"
-    new_lineup_range = "J3:W999"
+    lineup_range = "J3:W999"
 
     positions = ["D"]
 
@@ -282,8 +260,7 @@ class TennisSport(Sport):
 
     name = "TEN"
     sheet_name = "TEN"
-    lineup_range = "J3:V61"
-    new_lineup_range = "J3:W999"
+    lineup_range = "J3:W999"
 
     positions = ["P"]
 
@@ -294,31 +271,27 @@ class NHLSport(Sport):
 
 class XFLSport(Sport):
     name = "XFL"
-    lineup_range = "J3:V56"
-    new_lineup_range = "J3:Z56"
+    lineup_range = "J3:Z56"
 
     positions = ["QB", "RB", "WR/TE", "WR/TE", "FLEX", "FLEX", "DST"]
 
 
 class LOLSport(Sport):
     name = "LOL"
-    lineup_range = "J3:V61"
-    new_lineup_range = "J3:W999"
+    lineup_range = "J3:W999"
 
     positions = ["CPT", "TOP", "JNG", "MID", "ADC", "SUP", "TEAM"]
 
 
 class MMASport(Sport):
     name = "MMA"
-    lineup_range = "J3:V61"
-    new_lineup_range = "J3:W999"
+    lineup_range = "J3:W999"
 
     positions = ["F"]
 
 
 class USFLSport(Sport):
     name = "USFL"
-    lineup_range = "J3:V66"
-    new_lineup_range = "J3:W999"
+    lineup_range = "J3:W999"
 
     positions = ["QB", "RB", "WR/TE", "WR/TE", "FLEX", "FLEX", "DST"]

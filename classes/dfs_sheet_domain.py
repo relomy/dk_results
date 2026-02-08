@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from .sport import get_lineup_range, get_new_lineup_range
+from .sport import get_lineup_range
 
 START_COL = "A"
 
@@ -30,49 +30,7 @@ def lineup_range_for_sport(sport: str) -> str:
     return f"{sport}!{lineup_range}"
 
 
-def new_lineup_range_for_sport(sport: str) -> str:
-    lineup_range = get_new_lineup_range(sport)
-    if not lineup_range:
-        raise KeyError(f"Missing lineup range for sport '{sport}'")
-    return f"{sport}!{lineup_range}"
-
-
-def build_values_for_vip_lineup(sport: str, vip: Any) -> list[list[Any]]:
-    if "GOLF" in sport:
-        values: list[list[Any]] = [[vip.name, None, "PMR", vip.pmr, None, None, None]]
-        values.append(["Name", "Salary", "Pts", "Value", "Own", "Pos", "Score"])
-        for player in vip.lineup:
-            values.append(
-                [
-                    player.name,
-                    player.salary,
-                    player.fpts,
-                    player.value,
-                    player.ownership,
-                    None,
-                    None,
-                ]
-            )
-        values.append(["rank", vip.rank, vip.pts, None, None, None, None])
-    else:
-        values = [[vip.name, None, "PMR", vip.pmr, None, None]]
-        values.append(["Pos", "Name", "Salary", "Pts", "Value", "Own"])
-        for player in vip.lineup:
-            values.append(
-                [
-                    player.pos,
-                    player.name,
-                    player.salary,
-                    player.fpts,
-                    player.value,
-                    player.ownership,
-                ]
-            )
-        values.append(["rank", vip.rank, None, vip.pts, None, None])
-    return values
-
-
-def build_values_for_new_vip_lineup(
+def build_values_for_vip_lineup(
     user: dict[str, Any], players: list[dict[str, Any]]
 ) -> list[list[Any]]:
     values: list[list[Any]] = [
