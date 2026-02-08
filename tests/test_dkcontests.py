@@ -76,6 +76,36 @@ def test_get_largest_contest_applies_query_and_exclude():
     assert largest.id == 2
 
 
+def test_get_largest_contest_applies_game_type_id():
+    contests = [
+        Contest({**_contest_payload(11, entries=200), "gameTypeId": 6}, "GOLF"),
+        Contest({**_contest_payload(12, entries=300), "gameTypeId": 87}, "GOLF"),
+    ]
+
+    largest = dkcontests.get_largest_contest(
+        contests,
+        datetime.datetime(2023, 11, 14),
+        entry_fee=25,
+        game_type_id=87,
+    )
+
+    assert largest is not None
+    assert largest.id == 12
+
+
+def test_match_contest_criteria_rejects_non_matching_game_type():
+    contest = Contest({**_contest_payload(21), "gameTypeId": 6}, "GOLF")
+    assert (
+        dkcontests.match_contest_criteria(
+            contest,
+            datetime.datetime(2023, 11, 14),
+            entry_fee=25,
+            game_type_id=87,
+        )
+        is False
+    )
+
+
 def test_get_contests_exits_on_invalid_shape(monkeypatch):
     monkeypatch.setattr(dkcontests, "get_lobby_response", lambda _sport, live=False: {"Other": []})
 
@@ -138,12 +168,14 @@ def test_get_cron_config_shares_pga_values():
 
 def test_main_passes_sport_class_choices_to_fetcher(monkeypatch):
     captured = {"choices": None}
-    sentinel = object()
+
+    class _DummySport:
+        contest_restraint_game_type_id = 87
 
     monkeypatch.setattr(
         dkcontests,
         "get_sport_class_choices",
-        lambda: {"PGAShowdown": sentinel},
+        lambda: {"PGAShowdown": _DummySport},
     )
     monkeypatch.setattr(
         dkcontests,
@@ -165,4 +197,15 @@ def test_main_passes_sport_class_choices_to_fetcher(monkeypatch):
     with pytest.raises(SystemExit):
         dkcontests.main()
 
-    assert captured["choices"] == {"PGAShowdown": sentinel}
+    assert captured["choices"] == {"PGAShowdown": _DummySport}
+
+
+def test_format_sport_class_game_type_help_lists_constraints():
+    help_text = dkcontests.format_sport_class_game_type_help(
+        dkcontests.get_sport_class_choices()
+    )
+
+    assert "Sport-class gameTypeId constraints:" in help_text
+    assert "PGAShowdown: 87" in help_text
+    assert "PGAWeekend: 33" in help_text
+    assert "NFLShowdown: 96" in help_text
