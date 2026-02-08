@@ -230,7 +230,7 @@ class PGAWeekendSport(Sport):
     name = "PGAWeekend"
     sport_name = "GOLF"
     lineup_range = "L3:Q41"
-    new_lineup_range = "L3:Q41"
+    new_lineup_range = "L3:T999"
 
     positions = ["G"]
     suffixes = [r"\(Weekend PGA TOUR\)"]
@@ -241,7 +241,7 @@ class PGAShowdownSport(Sport):
     name = "PGAShowdown"
     sport_name = "GOLF"
     lineup_range = "L3:Q41"
-    new_lineup_range = "L3:Q41"
+    new_lineup_range = "L3:T999"
 
     positions = ["G"]
     suffixes = [r"\(Round [1-4] PGA TOUR\)", r"\(Round [1-4] TOUR\)"]
