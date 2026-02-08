@@ -233,6 +233,8 @@ class PGAWeekendSport(Sport):
     new_lineup_range = "L3:Q41"
 
     positions = ["G"]
+    suffixes = [r"\(Weekend PGA TOUR\)"]
+    contest_restraint_game_type_id = 33
 
 
 class PGAShowdownSport(Sport):
@@ -242,6 +244,8 @@ class PGAShowdownSport(Sport):
     new_lineup_range = "L3:Q41"
 
     positions = ["G"]
+    suffixes = [r"\(Round [1-4] PGA TOUR\)", r"\(Round [1-4] TOUR\)"]
+    contest_restraint_game_type_id = 87
 
 
 class WeekendGolfSport(Sport):
