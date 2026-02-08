@@ -22,8 +22,8 @@ def test_ranges_for_sport():
     assert header_range_for_sport("NBA") == "NBA!A1:H1"
     assert lineup_range_for_sport("NBA") == "NBA!J3:V61"
     assert new_lineup_range_for_sport("NBA") == "NBA!J3:W999"
-    assert new_lineup_range_for_sport("PGAShowdown") == "PGAShowdown!J3:W999"
-    assert new_lineup_range_for_sport("PGAWeekend") == "PGAWeekend!J3:W999"
+    assert new_lineup_range_for_sport("PGAShowdown") == "PGAShowdown!L3:T999"
+    assert new_lineup_range_for_sport("PGAWeekend") == "PGAWeekend!L3:T999"
 
 
 def test_build_values_for_vip_lineup_golf_and_other():
