@@ -72,6 +72,23 @@ def get_sport_class_choices() -> dict[str, Type[Sport]]:
     return {sport.name: sport for sport in Sport.__subclasses__() if sport.name}
 
 
+def format_sport_class_game_type_help(
+    choices: dict[str, Type[Sport]],
+) -> str:
+    lines = ["Sport-class gameTypeId constraints:"]
+    constrained = [
+        (name, sport_cls.contest_restraint_game_type_id)
+        for name, sport_cls in sorted(choices.items())
+        if sport_cls.contest_restraint_game_type_id is not None
+    ]
+    if not constrained:
+        lines.append("  (none configured)")
+    else:
+        for name, game_type_id in constrained:
+            lines.append(f"  {name}: {game_type_id}")
+    return "\n".join(lines)
+
+
 def get_contests_for_sport_class(
     sport_class: str,
     choices: dict[str, Type[Sport]] | None = None,
@@ -92,7 +109,14 @@ def get_cron_config(sport: str) -> dict[str, int | str]:
     return _SPORT_CRON_CONFIG[sport]
 
 
-def get_largest_contest(contests, dt, entry_fee=25, query=None, exclude=None):
+def get_largest_contest(
+    contests,
+    dt,
+    entry_fee=25,
+    query=None,
+    exclude=None,
+    game_type_id: int | None = None,
+):
     """Return largest contest from a list of Contests.
 
     Parameters
@@ -119,7 +143,16 @@ def get_largest_contest(contests, dt, entry_fee=25, query=None, exclude=None):
 
     # add contest to list if it matches criteria
     contest_list = [
-        c for c in contests if match_contest_criteria(c, dt, entry_fee, query, exclude)
+        c
+        for c in contests
+        if match_contest_criteria(
+            c,
+            dt,
+            entry_fee,
+            query,
+            exclude,
+            game_type_id=game_type_id,
+        )
     ]
 
     print("number of contests meeting requirements: {}".format(len(contest_list)))
@@ -131,7 +164,14 @@ def get_largest_contest(contests, dt, entry_fee=25, query=None, exclude=None):
     return None
 
 
-def match_contest_criteria(contest, dt, entry_fee=25, query=None, exclude=None):
+def match_contest_criteria(
+    contest,
+    dt,
+    entry_fee=25,
+    query=None,
+    exclude=None,
+    game_type_id: int | None = None,
+):
     """Use arguments to filter contest criteria.
 
     Parameters
@@ -160,6 +200,9 @@ def match_contest_criteria(contest, dt, entry_fee=25, query=None, exclude=None):
         and contest.is_double_up
         and contest.is_guaranteed
     ):
+        if game_type_id is not None and contest.game_type_id != game_type_id:
+            return False
+
         # if exclude is in the name, return false
         if exclude and exclude in contest.name:
             return False
@@ -296,9 +339,13 @@ def main():
     ]
 
     sport_class_choices = get_sport_class_choices()
+    sport_class_help = format_sport_class_game_type_help(sport_class_choices)
 
     # parse arguments
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=sport_class_help,
+    )
     mode_group = parser.add_mutually_exclusive_group(required=True)
     mode_group.add_argument(
         "-s",
@@ -316,6 +363,11 @@ def main():
     )
     parser.add_argument(
         "-e", "--entry", type=int, default=25, help="Entry fee (25 for $25)"
+    )
+    parser.add_argument(
+        "--game-type-id",
+        type=int,
+        help="Optional DraftKings gameTypeId filter (e.g. 87 for standard Showdown).",
     )
     parser.add_argument("-q", "--query", help="Search contest name")
     parser.add_argument("-x", "--exclude", help="Exclude from search")
@@ -352,7 +404,12 @@ def main():
 
     # parse contest and return single contest which matches argument criteria
     contest = get_largest_contest(
-        contests, args.date, args.entry, args.query, args.exclude
+        contests,
+        args.date,
+        args.entry,
+        args.query,
+        args.exclude,
+        game_type_id=args.game_type_id,
     )
 
     # check if contest is empty
