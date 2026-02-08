@@ -10,7 +10,7 @@ from requests.cookies import RequestsCookieJar
 
 import find_new_double_ups as find_mod
 from classes.contest import Contest
-from classes.sport import NFLShowdownSport, NFLSport, Sport
+from classes.sport import NFLShowdownSport, NFLSport, PGAShowdownSport, PGAWeekendSport, Sport
 from find_new_double_ups import (
     _init_runtime,
     parse_args,
@@ -323,6 +323,66 @@ def test_get_draft_groups_from_response_nfl_showdown_super_bowl_suffix():
 
     result = get_draft_groups_from_response(response, NFLShowdownSport)
     assert result == [21]
+
+
+def test_get_draft_groups_from_response_pga_weekend_strict():
+    response = {
+        "DraftGroups": [
+            {
+                "DraftGroupTag": "Featured",
+                "ContestStartTimeSuffix": "(Weekend PGA TOUR)",
+                "DraftGroupId": 31,
+                "StartDateEst": "2026-02-08T11:23:00.000-05:00",
+                "ContestTypeId": 29,
+                "GameTypeId": 33,
+            },
+            {
+                "DraftGroupTag": "Featured",
+                "ContestStartTimeSuffix": "(Round 3 PGA TOUR)",
+                "DraftGroupId": 32,
+                "StartDateEst": "2026-02-08T07:00:00.000-05:00",
+                "ContestTypeId": 87,
+                "GameTypeId": 87,
+            },
+        ]
+    }
+
+    result = get_draft_groups_from_response(response, PGAWeekendSport)
+    assert result == [31]
+
+
+def test_get_draft_groups_from_response_pga_showdown_standard_only():
+    response = {
+        "DraftGroups": [
+            {
+                "DraftGroupTag": "Featured",
+                "ContestStartTimeSuffix": "(Round 4 TOUR)",
+                "DraftGroupId": 41,
+                "StartDateEst": "2026-02-09T10:45:00.000-05:00",
+                "ContestTypeId": 87,
+                "GameTypeId": 87,
+            },
+            {
+                "DraftGroupTag": "Featured",
+                "ContestStartTimeSuffix": "(Late Round 4 TOUR)",
+                "DraftGroupId": 42,
+                "StartDateEst": "2026-02-09T12:24:00.000-05:00",
+                "ContestTypeId": 154,
+                "GameTypeId": 154,
+            },
+            {
+                "DraftGroupTag": "Featured",
+                "ContestStartTimeSuffix": "(Round 4 DP World Tour)",
+                "DraftGroupId": 43,
+                "StartDateEst": "2026-02-09T10:45:00.000-05:00",
+                "ContestTypeId": 87,
+                "GameTypeId": 87,
+            },
+        ]
+    }
+
+    result = get_draft_groups_from_response(response, PGAShowdownSport)
+    assert result == [41]
 
 
 def test_build_draft_group_start_map_empty():
