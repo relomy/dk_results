@@ -12,6 +12,7 @@ import find_new_double_ups as find_mod
 from classes.contest import Contest
 from classes.sport import NFLShowdownSport, NFLSport, Sport
 from find_new_double_ups import (
+    _init_runtime,
     parse_args,
     process_sport,
     send_discord_notification,
@@ -31,6 +32,25 @@ from lobby.parsing import (
 
 def test_find_new_double_ups_exposes_webhook_sender():
     assert find_mod.WebhookSender is WebhookSender
+
+
+def test_init_runtime_keeps_existing_loggers(monkeypatch):
+    calls = {"dotenv": 0, "file_config_kwargs": None}
+
+    monkeypatch.setattr(
+        "find_new_double_ups.load_dotenv",
+        lambda *_a, **_k: calls.__setitem__("dotenv", calls["dotenv"] + 1),
+    )
+
+    def fake_file_config(*_args, **kwargs):
+        calls["file_config_kwargs"] = kwargs
+
+    monkeypatch.setattr("find_new_double_ups.logging.config.fileConfig", fake_file_config)
+
+    _init_runtime()
+
+    assert calls["dotenv"] == 1
+    assert calls["file_config_kwargs"] == {"disable_existing_loggers": False}
 
 
 def test_build_draft_group_start_map_filters_and_parses():
@@ -277,6 +297,32 @@ def test_get_draft_groups_from_response_nfl_showdown():
 
     result = get_draft_groups_from_response(response, NFLShowdownSport)
     assert result == [12]
+
+
+def test_get_draft_groups_from_response_nfl_showdown_super_bowl_suffix():
+    response = {
+        "DraftGroups": [
+            {
+                "DraftGroupTag": "Featured",
+                "ContestStartTimeSuffix": "(Super Bowl LX)",
+                "DraftGroupId": 21,
+                "StartDateEst": "2026-02-08T18:30:00.000-05:00",
+                "ContestTypeId": 1,
+                "GameTypeId": 96,
+            },
+            {
+                "DraftGroupTag": "Featured",
+                "ContestStartTimeSuffix": "(Super Bowl LX)",
+                "DraftGroupId": 22,
+                "StartDateEst": "2026-02-08T18:30:00.000-05:00",
+                "ContestTypeId": 1,
+                "GameTypeId": 192,
+            },
+        ]
+    }
+
+    result = get_draft_groups_from_response(response, NFLShowdownSport)
+    assert result == [21]
 
 
 def test_build_draft_group_start_map_empty():
@@ -551,3 +597,53 @@ def test_main_with_webhook_and_quiet(monkeypatch):
     monkeypatch.setattr(sys, "argv", ["prog", "-s", "NFL", "-q"])
 
     runpy.run_module("find_new_double_ups", run_name="__main__")
+
+
+def test_main_resolves_db_path_once(monkeypatch):
+    fake_cookieservice = types.ModuleType("classes.cookieservice")
+    fake_cookieservice.get_dk_cookies = lambda *_a, **_k: ({}, RequestsCookieJar())
+
+    class FakeDB:
+        def __init__(self, *_a, **_k):
+            pass
+
+        def create_table(self):
+            return None
+
+        def sync_draft_group_start_dates(self, *_a, **_k):
+            return 0
+
+        def compare_contests(self, *_a, **_k):
+            return []
+
+        def close(self):
+            return None
+
+    fake_contestdatabase = types.ModuleType("classes.contestdatabase")
+    fake_contestdatabase.ContestDatabase = FakeDB
+
+    class FakeResp:
+        def json(self):
+            return {"Contests": [], "DraftGroups": []}
+
+    calls = {"contests_db_path": 0, "ensure_schema": 0}
+
+    def fake_contests_db_path():
+        calls["contests_db_path"] += 1
+        return "/tmp/contests.db"
+
+    def fake_ensure_schema():
+        calls["ensure_schema"] += 1
+        return "/tmp/contests.db"
+
+    monkeypatch.setitem(sys.modules, "classes.cookieservice", fake_cookieservice)
+    monkeypatch.setitem(sys.modules, "classes.contestdatabase", fake_contestdatabase)
+    monkeypatch.setattr("requests.get", lambda *_a, **_k: FakeResp())
+    monkeypatch.setattr("contests_state.contests_db_path", fake_contests_db_path)
+    monkeypatch.setattr("contests_state.ensure_schema", fake_ensure_schema)
+    monkeypatch.setenv("DISCORD_WEBHOOK", "")
+    monkeypatch.setattr(sys, "argv", ["prog", "-s", "NFL"])
+
+    runpy.run_module("find_new_double_ups", run_name="__main__")
+
+    assert calls == {"contests_db_path": 0, "ensure_schema": 1}

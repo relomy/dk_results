@@ -138,7 +138,9 @@ class NFLShowdownSport(Sport):
 
     positions = ["CPT", "FLEX"]
 
-    suffixes = [r"\(\w{2,3} @ \w{2,3}\)"]
+    # DK sometimes uses team-vs-team suffixes and sometimes event labels
+    # like "(Super Bowl LX)" for the same showdown game type.
+    suffixes = [r"\(\w{2,3} @ \w{2,3}\)", r"\([A-Za-z0-9 .'-]+\)"]
 
     # contest_restraint_time = time(20, 0)
     contest_restraint_game_type_id = 96

@@ -106,7 +106,7 @@ def process_sport(
 def _init_runtime() -> None:
     """Initialize runtime-only side effects for CLI execution."""
     load_dotenv()
-    logging.config.fileConfig(LOGGING_CONFIG_FILE)
+    logging.config.fileConfig(LOGGING_CONFIG_FILE, disable_existing_loggers=False)
 
 
 def _load_lobby_cookies():
@@ -134,8 +134,7 @@ def main() -> None:
     if args.quiet:
         set_quiet_verbosity()
 
-    db_path = str(contests_state.contests_db_path())
-    contests_state.ensure_schema()
+    db_path = str(contests_state.ensure_schema())
     lobby_cookies = _load_lobby_cookies()
 
     db = ContestDatabase(db_path)

@@ -42,3 +42,33 @@ def test_contests_state_requires_env(monkeypatch):
     monkeypatch.delenv("DFS_STATE_DIR", raising=False)
     with pytest.raises(RuntimeError, match="DFS_STATE_DIR"):
         contests_state.contests_db_path()
+
+
+def test_contests_db_path_does_not_log_info(tmp_path, monkeypatch, caplog):
+    monkeypatch.setenv("DFS_STATE_DIR", str(tmp_path))
+    caplog.set_level("INFO")
+    path = contests_state.contests_db_path()
+    assert path == tmp_path / "contests.db"
+    assert "Contests DB path is" in caplog.text
+    assert str(path) in caplog.text
+    assert "Using contests DB at" not in caplog.text
+
+
+def test_upsert_contests_uses_ensured_schema_path_once(monkeypatch):
+    contest = Contest(_payload(202), "NBA")
+    captured = {"db_path": None, "calls": 0}
+
+    def fake_ensure_schema():
+        return "/tmp/contests.db"
+
+    def fake_upsert(db_path, rows):
+        captured["db_path"] = db_path
+        captured["calls"] += 1
+        assert rows
+
+    monkeypatch.setattr(contests_state, "ensure_schema", fake_ensure_schema)
+    monkeypatch.setattr(contests_state.contests, "upsert_contests", fake_upsert)
+
+    contests_state.upsert_contests([contest])
+
+    assert captured == {"db_path": "/tmp/contests.db", "calls": 1}

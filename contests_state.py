@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import logging
 from pathlib import Path
 
 from dfs_common import contests, state
@@ -11,9 +10,7 @@ _UNSET = object()
 
 
 def contests_db_path() -> Path:
-    path = state.contests_db_path()
-    logging.getLogger(__name__).info("Using contests DB at %s", path)
-    return path
+    return state.contests_db_path()
 
 
 def ensure_schema() -> Path:
@@ -21,7 +18,7 @@ def ensure_schema() -> Path:
 
 
 def upsert_contests(items: list[Contest]) -> None:
-    ensure_schema()
+    db_path = ensure_schema()
     rows: list[dict] = []
     for contest in items:
         rows.append(
@@ -41,7 +38,7 @@ def upsert_contests(items: list[Contest]) -> None:
                 "status": None,
             }
         )
-    contests.upsert_contests(contests_db_path(), rows)
+    contests.upsert_contests(db_path, rows)
 
 
 def update_contest_status(
