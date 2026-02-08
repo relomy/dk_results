@@ -160,10 +160,21 @@ class Results:
                 continue
 
             rank, player_id, name, pmr, points, lineup = row[:6]
+            parsed_rank: int | None = None
+            parsed_points: float | None = None
 
-            if rank and points:
-                rank = int(rank)
-                points = float(points)
+            if rank:
+                try:
+                    parsed_rank = int(rank)
+                    rank = parsed_rank
+                except (TypeError, ValueError):
+                    parsed_rank = None
+            if points:
+                try:
+                    parsed_points = float(points)
+                    points = parsed_points
+                except (TypeError, ValueError):
+                    parsed_points = None
 
             # create User object and append to users list
             lineupobj = Lineup(self.sport_obj, self.players, lineup)
@@ -178,11 +189,15 @@ class Results:
                 self.vip_list.append(user)
 
             # keep track of minimum pts to cash
-            if self.positions_paid:
+            if (
+                self.positions_paid is not None
+                and parsed_rank is not None
+                and parsed_points is not None
+            ):
                 # set minimum cash pts
-                if self.positions_paid >= rank and self.min_cash_pts > points:
-                    self.min_rank = rank
-                    self.min_cash_pts = points
+                if self.positions_paid >= parsed_rank and self.min_cash_pts > parsed_points:
+                    self.min_rank = parsed_rank
+                    self.min_cash_pts = parsed_points
                 else:
                     self.non_cashing_total_pmr += float(pmr)
 

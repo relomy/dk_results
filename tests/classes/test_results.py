@@ -103,6 +103,33 @@ def test_results_coerces_string_positions_paid():
     assert results.min_cash_pts == 150.0
 
 
+def test_results_handles_blank_points_without_type_error():
+    standings_rows = [
+        ["rank", "player_id", "name", "pmr", "pts", "lineup_str"],
+        [
+            "1",
+            "111",
+            "CashUser",
+            "0",
+            "",
+            "QB Tom Brady RB Derrick Henry WR Justin Jefferson TE Travis Kelce",
+        ],
+    ]
+
+    results = results_module.Results(
+        NFLSport,
+        contest_id=1,
+        salary_csv_fn="unused.csv",
+        positions_paid=10,
+        salary_rows=_sample_salary_rows(),
+        standings_rows=standings_rows,
+    )
+
+    assert len(results.users) == 1
+    assert results.min_rank == 0
+    assert results.min_cash_pts == 1000.0
+
+
 def test_add_player_to_dict_increments_for_new_and_existing_players():
     results = results_module.Results(
         sport_obj=NFLSport,
