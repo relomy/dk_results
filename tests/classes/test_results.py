@@ -88,6 +88,21 @@ def test_results_accepts_iterable_rows():
     assert len(results.users) == 2
 
 
+def test_results_coerces_string_positions_paid():
+    results = results_module.Results(
+        NFLSport,
+        contest_id=1,
+        salary_csv_fn="unused.csv",
+        positions_paid="1",
+        salary_rows=_sample_salary_rows(),
+        standings_rows=_sample_standings_rows(),
+    )
+
+    assert results.positions_paid == 1
+    assert results.min_rank == 1
+    assert results.min_cash_pts == 150.0
+
+
 def test_add_player_to_dict_increments_for_new_and_existing_players():
     results = results_module.Results(
         sport_obj=NFLSport,

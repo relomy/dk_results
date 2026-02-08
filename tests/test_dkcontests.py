@@ -57,6 +57,23 @@ def test_print_stats_includes_largest_entry_count(capsys):
     assert "$25: 2 contest(s) (largest entry count: 230)" in out
 
 
+def test_print_sql_insert_uses_typed_values(capsys):
+    contest = Contest(
+        {**_contest_payload(99, entries=22, fee=25), "n": "Weekend PGA TOUR Single Entry"},
+        "GOLF",
+    )
+
+    dkcontests.print_sql_insert(contest)
+
+    out = capsys.readouterr().out
+    assert "INSERT INTO contests (" in out
+    assert "positions_paid" in out
+    assert "'GOLF'" in out
+    assert "99" in out
+    assert "'99'" not in out
+    assert "NULL" in out
+
+
 def test_get_largest_contest_applies_query_and_exclude():
     contests = [
         Contest(_contest_payload(1, entries=150, fee=25), "NFL"),

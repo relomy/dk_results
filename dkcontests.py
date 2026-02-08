@@ -274,7 +274,16 @@ def print_cron_job(contest, sport):
 
 
 def print_sql_insert(contest):
-    #  "sport",
+    def _sql_literal(value):
+        if value is None:
+            return "NULL"
+        if isinstance(value, bool):
+            return str(int(value))
+        if isinstance(value, (int, float)):
+            return str(value)
+        text = str(value).replace("'", "''")
+        return f"'{text}'"
+
     fields = [
         "sport",
         "dk_id",
@@ -283,6 +292,7 @@ def print_sql_insert(contest):
         "draft_group",
         "total_prizes",
         "entries",
+        "positions_paid",
         "entry_fee",
         "entry_count",
         "max_entry_count",
@@ -295,12 +305,13 @@ def print_sql_insert(contest):
         contest.draft_group,
         contest.total_prizes,
         contest.entries,
+        None,
         contest.entry_fee,
         contest.entry_count,
         contest.max_entry_count,
     ]
-    value_str = "', '".join([str(v) for v in values])
-    print(f"INSERT INTO contests ({', '.join(fields)}) VALUES ('{value_str}')")
+    value_str = ", ".join(_sql_literal(v) for v in values)
+    print(f"INSERT INTO contests ({', '.join(fields)}) VALUES ({value_str})")
 
 def print_stats(contests):
     stats = get_stats(contests, include_largest=True)

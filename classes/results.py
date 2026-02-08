@@ -5,7 +5,7 @@ import io
 import logging
 import os
 from datetime import datetime
-from typing import Iterable, Type
+from typing import Any, Iterable, Type
 
 from .lineup import Lineup, normalize_name, parse_lineup_string
 from .player import Player
@@ -15,6 +15,30 @@ from .user import User
 
 class Results:
     """Parse salary and standings data for a DraftKings contest."""
+
+    @staticmethod
+    def _coerce_positions_paid(positions_paid: Any) -> int | None:
+        if positions_paid is None:
+            return None
+        if isinstance(positions_paid, bool):
+            return int(positions_paid)
+        if isinstance(positions_paid, int):
+            return positions_paid
+        if isinstance(positions_paid, float):
+            return int(positions_paid) if positions_paid.is_integer() else None
+        if isinstance(positions_paid, str):
+            value = positions_paid.strip()
+            if not value:
+                return None
+            try:
+                return int(value)
+            except ValueError:
+                try:
+                    float_value = float(value)
+                except ValueError:
+                    return None
+                return int(float_value) if float_value.is_integer() else None
+        return None
 
     def __init__(
         self,
@@ -33,7 +57,7 @@ class Results:
         self.contest_id = contest_id
         self.players = {}  # dict for players found in salary and standings CSV
         self.users = []  # list of Users found in standings CSV
-        self.positions_paid: int | None = positions_paid
+        self.positions_paid: int | None = self._coerce_positions_paid(positions_paid)
         self.name: str = ""
 
         self.min_rank = 0
