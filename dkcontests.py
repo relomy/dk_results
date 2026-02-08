@@ -37,17 +37,59 @@ Response format: {
 
 import argparse
 import datetime
+from typing import Type
 
 from classes.contest import Contest
+from classes.sport import Sport
 from lobby.common import valid_date
 from lobby.double_ups import get_stats
 from lobby.fetch import get_lobby_response
-from lobby.parsing import get_contests_from_response
+from lobby.parsing import get_contests_from_response, get_draft_groups_from_response
+
+_PGA_CRON_CONFIG = {"sport_length": 8, "get_interval": "4-59/15"}
+_SPORT_CRON_CONFIG = {
+    "NBA": {"sport_length": 6, "get_interval": "*/5"},
+    "NFL": {"sport_length": 6, "get_interval": "*/5"},
+    "CFB": {"sport_length": 6, "get_interval": "*/5"},
+    "MLB": {"sport_length": 7, "get_interval": "2-59/10"},
+    "PGA": _PGA_CRON_CONFIG,
+    "PGAWeekend": _PGA_CRON_CONFIG,
+    "PGAShowdown": _PGA_CRON_CONFIG,
+    "TEN": {"sport_length": 15, "get_interval": "5-59/10"},
+    "LOL": {"sport_length": 4, "get_interval": "*/5"},
+    "MMA": {"sport_length": 6, "get_interval": "*/10"},
+    "NAS": {"sport_length": 4, "get_interval": "*/5"},
+    "USFL": {"sport_length": 6, "get_interval": "*/10"},
+}
 
 
 def get_contests(sport: str, live: bool = False):
     response = get_lobby_response(sport, live=live)
     return get_contests_from_response(response)
+
+
+def get_sport_class_choices() -> dict[str, Type[Sport]]:
+    return {sport.name: sport for sport in Sport.__subclasses__() if sport.name}
+
+
+def get_contests_for_sport_class(
+    sport_class: str,
+    choices: dict[str, Type[Sport]] | None = None,
+) -> list[dict]:
+    choices = choices or get_sport_class_choices()
+    if sport_class not in choices:
+        raise ValueError(f"Unknown sport class: {sport_class}")
+    sport_obj = choices[sport_class]
+    response = get_lobby_response(sport_obj.get_primary_sport(), live=False)
+    if not isinstance(response, dict):
+        raise SystemExit("Sport-class mode requires getcontests response with DraftGroups.")
+    contests = get_contests_from_response(response)
+    draft_groups = set(get_draft_groups_from_response(response, sport_obj))
+    return [contest for contest in contests if contest.get("dg") in draft_groups]
+
+
+def get_cron_config(sport: str) -> dict[str, int | str]:
+    return _SPORT_CRON_CONFIG[sport]
 
 
 def get_largest_contest(contests, dt, entry_fee=25, query=None, exclude=None):
@@ -165,56 +207,14 @@ def print_cron_job(contest, sport):
     home_dir = "/home/pi/Desktop"
     pipenv_path = "/usr/local/bin/pipenv"
 
-    # set interval and length depending on sport
-    dict_sports = {
-        "NBA": {
-            "sport_length": 6,
-            "get_interval": "*/5",
-        },
-        "NFL": {
-            "sport_length": 6,
-            "get_interval": "*/5",
-        },
-        "CFB": {
-            "sport_length": 6,
-            "get_interval": "*/5",
-        },
-        "MLB": {
-            "sport_length": 7,
-            "get_interval": "2-59/10",
-        },
-        "PGA": {
-            "sport_length": 8,
-            "get_interval": "4-59/15",
-        },
-        "TEN": {
-            "sport_length": 15,
-            "get_interval": "5-59/10",
-        },
-        "LOL": {
-            "sport_length": 4,
-            "get_interval": "*/5",
-        },
-        "MMA": {
-            "sport_length": 6,
-            "get_interval": "*/10",
-        },
-        "NAS": {
-            "sport_length": 4,
-            "get_interval": "*/5",
-        },
-        "USFL": {
-            "sport_length": 6,
-            "get_interval": "*/10",
-        },
-    }
+    cron_config = get_cron_config(sport)
 
     # set some long strings up as variables
     py_str = f"cd {home_dir}/dk_results && {pipenv_path} run python"
     dl_str = f"{py_str} download_DK_salary.py"
     get_str = f"export DISPLAY=:1 && {py_str} main.py"
     # cron_str = set_cron_interval(contest, dict_sports[sport]["get_interval"])
-    cron_str = set_cron_interval(contest, dict_sports[sport]["sport_length"])
+    cron_str = set_cron_interval(contest, int(cron_config["sport_length"]))
     out_str = f"{home_dir}/{sport}_results.log 2>&1"
     file_str = f"DKSalaries_{sport}_{contest.start_dt:%A}.csv"
 
@@ -225,7 +225,7 @@ def print_cron_job(contest, sport):
         f"Download CSV for this slate:\n{dl_str} -s {sport} -dg {contest.draft_group} -f {file_str}\n"
     )
     print(
-        f"{dict_sports[sport]['get_interval']} {cron_str} {get_str} -s {sport} "
+        f"{cron_config['get_interval']} {cron_str} {get_str} -s {sport} "
         f"-i {contest.id} -dg {contest.draft_group} >> {out_str}"
     )
 
@@ -295,14 +295,21 @@ def main():
         "USFL",
     ]
 
+    sport_class_choices = get_sport_class_choices()
+
     # parse arguments
     parser = argparse.ArgumentParser()
-    parser.add_argument(
+    mode_group = parser.add_mutually_exclusive_group(required=True)
+    mode_group.add_argument(
         "-s",
         "--sport",
         choices=supported_sports,
-        required=True,
-        help="Type of contest",
+        help="Legacy sport code (existing behavior).",
+    )
+    mode_group.add_argument(
+        "--sport-class",
+        choices=sorted(sport_class_choices),
+        help="Use standard Sport subclasses (e.g. PGAShowdown, PGAWeekend).",
     )
     parser.add_argument(
         "-l", "--live", action="store_true", default="", help="Get live contests"
@@ -322,15 +329,23 @@ def main():
     args = parser.parse_args()
     print(args)
 
-    live = ""
-    if args.live:
-        live = "live"
+    is_live = bool(args.live)
 
-    # get contests via authenticated client
-    response_contests = get_contests(args.sport, live=bool(live))
+    if args.sport_class and args.live:
+        parser.error("--live is only supported with --sport legacy mode.")
+
+    if args.sport_class:
+        selected_sport = args.sport_class
+        response_contests = get_contests_for_sport_class(
+            args.sport_class, choices=sport_class_choices
+        )
+    else:
+        selected_sport = args.sport
+        # get contests via authenticated client
+        response_contests = get_contests(args.sport, live=is_live)
 
     # create list of Contest objects
-    contests = [Contest(c, args.sport) for c in response_contests]
+    contests = [Contest(c, selected_sport) for c in response_contests]
 
     # print stats for contests
     print_stats(contests)
@@ -345,11 +360,12 @@ def main():
         exit("No contests found.")
 
     # change GOLF back to PGA
-    if args.sport == "GOLF":
-        args.sport = "PGA"
+    output_sport = selected_sport
+    if output_sport == "GOLF":
+        output_sport = "PGA"
 
     # print out cron job for our other scripts
-    print_cron_job(contest, args.sport)
+    print_cron_job(contest, output_sport)
 
     print_sql_insert(contest)
 
