@@ -6,6 +6,7 @@ import sqlite3
 from pathlib import Path
 from typing import Any
 
+from dfs_common import config as common_config
 from dfs_common import contests, state
 import yaml
 
@@ -16,6 +17,28 @@ from classes.sport import Sport
 # load the logging configuration
 logging.config.fileConfig("logging.ini")
 logger = logging.getLogger(__name__)
+
+try:
+    from dotenv import load_dotenv
+except ImportError:  # pragma: no cover
+    def load_dotenv(*_args, **_kwargs):
+        return False
+
+load_dotenv()
+_config_data = common_config.load_json_config()
+_settings = common_config.resolve_dk_results_settings(_config_data)
+if _settings.dfs_state_dir and not os.getenv("DFS_STATE_DIR"):
+    os.environ["DFS_STATE_DIR"] = _settings.dfs_state_dir
+if _settings.spreadsheet_id and not os.getenv("SPREADSHEET_ID"):
+    os.environ["SPREADSHEET_ID"] = _settings.spreadsheet_id
+if not os.getenv("SHEET_GIDS_FILE") and _settings.sheet_gids_file:
+    os.environ["SHEET_GIDS_FILE"] = _settings.sheet_gids_file
+if not os.getenv("DISCORD_NOTIFICATIONS_ENABLED"):
+    os.environ["DISCORD_NOTIFICATIONS_ENABLED"] = (
+        "true" if _settings.discord_notifications_enabled else "false"
+    )
+if not os.getenv("CONTEST_WARNING_MINUTES"):
+    os.environ["CONTEST_WARNING_MINUTES"] = str(_settings.contest_warning_minutes)
 
 # constants
 COMPLETED_STATUSES = ["COMPLETED", "CANCELLED"]

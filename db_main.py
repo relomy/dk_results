@@ -10,6 +10,7 @@ from typing import Any
 import yaml
 from zoneinfo import ZoneInfo
 
+from dfs_common import config as common_config
 from dfs_common import state
 from classes.contestdatabase import ContestDatabase
 from classes.dfs_sheet_service import DfsSheetService
@@ -24,6 +25,12 @@ from classes.trainfinder import TrainFinder
 logging.config.fileConfig("logging.ini")
 
 logger = logging.getLogger(__name__)
+
+try:
+    from dotenv import load_dotenv
+except ImportError:  # pragma: no cover
+    def load_dotenv(*_args, **_kwargs):
+        return False
 
 # typing helpers
 SportType = type[Sport]
@@ -305,6 +312,14 @@ def main() -> None:
     """
     Use database and update Google Sheet with contest standings from DraftKings.
     """
+    load_dotenv()
+    cfg = common_config.load_json_config()
+    settings = common_config.resolve_dk_results_settings(cfg)
+    if settings.dfs_state_dir and not os.getenv("DFS_STATE_DIR"):
+        os.environ["DFS_STATE_DIR"] = settings.dfs_state_dir
+    if settings.spreadsheet_id and not os.getenv("SPREADSHEET_ID"):
+        os.environ["SPREADSHEET_ID"] = settings.spreadsheet_id
+
     parser = argparse.ArgumentParser()
     sportz: list[SportType] = Sport.__subclasses__()
     choices: dict[str, SportType] = {sport.name: sport for sport in sportz}
