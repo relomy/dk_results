@@ -461,6 +461,11 @@ def test_fetch_live_contest_closes_db(monkeypatch):
     assert captured.get("closed") is True
 
 
+def test_db_path_uses_dfs_common_state(monkeypatch):
+    monkeypatch.setattr(discord_bot.state, "contests_db_path", lambda: "/tmp/contests.db")
+    assert discord_bot._db_path() == "/tmp/contests.db"
+
+
 def test_format_time_until_seconds_only(monkeypatch):
     class FixedDateTime(datetime.datetime):
         @classmethod

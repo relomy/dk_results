@@ -1,9 +1,9 @@
 import argparse
 from typing import Any
 
+from dfs_common import state
 import yaml
 
-import contests_state
 from classes.contestdatabase import ContestDatabase
 from classes.dfs_sheet_service import DfsSheetService
 from classes.sheets_service import build_dfs_sheet_service
@@ -151,7 +151,7 @@ if __name__ == "__main__":
         nargs="+",
     )
 
-    contest_database = ContestDatabase(str(contests_state.contests_db_path()))
+    contest_database = ContestDatabase(str(state.contests_db_path()))
 
     args = parser.parse_args()
 

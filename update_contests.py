@@ -6,9 +6,9 @@ import sqlite3
 from pathlib import Path
 from typing import Any
 
+from dfs_common import contests, state
 import yaml
 
-import contests_state
 from bot.discord_rest import DiscordRest
 from classes.draftkings import Draftkings
 from classes.sport import Sport
@@ -218,7 +218,7 @@ def _format_contest_announcement(
 
 
 def _contests_db_path() -> str:
-    return str(contests_state.contests_db_path())
+    return str(state.contests_db_path())
 
 
 def create_notifications_table(conn) -> None:
@@ -672,7 +672,7 @@ def db_get_next_upcoming_contest_any(conn, sport: str) -> tuple | None:
 
 def main():
     try:
-        contests_state.ensure_schema()
+        contests.init_schema(state.contests_db_path())
         conn = sqlite3.connect(_contests_db_path())
         check_contests_for_completion(conn)
     except sqlite3.Error as sql_error:

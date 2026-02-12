@@ -6,10 +6,10 @@ import logging.config
 from os import getenv
 from typing import Type
 
+from dfs_common import contests, state
 from dfs_common.discord import WebhookSender
 from dotenv import load_dotenv
 
-import contests_state
 from classes.contest import Contest
 from classes.contestdatabase import ContestDatabase
 from classes.sport import Sport
@@ -22,6 +22,31 @@ from lobby.parsing import build_draft_group_start_map
 LOGGING_CONFIG_FILE = "logging.ini"
 
 logger = logging.getLogger(__name__)
+
+
+def _contest_to_row(contest: Contest) -> dict:
+    return {
+        "dk_id": contest.id,
+        "sport": contest.sport,
+        "name": contest.name,
+        "start_date": contest.start_dt.isoformat(sep=" "),
+        "draft_group": contest.draft_group,
+        "total_prizes": contest.total_prizes,
+        "entries": contest.entries,
+        "positions_paid": None,
+        "entry_fee": contest.entry_fee,
+        "entry_count": contest.entry_count,
+        "max_entry_count": contest.max_entry_count,
+        "completed": 0,
+        "status": None,
+    }
+
+
+def _upsert_contests(items: list[Contest]) -> None:
+    contests.upsert_contests(
+        state.contests_db_path(),
+        [_contest_to_row(contest) for contest in items],
+    )
 
 
 def send_discord_notification(bot: WebhookSender | None, sport_name: str, message: str) -> None:
@@ -99,7 +124,7 @@ def process_sport(
         matching_contests = [c for c in contests if c.id in new_contest_ids]
         discord_message = format_discord_messages(matching_contests)
         logger.info(discord_message)
-        contests_state.upsert_contests(matching_contests)
+        _upsert_contests(matching_contests)
         send_discord_notification(bot, sport_obj.name, discord_message)
 
 
@@ -134,7 +159,7 @@ def main() -> None:
     if args.quiet:
         set_quiet_verbosity()
 
-    db_path = str(contests_state.ensure_schema())
+    db_path = str(contests.init_schema(state.contests_db_path()))
     lobby_cookies = _load_lobby_cookies()
 
     db = ContestDatabase(db_path)

@@ -511,6 +511,31 @@ def test_main_handles_sqlite_error(monkeypatch):
     update_contests.main()
 
 
+def test_main_uses_dfs_common_schema_init(monkeypatch):
+    calls = {"db_path": 0, "init_schema": 0}
+
+    def fake_db_path():
+        calls["db_path"] += 1
+        return "/tmp/contests.db"
+
+    def fake_init_schema(path):
+        calls["init_schema"] += 1
+        assert path == "/tmp/contests.db"
+        return path
+
+    class FakeConn:
+        pass
+
+    monkeypatch.setattr(update_contests.state, "contests_db_path", fake_db_path)
+    monkeypatch.setattr(update_contests.contests, "init_schema", fake_init_schema)
+    monkeypatch.setattr(update_contests.sqlite3, "connect", lambda _p: FakeConn())
+    monkeypatch.setattr(update_contests, "check_contests_for_completion", lambda _c: None)
+
+    update_contests.main()
+
+    assert calls == {"db_path": 2, "init_schema": 1}
+
+
 def test_load_sheet_gid_map_valid_entries(tmp_path, monkeypatch):
     path = tmp_path / "gids.yaml"
     path.write_text("NBA: 10\nbad: x\n42: 3\n")
@@ -1018,7 +1043,8 @@ def test_main_happy_path(monkeypatch):
         lambda c: called.setdefault("ok", True),
     )
     monkeypatch.setenv("DFS_STATE_DIR", "/tmp")
-    monkeypatch.setattr(update_contests.contests_state, "ensure_schema", lambda: None)
+    monkeypatch.setattr(update_contests.state, "contests_db_path", lambda: "/tmp/contests.db")
+    monkeypatch.setattr(update_contests.contests, "init_schema", lambda _p: None)
 
     update_contests.main()
 

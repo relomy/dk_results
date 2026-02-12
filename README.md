@@ -71,7 +71,7 @@ Sample config files are provided to copy/adapt:
 
 | Variable                        | Used by                                                                                                                                                      | Notes                                                             |
 | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------- |
-| `DFS_STATE_DIR`                 | `contests_state.contests_db_path`, `update_contests.py:_contests_db_path`, `bot/discord_bot.py:_db_path`                                                     | Required. Shared state directory containing `contests.db`.        |
+| `DFS_STATE_DIR`                 | `dfs_common.state.contests_db_path`, `update_contests.py:_contests_db_path`, `bot/discord_bot.py:_db_path`                                                 | Required. Shared state directory containing `contests.db`.        |
 | `DISCORD_NOTIFICATIONS_ENABLED` | `update_contests.py:DISCORD_NOTIFICATIONS_ENABLED`                                                                                                           | Controls whether `update_contests.py` sends notifications.        |
 | `DISCORD_BOT_TOKEN`             | `update_contests.py:_build_discord_sender`, `bot/discord_bot.py:BOT_TOKEN`                                                                                   | Required for bot-based notifications and the Discord service.     |
 | `DISCORD_CHANNEL_ID`            | `update_contests.py:_build_discord_sender`, `bot/discord_bot.py:ALLOWED_CHANNEL_ID`                                                                          | Required for bot-based notifications; also gates allowed channel. |
@@ -95,8 +95,8 @@ so place the credential file at the repo root before running `db_main.py` or the
 
 ## Data Files and Artifacts
 
-- `contests.sqlite` lives under `DFS_STATE_DIR` and stores shared contest state.
-  The `contests` table schema is managed by `dfs_common` via `contests_state.ensure_schema`,
+- `contests.db` lives under `DFS_STATE_DIR` and stores shared contest state.
+  The `contests` table schema is managed by `dfs_common` via `dfs_common.contests.init_schema`,
   and `contest_notifications` is created by `update_contests.py` for de-duplication
   (`update_contests.py:create_notifications_table`).
 - Sample config templates live alongside the real files and are safe to share:

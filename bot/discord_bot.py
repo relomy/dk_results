@@ -10,7 +10,7 @@ import discord  # noqa: E402
 import yaml
 from discord.ext import commands
 
-import contests_state
+from dfs_common import state
 from classes.contestdatabase import ContestDatabase
 from classes.sport import Sport
 
@@ -174,7 +174,7 @@ def _format_contest_row(row: tuple, sport_name: str, sheet_link: str | None) -> 
 
 
 def _db_path() -> str:
-    return str(contests_state.contests_db_path())
+    return str(state.contests_db_path())
 
 
 def _fetch_live_contest(sport_cls: SportType) -> tuple | None:

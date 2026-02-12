@@ -10,7 +10,7 @@ from typing import Any
 import yaml
 from zoneinfo import ZoneInfo
 
-import contests_state
+from dfs_common import state
 from classes.contestdatabase import ContestDatabase
 from classes.dfs_sheet_service import DfsSheetService
 from classes.sheets_service import build_dfs_sheet_service
@@ -324,7 +324,7 @@ def main() -> None:
     )
     parser.add_argument("-v", "--verbose", help="Increase verbosity")
     args = parser.parse_args()
-    contest_database = ContestDatabase(str(contests_state.contests_db_path()))
+    contest_database = ContestDatabase(str(state.contests_db_path()))
     vips = load_vips()
     now = datetime.datetime.now(ZoneInfo("America/New_York"))
     for sport_name in args.sport:
