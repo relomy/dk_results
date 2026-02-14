@@ -39,11 +39,25 @@ Optional explicit contest:
 uv run python export_fixture.py --sport NBA --contest-id 123456789 --out fixtures/nba-123456789-fixture.json
 ```
 
+Multi-sport bundle for testing with explicit IDs:
+
+```bash
+uv run python export_fixture.py bundle --item NBA:188080404 --item GOLF:187937165 --out /tmp/dk-two-sport-bundle.json
+```
+
 Notes:
 - The exporter reuses the same `dk_results` data sources/endpoints already in use (contest DB + existing `Draftkings` client methods); no new scraping endpoints are introduced.
 - Contest selection is deterministic and includes a `selection.reason` object plus compact candidate summary for transparency.
 - Output is byte-stable for tests (`sort_keys`, fixed separators, stable ordering) and keeps major sections present with explicit `null` where data is unavailable.
 - Cookies/auth handling follows existing project mechanisms (`classes/dksession.py`, `pickled_cookies_works.txt`); no credentials are printed in logs.
+
+Optional `db_main.py` addendum export for integration testing:
+
+```bash
+uv run python db_main.py --sport NBA GOLF --snapshot-out /tmp/live-snapshot.json
+```
+
+`--snapshot-out` is opt-in and does not change normal sheet-writing behavior when omitted.
 
 - `db_main.py` updates Google Sheets for a live contest per sport by downloading salary
   and standings CSVs, constructing `Results`, and writing via `DfsSheetService`

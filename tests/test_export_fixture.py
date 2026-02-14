@@ -336,3 +336,94 @@ def test_standalone_main_routes_export_fixture(monkeypatch, tmp_path):
     )
     assert rc == 0
     assert called["sport"] == "NBA"
+
+
+def test_standalone_main_bundle_routes_export_bundle(monkeypatch, tmp_path):
+    called = {}
+
+    def fake_bundle(args):
+        called["items"] = list(args.item)
+        called["out"] = args.out
+        return 0
+
+    monkeypatch.setattr(export_fixture, "run_export_bundle", fake_bundle)
+    rc = export_fixture.main(
+        [
+            "bundle",
+            "--item",
+            "NBA:123",
+            "--item",
+            "GOLF:456",
+            "--out",
+            str(tmp_path / "bundle.json"),
+        ]
+    )
+    assert rc == 0
+    assert called["items"] == ["NBA:123", "GOLF:456"]
+
+
+def test_standalone_main_bundle_routes_from_sys_argv(monkeypatch, tmp_path):
+    called = {}
+
+    def fake_bundle(args):
+        called["items"] = list(args.item)
+        return 0
+
+    monkeypatch.setattr(export_fixture, "run_export_bundle", fake_bundle)
+    monkeypatch.setattr(
+        export_fixture.sys,
+        "argv",
+        [
+            "export_fixture.py",
+            "bundle",
+            "--item",
+            "NBA:123",
+            "--item",
+            "GOLF:456",
+            "--out",
+            str(tmp_path / "bundle.json"),
+        ],
+    )
+    rc = export_fixture.main()
+    assert rc == 0
+    assert called["items"] == ["NBA:123", "GOLF:456"]
+
+
+def test_run_export_bundle_writes_two_sports(monkeypatch, tmp_path):
+    monkeypatch.setattr(export_command, "configure_runtime", lambda: None)
+
+    def _fake_build_snapshot(*, sport: str, contest_id: int | None, standings_limit: int):
+        return {
+            "snapshot_version": "v1",
+            "snapshot_generated_at_utc": "2026-02-14T10:00:00Z",
+            "sport": sport,
+            "contest": {"contest_id": contest_id, "is_primary": True},
+            "selection": {"selected_contest_id": contest_id, "reason": {}},
+            "candidates": [],
+            "cash_line": {},
+            "vip_lineups": [],
+            "players": [],
+            "ownership": {"ownership_remaining_total_pct": 1.0},
+            "train_clusters": [],
+            "standings": [],
+            "truncation": {"limit": standings_limit},
+            "metadata": {"warnings": [], "missing_fields": [], "source_endpoints": []},
+        }
+
+    monkeypatch.setattr(export_command, "build_snapshot", _fake_build_snapshot)
+    out = tmp_path / "bundle.json"
+    args = Namespace(
+        item=["NBA:123", "GOLF:456"],
+        out=str(out),
+        standings_limit=42,
+    )
+
+    rc = export_command.run_export_bundle(args)
+    payload = out.read_text(encoding="utf-8")
+
+    assert rc == 0
+    assert '"schema_version":1' in payload
+    assert '"nba"' in payload
+    assert '"golf"' in payload
+    assert '"selected_contest_id":"123"' in payload
+    assert '"selected_contest_id":"456"' in payload

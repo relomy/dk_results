@@ -1,3 +1,4 @@
+import datetime
 import logging
 import pathlib
 from typing import Any
@@ -9,6 +10,8 @@ from services.snapshot_exporter import (
     normalize_snapshot_for_output,
     normalize_sport_name,
     snapshot_to_json,
+    to_stable_json,
+    to_utc_iso,
 )
 
 logger = logging.getLogger(__name__)
@@ -46,4 +49,55 @@ def run_export_fixture(args: Any) -> int:
     logger.info("missing fields=%s", ",".join(missing))
     logger.info("warning count=%d", warning_count)
     logger.info("output path=%s", out_path)
+    return 0
+
+
+def _parse_bundle_item(raw_item: str) -> tuple[str, int]:
+    value = str(raw_item or "").strip()
+    if ":" not in value:
+        raise ValueError(f"Invalid bundle item '{raw_item}'. Expected SPORT:CONTEST_ID.")
+    raw_sport, raw_contest_id = value.split(":", 1)
+    sport = normalize_sport_name(raw_sport)
+    try:
+        contest_id = int(raw_contest_id)
+    except ValueError as exc:
+        raise ValueError(
+            f"Invalid contest id in bundle item '{raw_item}'. Expected integer id."
+        ) from exc
+    return sport, contest_id
+
+
+def run_export_bundle(args: Any) -> int:
+    logging.getLogger("Draftkings").setLevel(logging.INFO)
+    logging.getLogger("classes.results").setLevel(logging.INFO)
+    configure_runtime()
+    standings_limit = int(args.standings_limit) if args.standings_limit else DEFAULT_STANDINGS_LIMIT
+
+    items = list(getattr(args, "item", []) or [])
+    if not items:
+        raise ValueError("At least one --item SPORT:CONTEST_ID is required for bundle export.")
+
+    parsed_items = [_parse_bundle_item(item) for item in items]
+    sports: dict[str, Any] = {}
+    for sport, contest_id in parsed_items:
+        snapshot = build_snapshot(
+            sport=sport,
+            contest_id=contest_id,
+            standings_limit=standings_limit,
+        )
+        sports[sport.lower()] = normalize_snapshot_for_output(snapshot)
+
+    now_utc = to_utc_iso(datetime.datetime.now(datetime.timezone.utc))
+    payload = {
+        "schema_version": 1,
+        "snapshot_at": now_utc,
+        "generated_at": now_utc,
+        "sports": sports,
+    }
+    out_path = pathlib.Path(args.out)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text(to_stable_json(payload), encoding="utf-8")
+
+    logger.info("bundle candidate count=%d", len(parsed_items))
+    logger.info("bundle output path=%s", out_path)
     return 0

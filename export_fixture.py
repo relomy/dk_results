@@ -1,7 +1,8 @@
 import argparse
+import sys
 from typing import Sequence
 
-from commands.export_fixture import run_export_fixture
+from commands.export_fixture import run_export_bundle, run_export_fixture
 from services.snapshot_exporter import DEFAULT_STANDINGS_LIMIT
 
 
@@ -19,9 +20,32 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def build_bundle_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(prog="export_fixture.py bundle")
+    parser.add_argument(
+        "--item",
+        action="append",
+        required=True,
+        help="Repeatable item in the format SPORT:CONTEST_ID, e.g. NBA:123456789",
+    )
+    parser.add_argument("--out", required=True, help="Output JSON bundle path")
+    parser.add_argument(
+        "--standings-limit",
+        type=int,
+        default=DEFAULT_STANDINGS_LIMIT,
+        help="Maximum number of standings rows to include per sport",
+    )
+    return parser
+
+
 def main(argv: Sequence[str] | None = None) -> int:
+    argv_list = list(argv) if argv is not None else sys.argv[1:]
+    if argv_list and argv_list[0] == "bundle":
+        parser = build_bundle_parser()
+        args = parser.parse_args(argv_list[1:])
+        return int(run_export_bundle(args) or 0)
     parser = build_parser()
-    args = parser.parse_args(argv)
+    args = parser.parse_args(argv_list)
     return int(run_export_fixture(args) or 0)
 
 
