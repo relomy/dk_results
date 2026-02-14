@@ -1119,6 +1119,42 @@ def _threat_metrics(
     }
 
 
+def _train_metrics(train_clusters: dict[str, Any] | None) -> dict[str, Any] | None:
+    if not train_clusters:
+        return None
+    clusters = train_clusters.get("clusters") or []
+    if not clusters:
+        return None
+
+    def _rank_key(cluster: dict[str, Any]) -> tuple[float, int, float, str]:
+        best_rank = cluster.get("best_rank")
+        best_rank = float(best_rank) if isinstance(best_rank, (int, float)) else float("inf")
+        entry_count = cluster.get("entry_count")
+        entry_count = int(entry_count) if isinstance(entry_count, int) else 0
+        avg_pmr = cluster.get("avg_pmr")
+        avg_pmr = float(avg_pmr) if isinstance(avg_pmr, (int, float)) else float("inf")
+        cluster_key = cluster.get("cluster_key") or ""
+        return (best_rank, -entry_count, avg_pmr, str(cluster_key))
+
+    ranked = sorted(clusters, key=_rank_key)
+    ranked_clusters = [
+        {
+            "cluster_key": cluster.get("cluster_key"),
+            "rank": index + 1,
+            "entry_count": cluster.get("entry_count"),
+            "best_rank": cluster.get("best_rank"),
+            "avg_pmr": cluster.get("avg_pmr"),
+        }
+        for index, cluster in enumerate(ranked)
+    ]
+    top_n = 5
+    return {
+        "recommended_top_n": top_n,
+        "ranked_clusters": ranked_clusters,
+        "top_clusters": ranked_clusters[:top_n],
+    }
+
+
 def _selection_reason_text(reason: Any, contest_id: Any) -> str | None:
     if isinstance(reason, str):
         text = reason.strip()
@@ -1218,6 +1254,9 @@ def build_dashboard_sport_snapshot(snapshot: dict[str, Any], generated_at: str) 
     )
     if threat:
         metrics["threat"] = threat
+    trains = _train_metrics(contest_object.get("train_clusters"))
+    if trains:
+        metrics["trains"] = trains
     if metrics:
         contest_object["metrics"] = {"updated_at": updated_at, **metrics}
     contest_object["live_metrics"] = {
