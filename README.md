@@ -25,6 +25,26 @@ Scheduling is external to this repo (cron/systemd/etc). Each entry point exposes
 `main()` and is runnable as a script or module (`db_main.py:main`,
 `find_new_double_ups.py:main`, `update_contests.py:main`, `bot/discord_bot.py:main`).
 
+## Export Fixture Snapshot
+
+Use the unified CLI to export a deterministic, decision-ready JSON snapshot for one contest:
+
+```bash
+uv run python export_fixture.py --sport NBA --out fixtures/nba-primary-live-fixture.json
+```
+
+Optional explicit contest:
+
+```bash
+uv run python export_fixture.py --sport NBA --contest-id 123456789 --out fixtures/nba-123456789-fixture.json
+```
+
+Notes:
+- The exporter reuses the same `dk_results` data sources/endpoints already in use (contest DB + existing `Draftkings` client methods); no new scraping endpoints are introduced.
+- Contest selection is deterministic and includes a `selection.reason` object plus compact candidate summary for transparency.
+- Output is byte-stable for tests (`sort_keys`, fixed separators, stable ordering) and keeps major sections present with explicit `null` where data is unavailable.
+- Cookies/auth handling follows existing project mechanisms (`classes/dksession.py`, `pickled_cookies_works.txt`); no credentials are printed in logs.
+
 - `db_main.py` updates Google Sheets for a live contest per sport by downloading salary
   and standings CSVs, constructing `Results`, and writing via `DfsSheetService`
   (`db_main.py:process_sport`, `classes/draftkings.py:download_salary_csv`,
