@@ -1,6 +1,9 @@
 # ignore uv.lock since it is already tracked
 uv.lock
 
+# ignore config.json
+config.json
+
 # package-specific
 .vscode/
 salary/
