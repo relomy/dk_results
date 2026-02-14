@@ -4,20 +4,23 @@ import logging
 import logging.config
 import os
 import pathlib
+import sqlite3
 from collections import OrderedDict
 from typing import Any
-
-import yaml
 from zoneinfo import ZoneInfo
 
+import yaml
 from dfs_common import config as common_config
 from dfs_common import state
+from dfs_common.discord import WebhookSender
+
+from classes.bonus_announcements import announce_vip_bonuses
 from classes.contestdatabase import ContestDatabase
 from classes.dfs_sheet_service import DfsSheetService
-from classes.sheets_service import build_dfs_sheet_service
 from classes.draftkings import Draftkings
 from classes.optimizer import Optimizer
 from classes.results import Results
+from classes.sheets_service import build_dfs_sheet_service
 from classes.sport import Sport
 from classes.trainfinder import TrainFinder
 
@@ -40,6 +43,19 @@ CONTEST_DIR = "contests"
 SALARY_DIR = "salary"
 SALARY_LIMIT = 40000
 COOKIES_FILE = "pickled_cookies_works.txt"
+
+
+def _build_bonus_sender() -> WebhookSender | None:
+    notifications_enabled = (
+        os.getenv("DISCORD_NOTIFICATIONS_ENABLED", "true").strip().lower()
+        not in {"0", "false", "no"}
+    )
+    if not notifications_enabled:
+        return None
+    webhook = os.getenv("DISCORD_BONUS_WEBHOOK") or os.getenv("DISCORD_WEBHOOK")
+    if not webhook:
+        return None
+    return WebhookSender(webhook)
 
 
 def load_vips() -> list[str]:
@@ -130,6 +146,25 @@ def write_players_to_sheet(
         logger.info("Writing API vip_lineups to sheet")
         sheet.clear_lineups()
         sheet.write_vip_lineups(vip_lineups)
+        bonus_sender = _build_bonus_sender()
+        if bonus_sender:
+            try:
+                with sqlite3.connect(str(state.contests_db_path())) as conn:
+                    announce_vip_bonuses(
+                        conn=conn,
+                        sport=sport_name,
+                        contest_id=dk_id,
+                        vip_lineups=vip_lineups,
+                        sender=bonus_sender,
+                        logger=logger,
+                    )
+            except sqlite3.Error as err:
+                logger.error(
+                    "Failed bonus announcement DB flow for %s (%s): %s",
+                    sport_name,
+                    dk_id,
+                    err,
+                )
 
 
 def write_non_cashing_info(sheet: DfsSheetService, results: Results) -> None:
