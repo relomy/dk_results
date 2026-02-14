@@ -49,6 +49,8 @@ Notes:
 - The exporter reuses the same `dk_results` data sources/endpoints already in use (contest DB + existing `Draftkings` client methods); no new scraping endpoints are introduced.
 - Contest selection is deterministic and includes a `selection.reason` object plus compact candidate summary for transparency.
 - Output is byte-stable for tests (`sort_keys`, fixed separators, stable ordering) and keeps major sections present with explicit `null` where data is unavailable.
+- Export output uses a snapshot envelope: `schema_version`, `snapshot_at`, `generated_at`, and `sports` keyed by sport code.
+- Each sport snapshot includes both legacy fields and normalized contract sections: `status`, `updated_at`, `primary_contest`, `contests`, and `players`.
 - Cookies/auth handling follows existing project mechanisms (`classes/dksession.py`, `pickled_cookies_works.txt`); no credentials are printed in logs.
 
 Optional `db_main.py` addendum export for integration testing:

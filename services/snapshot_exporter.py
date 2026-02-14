@@ -35,6 +35,8 @@ ID_FIELDS = {
     "cluster_id",
 }
 
+CANONICAL_DISALLOWED_KEYS = {"username", "player_id", "playerId", "dk_player_id"}
+
 SOURCE_ENDPOINTS = [
     "contests_db.get_live_contest",
     "contests_db.get_live_contest_candidates",
@@ -126,6 +128,15 @@ def _rank_numeric(value: Any) -> int | None:
             except ValueError:
                 return None
     return None
+
+
+def _to_int(value: Any) -> int | None:
+    if value in (None, ""):
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def _ownership_remaining_for_user(user: Any) -> float | None:
@@ -680,3 +691,480 @@ def to_stable_json(payload: Any) -> str:
         separators=(",", ":"),
         ensure_ascii=True,
     ) + "\n"
+
+
+def _cash_line_contract(cash_line: dict[str, Any]) -> dict[str, Any]:
+    raw = str(cash_line.get("cutoff_type") or "").strip().lower()
+    if raw in {"positions_paid", "rank"}:
+        cutoff_type = "rank"
+    elif raw == "points":
+        cutoff_type = "points"
+    else:
+        cutoff_type = "unknown"
+    return {
+        "cutoff_type": cutoff_type,
+        "rank_cutoff": cash_line.get("rank"),
+        "points_cutoff": cash_line.get("points"),
+    }
+
+
+def _ownership_watchlist_contract(ownership: dict[str, Any], updated_at: str) -> dict[str, Any]:
+    entries: list[dict[str, Any]] = []
+    for row in ownership.get("top_remaining_players") or []:
+        if not isinstance(row, dict):
+            continue
+        entry_key = row.get("entry_key")
+        display_name = row.get("display_name") or row.get("player_name")
+        if display_name in (None, "") and entry_key not in (None, ""):
+            display_name = str(entry_key)
+        entries.append(
+            {
+                "display_name": display_name,
+                "ownership_remaining_pct": _to_float(row.get("ownership_remaining_pct")),
+                "entry_key": entry_key,
+                "current_rank": _rank_numeric(row.get("current_rank")),
+                "current_points": _to_float(row.get("current_points")),
+                "pmr": _to_float(row.get("pmr")),
+            }
+        )
+    top_n_default_raw = ownership.get("top_n_default")
+    if isinstance(top_n_default_raw, (int, float)):
+        top_n_default = int(top_n_default_raw)
+    else:
+        top_n_default = 10
+    if top_n_default <= 0:
+        top_n_default = 10
+    return {
+        "updated_at": updated_at,
+        "ownership_remaining_total_pct": _to_float(
+            ownership.get("ownership_remaining_total_pct")
+        ),
+        "top_n_default": top_n_default,
+        "entries": entries,
+    }
+
+
+def _normalize_standings_rows(rows: list[Any]) -> list[dict[str, Any]]:
+    normalized_rows: list[dict[str, Any]] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        entry_key = row.get("entry_key")
+        display_name = row.get("display_name") or row.get("username")
+        if display_name in (None, "") and entry_key not in (None, ""):
+            display_name = str(entry_key)
+        payout_cents = _to_int(row.get("payout_cents"))
+        normalized_rows.append(
+            {
+                "entry_key": entry_key,
+                "display_name": display_name,
+                "rank": _rank_numeric(row.get("rank")),
+                "points": _to_float(row.get("points")),
+                "pmr": _to_float(row.get("pmr")),
+                "ownership_remaining_pct": _to_float(
+                    row.get("ownership_remaining_total_pct")
+                    if row.get("ownership_remaining_total_pct") is not None
+                    else row.get("ownership_remaining_pct")
+                ),
+                "payout_cents": payout_cents,
+                "is_cashing": payout_cents is not None,
+                "is_vip": bool(row.get("is_vip")),
+            }
+        )
+    return normalized_rows
+
+
+def _unique_standings_by_display_name(
+    rows: list[dict[str, Any]],
+) -> dict[str, dict[str, Any]]:
+    counts: dict[str, int] = {}
+    for row in rows:
+        display_name = row.get("display_name")
+        if display_name in (None, ""):
+            continue
+        key = str(display_name)
+        counts[key] = counts.get(key, 0) + 1
+    unique: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        display_name = row.get("display_name")
+        if display_name in (None, ""):
+            continue
+        key = str(display_name)
+        if counts.get(key) == 1:
+            unique[key] = row
+    return unique
+
+
+def _build_player_name_lookup(players: list[Any]) -> dict[str, str]:
+    lookup: dict[str, str] = {}
+    collisions: set[str] = set()
+    for player in players:
+        if not isinstance(player, dict):
+            continue
+        name = str(player.get("name") or "").strip()
+        if not name:
+            continue
+        key = name.lower()
+        if key in lookup and lookup[key] != name:
+            collisions.add(key)
+        else:
+            lookup[key] = name
+    for key in collisions:
+        lookup.pop(key, None)
+    return lookup
+
+
+def _canonical_player_name(raw_name: Any, lookup: dict[str, str]) -> str | None:
+    name = str(raw_name or "").strip()
+    if not name:
+        return None
+    if name.lower() in lookup:
+        return lookup[name.lower()]
+    return None
+
+
+def _cluster_composition(
+    cluster: dict[str, Any], player_lookup: dict[str, str]
+) -> list[dict[str, Any]]:
+    signature = str(cluster.get("lineup_signature") or "").strip()
+    if not signature:
+        return []
+    names = [part.strip() for part in signature.split("|") if part.strip()]
+    composition: list[dict[str, Any]] = []
+    for index, name in enumerate(names):
+        canonical_name = _canonical_player_name(name, player_lookup)
+        if canonical_name is None:
+            continue
+        composition.append({"slot": f"SLOT_{index + 1}", "player_name": canonical_name})
+    return composition
+
+
+def _train_clusters_contract(
+    clusters: list[Any],
+    updated_at: str,
+    player_lookup: dict[str, str],
+    standings_by_entry_key: dict[str, dict[str, Any]],
+) -> dict[str, Any]:
+    mapped_clusters: list[dict[str, Any]] = []
+    max_shared = 0
+    for row in clusters:
+        if not isinstance(row, dict):
+            continue
+        composition = _cluster_composition(row, player_lookup)
+        max_shared = max(max_shared, len(composition))
+
+        entry_keys = [str(v) for v in (row.get("entry_keys") or []) if str(v)]
+        sample_entries: list[dict[str, Any]] = []
+        for entry_key in entry_keys:
+            standing_row = standings_by_entry_key.get(entry_key, {})
+            display_name = standing_row.get("display_name")
+            if display_name in (None, "") and entry_key:
+                display_name = str(entry_key)
+            sample_entries.append(
+                {
+                    "entry_key": entry_key,
+                    "display_name": display_name,
+                    "rank": _rank_numeric(standing_row.get("rank")),
+                    "points": _to_float(standing_row.get("points")),
+                    "pmr": _to_float(standing_row.get("pmr")),
+                }
+            )
+
+        pmr_values = [item.get("pmr") for item in sample_entries if isinstance(item.get("pmr"), (int, float))]
+        ownership_values = [
+            standings_by_entry_key.get(key, {}).get("ownership_remaining_pct")
+            for key in entry_keys
+            if isinstance(standings_by_entry_key.get(key, {}).get("ownership_remaining_pct"), (int, float))
+        ]
+
+        mapped = {
+            "cluster_key": row.get("cluster_id") or row.get("lineup_signature"),
+            "entry_count": int(row.get("user_count") or len(entry_keys)),
+            "best_rank": _rank_numeric(row.get("rank")),
+            "best_points": _to_float(row.get("points")),
+            "avg_pmr": (sum(pmr_values) / len(pmr_values)) if pmr_values else _to_float(row.get("pmr")),
+            "avg_ownership_remaining_pct": (sum(ownership_values) / len(ownership_values))
+            if ownership_values
+            else None,
+            "composition": composition,
+            "sample_entries": sample_entries,
+        }
+        mapped_clusters.append(mapped)
+    return {
+        "updated_at": updated_at,
+        "cluster_rule": {
+            "type": "shared_slots",
+            "min_shared": max_shared if max_shared > 0 else 0,
+        },
+        "clusters": mapped_clusters,
+    }
+
+
+def _vip_slots_from_lineup(lineup: Any, player_lookup: dict[str, str]) -> list[dict[str, Any]]:
+    if not isinstance(lineup, list):
+        return []
+    slots: list[dict[str, Any]] = []
+    for index, item in enumerate(lineup):
+        if isinstance(item, dict):
+            player_name = item.get("player_name") or item.get("name")
+            slot = item.get("slot") or item.get("position") or f"SLOT_{index + 1}"
+            multiplier = item.get("multiplier")
+        else:
+            player_name = str(item)
+            slot = f"SLOT_{index + 1}"
+            multiplier = None
+        canonical_name = _canonical_player_name(player_name, player_lookup)
+        if canonical_name is None:
+            continue
+        slot_row: dict[str, Any] = {"slot": slot, "player_name": canonical_name}
+        if multiplier is not None:
+            slot_row["multiplier"] = multiplier
+        slots.append(slot_row)
+    return slots
+
+
+def _vip_lineups_contract(
+    vip_lineups: list[Any],
+    player_lookup: dict[str, str],
+    updated_at: str,
+    standings_by_entry_key: dict[str, dict[str, Any]],
+    standings_by_username: dict[str, dict[str, Any]],
+    cash_line: dict[str, Any],
+) -> list[dict[str, Any]]:
+    normalized: list[dict[str, Any]] = []
+    for row in vip_lineups:
+        if not isinstance(row, dict):
+            continue
+        display_name = row.get("display_name") or row.get("username") or row.get("user")
+        entry_key = row.get("entry_key")
+        standings_row = standings_by_entry_key.get(str(entry_key), {})
+        if not standings_row and display_name:
+            standings_row = standings_by_username.get(str(display_name), {})
+        if entry_key in (None, "") and standings_row:
+            entry_key = standings_row.get("entry_key")
+        if display_name in (None, "") and entry_key not in (None, ""):
+            display_name = str(entry_key)
+        current_points = (
+            row.get("pts") if row.get("pts") is not None else standings_row.get("points")
+        )
+        current_rank = (
+            row.get("rank") if row.get("rank") is not None else standings_row.get("rank")
+        )
+        current_points_num = _to_float(current_points)
+        current_rank_num = _rank_numeric(current_rank)
+        cash_line_delta_points = (
+            float(current_points_num) - float(cash_line.get("points_cutoff"))
+            if isinstance(current_points_num, (int, float))
+            and isinstance(cash_line.get("points_cutoff"), (int, float))
+            else None
+        )
+        payout_cents = _to_int(
+            row.get("payout_cents")
+            if row.get("payout_cents") is not None
+            else standings_row.get("payout_cents")
+        )
+        is_cashing = payout_cents is not None
+
+        mapped = {
+            "display_name": display_name,
+            "entry_key": entry_key,
+            "live": {
+                "updated_at": updated_at,
+                "current_points": current_points_num,
+                "current_rank": current_rank_num,
+                "cash_line_delta_points": cash_line_delta_points,
+                "is_cashing": is_cashing,
+                "payout_cents": payout_cents,
+                "ownership_remaining_pct": _to_float(
+                    standings_row.get("ownership_remaining_pct")
+                ),
+                "pmr": _to_float(
+                    row.get("pmr") if row.get("pmr") is not None else standings_row.get("pmr")
+                ),
+            },
+            "slots": _vip_slots_from_lineup(
+                row.get("lineup") if row.get("lineup") is not None else row.get("players"),
+                player_lookup,
+            ),
+        }
+        normalized.append(mapped)
+    return normalized
+
+
+def _selection_reason_text(reason: Any, contest_id: Any) -> str | None:
+    if isinstance(reason, str):
+        text = reason.strip()
+        return text if text else None
+    if isinstance(reason, dict):
+        mode = str(reason.get("mode") or "unknown")
+        if mode == "explicit_id":
+            return f"explicit_id contest_id={contest_id}"
+        return mode
+    if reason is None:
+        return None
+    return str(reason)
+
+
+def build_dashboard_sport_snapshot(snapshot: dict[str, Any], generated_at: str) -> dict[str, Any]:
+    normalized = normalize_snapshot_for_output(snapshot)
+    updated_at = normalized.get("snapshot_generated_at_utc") or generated_at
+    contest = dict(normalized.get("contest") or {})
+    selection = dict(normalized.get("selection") or {})
+    contest_id = selection.get("selected_contest_id") or contest.get("contest_id")
+    truncation = dict(normalized.get("truncation") or {})
+    players = list(normalized.get("players") or [])
+    player_lookup = _build_player_name_lookup(players)
+    standings_rows = list(normalized.get("standings") or [])
+    standings_rows = _normalize_standings_rows(standings_rows)
+    standings_by_entry_key = {
+        str(row.get("entry_key")): row
+        for row in standings_rows
+        if isinstance(row, dict) and row.get("entry_key") not in (None, "")
+    }
+    standings_by_username = _unique_standings_by_display_name(standings_rows)
+
+    contest_object = dict(contest)
+    contest_object["is_primary"] = True
+    if "entries" in contest_object and "entries_count" not in contest_object:
+        contest_object["entries_count"] = contest_object.get("entries")
+    for key in (
+        "entries_count",
+        "positions_paid",
+        "entry_fee_cents",
+        "payout_cents",
+        "draft_group",
+    ):
+        if key in contest_object:
+            contest_object[key] = _rank_numeric(contest_object.get(key))
+    contest_object.pop("entries", None)
+    cash_line = _cash_line_contract(dict(normalized.get("cash_line") or {}))
+    cash_line = _cash_line_contract(dict(normalized.get("cash_line") or {}))
+
+    ownership_source = normalized.get("ownership")
+    if isinstance(ownership_source, dict):
+        contest_object["ownership_watchlist"] = _ownership_watchlist_contract(
+            ownership_source,
+            updated_at,
+        )
+
+    if isinstance(normalized.get("standings"), list):
+        contest_object["standings"] = {
+            "updated_at": updated_at,
+            "rows": standings_rows,
+            "total_rows": truncation.get("total_rows_before_truncation")
+            or truncation.get("total_rows_after_truncation")
+            or len(standings_rows),
+            "is_truncated": bool(truncation.get("applied")),
+        }
+
+    train_source = normalized.get("train_clusters")
+    if isinstance(train_source, list):
+        contest_object["train_clusters"] = _train_clusters_contract(
+            train_source,
+            updated_at,
+            player_lookup,
+            standings_by_entry_key,
+        )
+
+    vip_source = normalized.get("vip_lineups")
+    if isinstance(vip_source, list):
+        contest_object["vip_lineups"] = _vip_lineups_contract(
+            vip_source,
+            player_lookup,
+            updated_at,
+            standings_by_entry_key,
+            standings_by_username,
+            cash_line,
+        )
+    contest_object["live_metrics"] = {
+        "updated_at": updated_at,
+        "cash_line": cash_line,
+    }
+    contest_object.pop("ownership", None)
+    contest_object.pop("selection", None)
+    contest_object.pop("truncation", None)
+    contest_object.pop("metadata", None)
+    contest_object.pop("snapshot_version", None)
+    contest_object.pop("snapshot_generated_at_utc", None)
+
+    sport_snapshot: dict[str, Any] = {
+        "status": normalized.get("status") or "ok",
+        "updated_at": updated_at,
+        "players": players,
+        "contests": [contest_object],
+    }
+    if contest_id is not None:
+        sport_snapshot["primary_contest"] = {
+            "contest_id": contest_id,
+            "contest_key": contest.get("contest_key"),
+            "selection_reason": _selection_reason_text(selection.get("reason"), contest_id),
+            "selected_at": generated_at,
+        }
+    error = normalized.get("error")
+    if error not in (None, ""):
+        sport_snapshot["error"] = error
+    return sport_snapshot
+
+
+def build_dashboard_envelope(sports: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    generated_at = to_utc_iso(datetime.datetime.now(datetime.timezone.utc))
+    output_sports: dict[str, Any] = {}
+    for sport, snapshot in sorted(sports.items()):
+        sport_snapshot = build_dashboard_sport_snapshot(snapshot, generated_at)
+        output_sports[sport.lower()] = sport_snapshot
+    return {
+        "schema_version": 1,
+        "snapshot_at": generated_at,
+        "generated_at": generated_at,
+        "sports": output_sports,
+    }
+
+
+def _is_numeric_string(value: str) -> bool:
+    text = value.strip()
+    if not text:
+        return False
+    try:
+        float(text)
+    except ValueError:
+        return False
+    return True
+
+
+def _walk_paths(value: Any, path: str = "") -> list[tuple[str, Any]]:
+    items: list[tuple[str, Any]] = []
+    if isinstance(value, dict):
+        for key, child in value.items():
+            child_path = f"{path}.{key}" if path else key
+            items.extend(_walk_paths(child, child_path))
+        return items
+    if isinstance(value, list):
+        for idx, child in enumerate(value):
+            child_path = f"{path}.{idx}" if path else str(idx)
+            items.extend(_walk_paths(child, child_path))
+        return items
+    items.append((path, value))
+    return items
+
+
+def validate_canonical_snapshot(payload: dict[str, Any]) -> list[str]:
+    violations: list[str] = []
+    allowed_numeric_string_suffixes = (
+        ".contest_id",
+        ".contest_key",
+        ".entry_key",
+        ".cluster_key",
+        ".selection_reason",
+        ".display_name",
+    )
+
+    for path, value in _walk_paths(payload):
+        if not path:
+            continue
+        key = path.split(".")[-1]
+        if key in CANONICAL_DISALLOWED_KEYS:
+            violations.append(f"disallowed_key:{path}")
+        if isinstance(value, str) and _is_numeric_string(value):
+            if not path.endswith(allowed_numeric_string_suffixes):
+                violations.append(f"numeric_string:{path}")
+    return sorted(set(violations))

@@ -1,17 +1,16 @@
-import datetime
 import logging
 import pathlib
 from typing import Any
 
 from services.snapshot_exporter import (
     DEFAULT_STANDINGS_LIMIT,
+    build_dashboard_envelope,
     build_snapshot,
     configure_runtime,
     normalize_snapshot_for_output,
     normalize_sport_name,
-    snapshot_to_json,
     to_stable_json,
-    to_utc_iso,
+    validate_canonical_snapshot,
 )
 
 logger = logging.getLogger(__name__)
@@ -34,7 +33,12 @@ def run_export_fixture(args: Any) -> int:
         contest_id=contest_id,
         standings_limit=standings_limit,
     )
-    json_text = snapshot_to_json(snapshot)
+    envelope = build_dashboard_envelope({sport: snapshot})
+    violations = validate_canonical_snapshot(envelope)
+    if violations:
+        logger.error("canonical contract violations=%s", ",".join(violations))
+        raise ValueError("Canonical snapshot validation failed")
+    json_text = to_stable_json(envelope)
     out_path = pathlib.Path(args.out) if getattr(args, "out", None) else _default_output_path(snapshot, sport)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(json_text, encoding="utf-8")
@@ -85,15 +89,12 @@ def run_export_bundle(args: Any) -> int:
             contest_id=contest_id,
             standings_limit=standings_limit,
         )
-        sports[sport.lower()] = normalize_snapshot_for_output(snapshot)
-
-    now_utc = to_utc_iso(datetime.datetime.now(datetime.timezone.utc))
-    payload = {
-        "schema_version": 1,
-        "snapshot_at": now_utc,
-        "generated_at": now_utc,
-        "sports": sports,
-    }
+        sports[sport] = snapshot
+    payload = build_dashboard_envelope(sports)
+    violations = validate_canonical_snapshot(payload)
+    if violations:
+        logger.error("canonical contract violations=%s", ",".join(violations))
+        raise ValueError("Canonical snapshot validation failed")
     out_path = pathlib.Path(args.out)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(to_stable_json(payload), encoding="utf-8")

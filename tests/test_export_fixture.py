@@ -1,5 +1,6 @@
 import datetime
 import hashlib
+import json
 from argparse import Namespace
 
 import pytest
@@ -425,5 +426,299 @@ def test_run_export_bundle_writes_two_sports(monkeypatch, tmp_path):
     assert '"schema_version":1' in payload
     assert '"nba"' in payload
     assert '"golf"' in payload
-    assert '"selected_contest_id":"123"' in payload
-    assert '"selected_contest_id":"456"' in payload
+    assert '"contest_id":"123"' in payload
+    assert '"contest_id":"456"' in payload
+
+
+def test_run_export_fixture_emits_envelope_and_contract_sections(monkeypatch, tmp_path):
+    monkeypatch.setattr(export_command, "configure_runtime", lambda: None)
+    monkeypatch.setattr(
+        export_command,
+        "build_snapshot",
+        lambda **_kwargs: {
+            "snapshot_version": "v1",
+            "snapshot_generated_at_utc": "2026-02-14T10:00:00Z",
+            "sport": "NBA",
+            "contest": {
+                "contest_id": 188080404,
+                "name": "NBA Single Entry",
+                "entries": 1000,
+                "positions_paid": 200,
+                "is_primary": True,
+            },
+            "selection": {
+                "selected_contest_id": 188080404,
+                "reason": {"mode": "explicit_id"},
+            },
+            "cash_line": {"cutoff_type": "positions_paid", "rank": 200, "points": 250.5},
+            "vip_lineups": [{"username": "vip1", "entry_key": "1", "rank": 2, "pts": 249.0, "pmr": 12.0, "lineup": ["A", "B"]}],
+            "players": [{"name": "A"}, {"name": "B"}],
+            "ownership": {
+                "ownership_remaining_total_pct": 123.4,
+                "top_remaining_players": [{"player_name": "A", "ownership_remaining_pct": 40.0}],
+            },
+            "train_clusters": [{"cluster_id": "abc123", "user_count": 2, "rank": 3, "points": 249.0, "pmr": 10.0, "lineup_signature": "A|B", "entry_keys": ["1"]}],
+            "standings": [{"entry_key": "1", "username": "u1", "rank": 2, "points": 249.0, "pmr": "12.0", "ownership_remaining_total_pct": "33.0"}],
+            "truncation": {
+                "applied": True,
+                "total_rows_before_truncation": 500,
+            },
+            "metadata": {"warnings": [], "missing_fields": [], "source_endpoints": []},
+        },
+    )
+
+    out = tmp_path / "single-envelope.json"
+    rc = export_command.run_export_fixture(
+        Namespace(
+            sport="NBA",
+            contest_id=188080404,
+            out=str(out),
+            standings_limit=100,
+        )
+    )
+
+    payload = json.loads(out.read_text(encoding="utf-8"))
+    sport = payload["sports"]["nba"]
+    contest = sport["contests"][0]
+
+    assert rc == 0
+    assert payload["schema_version"] == 1
+    assert payload["generated_at"].endswith("Z")
+    assert payload["snapshot_at"].endswith("Z")
+    assert set(sport.keys()) == {
+        "status",
+        "updated_at",
+        "primary_contest",
+        "players",
+        "contests",
+    }
+    assert sport["status"] == "ok"
+    assert sport["primary_contest"]["contest_id"] == "188080404"
+    assert sport["primary_contest"]["selection_reason"] == "explicit_id contest_id=188080404"
+    assert contest["contest_id"] == "188080404"
+    assert contest["is_primary"] is True
+    assert contest["entries_count"] == 1000
+    assert contest["live_metrics"]["cash_line"]["cutoff_type"] == "rank"
+    assert contest["live_metrics"]["cash_line"]["rank_cutoff"] == 200
+    assert contest["live_metrics"]["cash_line"]["points_cutoff"] == 250.5
+    assert contest["ownership_watchlist"]["entries"][0]["display_name"] == "A"
+    assert contest["ownership_watchlist"]["top_n_default"] == 10
+    assert "ownership_remaining_total_pct" in contest["ownership_watchlist"]
+    assert contest["standings"]["is_truncated"] is True
+    assert contest["standings"]["total_rows"] == 500
+    assert contest["standings"]["rows"][0]["display_name"] == "u1"
+    assert "ownership_remaining_pct" in contest["standings"]["rows"][0]
+    assert "ownership_remaining_total_pct" not in contest["standings"]["rows"][0]
+    assert isinstance(contest["standings"]["rows"][0]["pmr"], float)
+    assert contest["train_clusters"]["clusters"][0]["composition"][0]["player_name"] == "A"
+    assert contest["train_clusters"]["cluster_rule"] == {"type": "shared_slots", "min_shared": 2}
+    assert contest["train_clusters"]["clusters"][0]["cluster_key"] == "abc123"
+    assert contest["train_clusters"]["clusters"][0]["entry_count"] == 2
+    assert contest["train_clusters"]["clusters"][0]["sample_entries"][0]["entry_key"] == "1"
+    assert contest["train_clusters"]["clusters"][0]["sample_entries"][0]["display_name"] == "u1"
+    assert contest["vip_lineups"][0]["slots"][0]["player_name"] == "A"
+    assert contest["vip_lineups"][0]["display_name"] == "vip1"
+    assert contest["vip_lineups"][0]["live"]["current_rank"] == 2
+    assert contest["vip_lineups"][0]["live"]["pmr"] == 12.0
+    assert isinstance(contest["vip_lineups"][0]["live"]["pmr"], float)
+    assert "username" not in json.dumps(payload)
+    assert "selection" not in sport
+    assert "contest" not in sport
+    assert "metadata" not in sport
+    assert "candidates" not in sport
+    assert "cash_line" not in sport
+    assert "ownership" not in sport
+    assert "standings" not in sport
+
+
+def test_run_export_bundle_emits_contests_primary_contest_and_players(monkeypatch, tmp_path):
+    monkeypatch.setattr(export_command, "configure_runtime", lambda: None)
+
+    def _fake_build_snapshot(*, sport: str, contest_id: int | None, standings_limit: int):
+        return {
+            "snapshot_version": "v1",
+            "snapshot_generated_at_utc": "2026-02-14T10:00:00Z",
+            "sport": sport,
+            "contest": {"contest_id": contest_id, "name": f"{sport} contest", "is_primary": True},
+            "selection": {"selected_contest_id": contest_id, "reason": {"mode": "explicit_id"}},
+            "cash_line": {"cutoff_type": "positions_paid", "rank": 10, "points": 99.9},
+            "vip_lineups": [],
+            "players": [{"name": "Player One"}],
+            "ownership": {"ownership_remaining_total_pct": 10.0, "top_remaining_players": []},
+            "train_clusters": [],
+            "standings": [],
+            "truncation": {"applied": False, "total_rows_before_truncation": 0},
+            "metadata": {"warnings": [], "missing_fields": [], "source_endpoints": []},
+        }
+
+    monkeypatch.setattr(export_command, "build_snapshot", _fake_build_snapshot)
+
+    out = tmp_path / "bundle-contract.json"
+    rc = export_command.run_export_bundle(
+        Namespace(
+            item=["NBA:123", "GOLF:456"],
+            out=str(out),
+            standings_limit=42,
+        )
+    )
+    payload = json.loads(out.read_text(encoding="utf-8"))
+
+    assert rc == 0
+    assert payload["schema_version"] == 1
+    assert sorted(payload["sports"].keys()) == ["golf", "nba"]
+    assert payload["sports"]["nba"]["primary_contest"]["contest_id"] == "123"
+    assert isinstance(payload["sports"]["nba"]["primary_contest"]["selection_reason"], str)
+    assert payload["sports"]["golf"]["contests"][0]["contest_id"] == "456"
+    assert payload["sports"]["nba"]["players"][0]["name"] == "Player One"
+    assert "selection" not in payload["sports"]["nba"]
+    assert "contest" not in payload["sports"]["nba"]
+    assert payload["sports"]["golf"]["contests"][0]["ownership_watchlist"]["top_n_default"] == 10
+
+
+def test_vip_lineups_support_user_and_players_shape(monkeypatch, tmp_path):
+    monkeypatch.setattr(export_command, "configure_runtime", lambda: None)
+    monkeypatch.setattr(
+        export_command,
+        "build_snapshot",
+        lambda **_kwargs: {
+            "snapshot_version": "v1",
+            "snapshot_generated_at_utc": "2026-02-14T10:00:00Z",
+            "sport": "NBA",
+            "contest": {"contest_id": 1, "name": "x", "is_primary": True},
+            "selection": {"selected_contest_id": 1, "reason": {"mode": "explicit_id"}},
+            "cash_line": {"cutoff_type": "rank", "rank": 10, "points": 100.0},
+            "players": [{"name": "Alpha"}, {"name": "Beta"}],
+            "ownership": {"ownership_remaining_total_pct": 1.0, "top_remaining_players": []},
+            "standings": [{"entry_key": "777", "username": "vip_user", "rank": "5", "points": "110.0", "pmr": "0", "ownership_remaining_total_pct": "20.0", "payout_cents": 1500}],
+            "train_clusters": [],
+            "vip_lineups": [
+                {
+                    "user": "vip_user",
+                    "pts": 110.0,
+                    "rank": 5,
+                    "pmr": 0.0,
+                    "players": [{"pos": "PG", "name": "Alpha"}, {"pos": "SG", "name": "Beta"}],
+                }
+            ],
+            "truncation": {"applied": False, "total_rows_before_truncation": 1},
+            "metadata": {"warnings": [], "missing_fields": [], "source_endpoints": []},
+        },
+    )
+    out = tmp_path / "vip-shape.json"
+    rc = export_command.run_export_fixture(
+        Namespace(sport="NBA", contest_id=1, out=str(out), standings_limit=100)
+    )
+    payload = json.loads(out.read_text(encoding="utf-8"))
+    vip = payload["sports"]["nba"]["contests"][0]["vip_lineups"][0]
+
+    assert rc == 0
+    assert vip["display_name"] == "vip_user"
+    assert vip["entry_key"] == "777"
+    assert vip["slots"][0]["player_name"] == "Alpha"
+    assert vip["slots"][1]["player_name"] == "Beta"
+    assert isinstance(vip["live"]["pmr"], float)
+    assert isinstance(vip["live"]["current_rank"], int)
+    assert vip["live"]["is_cashing"] is True
+    assert vip["live"]["payout_cents"] == 1500
+
+
+def test_vip_entry_key_backfill_requires_unique_display_name(monkeypatch, tmp_path):
+    monkeypatch.setattr(export_command, "configure_runtime", lambda: None)
+    monkeypatch.setattr(
+        export_command,
+        "build_snapshot",
+        lambda **_kwargs: {
+            "snapshot_version": "v1",
+            "snapshot_generated_at_utc": "2026-02-14T10:00:00Z",
+            "sport": "NBA",
+            "contest": {"contest_id": 1, "name": "x", "is_primary": True},
+            "selection": {"selected_contest_id": 1, "reason": {"mode": "explicit_id"}},
+            "cash_line": {"cutoff_type": "rank", "rank": 10, "points": 100.0},
+            "players": [{"name": "Alpha"}],
+            "ownership": {"ownership_remaining_total_pct": 1.0, "top_remaining_players": []},
+            "standings": [
+                {"entry_key": "111", "username": "dup_user", "rank": 5, "points": 110.0, "pmr": 0.0},
+                {"entry_key": "222", "username": "dup_user", "rank": 8, "points": 101.0, "pmr": 1.0},
+            ],
+            "train_clusters": [],
+            "vip_lineups": [{"user": "dup_user", "players": [{"pos": "PG", "name": "Alpha"}]}],
+            "truncation": {"applied": False, "total_rows_before_truncation": 2},
+            "metadata": {"warnings": [], "missing_fields": [], "source_endpoints": []},
+        },
+    )
+    out = tmp_path / "vip-ambiguous.json"
+    rc = export_command.run_export_fixture(
+        Namespace(sport="NBA", contest_id=1, out=str(out), standings_limit=100)
+    )
+    payload = json.loads(out.read_text(encoding="utf-8"))
+    vip = payload["sports"]["nba"]["contests"][0]["vip_lineups"][0]
+
+    assert rc == 0
+    assert vip["entry_key"] is None
+
+
+def test_standings_is_cashing_derived_from_payout_presence(monkeypatch, tmp_path):
+    monkeypatch.setattr(export_command, "configure_runtime", lambda: None)
+    monkeypatch.setattr(
+        export_command,
+        "build_snapshot",
+        lambda **_kwargs: {
+            "snapshot_version": "v1",
+            "snapshot_generated_at_utc": "2026-02-14T10:00:00Z",
+            "sport": "NBA",
+            "contest": {"contest_id": 1, "name": "x", "is_primary": True},
+            "selection": {"selected_contest_id": 1, "reason": {"mode": "explicit_id"}},
+            "cash_line": {"cutoff_type": "rank", "rank": 10, "points": 100.0},
+            "players": [],
+            "ownership": {"ownership_remaining_total_pct": 1.0, "top_remaining_players": []},
+            "standings": [
+                {"entry_key": "a", "username": "u1", "rank": 1, "points": 120.0, "pmr": 0.0, "payout_cents": "2500"},
+                {"entry_key": "b", "username": "u2", "rank": 40, "points": 90.0, "pmr": 2.0, "payout_cents": None},
+            ],
+            "train_clusters": [],
+            "vip_lineups": [],
+            "truncation": {"applied": False, "total_rows_before_truncation": 2},
+            "metadata": {"warnings": [], "missing_fields": [], "source_endpoints": []},
+        },
+    )
+    out = tmp_path / "cashing-rule.json"
+    rc = export_command.run_export_fixture(
+        Namespace(sport="NBA", contest_id=1, out=str(out), standings_limit=100)
+    )
+    payload = json.loads(out.read_text(encoding="utf-8"))
+    rows = payload["sports"]["nba"]["contests"][0]["standings"]["rows"]
+
+    assert rc == 0
+    assert rows[0]["payout_cents"] == 2500
+    assert rows[0]["is_cashing"] is True
+    assert rows[1]["payout_cents"] is None
+    assert rows[1]["is_cashing"] is False
+
+
+def test_validate_canonical_snapshot_detects_disallowed_keys_and_numeric_strings():
+    payload = {
+        "schema_version": 1,
+        "snapshot_at": "2026-02-14T00:00:00Z",
+        "generated_at": "2026-02-14T00:00:00Z",
+        "sports": {
+            "nba": {
+                "status": "ok",
+                "updated_at": "2026-02-14T00:00:00Z",
+                "players": [],
+                "contests": [
+                    {
+                        "contest_id": "123",
+                        "standings": {
+                            "updated_at": "2026-02-14T00:00:00Z",
+                            "rows": [{"username": "bad", "points": "99.5"}],
+                        },
+                    }
+                ],
+            }
+        },
+    }
+
+    violations = snapshot_exporter.validate_canonical_snapshot(payload)
+
+    assert "disallowed_key:sports.nba.contests.0.standings.rows.0.username" in violations
+    assert "numeric_string:sports.nba.contests.0.standings.rows.0.points" in violations
