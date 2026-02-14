@@ -77,7 +77,6 @@ def create_bonus_announcements_table(conn: sqlite3.Connection) -> None:
         ON bonus_announcements (contest_id, sport, normalized_player_name, bonus_code);
         """
     )
-    conn.commit()
 
 
 def _format_vip_users(vip_users: list[str], limit: int = 5) -> str:
@@ -269,7 +268,7 @@ def announce_vip_bonuses(
     if not candidates:
         return 0
 
-    sent_messages = 0
+    persisted_announcements = 0
     for candidate in candidates:
         old_count = _load_old_count(
             conn,
@@ -291,7 +290,6 @@ def announce_vip_bonuses(
         try:
             for count_value in counts_to_announce:
                 sender.send_message(_format_message(sport, candidate, count_value))
-                sent_messages += 1
         except Exception as err:
             log.error(
                 "Failed to send bonus announcement for %s %s in contest %s: %s",
@@ -327,6 +325,8 @@ def announce_vip_bonuses(
                     candidate.bonus_code,
                     contest_id,
                 )
+                continue
+            persisted_announcements += len(counts_to_announce)
         except sqlite3.Error as err:
             log.error(
                 "Failed to persist bonus announcement for %s %s in contest %s: %s",
@@ -336,4 +336,4 @@ def announce_vip_bonuses(
                 err,
             )
 
-    return sent_messages
+    return persisted_announcements

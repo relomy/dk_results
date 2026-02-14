@@ -253,7 +253,10 @@ def test_announce_vip_bonuses_cas_rowcount_zero_skips_update(monkeypatch):
         vip_lineups=vip_lineups,
         sender=sender,
     )
-    assert sent == 1
+    assert sent == 0
+    assert sender.messages == [
+        "GOLF: Rory McIlroy (0.0%) recorded an eagle (+8 pts, 16 total bonus pts) (VIPs: amy)"
+    ]
     row = conn.execute(
         """
         SELECT last_announced_count
