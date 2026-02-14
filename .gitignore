@@ -8,6 +8,7 @@ config.json
 .vscode/
 salary/
 contests/
+fixtures/
 sheet_gids.yaml
 vips.yaml
 

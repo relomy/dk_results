@@ -23,6 +23,13 @@ from classes.results import Results
 from classes.sheets_service import build_dfs_sheet_service
 from classes.sport import Sport
 from classes.trainfinder import TrainFinder
+from services.snapshot_exporter import (
+    DEFAULT_STANDINGS_LIMIT,
+    build_snapshot,
+    normalize_snapshot_for_output,
+    to_stable_json,
+    to_utc_iso,
+)
 
 # load the logging configuration
 logging.config.fileConfig("logging.ini")
@@ -250,7 +257,7 @@ def process_sport(
     now: datetime.datetime,
     args: argparse.Namespace,
     vips: list[str],
-) -> None:
+) -> int | None:
     """
     Process a single sport: download salary, pull contest, update sheet.
 
@@ -270,7 +277,7 @@ def process_sport(
     )
     if not result:
         logger.warning("There are no live contests for %s! Moving on.", sport_name)
-        return
+        return None
 
     dk_id, name, draft_group, positions_paid, start_date = result
     fn = os.path.join(SALARY_DIR, f"DKSalaries_{sport_name}_{now:%A}.csv")
@@ -288,7 +295,7 @@ def process_sport(
             "Contest standings download failed or was empty for dk_id=%s; skipping.",
             dk_id,
         )
-        return
+        return None
 
     sheet = build_dfs_sheet_service(sport_name)
     logger.debug("Creating Results object Results(%s, %s, %s)", sport_name, dk_id, fn)
@@ -341,6 +348,35 @@ def process_sport(
     write_players_to_sheet(sheet, results, sport_name, now, dk, draft_group)
     write_non_cashing_info(sheet, results)
     write_train_info(sheet, results)
+    return int(dk_id)
+
+
+def build_snapshot_payload(
+    selected_contests: dict[str, int],
+    standings_limit: int = DEFAULT_STANDINGS_LIMIT,
+) -> dict[str, Any]:
+    generated_at = to_utc_iso(datetime.datetime.now(datetime.timezone.utc))
+    sports: dict[str, Any] = {}
+    for sport_name in sorted(selected_contests):
+        contest_id = selected_contests[sport_name]
+        snapshot = build_snapshot(
+            sport=sport_name,
+            contest_id=contest_id,
+            standings_limit=standings_limit,
+        )
+        sports[sport_name.lower()] = normalize_snapshot_for_output(snapshot)
+
+    return {
+        "schema_version": 1,
+        "snapshot_at": generated_at,
+        "generated_at": generated_at,
+        "sports": sports,
+    }
+
+
+def write_snapshot_payload(path: pathlib.Path, payload: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(to_stable_json(payload), encoding="utf-8")
 
 
 def main() -> None:
@@ -373,12 +409,35 @@ def main() -> None:
         help="If true, will not print VIP lineups",
     )
     parser.add_argument("-v", "--verbose", help="Increase verbosity")
+    parser.add_argument(
+        "--snapshot-out",
+        help="Optional path to write a multi-sport snapshot envelope for selected contests.",
+    )
+    parser.add_argument(
+        "--standings-limit",
+        type=int,
+        default=DEFAULT_STANDINGS_LIMIT,
+        help="Standings row limit used for snapshot export output.",
+    )
     args = parser.parse_args()
     contest_database = ContestDatabase(str(state.contests_db_path()))
     vips = load_vips()
     now = datetime.datetime.now(ZoneInfo("America/New_York"))
+    selected_contests: dict[str, int] = {}
     for sport_name in args.sport:
-        process_sport(sport_name, choices, contest_database, now, args, vips)
+        selected_id = process_sport(sport_name, choices, contest_database, now, args, vips)
+        if selected_id is not None:
+            selected_contests[sport_name] = selected_id
+
+    if args.snapshot_out:
+        payload = build_snapshot_payload(
+            selected_contests,
+            standings_limit=args.standings_limit,
+        )
+        out_path = pathlib.Path(args.snapshot_out)
+        write_snapshot_payload(out_path, payload)
+        logger.info("snapshot selected_contests=%d", len(selected_contests))
+        logger.info("snapshot output path=%s", out_path)
 
 
 if __name__ == "__main__":

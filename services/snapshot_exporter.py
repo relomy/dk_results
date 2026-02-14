@@ -1,0 +1,1170 @@
+import copy
+import datetime
+import hashlib
+import json
+import logging
+import os
+import pathlib
+from typing import Any
+
+import yaml
+from zoneinfo import ZoneInfo
+
+from dfs_common import config as common_config
+from dfs_common import state
+from classes.contestdatabase import ContestDatabase
+from classes.draftkings import Draftkings
+from classes.results import Results
+from classes.sport import Sport
+from classes.trainfinder import TrainFinder
+
+logger = logging.getLogger(__name__)
+
+CONTEST_DIR = "contests"
+SALARY_DIR = "salary"
+SALARY_LIMIT = 40000
+COOKIES_FILE = "pickled_cookies_works.txt"
+CANDIDATE_LIMIT = 5
+DEFAULT_STANDINGS_LIMIT = 500
+
+ID_FIELDS = {
+    "contest_id",
+    "draft_group",
+    "selected_contest_id",
+    "entry_key",
+    "cluster_id",
+}
+
+CANONICAL_DISALLOWED_KEYS = {"username", "player_id", "playerId", "dk_player_id"}
+
+SOURCE_ENDPOINTS = [
+    "contests_db.get_live_contest",
+    "contests_db.get_live_contest_candidates",
+    "draftkings.download_salary_csv",
+    "draftkings.download_contest_rows",
+    "draftkings.get_vip_lineups",
+]
+
+try:
+    from dotenv import load_dotenv
+except ImportError:  # pragma: no cover
+    def load_dotenv(*_args, **_kwargs):
+        return False
+
+
+def load_vips() -> list[str]:
+    vip_path = pathlib.Path(__file__).resolve().parent.parent / "vips.yaml"
+    try:
+        with open(vip_path, "r") as f:
+            vips = yaml.safe_load(f) or []
+        if not isinstance(vips, list):
+            return []
+        return [str(x).strip() for x in vips if str(x).strip()]
+    except Exception:
+        return []
+
+
+def configure_runtime() -> None:
+    load_dotenv()
+    cfg = common_config.load_json_config()
+    settings = common_config.resolve_dk_results_settings(cfg)
+    if settings.dfs_state_dir and not os.getenv("DFS_STATE_DIR"):
+        os.environ["DFS_STATE_DIR"] = settings.dfs_state_dir
+    if settings.spreadsheet_id and not os.getenv("SPREADSHEET_ID"):
+        os.environ["SPREADSHEET_ID"] = settings.spreadsheet_id
+
+
+def _sport_choices() -> dict[str, type[Sport]]:
+    return {sport.name.upper(): sport for sport in Sport.__subclasses__()}
+
+
+def normalize_sport_name(raw: str) -> str:
+    value = (raw or "").strip().upper()
+    choices = _sport_choices()
+    if value not in choices:
+        raise ValueError(f"Unsupported sport: {raw}")
+    return choices[value].name
+
+
+def to_utc_iso(value: datetime.datetime | str | None) -> str | None:
+    if value is None:
+        return None
+    if isinstance(value, str):
+        text = value.strip()
+        if not text:
+            return None
+        text = text.replace("Z", "+00:00")
+        try:
+            parsed = datetime.datetime.fromisoformat(text)
+        except ValueError:
+            return None
+        value = parsed
+
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=ZoneInfo("America/New_York"))
+    value = value.astimezone(datetime.timezone.utc)
+    return value.replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
+def _to_float(value: Any) -> float | None:
+    if value in (None, ""):
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _rank_numeric(value: Any) -> int | None:
+    if value in (None, ""):
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        text = str(value).strip().upper()
+        if text.startswith("T"):
+            try:
+                return int(text[1:])
+            except ValueError:
+                return None
+    return None
+
+
+def _to_int(value: Any) -> int | None:
+    if value in (None, ""):
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _ownership_remaining_for_user(user: Any) -> float | None:
+    lineup_obj = getattr(user, "lineupobj", None)
+    if not lineup_obj:
+        return None
+    total = 0.0
+    has_any = False
+    for player in getattr(lineup_obj, "lineup", []):
+        if getattr(player, "game_info", "") == "Final":
+            continue
+        ownership = getattr(player, "ownership", None)
+        if ownership in (None, ""):
+            continue
+        has_any = True
+        total += float(ownership) * 100
+    if not has_any:
+        return 0.0
+    return total
+
+
+def _lineup_signature(user: Any) -> str:
+    lineup_obj = getattr(user, "lineupobj", None)
+    if not lineup_obj:
+        return ""
+    names = [getattr(player, "name", "").strip() for player in lineup_obj.lineup]
+    return "|".join(names)
+
+
+def cluster_id_from_signature(signature: str) -> str:
+    return hashlib.sha1(signature.encode("utf-8")).hexdigest()[:12]
+
+
+def build_selection_reason(
+    *,
+    mode: str,
+    sport: str,
+    min_entry_fee: int,
+    keyword: str,
+    selected_from_candidate_count: int,
+    contest_id: int | None = None,
+) -> dict[str, Any]:
+    criteria: dict[str, Any] = {
+        "sport": sport,
+        "min_entry_fee": min_entry_fee,
+        "keyword": keyword,
+        "status_window": "start_date <= now && completed=0",
+        "primary_preference": "entry_fee >= min_entry_fee then fallback below min",
+    }
+    if mode == "explicit_id":
+        criteria = {"contest_id": str(contest_id) if contest_id is not None else None}
+
+    return {
+        "mode": mode,
+        "criteria": criteria,
+        "tie_breakers": [
+            "entry_fee desc",
+            "entries desc",
+            "start_date desc",
+            "dk_id desc",
+        ],
+        "selected_from_candidate_count": selected_from_candidate_count,
+    }
+
+
+def summarize_candidates(rows: list[tuple], top_n: int = CANDIDATE_LIMIT) -> list[dict[str, Any]]:
+    normalized: list[dict[str, Any]] = []
+    for row in rows:
+        contest_id, name, entry_fee, start_date, entries, selection_priority = row
+        normalized.append(
+            {
+                "contest_id": str(contest_id),
+                "name": name,
+                "entry_fee": entry_fee,
+                "entries": entries,
+                "start_time_utc": to_utc_iso(start_date),
+                "selection_priority": int(selection_priority),
+            }
+        )
+
+    normalized.sort(
+        key=lambda item: (
+            item["selection_priority"],
+            -int(item["entry_fee"] or 0),
+            -int(item["entries"] or 0),
+            item["contest_id"],
+        )
+    )
+    return normalized[:top_n]
+
+
+def _default_snapshot(sport: str) -> dict[str, Any]:
+    return {
+        "snapshot_version": "v1",
+        "snapshot_generated_at_utc": None,
+        "sport": sport,
+        "contest": {
+            "contest_id": None,
+            "name": None,
+            "draft_group": None,
+            "start_time_utc": None,
+            "is_primary": True,
+            "entry_fee": None,
+            "entries": None,
+            "positions_paid": None,
+        },
+        "selection": {
+            "selected_contest_id": None,
+            "reason": {
+                "mode": None,
+                "criteria": {},
+                "tie_breakers": [],
+                "selected_from_candidate_count": 0,
+            },
+        },
+        "candidates": [],
+        "cash_line": {
+            "cutoff_type": "positions_paid",
+            "rank": None,
+            "points": None,
+            "delta_to_cash": None,
+        },
+        "vip_lineups": [],
+        "players": [],
+        "ownership": {
+            "ownership_remaining_total_pct": None,
+            "non_cashing_user_count": 0,
+            "non_cashing_avg_pmr": 0.0,
+            "top_remaining_players": [],
+        },
+        "train_clusters": [],
+        "standings": [],
+        "truncation": {
+            "applied": False,
+            "limit": None,
+            "total_rows_before_truncation": 0,
+            "total_rows_after_truncation": 0,
+        },
+        "metadata": {
+            "missing_fields": [],
+            "warnings": [],
+            "source_endpoints": SOURCE_ENDPOINTS[:],
+        },
+    }
+
+
+def _merge_dict(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
+    result = copy.deepcopy(base)
+    for key, value in override.items():
+        if isinstance(value, dict) and isinstance(result.get(key), dict):
+            result[key] = _merge_dict(result[key], value)
+        else:
+            result[key] = value
+    return result
+
+
+def _find_missing_fields(value: Any, path: str = "") -> list[str]:
+    missing: list[str] = []
+    if isinstance(value, dict):
+        for key, child in value.items():
+            child_path = f"{path}.{key}" if path else key
+            missing.extend(_find_missing_fields(child, child_path))
+        return missing
+    if isinstance(value, list):
+        for idx, child in enumerate(value):
+            child_path = f"{path}.{idx}" if path else str(idx)
+            missing.extend(_find_missing_fields(child, child_path))
+        return missing
+    if value is None:
+        return [path]
+    return []
+
+
+def _contest_row_from_detail(dk_id: int, detail: dict[str, Any]) -> tuple:
+    contest_detail = detail.get("contestDetail", {})
+    payout_summary = contest_detail.get("payoutSummary") or []
+    positions_paid = None
+    if payout_summary:
+        positions_paid = payout_summary[0].get("maxPosition")
+    start_time = contest_detail.get("contestStartTime")
+    return (
+        dk_id,
+        contest_detail.get("name"),
+        contest_detail.get("draftGroupId"),
+        positions_paid,
+        start_time,
+        contest_detail.get("entryFee"),
+        contest_detail.get("maximumEntries"),
+    )
+
+
+def collect_snapshot_data(
+    *,
+    sport: str,
+    contest_id: int | None = None,
+    standings_limit: int = DEFAULT_STANDINGS_LIMIT,
+) -> dict[str, Any]:
+    sport_map = _sport_choices()
+    sport_cls = sport_map[sport.upper()]
+    contest_db: ContestDatabase | None = None
+    try:
+        contest_db = ContestDatabase(str(state.contests_db_path()))
+    except Exception:
+        contest_db = None
+
+    try:
+        candidate_rows: list[tuple] = []
+        if contest_db is not None:
+            candidate_rows = contest_db.get_live_contest_candidates(
+                sport_cls.name,
+                entry_fee=sport_cls.sheet_min_entry_fee,
+                keyword=sport_cls.keyword,
+                limit=CANDIDATE_LIMIT,
+            )
+
+        mode = "primary_live"
+        selected: tuple | None = None
+        dk = Draftkings()
+        if contest_id is not None:
+            mode = "explicit_id"
+            if contest_db is not None:
+                selected = contest_db.get_contest_by_id(int(contest_id))
+            if not selected:
+                selected = _contest_row_from_detail(
+                    int(contest_id), dk.get_contest_detail(int(contest_id))
+                )
+        else:
+            if contest_db is None:
+                raise RuntimeError("Contest DB unavailable for primary live selection")
+            live = contest_db.get_live_contest(
+                sport_cls.name, sport_cls.sheet_min_entry_fee, sport_cls.keyword
+            )
+            if live:
+                selected = contest_db.get_contest_by_id(int(live[0]))
+
+        if not selected:
+            raise RuntimeError(f"No contest found for sport={sport_cls.name}")
+
+        dk_id, contest_name, draft_group, positions_paid, start_date, entry_fee, entries = (
+            selected
+        )
+        logger.info("selected contest id=%s mode=%s", dk_id, mode)
+
+        now_et = datetime.datetime.now(ZoneInfo("America/New_York"))
+        salary_path = os.path.join(SALARY_DIR, f"DKSalaries_{sport_cls.name}_{now_et:%A}.csv")
+        if draft_group:
+            dk.download_salary_csv(sport_cls.name, draft_group, salary_path)
+
+        standings_rows = dk.download_contest_rows(
+            int(dk_id),
+            timeout=30,
+            cookies_dump_file=COOKIES_FILE,
+            contest_dir=CONTEST_DIR,
+        )
+        if not standings_rows:
+            raise RuntimeError(f"Contest standings unavailable for contest_id={dk_id}")
+
+        vips = load_vips()
+        results = Results(
+            sport_cls,
+            int(dk_id),
+            salary_path,
+            positions_paid,
+            standings_rows=standings_rows,
+            vips=vips,
+        )
+        results.name = contest_name
+        results.positions_paid = positions_paid
+
+        vip_entries: dict[str, dict[str, Any] | str] = {}
+        for vip in results.vip_list:
+            if not vip.name or not vip.player_id:
+                continue
+            vip_entries[vip.name] = {
+                "entry_key": vip.player_id,
+                "pmr": vip.pmr,
+                "rank": vip.rank,
+                "pts": vip.pts,
+            }
+
+        player_salary_map = {name: player.salary for name, player in results.players.items()}
+        vip_lineups = (
+            dk.get_vip_lineups(
+                int(dk_id),
+                int(draft_group),
+                vips,
+                vip_entries=vip_entries,
+                player_salary_map=player_salary_map,
+            )
+            if draft_group
+            else []
+        )
+
+        vip_lookup = {vip.name for vip in results.vip_list}
+        standings = []
+        for user in results.users:
+            parsed_rank = _rank_numeric(user.rank)
+            standings.append(
+                {
+                    "rank": parsed_rank if parsed_rank is not None else user.rank,
+                    "entry_key": user.player_id,
+                    "username": user.name,
+                    "pmr": _to_float(user.pmr),
+                    "points": _to_float(user.pts),
+                    "ownership_remaining_total_pct": _ownership_remaining_for_user(user),
+                    "is_vip": user.name in vip_lookup,
+                }
+            )
+
+        players = []
+        for player in results.players.values():
+            players.append(
+                {
+                    "name": player.name,
+                    "position": player.pos,
+                    "roster_positions": list(player.roster_pos),
+                    "salary": player.salary,
+                    "team": player.team_abbv,
+                    "game_status": player.game_info,
+                    "matchup": player.matchup_info,
+                    "ownership_pct": float(player.ownership) * 100,
+                    "fantasy_points": player.fpts,
+                    "value": player.value,
+                }
+            )
+        players.sort(
+            key=lambda item: (
+                item["position"] or "",
+                item["name"] or "",
+                int(item["salary"] or 0),
+            )
+        )
+
+        standings.sort(
+            key=lambda item: (
+                item["rank"] is None,
+                _rank_numeric(item["rank"]) if _rank_numeric(item["rank"]) is not None else 10**9,
+                str(item["rank"] if item["rank"] is not None else ""),
+                item["username"] or "",
+                str(item["entry_key"] or ""),
+            )
+        )
+
+        total_before = len(standings)
+        limit = standings_limit if standings_limit and standings_limit > 0 else None
+        applied = bool(limit and total_before > limit)
+        if applied and limit is not None:
+            standings = standings[:limit]
+
+        ownership_values = [
+            row["ownership_remaining_total_pct"]
+            for row in standings
+            if row["ownership_remaining_total_pct"] is not None
+        ]
+        ownership_remaining_total = (
+            sum(ownership_values) / len(ownership_values) if ownership_values else None
+        )
+
+        top_remaining_players: list[dict[str, Any]] = []
+        if results.non_cashing_users > 0:
+            for name, count in results.non_cashing_players.items():
+                top_remaining_players.append(
+                    {
+                        "player_name": name,
+                        "ownership_remaining_pct": (float(count) / results.non_cashing_users)
+                        * 100,
+                    }
+                )
+        top_remaining_players.sort(
+            key=lambda item: (-item["ownership_remaining_pct"], item["player_name"])
+        )
+        top_remaining_players = top_remaining_players[:10]
+
+        cash_rank = results.min_rank if results.min_rank > 0 else None
+        cash_points = results.min_cash_pts if cash_rank is not None else None
+        cash_delta = None
+        if cash_rank is not None:
+            below_cash = [
+                row
+                for row in standings
+                if _rank_numeric(row["rank"]) is not None
+                and _rank_numeric(row["rank"]) > int(cash_rank)
+            ]
+            if below_cash and cash_points is not None:
+                first_below = below_cash[0]
+                if first_below["points"] is not None:
+                    cash_delta = float(first_below["points"]) - float(cash_points)
+
+        trains = TrainFinder(results.users).get_users_above_salary_spent(SALARY_LIMIT)
+        train_clusters = []
+        for key, cluster in trains.items():
+            if cluster.get("count", 0) <= 1:
+                continue
+            members = [u for u in results.users if f"{u.pts}-{u.pmr}" == key]
+            members.sort(
+                key=lambda user: (
+                    user.rank is None,
+                    _rank_numeric(user.rank) if _rank_numeric(user.rank) is not None else 10**9,
+                    str(user.rank if user.rank is not None else ""),
+                    str(user.player_id),
+                )
+            )
+            signature = _lineup_signature(members[0]) if members else ""
+            train_clusters.append(
+                {
+                    "cluster_id": cluster_id_from_signature(signature),
+                    "cluster_rule": "salary_remaining<=40000_and_same_points_pmr",
+                    "user_count": int(cluster.get("count") or 0),
+                    "rank": cluster.get("rank"),
+                    "points": _to_float(cluster.get("pts")),
+                    "pmr": _to_float(cluster.get("pmr")),
+                    "lineup_signature": signature,
+                    "entry_keys": [member.player_id for member in members],
+                }
+            )
+        train_clusters.sort(
+            key=lambda item: (
+                -item["user_count"],
+                -(item["points"] if item["points"] is not None else -10**9),
+                item["lineup_signature"],
+            )
+        )
+
+        return {
+            "sport": sport_cls.name,
+            "contest": {
+                "contest_id": dk_id,
+                "name": contest_name,
+                "draft_group": draft_group,
+                "start_time_utc": to_utc_iso(start_date),
+                "is_primary": True,
+                "entry_fee": entry_fee,
+                "entries": entries,
+                "positions_paid": positions_paid,
+            },
+            "selection": {
+                "selected_contest_id": dk_id,
+                "reason": build_selection_reason(
+                    mode=mode,
+                    sport=sport_cls.name,
+                    min_entry_fee=sport_cls.sheet_min_entry_fee,
+                    keyword=sport_cls.keyword,
+                    selected_from_candidate_count=len(candidate_rows),
+                    contest_id=int(dk_id) if mode == "explicit_id" else None,
+                ),
+            },
+            "candidates": summarize_candidates(candidate_rows, top_n=CANDIDATE_LIMIT),
+            "cash_line": {
+                "cutoff_type": "positions_paid",
+                "rank": cash_rank,
+                "points": cash_points,
+                "delta_to_cash": cash_delta,
+            },
+            "vip_lineups": vip_lineups,
+            "players": players,
+            "ownership": {
+                "ownership_remaining_total_pct": ownership_remaining_total,
+                "non_cashing_user_count": results.non_cashing_users,
+                "non_cashing_avg_pmr": results.non_cashing_avg_pmr,
+                "top_remaining_players": top_remaining_players,
+            },
+            "train_clusters": train_clusters,
+            "standings": standings,
+            "truncation": {
+                "applied": applied,
+                "limit": limit,
+                "total_rows_before_truncation": total_before,
+                "total_rows_after_truncation": len(standings),
+            },
+        }
+    finally:
+        if contest_db is not None:
+            contest_db.close()
+
+
+def build_snapshot(
+    *, sport: str, contest_id: int | None = None, standings_limit: int = DEFAULT_STANDINGS_LIMIT
+) -> dict[str, Any]:
+    collected = collect_snapshot_data(
+        sport=sport,
+        contest_id=contest_id,
+        standings_limit=standings_limit,
+    )
+    snapshot = _merge_dict(_default_snapshot(sport), collected)
+    snapshot["snapshot_generated_at_utc"] = to_utc_iso(
+        datetime.datetime.now(datetime.timezone.utc)
+    )
+
+    missing = [
+        path
+        for path in _find_missing_fields(snapshot)
+        if not path.startswith("metadata.missing_fields")
+    ]
+    snapshot["metadata"]["missing_fields"] = sorted(set(missing))
+    return snapshot
+
+
+def _round_for_key(key: str, value: float) -> float:
+    if key.endswith("_pct"):
+        return round(value, 4)
+    if key in {"points", "delta_to_cash", "pmr", "pts", "fantasy_points", "value"}:
+        return round(value, 2)
+    return value
+
+
+def _normalize_value(value: Any, path: str, warnings: list[dict[str, Any]]) -> Any:
+    if isinstance(value, dict):
+        out: dict[str, Any] = {}
+        for key, child in value.items():
+            child_path = f"{path}.{key}" if path else key
+            normalized = _normalize_value(child, child_path, warnings)
+            if key in ID_FIELDS and normalized is not None:
+                normalized = str(normalized)
+            if key == "entry_keys" and isinstance(normalized, list):
+                normalized = [str(item) for item in normalized]
+            if key == "ownership_remaining_total_pct" and isinstance(normalized, (int, float)):
+                normalized = round(float(normalized), 4)
+            elif isinstance(normalized, float):
+                normalized = _round_for_key(key, normalized)
+            out[key] = normalized
+        return out
+
+    if isinstance(value, list):
+        return [
+            _normalize_value(item, f"{path}.{idx}" if path else str(idx), warnings)
+            for idx, item in enumerate(value)
+        ]
+
+    return value
+
+
+def normalize_snapshot_for_output(snapshot: dict[str, Any]) -> dict[str, Any]:
+    result = copy.deepcopy(snapshot)
+    warnings: list[dict[str, Any]] = list(result.get("metadata", {}).get("warnings", []))
+    normalized = _normalize_value(result, "", warnings)
+    if "metadata" not in normalized:
+        normalized["metadata"] = {}
+    normalized["metadata"]["warnings"] = warnings
+    return normalized
+
+
+def snapshot_to_json(snapshot: dict[str, Any]) -> str:
+    normalized = normalize_snapshot_for_output(snapshot)
+    return to_stable_json(normalized)
+
+
+def to_stable_json(payload: Any) -> str:
+    return json.dumps(
+        payload,
+        sort_keys=True,
+        indent=2,
+        separators=(",", ":"),
+        ensure_ascii=True,
+    ) + "\n"
+
+
+def _cash_line_contract(cash_line: dict[str, Any]) -> dict[str, Any]:
+    raw = str(cash_line.get("cutoff_type") or "").strip().lower()
+    if raw in {"positions_paid", "rank"}:
+        cutoff_type = "rank"
+    elif raw == "points":
+        cutoff_type = "points"
+    else:
+        cutoff_type = "unknown"
+    return {
+        "cutoff_type": cutoff_type,
+        "rank_cutoff": cash_line.get("rank"),
+        "points_cutoff": cash_line.get("points"),
+    }
+
+
+def _ownership_watchlist_contract(ownership: dict[str, Any], updated_at: str) -> dict[str, Any]:
+    entries: list[dict[str, Any]] = []
+    for row in ownership.get("top_remaining_players") or []:
+        if not isinstance(row, dict):
+            continue
+        entry_key = row.get("entry_key")
+        display_name = row.get("display_name") or row.get("player_name")
+        if display_name in (None, "") and entry_key not in (None, ""):
+            display_name = str(entry_key)
+        entries.append(
+            {
+                "display_name": display_name,
+                "ownership_remaining_pct": _to_float(row.get("ownership_remaining_pct")),
+                "entry_key": entry_key,
+                "current_rank": _rank_numeric(row.get("current_rank")),
+                "current_points": _to_float(row.get("current_points")),
+                "pmr": _to_float(row.get("pmr")),
+            }
+        )
+    top_n_default_raw = ownership.get("top_n_default")
+    if isinstance(top_n_default_raw, (int, float)):
+        top_n_default = int(top_n_default_raw)
+    else:
+        top_n_default = 10
+    if top_n_default <= 0:
+        top_n_default = 10
+    return {
+        "updated_at": updated_at,
+        "ownership_remaining_total_pct": _to_float(
+            ownership.get("ownership_remaining_total_pct")
+        ),
+        "top_n_default": top_n_default,
+        "entries": entries,
+    }
+
+
+def _normalize_standings_rows(rows: list[Any]) -> list[dict[str, Any]]:
+    normalized_rows: list[dict[str, Any]] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        entry_key = row.get("entry_key")
+        display_name = row.get("display_name") or row.get("username")
+        if display_name in (None, "") and entry_key not in (None, ""):
+            display_name = str(entry_key)
+        payout_cents = _to_int(row.get("payout_cents"))
+        normalized_rows.append(
+            {
+                "entry_key": entry_key,
+                "display_name": display_name,
+                "rank": _rank_numeric(row.get("rank")),
+                "points": _to_float(row.get("points")),
+                "pmr": _to_float(row.get("pmr")),
+                "ownership_remaining_pct": _to_float(
+                    row.get("ownership_remaining_total_pct")
+                    if row.get("ownership_remaining_total_pct") is not None
+                    else row.get("ownership_remaining_pct")
+                ),
+                "payout_cents": payout_cents,
+                "is_cashing": payout_cents is not None,
+                "is_vip": bool(row.get("is_vip")),
+            }
+        )
+    return normalized_rows
+
+
+def _unique_standings_by_display_name(
+    rows: list[dict[str, Any]],
+) -> dict[str, dict[str, Any]]:
+    counts: dict[str, int] = {}
+    for row in rows:
+        display_name = row.get("display_name")
+        if display_name in (None, ""):
+            continue
+        key = str(display_name)
+        counts[key] = counts.get(key, 0) + 1
+    unique: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        display_name = row.get("display_name")
+        if display_name in (None, ""):
+            continue
+        key = str(display_name)
+        if counts.get(key) == 1:
+            unique[key] = row
+    return unique
+
+
+def _build_player_name_lookup(players: list[Any]) -> dict[str, str]:
+    lookup: dict[str, str] = {}
+    collisions: set[str] = set()
+    for player in players:
+        if not isinstance(player, dict):
+            continue
+        name = str(player.get("name") or "").strip()
+        if not name:
+            continue
+        key = name.lower()
+        if key in lookup and lookup[key] != name:
+            collisions.add(key)
+        else:
+            lookup[key] = name
+    for key in collisions:
+        lookup.pop(key, None)
+    return lookup
+
+
+def _canonical_player_name(raw_name: Any, lookup: dict[str, str]) -> str | None:
+    name = str(raw_name or "").strip()
+    if not name:
+        return None
+    if name.lower() in lookup:
+        return lookup[name.lower()]
+    return None
+
+
+def _cluster_composition(
+    cluster: dict[str, Any], player_lookup: dict[str, str]
+) -> list[dict[str, Any]]:
+    signature = str(cluster.get("lineup_signature") or "").strip()
+    if not signature:
+        return []
+    names = [part.strip() for part in signature.split("|") if part.strip()]
+    composition: list[dict[str, Any]] = []
+    for index, name in enumerate(names):
+        canonical_name = _canonical_player_name(name, player_lookup)
+        if canonical_name is None:
+            continue
+        composition.append({"slot": f"SLOT_{index + 1}", "player_name": canonical_name})
+    return composition
+
+
+def _train_clusters_contract(
+    clusters: list[Any],
+    updated_at: str,
+    player_lookup: dict[str, str],
+    standings_by_entry_key: dict[str, dict[str, Any]],
+) -> dict[str, Any]:
+    mapped_clusters: list[dict[str, Any]] = []
+    max_shared = 0
+    for row in clusters:
+        if not isinstance(row, dict):
+            continue
+        composition = _cluster_composition(row, player_lookup)
+        max_shared = max(max_shared, len(composition))
+
+        entry_keys = [str(v) for v in (row.get("entry_keys") or []) if str(v)]
+        sample_entries: list[dict[str, Any]] = []
+        for entry_key in entry_keys:
+            standing_row = standings_by_entry_key.get(entry_key, {})
+            display_name = standing_row.get("display_name")
+            if display_name in (None, "") and entry_key:
+                display_name = str(entry_key)
+            sample_entries.append(
+                {
+                    "entry_key": entry_key,
+                    "display_name": display_name,
+                    "rank": _rank_numeric(standing_row.get("rank")),
+                    "points": _to_float(standing_row.get("points")),
+                    "pmr": _to_float(standing_row.get("pmr")),
+                }
+            )
+
+        pmr_values = [item.get("pmr") for item in sample_entries if isinstance(item.get("pmr"), (int, float))]
+        ownership_values = [
+            standings_by_entry_key.get(key, {}).get("ownership_remaining_pct")
+            for key in entry_keys
+            if isinstance(standings_by_entry_key.get(key, {}).get("ownership_remaining_pct"), (int, float))
+        ]
+
+        mapped = {
+            "cluster_key": row.get("cluster_id") or row.get("lineup_signature"),
+            "entry_count": int(row.get("user_count") or len(entry_keys)),
+            "best_rank": _rank_numeric(row.get("rank")),
+            "best_points": _to_float(row.get("points")),
+            "avg_pmr": (sum(pmr_values) / len(pmr_values)) if pmr_values else _to_float(row.get("pmr")),
+            "avg_ownership_remaining_pct": (sum(ownership_values) / len(ownership_values))
+            if ownership_values
+            else None,
+            "composition": composition,
+            "sample_entries": sample_entries,
+        }
+        mapped_clusters.append(mapped)
+    return {
+        "updated_at": updated_at,
+        "cluster_rule": {
+            "type": "shared_slots",
+            "min_shared": max_shared if max_shared > 0 else 0,
+        },
+        "clusters": mapped_clusters,
+    }
+
+
+def _vip_slots_from_lineup(lineup: Any, player_lookup: dict[str, str]) -> list[dict[str, Any]]:
+    if not isinstance(lineup, list):
+        return []
+    slots: list[dict[str, Any]] = []
+    for index, item in enumerate(lineup):
+        if isinstance(item, dict):
+            player_name = item.get("player_name") or item.get("name")
+            slot = item.get("slot") or item.get("position") or f"SLOT_{index + 1}"
+            multiplier = item.get("multiplier")
+        else:
+            player_name = str(item)
+            slot = f"SLOT_{index + 1}"
+            multiplier = None
+        canonical_name = _canonical_player_name(player_name, player_lookup)
+        if canonical_name is None:
+            continue
+        slot_row: dict[str, Any] = {"slot": slot, "player_name": canonical_name}
+        if multiplier is not None:
+            slot_row["multiplier"] = multiplier
+        slots.append(slot_row)
+    return slots
+
+
+def _vip_lineups_contract(
+    vip_lineups: list[Any],
+    player_lookup: dict[str, str],
+    updated_at: str,
+    standings_by_entry_key: dict[str, dict[str, Any]],
+    standings_by_username: dict[str, dict[str, Any]],
+    cash_line: dict[str, Any],
+) -> list[dict[str, Any]]:
+    normalized: list[dict[str, Any]] = []
+    for row in vip_lineups:
+        if not isinstance(row, dict):
+            continue
+        display_name = row.get("display_name") or row.get("username") or row.get("user")
+        entry_key = row.get("entry_key")
+        standings_row = standings_by_entry_key.get(str(entry_key), {})
+        if not standings_row and display_name:
+            standings_row = standings_by_username.get(str(display_name), {})
+        if entry_key in (None, "") and standings_row:
+            entry_key = standings_row.get("entry_key")
+        if display_name in (None, "") and entry_key not in (None, ""):
+            display_name = str(entry_key)
+        current_points = (
+            row.get("pts") if row.get("pts") is not None else standings_row.get("points")
+        )
+        current_rank = (
+            row.get("rank") if row.get("rank") is not None else standings_row.get("rank")
+        )
+        current_points_num = _to_float(current_points)
+        current_rank_num = _rank_numeric(current_rank)
+        cash_line_delta_points = (
+            float(current_points_num) - float(cash_line.get("points_cutoff"))
+            if isinstance(current_points_num, (int, float))
+            and isinstance(cash_line.get("points_cutoff"), (int, float))
+            else None
+        )
+        payout_cents = _to_int(
+            row.get("payout_cents")
+            if row.get("payout_cents") is not None
+            else standings_row.get("payout_cents")
+        )
+        is_cashing = payout_cents is not None
+
+        mapped = {
+            "display_name": display_name,
+            "entry_key": entry_key,
+            "live": {
+                "updated_at": updated_at,
+                "current_points": current_points_num,
+                "current_rank": current_rank_num,
+                "cash_line_delta_points": cash_line_delta_points,
+                "is_cashing": is_cashing,
+                "payout_cents": payout_cents,
+                "ownership_remaining_pct": _to_float(
+                    standings_row.get("ownership_remaining_pct")
+                ),
+                "pmr": _to_float(
+                    row.get("pmr") if row.get("pmr") is not None else standings_row.get("pmr")
+                ),
+            },
+            "slots": _vip_slots_from_lineup(
+                row.get("lineup") if row.get("lineup") is not None else row.get("players"),
+                player_lookup,
+            ),
+        }
+        normalized.append(mapped)
+    return normalized
+
+
+def _selection_reason_text(reason: Any, contest_id: Any) -> str | None:
+    if isinstance(reason, str):
+        text = reason.strip()
+        return text if text else None
+    if isinstance(reason, dict):
+        mode = str(reason.get("mode") or "unknown")
+        if mode == "explicit_id":
+            return f"explicit_id contest_id={contest_id}"
+        return mode
+    if reason is None:
+        return None
+    return str(reason)
+
+
+def build_dashboard_sport_snapshot(snapshot: dict[str, Any], generated_at: str) -> dict[str, Any]:
+    normalized = normalize_snapshot_for_output(snapshot)
+    updated_at = normalized.get("snapshot_generated_at_utc") or generated_at
+    contest = dict(normalized.get("contest") or {})
+    selection = dict(normalized.get("selection") or {})
+    contest_id = selection.get("selected_contest_id") or contest.get("contest_id")
+    truncation = dict(normalized.get("truncation") or {})
+    players = list(normalized.get("players") or [])
+    player_lookup = _build_player_name_lookup(players)
+    standings_rows = list(normalized.get("standings") or [])
+    standings_rows = _normalize_standings_rows(standings_rows)
+    standings_by_entry_key = {
+        str(row.get("entry_key")): row
+        for row in standings_rows
+        if isinstance(row, dict) and row.get("entry_key") not in (None, "")
+    }
+    standings_by_username = _unique_standings_by_display_name(standings_rows)
+
+    contest_object = dict(contest)
+    contest_object["is_primary"] = True
+    if "entries" in contest_object and "entries_count" not in contest_object:
+        contest_object["entries_count"] = contest_object.get("entries")
+    for key in (
+        "entries_count",
+        "positions_paid",
+        "entry_fee_cents",
+        "payout_cents",
+        "draft_group",
+    ):
+        if key in contest_object:
+            contest_object[key] = _rank_numeric(contest_object.get(key))
+    contest_object.pop("entries", None)
+    cash_line = _cash_line_contract(dict(normalized.get("cash_line") or {}))
+    cash_line = _cash_line_contract(dict(normalized.get("cash_line") or {}))
+
+    ownership_source = normalized.get("ownership")
+    if isinstance(ownership_source, dict):
+        contest_object["ownership_watchlist"] = _ownership_watchlist_contract(
+            ownership_source,
+            updated_at,
+        )
+
+    if isinstance(normalized.get("standings"), list):
+        contest_object["standings"] = {
+            "updated_at": updated_at,
+            "rows": standings_rows,
+            "total_rows": truncation.get("total_rows_before_truncation")
+            or truncation.get("total_rows_after_truncation")
+            or len(standings_rows),
+            "is_truncated": bool(truncation.get("applied")),
+        }
+
+    train_source = normalized.get("train_clusters")
+    if isinstance(train_source, list):
+        contest_object["train_clusters"] = _train_clusters_contract(
+            train_source,
+            updated_at,
+            player_lookup,
+            standings_by_entry_key,
+        )
+
+    vip_source = normalized.get("vip_lineups")
+    if isinstance(vip_source, list):
+        contest_object["vip_lineups"] = _vip_lineups_contract(
+            vip_source,
+            player_lookup,
+            updated_at,
+            standings_by_entry_key,
+            standings_by_username,
+            cash_line,
+        )
+    contest_object["live_metrics"] = {
+        "updated_at": updated_at,
+        "cash_line": cash_line,
+    }
+    contest_object.pop("ownership", None)
+    contest_object.pop("selection", None)
+    contest_object.pop("truncation", None)
+    contest_object.pop("metadata", None)
+    contest_object.pop("snapshot_version", None)
+    contest_object.pop("snapshot_generated_at_utc", None)
+
+    sport_snapshot: dict[str, Any] = {
+        "status": normalized.get("status") or "ok",
+        "updated_at": updated_at,
+        "players": players,
+        "contests": [contest_object],
+    }
+    if contest_id is not None:
+        sport_snapshot["primary_contest"] = {
+            "contest_id": contest_id,
+            "contest_key": contest.get("contest_key"),
+            "selection_reason": _selection_reason_text(selection.get("reason"), contest_id),
+            "selected_at": generated_at,
+        }
+    error = normalized.get("error")
+    if error not in (None, ""):
+        sport_snapshot["error"] = error
+    return sport_snapshot
+
+
+def build_dashboard_envelope(sports: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    generated_at = to_utc_iso(datetime.datetime.now(datetime.timezone.utc))
+    output_sports: dict[str, Any] = {}
+    for sport, snapshot in sorted(sports.items()):
+        sport_snapshot = build_dashboard_sport_snapshot(snapshot, generated_at)
+        output_sports[sport.lower()] = sport_snapshot
+    return {
+        "schema_version": 1,
+        "snapshot_at": generated_at,
+        "generated_at": generated_at,
+        "sports": output_sports,
+    }
+
+
+def _is_numeric_string(value: str) -> bool:
+    text = value.strip()
+    if not text:
+        return False
+    try:
+        float(text)
+    except ValueError:
+        return False
+    return True
+
+
+def _walk_paths(value: Any, path: str = "") -> list[tuple[str, Any]]:
+    items: list[tuple[str, Any]] = []
+    if isinstance(value, dict):
+        for key, child in value.items():
+            child_path = f"{path}.{key}" if path else key
+            items.extend(_walk_paths(child, child_path))
+        return items
+    if isinstance(value, list):
+        for idx, child in enumerate(value):
+            child_path = f"{path}.{idx}" if path else str(idx)
+            items.extend(_walk_paths(child, child_path))
+        return items
+    items.append((path, value))
+    return items
+
+
+def validate_canonical_snapshot(payload: dict[str, Any]) -> list[str]:
+    violations: list[str] = []
+    allowed_numeric_string_suffixes = (
+        ".contest_id",
+        ".contest_key",
+        ".entry_key",
+        ".cluster_key",
+        ".selection_reason",
+        ".display_name",
+    )
+
+    for path, value in _walk_paths(payload):
+        if not path:
+            continue
+        key = path.split(".")[-1]
+        if key in CANONICAL_DISALLOWED_KEYS:
+            violations.append(f"disallowed_key:{path}")
+        if isinstance(value, str) and _is_numeric_string(value):
+            if not path.endswith(allowed_numeric_string_suffixes):
+                violations.append(f"numeric_string:{path}")
+    return sorted(set(violations))
