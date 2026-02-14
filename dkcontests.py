@@ -106,6 +106,18 @@ def get_contests_for_sport_class(
     return [contest for contest in contests if contest.get("dg") in draft_groups]
 
 
+def get_draft_group_info(
+    response: dict | list[dict],
+    draft_group_id: int,
+) -> dict | None:
+    if not isinstance(response, dict) or "DraftGroups" not in response:
+        return None
+    for draft_group in response["DraftGroups"]:
+        if draft_group.get("DraftGroupId") == draft_group_id:
+            return draft_group
+    return None
+
+
 def get_cron_config(sport: str) -> dict[str, int | str]:
     return _SPORT_CRON_CONFIG[sport]
 
@@ -246,8 +258,15 @@ def set_cron_interval(contest, sport_length):
     return f"{hours} {days} {end_dt:%m} *"
 
 
-def print_cron_job(contest, sport):
-    print(pformat(vars(contest), sort_dicts=False))
+def print_cron_job(contest, sport, draft_group_info=None):
+    print(
+        pformat(
+            {"contest": vars(contest), "draft_group": draft_group_info},
+            sort_dicts=False,
+            compact=True,
+            width=160,
+        )
+    )
     home_dir = "/home/pi/Desktop"
     pipenv_path = "/usr/local/bin/pipenv"
 
@@ -400,13 +419,21 @@ def main():
 
     if args.sport_class:
         selected_sport = args.sport_class
-        response_contests = get_contests_for_sport_class(
-            args.sport_class, choices=sport_class_choices
-        )
+        sport_obj = sport_class_choices[args.sport_class]
+        response = get_lobby_response(sport_obj.get_primary_sport(), live=False)
+        if not isinstance(response, dict):
+            raise SystemExit("Sport-class mode requires getcontests response with DraftGroups.")
+        draft_groups = set(get_draft_groups_from_response(response, sport_obj))
+        response_contests = [
+            contest
+            for contest in get_contests_from_response(response)
+            if contest.get("dg") in draft_groups
+        ]
     else:
         selected_sport = args.sport
         # get contests via authenticated client
-        response_contests = get_contests(args.sport, live=is_live)
+        response = get_lobby_response(args.sport, live=is_live)
+        response_contests = get_contests_from_response(response)
 
     # create list of Contest objects
     contests = [Contest(c, selected_sport) for c in response_contests]
@@ -434,7 +461,11 @@ def main():
         output_sport = "PGA"
 
     # print out cron job for our other scripts
-    print_cron_job(contest, output_sport)
+    print_cron_job(
+        contest,
+        output_sport,
+        draft_group_info=get_draft_group_info(response, contest.draft_group),
+    )
 
     print_sql_insert(contest)
 

@@ -81,7 +81,8 @@ def test_print_cron_job_pretty_prints_contest(capsys):
 
     out = capsys.readouterr().out
     assert "'contest': {" in out
-    assert "'n': 'Contest 101',\n" in out
+    assert "'draft_group': None" in out
+    assert "'n': 'Contest 101'" in out
 
 
 def test_get_largest_contest_applies_query_and_exclude():
@@ -172,6 +173,22 @@ def test_get_contests_for_sport_class_filters_by_draft_groups(monkeypatch):
     assert [contest["id"] for contest in contests] == [41]
 
 
+def test_get_draft_group_info_returns_matching_entry():
+    response = {
+        "DraftGroups": [
+            {"DraftGroupId": 100, "ContestTypeId": 87},
+            {"DraftGroupId": 200, "ContestTypeId": 33},
+        ]
+    }
+
+    assert dkcontests.get_draft_group_info(response, 200) == {
+        "DraftGroupId": 200,
+        "ContestTypeId": 33,
+    }
+    assert dkcontests.get_draft_group_info(response, 999) is None
+    assert dkcontests.get_draft_group_info([], 200) is None
+
+
 def test_main_rejects_live_with_sport_class(monkeypatch):
     monkeypatch.setattr(
         sys,
@@ -193,11 +210,16 @@ def test_get_cron_config_shares_pga_values():
     assert pga_showdown == pga
 
 
-def test_main_passes_sport_class_choices_to_fetcher(monkeypatch):
-    captured = {"choices": None}
+def test_main_passes_sport_class_choices_to_response_filters(monkeypatch):
+    captured = {"sport": None, "sport_obj": None}
 
     class _DummySport:
+        name = "PGAShowdown"
         contest_restraint_game_type_id = 87
+
+        @staticmethod
+        def get_primary_sport():
+            return "GOLF"
 
     monkeypatch.setattr(
         dkcontests,
@@ -206,8 +228,14 @@ def test_main_passes_sport_class_choices_to_fetcher(monkeypatch):
     )
     monkeypatch.setattr(
         dkcontests,
-        "get_contests_for_sport_class",
-        lambda sport_class, choices=None: captured.update({"choices": choices}) or [],
+        "get_lobby_response",
+        lambda sport, live=False: captured.update({"sport": sport})
+        or {"Contests": [], "DraftGroups": []},
+    )
+    monkeypatch.setattr(
+        dkcontests,
+        "get_draft_groups_from_response",
+        lambda _response, sport_obj: captured.update({"sport_obj": sport_obj}) or [],
     )
     monkeypatch.setattr(dkcontests, "print_stats", lambda _contests: None)
     monkeypatch.setattr(
@@ -224,7 +252,8 @@ def test_main_passes_sport_class_choices_to_fetcher(monkeypatch):
     with pytest.raises(SystemExit):
         dkcontests.main()
 
-    assert captured["choices"] == {"PGAShowdown": _DummySport}
+    assert captured["sport"] == "GOLF"
+    assert captured["sport_obj"] is _DummySport
 
 
 def test_format_sport_class_game_type_help_lists_constraints():
