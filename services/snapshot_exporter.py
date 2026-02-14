@@ -996,7 +996,6 @@ def _vip_lineups_contract(
 def _distance_to_cash_metrics(
     vip_lineups: list[dict[str, Any]],
     cash_line: dict[str, Any],
-    updated_at: str,
 ) -> dict[str, Any] | None:
     cutoff_points = cash_line.get("points_cutoff")
     rank_cutoff = cash_line.get("rank_cutoff")
@@ -1028,7 +1027,6 @@ def _distance_to_cash_metrics(
         return None
 
     metrics: dict[str, Any] = {
-        "updated_at": updated_at,
         "per_vip": per_vip,
     }
     if isinstance(cutoff_points, (int, float)):
@@ -1039,7 +1037,6 @@ def _distance_to_cash_metrics(
 def _threat_metrics(
     ownership_watchlist: dict[str, Any] | None,
     vip_lineups: list[dict[str, Any]],
-    updated_at: str,
 ) -> dict[str, Any] | None:
     if not ownership_watchlist:
         return None
@@ -1112,7 +1109,6 @@ def _threat_metrics(
         return None
 
     return {
-        "updated_at": updated_at,
         "leverage_semantics": "positive=unique",
         "field_remaining_scope": "watchlist",
         "field_remaining_source": field_remaining_source,
@@ -1213,14 +1209,12 @@ def build_dashboard_sport_snapshot(snapshot: dict[str, Any], generated_at: str) 
         distance_to_cash = _distance_to_cash_metrics(
             contest_object["vip_lineups"],
             cash_line,
-            updated_at,
         )
         if distance_to_cash:
             metrics["distance_to_cash"] = distance_to_cash
     threat = _threat_metrics(
         contest_object.get("ownership_watchlist"),
         contest_object.get("vip_lineups", []),
-        updated_at,
     )
     if threat:
         metrics["threat"] = threat
