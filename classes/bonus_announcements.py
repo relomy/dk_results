@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import sqlite3
+import time
 from dataclasses import dataclass
 from typing import Any
 
@@ -263,12 +264,44 @@ def announce_vip_bonuses(
     if not sender or not vip_lineups:
         return 0
 
+    started_at = time.monotonic()
+    log.info(
+        "Starting VIP bonus announcements: sport=%s contest_id=%s vip_lineups=%d",
+        sport,
+        contest_id,
+        len(vip_lineups),
+    )
+
     create_bonus_announcements_table(conn)
     candidates = _collect_candidates(sport, vip_lineups)
     if not candidates:
+        elapsed_ms = int((time.monotonic() - started_at) * 1000)
+        log.info(
+            "Completed VIP bonus announcements: sport=%s contest_id=%s "
+            "candidates=0 persisted=0 webhook_messages=0 send_failures=0 "
+            "db_failures=0 cas_skips=0 elapsed_ms=%d",
+            sport,
+            contest_id,
+            elapsed_ms,
+        )
         return 0
 
+    by_bonus: dict[str, int] = {}
+    for candidate in candidates:
+        by_bonus[candidate.bonus_code] = by_bonus.get(candidate.bonus_code, 0) + 1
+    log.debug(
+        "VIP bonus candidate aggregate: sport=%s contest_id=%s candidates=%d by_bonus=%s",
+        sport,
+        contest_id,
+        len(candidates),
+        dict(sorted(by_bonus.items())),
+    )
+
     persisted_announcements = 0
+    webhook_messages = 0
+    send_failures = 0
+    db_failures = 0
+    cas_skips = 0
     for candidate in candidates:
         old_count = _load_old_count(
             conn,
@@ -286,11 +319,24 @@ def announce_vip_bonuses(
             counts_to_announce = [1]
         else:
             counts_to_announce = list(range(old_count + 1, new_count + 1))
+        log.debug(
+            "VIP bonus transition: sport=%s contest_id=%s player=%s bonus=%s "
+            "old_count=%d new_count=%d messages_to_send=%d",
+            sport,
+            contest_id,
+            candidate.normalized_player_name,
+            candidate.bonus_code,
+            old_count,
+            new_count,
+            len(counts_to_announce),
+        )
 
         try:
             for count_value in counts_to_announce:
                 sender.send_message(_format_message(sport, candidate, count_value))
+            webhook_messages += len(counts_to_announce)
         except Exception as err:
+            send_failures += 1
             log.error(
                 "Failed to send bonus announcement for %s %s in contest %s: %s",
                 candidate.normalized_player_name,
@@ -319,7 +365,8 @@ def announce_vip_bonuses(
             )
             conn.commit()
             if not updated:
-                log.info(
+                cas_skips += 1
+                log.debug(
                     "Skipping DB advance for %s %s in contest %s; count changed in another run.",
                     candidate.normalized_player_name,
                     candidate.bonus_code,
@@ -328,6 +375,7 @@ def announce_vip_bonuses(
                 continue
             persisted_announcements += len(counts_to_announce)
         except sqlite3.Error as err:
+            db_failures += 1
             log.error(
                 "Failed to persist bonus announcement for %s %s in contest %s: %s",
                 candidate.normalized_player_name,
@@ -335,5 +383,21 @@ def announce_vip_bonuses(
                 contest_id,
                 err,
             )
+
+    elapsed_ms = int((time.monotonic() - started_at) * 1000)
+    log.info(
+        "Completed VIP bonus announcements: sport=%s contest_id=%s candidates=%d "
+        "persisted=%d webhook_messages=%d send_failures=%d db_failures=%d "
+        "cas_skips=%d elapsed_ms=%d",
+        sport,
+        contest_id,
+        len(candidates),
+        persisted_announcements,
+        webhook_messages,
+        send_failures,
+        db_failures,
+        cas_skips,
+        elapsed_ms,
+    )
 
     return persisted_announcements

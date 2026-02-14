@@ -140,3 +140,10 @@ default: [25]
 Logging is configured via `logging.ini` and loaded by most modules using
 `logging.config.fileConfig()` (`update_contests.py`, `db_main.py`,
 `classes/contestdatabase.py`, `classes/dfs_sheet_service.py`).
+
+Bonus announcement logging (`classes/bonus_announcements.py`) uses:
+
+- `INFO`: one start line and one completion summary per run (every scheduled execution).
+- `DEBUG`: candidate aggregate counts and per-candidate transition lines only when
+  `new_count > old_count`.
+- `ERROR`: webhook send failures and DB persistence failures.
