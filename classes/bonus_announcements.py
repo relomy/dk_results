@@ -155,18 +155,20 @@ def _collect_candidates(
                 key = (normalized_name, bonus_code)
                 if key not in grouped:
                     grouped[key] = {
-                        "display_name": display_name or normalized_name,
+                        "display_names": set(),
                         "count": count,
                         "vips": set(),
                     }
+                grouped[key]["display_names"].add(display_name or normalized_name)
                 grouped[key]["count"] = max(grouped[key]["count"], count)
                 if vip_name:
                     grouped[key]["vips"].add(vip_name)
     candidates: list[BonusCandidate] = []
     for (normalized_name, bonus_code), data in sorted(grouped.items()):
+        canonical_display_name = sorted(data["display_names"], key=str.lower)[0]
         candidates.append(
             BonusCandidate(
-                display_name=data["display_name"],
+                display_name=canonical_display_name,
                 normalized_player_name=normalized_name,
                 bonus_code=bonus_code,
                 new_count=int(data["count"]),

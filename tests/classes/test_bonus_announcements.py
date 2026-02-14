@@ -136,6 +136,27 @@ def test_announce_vip_bonuses_sorts_and_caps_vip_names():
     assert "VIPs: amy, beth, carl, dana, mike +1 more" in sender.messages[0]
 
 
+def test_announce_vip_bonuses_uses_deterministic_canonical_display_name():
+    conn = _build_conn()
+    sender = _Sender()
+    vip_lineups = [
+        {"user": "amy", "players": [{"name": "José Alvarado", "stats": "1 EAG"}]},
+        {"user": "beth", "players": [{"name": "Jose Alvarado", "stats": "1 EAG"}]},
+    ]
+
+    sent = announce_vip_bonuses(
+        conn=conn,
+        sport="GOLF",
+        contest_id=556,
+        vip_lineups=vip_lineups,
+        sender=sender,
+    )
+
+    assert sent == 1
+    assert sender.messages
+    assert "Jose Alvarado" in sender.messages[0]
+
+
 def test_announce_vip_bonuses_webhook_failure_does_not_update_db():
     conn = _build_conn()
     sender = _Sender()
