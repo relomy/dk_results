@@ -177,6 +177,50 @@ def test_parse_contest_standings_rows_handles_empty_player_stats_columns():
     assert len(results.users) == 1
 
 
+def test_parse_contest_standings_rows_skips_blank_core_rows():
+    standings_rows = [
+        ["rank", "player_id", "name", "pmr", "pts", "lineup_str"],
+        ["1", "111", "UserA", "0", "120", "QB Tom Brady RB Derrick Henry"],
+        ["", "", "", "", "", ""],
+        ["", " ", " ", "", "", "   "],
+    ]
+    results = results_module.Results(
+        sport_obj=NFLSport,
+        contest_id=1,
+        salary_csv_fn="unused.csv",
+        positions_paid=1,
+        salary_rows=_sample_salary_rows(),
+        standings_rows=standings_rows,
+    )
+
+    assert len(results.users) == 1
+    assert results.users[0].name == "UserA"
+
+
+def test_parse_contest_standings_rows_processes_player_stats_only_rows():
+    salary_rows = _sample_salary_rows()
+    salary_rows[1][6] = "NE@NYJ 1:00PM ET"
+    standings_rows = [
+        ["rank", "player_id", "name", "pmr", "pts", "lineup_str", "", "Player", "Roster Position", "%Drafted", "FPTS"],
+        ["1", "111", "UserA", "0", "120", "QB Tom Brady RB Derrick Henry"],
+        ["", "", "", "", "", "", "", "Tom Brady", "QB", "50.00%", "20"],
+    ]
+    results = results_module.Results(
+        sport_obj=NFLSport,
+        contest_id=1,
+        salary_csv_fn="unused.csv",
+        positions_paid=1,
+        salary_rows=salary_rows,
+        standings_rows=standings_rows,
+    )
+
+    assert len(results.users) == 1
+    player = results.players["Tom Brady"]
+    assert player.standings_pos == "QB"
+    assert player.ownership == 0.5
+    assert player.fpts == 20.0
+
+
 def test_parse_lineup_string_handles_locked_and_unknown_players():
     results = results_module.Results(
         sport_obj=NFLSport,

@@ -158,6 +158,22 @@ class Results:
             # catch empty rows
             if not row:
                 continue
+            if len(row) < 6:
+                continue
+            core_blank = all(str(col).strip() == "" for col in row[:6])
+            if core_blank:
+                # DK exports may include player-stat-only rows with blank entry columns.
+                player_stats = row[7:]
+                if player_stats and not all(
+                    s == "" or str(s).isspace() for s in player_stats
+                ):
+                    name, pos, ownership, fpts = player_stats
+                    name = normalize_name(name)
+                    try:
+                        self.players[name].update_stats(pos, ownership, fpts)
+                    except KeyError:
+                        self.logger.error("Player %s not found in players[] dict", name)
+                continue
 
             rank, player_id, name, pmr, points, lineup = row[:6]
             parsed_rank: int | None = None
