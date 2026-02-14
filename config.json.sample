@@ -1,0 +1,7 @@
+{
+  "dfs_state_dir": "/path/to/dfs-state",
+  "spreadsheet_id": "your-spreadsheet-id",
+  "sheet_gids_file": "sheet_gids.yaml",
+  "discord_notifications_enabled": true,
+  "contest_warning_minutes": 25
+}
