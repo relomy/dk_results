@@ -403,7 +403,7 @@ def test_run_export_bundle_writes_two_sports(monkeypatch, tmp_path):
             "candidates": [],
             "cash_line": {},
             "vip_lineups": [],
-            "players": [],
+            "players": [{"name": "A"}, {"name": "C"}],
             "ownership": {"ownership_remaining_total_pct": 1.0},
             "train_clusters": [],
             "standings": [],
@@ -589,7 +589,7 @@ def test_distance_to_cash_metrics_points_and_rank_delta(monkeypatch):
             "vip_lineups": [
                 {"entry_key": "vip-1", "pts": 102.5, "rank": 8, "username": "vip"}
             ],
-            "players": [],
+            "players": [{"name": "A"}, {"name": "C"}],
             "ownership": {"ownership_remaining_total_pct": 1.0, "top_remaining_players": []},
             "train_clusters": [],
             "standings": [],
@@ -605,6 +605,59 @@ def test_distance_to_cash_metrics_points_and_rank_delta(monkeypatch):
     assert metrics["cutoff_points"] == 100.0
     assert metrics["per_vip"][0]["points_delta"] == 2.5
     assert metrics["per_vip"][0]["rank_delta"] == 2
+
+
+def test_threat_metrics_leverage_and_vip_counts(monkeypatch):
+    monkeypatch.setattr(
+        snapshot_exporter,
+        "collect_snapshot_data",
+        lambda **_kwargs: {
+            "snapshot_version": "v1",
+            "sport": "NBA",
+            "contest": {"contest_id": 123, "is_primary": True, "name": "x"},
+            "selection": {"selected_contest_id": 123, "reason": {}},
+            "candidates": [],
+            "cash_line": {"cutoff_type": "points", "points": 100.0},
+            "vip_lineups": [
+                {
+                    "entry_key": "vip-1",
+                    "pts": 99.0,
+                    "rank": 50,
+                    "username": "vip",
+                    "players": [{"name": "A"}, {"name": "C"}],
+                }
+            ],
+            "players": [{"name": "A"}, {"name": "C"}],
+            "ownership": {
+                "ownership_remaining_total_pct": 120.0,
+                "top_remaining_players": [
+                    {"player_name": "A", "ownership_remaining_pct": 40.0},
+                    {"player_name": "B", "ownership_remaining_pct": 20.0},
+                ],
+            },
+            "train_clusters": [],
+            "standings": [
+                {
+                    "entry_key": "vip-1",
+                    "username": "vip",
+                    "ownership_remaining_total_pct": 30.0,
+                }
+            ],
+            "truncation": {},
+            "metadata": {"warnings": [], "missing_fields": [], "source_endpoints": []},
+        },
+    )
+
+    snapshot = snapshot_exporter.build_snapshot(sport="NBA")
+    envelope = snapshot_exporter.build_dashboard_envelope({"NBA": snapshot})
+    threat = envelope["sports"]["nba"]["contests"][0]["metrics"]["threat"]
+
+    assert threat["leverage_semantics"] == "positive=unique"
+    assert threat["field_remaining_scope"] == "watchlist"
+    assert threat["field_remaining_pct"] == 120.0
+    assert threat["top_swing_players"][0]["player_name"] == "A"
+    assert threat["top_swing_players"][0]["vip_count"] == 1
+    assert threat["vip_vs_field_leverage"][0]["uniqueness_delta_pct"] == 90.0
 
 
 def test_distance_to_cash_metrics_rank_only_emits_rank_delta(monkeypatch):
