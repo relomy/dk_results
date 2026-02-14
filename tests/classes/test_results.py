@@ -1,10 +1,6 @@
-import csv
 import datetime
 
-import pytest
-
 import classes.results as results_module
-from classes.player import Player
 from classes.results import Results
 from classes.sport import NFLSport
 

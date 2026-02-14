@@ -6,9 +6,9 @@ import sqlite3
 from pathlib import Path
 from typing import Any
 
+import yaml
 from dfs_common import config as common_config
 from dfs_common import contests, state
-import yaml
 
 from bot.discord_rest import DiscordRest
 from classes.draftkings import Draftkings

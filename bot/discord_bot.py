@@ -5,12 +5,11 @@ import os
 import time
 from pathlib import Path
 
-
 import discord  # noqa: E402
 import yaml
+from dfs_common import state
 from discord.ext import commands
 
-from dfs_common import state
 from classes.contestdatabase import ContestDatabase
 from classes.sport import Sport
 

@@ -1,13 +1,12 @@
 import argparse
 from typing import Any
 
-from dfs_common import state
 import yaml
+from dfs_common import state
 
 from classes.contestdatabase import ContestDatabase
-from classes.dfs_sheet_service import DfsSheetService
-from classes.sheets_service import build_dfs_sheet_service
 from classes.dksession import DkSession
+from classes.sheets_service import build_dfs_sheet_service
 from classes.sport import Sport
 
 

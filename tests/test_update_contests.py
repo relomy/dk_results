@@ -2,7 +2,6 @@ import datetime
 import runpy
 import sqlite3
 
-import pytest
 import yaml
 
 import update_contests
@@ -388,15 +387,19 @@ def test_check_contests_for_completion_live_and_completed(monkeypatch):
     )
 
     now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    conn.execute(
-        "INSERT INTO contests (dk_id, sport, name, start_date, draft_group, total_prizes, entries, positions_paid, entry_fee, entry_count, max_entry_count, completed, status) "
-        "VALUES (1, 'NBA', 'Contest1', ?, 10, 0, 0, NULL, 25, 0, 1, 0, 'UPCOMING')",
-        (now,),
+    insert_sql = (
+        "INSERT INTO contests (dk_id, sport, name, start_date, draft_group, "
+        "total_prizes, entries, positions_paid, entry_fee, entry_count, "
+        "max_entry_count, completed, status) "
+        "VALUES (?, 'NBA', ?, ?, ?, 0, 0, NULL, 25, 0, 1, 0, ?)"
     )
     conn.execute(
-        "INSERT INTO contests (dk_id, sport, name, start_date, draft_group, total_prizes, entries, positions_paid, entry_fee, entry_count, max_entry_count, completed, status) "
-        "VALUES (2, 'NBA', 'Contest2', ?, 11, 0, 0, NULL, 25, 0, 1, 0, 'LIVE')",
-        (now,),
+        insert_sql,
+        (1, "Contest1", now, 10, "UPCOMING"),
+    )
+    conn.execute(
+        insert_sql,
+        (2, "Contest2", now, 11, "LIVE"),
     )
     conn.commit()
 
@@ -502,7 +505,7 @@ def test_db_get_next_upcoming_contest_any_error(monkeypatch):
     assert update_contests.db_get_next_upcoming_contest_any(BoomConn(), "NBA") is None
 
 
-def test_main_handles_sqlite_error(monkeypatch):
+def test_main_handles_sqlite_error_without_state_dir(monkeypatch):
     def boom(_path):
         raise sqlite3.Error("boom")
 

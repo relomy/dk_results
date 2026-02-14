@@ -220,9 +220,13 @@ def test_sync_draft_group_start_dates_skips_none(contest_db):
 
 
 def test_sync_draft_group_start_dates_handles_invalid_existing_date(contest_db):
-    contest_db.conn.execute(
-        "INSERT INTO contests (dk_id, sport, name, start_date, draft_group, total_prizes, entries, entry_fee, entry_count, max_entry_count, completed) "
+    insert_sql = (
+        "INSERT INTO contests (dk_id, sport, name, start_date, draft_group, "
+        "total_prizes, entries, entry_fee, entry_count, max_entry_count, completed) "
         "VALUES (1, 'NBA', 'Contest', 'bad-date', 10, 0, 0, 5, 0, 1, 0)"
+    )
+    contest_db.conn.execute(
+        insert_sql
     )
     contest_db.conn.commit()
 
@@ -267,9 +271,13 @@ def test_get_next_upcoming_contest_returns_row(contest_db):
     future = (datetime.datetime.now() + datetime.timedelta(days=1)).strftime(
         "%Y-%m-%d %H:%M:%S"
     )
+    insert_sql = (
+        "INSERT INTO contests (dk_id, sport, name, start_date, draft_group, "
+        "total_prizes, entries, entry_fee, entry_count, max_entry_count, completed) "
+        "VALUES (1, 'NBA', 'Contest', ?, 10, 0, 0, 25, 0, 1, 0)"
+    )
     contest_db.conn.execute(
-        "INSERT INTO contests (dk_id, sport, name, start_date, draft_group, total_prizes, entries, entry_fee, entry_count, max_entry_count, completed) "
-        "VALUES (1, 'NBA', 'Contest', ?, 10, 0, 0, 25, 0, 1, 0)",
+        insert_sql,
         (future,),
     )
     contest_db.conn.commit()
@@ -282,9 +290,13 @@ def test_get_next_upcoming_contest_any_returns_row(contest_db):
     future = (datetime.datetime.now() + datetime.timedelta(days=1)).strftime(
         "%Y-%m-%d %H:%M:%S"
     )
+    insert_sql = (
+        "INSERT INTO contests (dk_id, sport, name, start_date, draft_group, "
+        "total_prizes, entries, entry_fee, entry_count, max_entry_count, completed) "
+        "VALUES (2, 'NBA', 'Contest', ?, 11, 0, 0, 25, 0, 1, 0)"
+    )
     contest_db.conn.execute(
-        "INSERT INTO contests (dk_id, sport, name, start_date, draft_group, total_prizes, entries, entry_fee, entry_count, max_entry_count, completed) "
-        "VALUES (2, 'NBA', 'Contest', ?, 11, 0, 0, 25, 0, 1, 0)",
+        insert_sql,
         (future,),
     )
     contest_db.conn.commit()
