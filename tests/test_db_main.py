@@ -1,6 +1,9 @@
 import datetime
+import json
+from collections import OrderedDict
 from argparse import Namespace
 from pathlib import Path
+from types import SimpleNamespace
 
 import db_main
 from classes.sport import NFLSport
@@ -109,7 +112,7 @@ def test_process_sport_parses_player_stats_only_rows_and_skips_blank_users(monke
     monkeypatch.setattr(db_main, "write_train_info", _capture_train)
 
     args = Namespace(nolineups=False)
-    db_main.process_sport(
+    contest_id = db_main.process_sport(
         "NFL",
         {"NFL": NFLSport},
         _FakeContestDb(),
@@ -122,3 +125,83 @@ def test_process_sport_parses_player_stats_only_rows_and_skips_blank_users(monke
     assert any(row[1] == "Tom Brady" for row in fake_sheet.players)
     # Blank core row should not create phantom users in db_main path.
     assert observed["users"] == 1
+    assert contest_id == 123
+
+
+def test_main_snapshot_out_writes_opt_in_envelope(monkeypatch, tmp_path):
+    out = tmp_path / "snapshot.json"
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(db_main, "load_dotenv", lambda: None)
+    monkeypatch.setattr(db_main.common_config, "load_json_config", lambda: {})
+    monkeypatch.setattr(
+        db_main.common_config,
+        "resolve_dk_results_settings",
+        lambda _cfg: SimpleNamespace(dfs_state_dir=None, spreadsheet_id=None),
+    )
+    monkeypatch.setattr(db_main.state, "contests_db_path", lambda: tmp_path / "contests.db")
+    monkeypatch.setattr(db_main, "ContestDatabase", lambda _path: object())
+    monkeypatch.setattr(db_main, "load_vips", lambda: [])
+    monkeypatch.setattr(
+        db_main.argparse.ArgumentParser,
+        "parse_args",
+        lambda _self: Namespace(
+            sport=["NFL", "GOLF"],
+            nolineups=False,
+            verbose=None,
+            snapshot_out=str(out),
+            standings_limit=123,
+        ),
+    )
+    monkeypatch.setattr(
+        db_main,
+        "process_sport",
+        lambda sport_name, *_args, **_kwargs: 111 if sport_name == "NFL" else 222,
+    )
+
+    def _fake_snapshot(*, sport: str, contest_id: int | None, standings_limit: int):
+        return {
+            "sport": sport,
+            "selection": {"selected_contest_id": contest_id},
+            "truncation": {"limit": standings_limit},
+            "metadata": {"warnings": [], "missing_fields": []},
+        }
+
+    monkeypatch.setattr(db_main, "build_snapshot", _fake_snapshot)
+
+    db_main.main()
+
+    payload = json.loads(out.read_text(encoding="utf-8"))
+    assert payload["schema_version"] == 1
+    assert sorted(payload["sports"].keys()) == ["golf", "nfl"]
+    assert payload["sports"]["nfl"]["selection"]["selected_contest_id"] == "111"
+    assert payload["sports"]["golf"]["truncation"]["limit"] == 123
+    assert payload["generated_at"].endswith("Z")
+    assert payload["snapshot_at"].endswith("Z")
+
+
+def test_write_snapshot_payload_is_byte_stable(tmp_path):
+    out = tmp_path / "stable.json"
+    payload = OrderedDict(
+        [
+            ("snapshot_at", "2026-01-01T00:00:00Z"),
+            ("sports", {"nfl": {"b": 2, "a": 1}}),
+            ("schema_version", 1),
+            ("generated_at", "2026-01-01T00:00:00Z"),
+        ]
+    )
+
+    db_main.write_snapshot_payload(out, payload)
+
+    assert out.read_text(encoding="utf-8") == (
+        '{\n'
+        '  "generated_at":"2026-01-01T00:00:00Z",\n'
+        '  "schema_version":1,\n'
+        '  "snapshot_at":"2026-01-01T00:00:00Z",\n'
+        '  "sports":{\n'
+        '    "nfl":{\n'
+        '      "a":1,\n'
+        '      "b":2\n'
+        '    }\n'
+        '  }\n'
+        '}\n'
+    )

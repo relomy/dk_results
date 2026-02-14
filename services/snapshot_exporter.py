@@ -669,8 +669,12 @@ def normalize_snapshot_for_output(snapshot: dict[str, Any]) -> dict[str, Any]:
 
 def snapshot_to_json(snapshot: dict[str, Any]) -> str:
     normalized = normalize_snapshot_for_output(snapshot)
+    return to_stable_json(normalized)
+
+
+def to_stable_json(payload: Any) -> str:
     return json.dumps(
-        normalized,
+        payload,
         sort_keys=True,
         indent=2,
         separators=(",", ":"),
