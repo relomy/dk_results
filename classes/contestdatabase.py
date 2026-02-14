@@ -326,3 +326,54 @@ class ContestDatabase:
                 "sqlite error in get_next_upcoming_contest_any(): %s", err.args[0]
             )
             return None
+
+    def get_contest_by_id(self, dk_id: int) -> tuple | None:
+        """
+        Get one contest by dk_id.
+
+        Returns:
+            tuple | None: (dk_id, name, draft_group, positions_paid, start_date, entry_fee, entries)
+        """
+        cur = self.conn.cursor()
+        try:
+            sql = (
+                "SELECT dk_id, name, draft_group, positions_paid, start_date, entry_fee, entries "
+                "FROM contests "
+                "WHERE dk_id=? "
+                "LIMIT 1"
+            )
+            cur.execute(sql, (dk_id,))
+            return cur.fetchone()
+        except sqlite3.Error as err:
+            self.logger.error("sqlite error in get_contest_by_id(): %s", err.args[0])
+            return None
+
+    def get_live_contest_candidates(
+        self, sport: str, entry_fee: int = 25, keyword: str = "%", limit: int = 5
+    ) -> list[tuple]:
+        """
+        Get top-N candidate contests for deterministic selection transparency.
+
+        Returns:
+            list[tuple]: (dk_id, name, entry_fee, start_date, entries, selection_priority)
+        """
+        cur = self.conn.cursor()
+        try:
+            sql = (
+                "SELECT dk_id, name, entry_fee, start_date, entries, "
+                "       CASE WHEN entry_fee >= ? THEN 0 ELSE 1 END AS selection_priority "
+                "FROM contests "
+                "WHERE sport=? "
+                "  AND name LIKE ? "
+                "  AND start_date <= datetime('now', 'localtime') "
+                "  AND completed=0 "
+                "ORDER BY selection_priority ASC, entry_fee DESC, entries DESC, start_date DESC, dk_id DESC "
+                "LIMIT ?"
+            )
+            cur.execute(sql, (entry_fee, sport, keyword, limit))
+            return cur.fetchall()
+        except sqlite3.Error as err:
+            self.logger.error(
+                "sqlite error in get_live_contest_candidates(): %s", err.args[0]
+            )
+            return []

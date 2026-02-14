@@ -321,3 +321,44 @@ def test_get_next_upcoming_contest_any_sqlite_error(monkeypatch):
 
     db.conn = BoomConn()
     assert db.get_next_upcoming_contest_any("NBA") is None
+
+
+def test_get_contest_by_id_returns_row(contest_db):
+    _insert_contest(contest_db, dk_id=55, sport="NBA", entry_fee=25, entries=123)
+    row = contest_db.get_contest_by_id(55)
+
+    assert row == (55, "Contest", 1, None, "2024-01-01 00:00:00", 25, 123)
+
+
+def test_get_live_contest_candidates_returns_stable_order(contest_db):
+    _insert_contest(
+        contest_db,
+        dk_id=101,
+        sport="NBA",
+        entry_fee=10,
+        entries=200,
+        start_date="2024-01-01 01:00:00",
+    )
+    _insert_contest(
+        contest_db,
+        dk_id=102,
+        sport="NBA",
+        entry_fee=30,
+        entries=100,
+        start_date="2024-01-01 01:00:00",
+    )
+    _insert_contest(
+        contest_db,
+        dk_id=103,
+        sport="NBA",
+        entry_fee=30,
+        entries=150,
+        start_date="2024-01-01 01:00:00",
+    )
+
+    rows = contest_db.get_live_contest_candidates("NBA", entry_fee=25, limit=5)
+    assert rows == [
+        (103, "Contest", 30, "2024-01-01 01:00:00", 150, 0),
+        (102, "Contest", 30, "2024-01-01 01:00:00", 100, 0),
+        (101, "Contest", 10, "2024-01-01 01:00:00", 200, 1),
+    ]
