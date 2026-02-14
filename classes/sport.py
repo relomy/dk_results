@@ -103,6 +103,8 @@ class NFLAfternoonSport(Sport):
     dub_min_entry_fee = 25
     dub_min_entries = 125
 
+    sport_name = "NFL"
+
     # optimizer
     positions = ["QB", "RB", "RB", "WR", "WR", "WR", "TE", "FLEX", "DST"]
 
