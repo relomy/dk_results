@@ -45,7 +45,7 @@ def test_announce_vip_bonuses_first_run_insert_and_update():
         {
             "user": "zeta",
             "players": [
-                {"name": "Rory McIlroy", "stats": "22 PAR, 1 EAG"},
+                {"name": "Rory McIlroy", "stats": "22 PAR, 1 EAG", "ownership": 0.347},
             ],
         }
     ]
@@ -59,7 +59,10 @@ def test_announce_vip_bonuses_first_run_insert_and_update():
     )
 
     assert sent == 1
-    assert "Rory McIlroy" in sender.messages[0]
+    assert (
+        sender.messages[0]
+        == "GOLF: Rory McIlroy (34.7%) recorded an eagle (+8 pts) (VIPs: zeta)"
+    )
     row = conn.execute(
         """
         SELECT last_announced_count
@@ -86,7 +89,7 @@ def test_announce_vip_bonuses_increments_one_message_per_count():
         {
             "user": "zeta",
             "players": [
-                {"name": "Rory McIlroy", "stats": "22 PAR, 3 EAG"},
+                {"name": "Rory McIlroy", "stats": "22 PAR, 3 EAG", "ownership": 0.347},
             ],
         }
     ]
@@ -100,7 +103,10 @@ def test_announce_vip_bonuses_increments_one_message_per_count():
     )
 
     assert sent == 2
-    assert len(sender.messages) == 2
+    assert sender.messages == [
+        "GOLF: Rory McIlroy (34.7%) recorded an eagle (+8 pts, 16 total bonus pts) (VIPs: zeta)",
+        "GOLF: Rory McIlroy (34.7%) recorded an eagle (+8 pts, 24 total bonus pts) (VIPs: zeta)",
+    ]
     row = conn.execute(
         """
         SELECT last_announced_count
@@ -140,8 +146,14 @@ def test_announce_vip_bonuses_uses_deterministic_canonical_display_name():
     conn = _build_conn()
     sender = _Sender()
     vip_lineups = [
-        {"user": "amy", "players": [{"name": "José Alvarado", "stats": "1 EAG"}]},
-        {"user": "beth", "players": [{"name": "Jose Alvarado", "stats": "1 EAG"}]},
+        {
+            "user": "amy",
+            "players": [{"name": "José Alvarado", "stats": "1 EAG", "ownership": 0.101}],
+        },
+        {
+            "user": "beth",
+            "players": [{"name": "Jose Alvarado", "stats": "1 EAG", "ownership": 0.203}],
+        },
     ]
 
     sent = announce_vip_bonuses(
@@ -154,7 +166,36 @@ def test_announce_vip_bonuses_uses_deterministic_canonical_display_name():
 
     assert sent == 1
     assert sender.messages
-    assert "Jose Alvarado" in sender.messages[0]
+    assert "Jose Alvarado (20.3%)" in sender.messages[0]
+
+
+def test_announce_vip_bonuses_nba_binary_points_message():
+    conn = _build_conn()
+    sender = _Sender()
+    vip_lineups = [
+        {
+            "user": "amy",
+            "players": [
+                {
+                    "name": "Nikola Jokic",
+                    "stats": "10 REB, 12 AST, 28 PTS, 1 TDbl",
+                    "ownership": 0.347,
+                }
+            ],
+        }
+    ]
+    sent = announce_vip_bonuses(
+        conn=conn,
+        sport="NBA",
+        contest_id=1001,
+        vip_lineups=vip_lineups,
+        sender=sender,
+    )
+
+    assert sent == 1
+    assert sender.messages == [
+        "NBA: Nikola Jokic (34.7%) achieved a triple-double (+3 pts) (VIPs: amy)"
+    ]
 
 
 def test_announce_vip_bonuses_webhook_failure_does_not_update_db():

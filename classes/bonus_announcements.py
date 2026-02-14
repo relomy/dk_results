@@ -10,6 +10,43 @@ from typing import Any
 from classes.bonus_rules import parse_bonus_counts
 from classes.lineup import normalize_name
 
+BONUS_META: dict[str, dict[str, dict[str, Any]]] = {
+    "GOLF": {
+        "EAG": {
+            "label": "eagle",
+            "action": "recorded an eagle",
+            "points": 8,
+            "count_mode": "incremental",
+        },
+        "BOFR": {
+            "label": "bogey-free round",
+            "action": "recorded a bogey-free round",
+            "points": 3,
+            "count_mode": "incremental",
+        },
+        "BIR3+": {
+            "label": "birdie streak",
+            "action": "recorded a birdie streak",
+            "points": 3,
+            "count_mode": "incremental",
+        },
+    },
+    "NBA": {
+        "DDbl": {
+            "label": "double-double",
+            "action": "achieved a double-double",
+            "points": 1.5,
+            "count_mode": "binary",
+        },
+        "TDbl": {
+            "label": "triple-double",
+            "action": "achieved a triple-double",
+            "points": 3,
+            "count_mode": "binary",
+        },
+    },
+}
+
 
 @dataclass
 class BonusCandidate:
@@ -17,6 +54,7 @@ class BonusCandidate:
     normalized_player_name: str
     bonus_code: str
     new_count: int
+    max_ownership: float
     vip_users: list[str]
 
 
@@ -52,20 +90,43 @@ def _format_vip_users(vip_users: list[str], limit: int = 5) -> str:
     return user_list
 
 
+def _format_points(points: float) -> str:
+    if int(points) == points:
+        return str(int(points))
+    return f"{points:.1f}".rstrip("0").rstrip(".")
+
+
+def _format_ownership(ownership: float) -> str:
+    return f"{ownership * 100:.1f}%"
+
+
+def _get_bonus_meta(sport: str, bonus_code: str) -> dict[str, Any]:
+    return BONUS_META.get(sport, {}).get(
+        bonus_code,
+        {
+            "label": bonus_code,
+            "action": f"recorded a {bonus_code}",
+            "points": 0,
+            "count_mode": "incremental",
+        },
+    )
+
+
 def _format_message(sport: str, candidate: BonusCandidate, announced_count: int) -> str:
+    meta = _get_bonus_meta(sport, candidate.bonus_code)
     vip_part = _format_vip_users(candidate.vip_users)
-    if sport == "NBA":
-        if candidate.bonus_code == "TDbl":
-            action = "achieved a triple-double"
-        else:
-            action = "achieved a double-double"
-        return (
-            f"{sport}: {candidate.display_name} {action} "
-            f"(VIPs: {vip_part})"
+    ownership = _format_ownership(candidate.max_ownership)
+    points = float(meta["points"])
+    points_text = f"+{_format_points(points)} pts"
+    if meta["count_mode"] == "incremental" and announced_count > 1:
+        total_points = points * announced_count
+        points_text = (
+            f"{points_text}, {_format_points(total_points)} total bonus pts"
         )
+    action = meta["action"]
     return (
-        f"{sport}: {candidate.display_name} has {announced_count} "
-        f"{candidate.bonus_code} (VIPs: {vip_part})"
+        f"{sport}: {candidate.display_name} ({ownership}) {action} "
+        f"({points_text}) (VIPs: {vip_part})"
     )
 
 
@@ -146,6 +207,12 @@ def _collect_candidates(
             normalized_name = normalize_name(display_name)
             if not normalized_name:
                 continue
+            raw_ownership = player.get("ownership", 0)
+            try:
+                ownership = float(raw_ownership)
+            except (TypeError, ValueError):
+                ownership = 0.0
+            ownership = max(0.0, min(1.0, ownership))
             bonus_counts = parse_bonus_counts(sport, str(player.get("stats", "")))
             if not bonus_counts:
                 continue
@@ -157,10 +224,14 @@ def _collect_candidates(
                     grouped[key] = {
                         "display_names": set(),
                         "count": count,
+                        "max_ownership": ownership,
                         "vips": set(),
                     }
                 grouped[key]["display_names"].add(display_name or normalized_name)
                 grouped[key]["count"] = max(grouped[key]["count"], count)
+                grouped[key]["max_ownership"] = max(
+                    grouped[key]["max_ownership"], ownership
+                )
                 if vip_name:
                     grouped[key]["vips"].add(vip_name)
     candidates: list[BonusCandidate] = []
@@ -172,6 +243,7 @@ def _collect_candidates(
                 normalized_player_name=normalized_name,
                 bonus_code=bonus_code,
                 new_count=int(data["count"]),
+                max_ownership=float(data["max_ownership"]),
                 vip_users=sorted(list(data["vips"]), key=str.lower),
             )
         )
@@ -210,7 +282,8 @@ def announce_vip_bonuses(
         if new_count <= old_count:
             continue
 
-        if sport == "NBA":
+        meta = _get_bonus_meta(sport, candidate.bonus_code)
+        if meta["count_mode"] == "binary":
             counts_to_announce = [1]
         else:
             counts_to_announce = list(range(old_count + 1, new_count + 1))
