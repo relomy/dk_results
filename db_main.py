@@ -46,6 +46,12 @@ COOKIES_FILE = "pickled_cookies_works.txt"
 
 
 def _build_bonus_sender() -> WebhookSender | None:
+    notifications_enabled = (
+        os.getenv("DISCORD_NOTIFICATIONS_ENABLED", "true").strip().lower()
+        not in {"0", "false", "no"}
+    )
+    if not notifications_enabled:
+        return None
     webhook = os.getenv("DISCORD_BONUS_WEBHOOK") or os.getenv("DISCORD_WEBHOOK")
     if not webhook:
         return None
