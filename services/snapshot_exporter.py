@@ -1113,7 +1113,7 @@ def build_dashboard_envelope(sports: dict[str, dict[str, Any]]) -> dict[str, Any
         sport_snapshot = build_dashboard_sport_snapshot(snapshot, generated_at)
         output_sports[sport.lower()] = sport_snapshot
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "snapshot_at": generated_at,
         "generated_at": generated_at,
         "sports": output_sports,
