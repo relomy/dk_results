@@ -74,6 +74,16 @@ def test_print_sql_insert_uses_typed_values(capsys):
     assert "NULL" in out
 
 
+def test_print_cron_job_pretty_prints_contest(capsys):
+    contest = Contest(_contest_payload(101, entries=22, fee=25), "NFL")
+
+    dkcontests.print_cron_job(contest, "NFL")
+
+    out = capsys.readouterr().out
+    assert "'contest': {" in out
+    assert "'n': 'Contest 101',\n" in out
+
+
 def test_get_largest_contest_applies_query_and_exclude():
     contests = [
         Contest(_contest_payload(1, entries=150, fee=25), "NFL"),

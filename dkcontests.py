@@ -37,6 +37,7 @@ Response format: {
 
 import argparse
 import datetime
+from pprint import pformat
 from typing import Type
 
 from classes.contest import Contest
@@ -246,7 +247,7 @@ def set_cron_interval(contest, sport_length):
 
 
 def print_cron_job(contest, sport):
-    print(contest)
+    print(pformat(vars(contest), sort_dicts=False))
     home_dir = "/home/pi/Desktop"
     pipenv_path = "/usr/local/bin/pipenv"
 
