@@ -999,39 +999,41 @@ def _distance_to_cash_metrics(
     updated_at: str,
 ) -> dict[str, Any] | None:
     cutoff_points = cash_line.get("points_cutoff")
-    if not isinstance(cutoff_points, (int, float)):
-        return None
-
     rank_cutoff = cash_line.get("rank_cutoff")
     per_vip: list[dict[str, Any]] = []
     for lineup in vip_lineups:
         live = lineup.get("live") or {}
         current_points = live.get("current_points")
-        if not isinstance(current_points, (int, float)):
-            continue
-        points_delta = float(current_points) - float(cutoff_points)
         current_rank = live.get("current_rank")
+        points_delta = None
+        if isinstance(current_points, (int, float)) and isinstance(cutoff_points, (int, float)):
+            points_delta = float(current_points) - float(cutoff_points)
         rank_delta = None
         if isinstance(current_rank, int) and isinstance(rank_cutoff, int):
             rank_delta = int(rank_cutoff) - int(current_rank)
-        per_vip.append(
-            {
-                "vip_entry_key": lineup.get("vip_entry_key"),
-                "entry_key": lineup.get("entry_key"),
-                "display_name": lineup.get("display_name"),
-                "points_delta": points_delta,
-                "rank_delta": rank_delta,
-            }
-        )
+        if points_delta is None and rank_delta is None:
+            continue
+        row = {
+            "vip_entry_key": lineup.get("vip_entry_key"),
+            "entry_key": lineup.get("entry_key"),
+            "display_name": lineup.get("display_name"),
+        }
+        if points_delta is not None:
+            row["points_delta"] = points_delta
+        if rank_delta is not None:
+            row["rank_delta"] = rank_delta
+        per_vip.append(row)
 
     if not per_vip:
         return None
 
-    return {
+    metrics: dict[str, Any] = {
         "updated_at": updated_at,
-        "cutoff_points": cutoff_points,
         "per_vip": per_vip,
     }
+    if isinstance(cutoff_points, (int, float)):
+        metrics["cutoff_points"] = cutoff_points
+    return metrics
 
 
 def _selection_reason_text(reason: Any, contest_id: Any) -> str | None:
