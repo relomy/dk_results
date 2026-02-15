@@ -367,7 +367,7 @@ def build_snapshot_payload(
         sports[sport_name.lower()] = normalize_snapshot_for_output(snapshot)
 
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "snapshot_at": generated_at,
         "generated_at": generated_at,
         "sports": sports,

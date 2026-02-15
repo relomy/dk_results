@@ -423,7 +423,7 @@ def test_run_export_bundle_writes_two_sports(monkeypatch, tmp_path):
     payload = out.read_text(encoding="utf-8")
 
     assert rc == 0
-    assert '"schema_version":1' in payload
+    assert '"schema_version":2' in payload
     assert '"nba"' in payload
     assert '"golf"' in payload
     assert '"contest_id":"123"' in payload
@@ -482,7 +482,7 @@ def test_run_export_fixture_emits_envelope_and_contract_sections(monkeypatch, tm
     contest = sport["contests"][0]
 
     assert rc == 0
-    assert payload["schema_version"] == 1
+    assert payload["schema_version"] == 2
     assert payload["generated_at"].endswith("Z")
     assert payload["snapshot_at"].endswith("Z")
     assert set(sport.keys()) == {
@@ -564,7 +564,7 @@ def test_run_export_bundle_emits_contests_primary_contest_and_players(monkeypatc
     payload = json.loads(out.read_text(encoding="utf-8"))
 
     assert rc == 0
-    assert payload["schema_version"] == 1
+    assert payload["schema_version"] == 2
     assert sorted(payload["sports"].keys()) == ["golf", "nba"]
     assert payload["sports"]["nba"]["primary_contest"]["contest_id"] == "123"
     assert isinstance(payload["sports"]["nba"]["primary_contest"]["selection_reason"], str)
@@ -697,7 +697,7 @@ def test_standings_is_cashing_derived_from_payout_presence(monkeypatch, tmp_path
 
 def test_validate_canonical_snapshot_detects_disallowed_keys_and_numeric_strings():
     payload = {
-        "schema_version": 1,
+        "schema_version": 2,
         "snapshot_at": "2026-02-14T00:00:00Z",
         "generated_at": "2026-02-14T00:00:00Z",
         "sports": {
