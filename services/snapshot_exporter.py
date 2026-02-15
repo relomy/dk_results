@@ -996,7 +996,6 @@ def _vip_lineups_contract(
 def _distance_to_cash_metrics(
     vip_lineups: list[dict[str, Any]],
     cash_line: dict[str, Any],
-    updated_at: str,
 ) -> dict[str, Any] | None:
     cutoff_points = cash_line.get("points_cutoff")
     rank_cutoff = cash_line.get("rank_cutoff")
@@ -1028,12 +1027,96 @@ def _distance_to_cash_metrics(
         return None
 
     metrics: dict[str, Any] = {
-        "updated_at": updated_at,
         "per_vip": per_vip,
     }
     if isinstance(cutoff_points, (int, float)):
         metrics["cutoff_points"] = cutoff_points
     return metrics
+
+
+def _threat_metrics(
+    ownership_watchlist: dict[str, Any] | None,
+    vip_lineups: list[dict[str, Any]],
+) -> dict[str, Any] | None:
+    if not ownership_watchlist:
+        return None
+
+    entries = ownership_watchlist.get("entries") or []
+    total_pct = ownership_watchlist.get("ownership_remaining_total_pct")
+    if isinstance(total_pct, (int, float)):
+        field_remaining_pct = float(total_pct)
+        field_remaining_source = "ownership_watchlist_total"
+        field_remaining_is_partial = False
+    else:
+        values = [
+            entry.get("ownership_remaining_pct")
+            for entry in entries
+            if isinstance(entry.get("ownership_remaining_pct"), (int, float))
+        ]
+        field_remaining_pct = float(sum(values)) if values else None
+        field_remaining_source = "watchlist_entries_sum"
+        field_remaining_is_partial = True
+
+    vip_lineup_players: list[set[str]] = []
+    for lineup in vip_lineups:
+        slots = lineup.get("slots") or []
+        names = {
+            str(slot.get("player_name")).strip().lower()
+            for slot in slots
+            if slot.get("player_name")
+        }
+        vip_lineup_players.append(names)
+
+    top_swing: list[dict[str, Any]] = []
+    for entry in sorted(
+        entries,
+        key=lambda item: item.get("ownership_remaining_pct") or 0,
+        reverse=True,
+    ):
+        name = entry.get("display_name") or entry.get("entry_key")
+        if not name:
+            continue
+        name_key = str(name).strip().lower()
+        vip_count = sum(1 for names in vip_lineup_players if name_key in names)
+        top_swing.append(
+            {
+                "player_name": name,
+                "remaining_ownership_pct": entry.get("ownership_remaining_pct"),
+                "vip_count": vip_count,
+            }
+        )
+
+    vip_vs_field: list[dict[str, Any]] = []
+    for lineup in vip_lineups:
+        vip_remaining = (lineup.get("live") or {}).get("ownership_remaining_pct")
+        uniqueness_delta = None
+        if isinstance(field_remaining_pct, (int, float)) and isinstance(
+            vip_remaining, (int, float)
+        ):
+            uniqueness_delta = float(field_remaining_pct) - float(vip_remaining)
+        vip_vs_field.append(
+            {
+                "vip_entry_key": lineup.get("vip_entry_key"),
+                "entry_key": lineup.get("entry_key"),
+                "display_name": lineup.get("display_name"),
+                "vip_remaining_pct": vip_remaining,
+                "field_remaining_pct": field_remaining_pct,
+                "uniqueness_delta_pct": uniqueness_delta,
+            }
+        )
+
+    if not top_swing and not vip_vs_field and field_remaining_pct is None:
+        return None
+
+    return {
+        "leverage_semantics": "positive=unique",
+        "field_remaining_scope": "watchlist",
+        "field_remaining_source": field_remaining_source,
+        "field_remaining_is_partial": field_remaining_is_partial,
+        "field_remaining_pct": field_remaining_pct,
+        "top_swing_players": top_swing,
+        "vip_vs_field_leverage": vip_vs_field,
+    }
 
 
 def _selection_reason_text(reason: Any, contest_id: Any) -> str | None:
@@ -1126,10 +1209,15 @@ def build_dashboard_sport_snapshot(snapshot: dict[str, Any], generated_at: str) 
         distance_to_cash = _distance_to_cash_metrics(
             contest_object["vip_lineups"],
             cash_line,
-            updated_at,
         )
         if distance_to_cash:
             metrics["distance_to_cash"] = distance_to_cash
+    threat = _threat_metrics(
+        contest_object.get("ownership_watchlist"),
+        contest_object.get("vip_lineups", []),
+    )
+    if threat:
+        metrics["threat"] = threat
     if metrics:
         contest_object["metrics"] = {"updated_at": updated_at, **metrics}
     contest_object["live_metrics"] = {
