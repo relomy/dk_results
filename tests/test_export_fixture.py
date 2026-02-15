@@ -575,6 +575,71 @@ def test_run_export_bundle_emits_contests_primary_contest_and_players(monkeypatc
     assert payload["sports"]["golf"]["contests"][0]["ownership_watchlist"]["top_n_default"] == 10
 
 
+def test_distance_to_cash_metrics_points_and_rank_delta(monkeypatch):
+    monkeypatch.setattr(
+        snapshot_exporter,
+        "collect_snapshot_data",
+        lambda **_kwargs: {
+            "snapshot_version": "v1",
+            "sport": "NBA",
+            "contest": {"contest_id": 123, "is_primary": True, "name": "x"},
+            "selection": {"selected_contest_id": 123, "reason": {}},
+            "candidates": [],
+            "cash_line": {"cutoff_type": "rank", "rank": 10, "points": 100.0},
+            "vip_lineups": [
+                {"entry_key": "vip-1", "pts": 102.5, "rank": 8, "username": "vip"}
+            ],
+            "players": [],
+            "ownership": {"ownership_remaining_total_pct": 1.0, "top_remaining_players": []},
+            "train_clusters": [],
+            "standings": [],
+            "truncation": {},
+            "metadata": {"warnings": [], "missing_fields": [], "source_endpoints": []},
+        },
+    )
+
+    snapshot = snapshot_exporter.build_snapshot(sport="NBA")
+    envelope = snapshot_exporter.build_dashboard_envelope({"NBA": snapshot})
+    metrics = envelope["sports"]["nba"]["contests"][0]["metrics"]["distance_to_cash"]
+
+    assert metrics["cutoff_points"] == 100.0
+    assert metrics["per_vip"][0]["points_delta"] == 2.5
+    assert metrics["per_vip"][0]["rank_delta"] == 2
+
+
+def test_distance_to_cash_metrics_rank_only_emits_rank_delta(monkeypatch):
+    monkeypatch.setattr(
+        snapshot_exporter,
+        "collect_snapshot_data",
+        lambda **_kwargs: {
+            "snapshot_version": "v1",
+            "sport": "NBA",
+            "contest": {"contest_id": 123, "is_primary": True, "name": "x"},
+            "selection": {"selected_contest_id": 123, "reason": {}},
+            "candidates": [],
+            "cash_line": {"cutoff_type": "rank", "rank": 10, "points": None},
+            "vip_lineups": [
+                {"entry_key": "vip-1", "pts": None, "rank": 8, "username": "vip"}
+            ],
+            "players": [],
+            "ownership": {"ownership_remaining_total_pct": 1.0, "top_remaining_players": []},
+            "train_clusters": [],
+            "standings": [],
+            "truncation": {},
+            "metadata": {"warnings": [], "missing_fields": [], "source_endpoints": []},
+        },
+    )
+
+    snapshot = snapshot_exporter.build_snapshot(sport="NBA")
+    envelope = snapshot_exporter.build_dashboard_envelope({"NBA": snapshot})
+    metrics = envelope["sports"]["nba"]["contests"][0]["metrics"]["distance_to_cash"]
+
+    assert "cutoff_points" not in metrics
+    assert len(metrics["per_vip"]) == 1
+    assert metrics["per_vip"][0]["rank_delta"] == 2
+    assert "points_delta" not in metrics["per_vip"][0]
+
+
 def test_vip_lineups_support_user_and_players_shape(monkeypatch, tmp_path):
     monkeypatch.setattr(export_command, "configure_runtime", lambda: None)
     monkeypatch.setattr(

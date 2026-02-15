@@ -32,6 +32,7 @@ ID_FIELDS = {
     "draft_group",
     "selected_contest_id",
     "entry_key",
+    "vip_entry_key",
     "cluster_id",
 }
 
@@ -968,6 +969,7 @@ def _vip_lineups_contract(
         mapped = {
             "display_name": display_name,
             "entry_key": entry_key,
+            "vip_entry_key": row.get("vip_entry_key"),
             "live": {
                 "updated_at": updated_at,
                 "current_points": current_points_num,
@@ -989,6 +991,49 @@ def _vip_lineups_contract(
         }
         normalized.append(mapped)
     return normalized
+
+
+def _distance_to_cash_metrics(
+    vip_lineups: list[dict[str, Any]],
+    cash_line: dict[str, Any],
+    updated_at: str,
+) -> dict[str, Any] | None:
+    cutoff_points = cash_line.get("points_cutoff")
+    rank_cutoff = cash_line.get("rank_cutoff")
+    per_vip: list[dict[str, Any]] = []
+    for lineup in vip_lineups:
+        live = lineup.get("live") or {}
+        current_points = live.get("current_points")
+        current_rank = live.get("current_rank")
+        points_delta = None
+        if isinstance(current_points, (int, float)) and isinstance(cutoff_points, (int, float)):
+            points_delta = float(current_points) - float(cutoff_points)
+        rank_delta = None
+        if isinstance(current_rank, int) and isinstance(rank_cutoff, int):
+            rank_delta = int(rank_cutoff) - int(current_rank)
+        if points_delta is None and rank_delta is None:
+            continue
+        row = {
+            "vip_entry_key": lineup.get("vip_entry_key"),
+            "entry_key": lineup.get("entry_key"),
+            "display_name": lineup.get("display_name"),
+        }
+        if points_delta is not None:
+            row["points_delta"] = points_delta
+        if rank_delta is not None:
+            row["rank_delta"] = rank_delta
+        per_vip.append(row)
+
+    if not per_vip:
+        return None
+
+    metrics: dict[str, Any] = {
+        "updated_at": updated_at,
+        "per_vip": per_vip,
+    }
+    if isinstance(cutoff_points, (int, float)):
+        metrics["cutoff_points"] = cutoff_points
+    return metrics
 
 
 def _selection_reason_text(reason: Any, contest_id: Any) -> str | None:
@@ -1076,6 +1121,17 @@ def build_dashboard_sport_snapshot(snapshot: dict[str, Any], generated_at: str) 
             standings_by_username,
             cash_line,
         )
+    metrics: dict[str, Any] = {}
+    if "vip_lineups" in contest_object:
+        distance_to_cash = _distance_to_cash_metrics(
+            contest_object["vip_lineups"],
+            cash_line,
+            updated_at,
+        )
+        if distance_to_cash:
+            metrics["distance_to_cash"] = distance_to_cash
+    if metrics:
+        contest_object["metrics"] = {"updated_at": updated_at, **metrics}
     contest_object["live_metrics"] = {
         "updated_at": updated_at,
         "cash_line": cash_line,
@@ -1153,6 +1209,7 @@ def validate_canonical_snapshot(payload: dict[str, Any]) -> list[str]:
         ".contest_id",
         ".contest_key",
         ".entry_key",
+        ".vip_entry_key",
         ".cluster_key",
         ".selection_reason",
         ".display_name",
