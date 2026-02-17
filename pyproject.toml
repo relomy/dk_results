@@ -2,8 +2,7 @@
 name = "dk_results"
 version = "0.1.0"
 description = ""
-# NOTE: rookiepy has no wheels for Python >=3.13; keep <3.13 to avoid source build failures.
-requires-python = ">=3.12,<3.13"
+requires-python = ">=3.11,<3.12"
 
 dependencies = [
     "google-api-python-client",
@@ -13,30 +12,37 @@ dependencies = [
     "pyyaml",
     "dotenv",
     "discord",
-    "dfs-common"
+    "dfs-common",
 ]
-
-[tool.setuptools.packages.find]
-include = ["bot", "classes"]
 
 [dependency-groups]
 dev = [
     "pytest",
     "pytest-asyncio",
-    "pytest-cov"
+    "pytest-cov",
+    "ruff",
+    "ty",
 ]
-lint = [
-    "ruff"
-]
-type = [
-    "ty"
-]
-
-[tool.pip]
-allow-prereleases = true
 
 [tool.uv]
-default-groups = "all"
+package = true
+default-groups = ["dev"]
 
 [tool.uv.sources]
-dfs-common = { path = "../dfs_common" }
+dfs-common = { path = "../dfs_common", editable = true }
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src", "."]
+
+[tool.ty]
