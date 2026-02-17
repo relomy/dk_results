@@ -2,6 +2,7 @@ import datetime
 import runpy
 import sqlite3
 
+import pytest
 import yaml
 
 import dk_results.cli.update_contests as update_contests
@@ -1026,3 +1027,15 @@ def test_main_happy_path(monkeypatch):
     update_contests.main()
 
     assert called["ok"] is True
+
+
+def test_main_help_exits_without_runtime(monkeypatch):
+    def boom(_path):
+        raise AssertionError("sqlite connect should not run for --help")
+
+    monkeypatch.setattr(update_contests.sqlite3, "connect", boom)
+
+    with pytest.raises(SystemExit) as exc:
+        update_contests.main(["--help"])
+
+    assert exc.value.code == 0

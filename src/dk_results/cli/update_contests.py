@@ -1,3 +1,4 @@
+import argparse
 import datetime
 import logging
 import os
@@ -657,7 +658,12 @@ def db_get_next_upcoming_contest_any(conn, sport: str) -> tuple | None:
         return None
 
 
-def main():
+def _build_parser() -> argparse.ArgumentParser:
+    return argparse.ArgumentParser(description="Update contest completion state and send contest status notifications.")
+
+
+def main(argv: list[str] | None = None):
+    _build_parser().parse_args(argv)
     configure_logging()
     try:
         contests.init_schema(state.contests_db_path())
