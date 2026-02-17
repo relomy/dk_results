@@ -44,8 +44,10 @@ def get_csv_url(sport, contests):
         if sport in v["name"]:
             game_type = v["game_type"]
             group_id = v["group_id"]
-            csv_url = "https://www.draftkings.com/lineup/getavailableplayerscsv?contestTypeId={0}&draftGroupId={1}".format(
-                game_type, group_id
+            csv_url = (
+                "https://www.draftkings.com/lineup/getavailableplayerscsv?contestTypeId={0}&draftGroupId={1}".format(
+                    game_type, group_id
+                )
             )
             return csv_url
 
@@ -64,9 +66,7 @@ def main():
         required=True,
         help="Type of contest (NBA, NFL, PGA, CFB, NHL, TEN, or XFL)",
     )
-    arg_parser.add_argument(
-        "-dg", "--draft_group", type=int, required=True, help="Draft Group ID"
-    )
+    arg_parser.add_argument("-dg", "--draft_group", type=int, required=True, help="Draft Group ID")
     arg_parser.add_argument("-f", "--filename", help="Output filename")
     args = arg_parser.parse_args()
 
@@ -91,15 +91,9 @@ def main():
             fn = "DKSalaries_{}_{}.csv".format(args.sport, now.strftime("%A"))
 
         if args.sport in contest_type_id:
-            print(
-                "contest_type_id [{}]: {}".format(
-                    args.sport, contest_type_id[args.sport]
-                )
-            )
+            print("contest_type_id [{}]: {}".format(args.sport, contest_type_id[args.sport]))
         else:
-            raise Exception(
-                "Sport {} not in contest_type_id dictionary".format(args.sport)
-            )
+            raise Exception("Sport {} not in contest_type_id dictionary".format(args.sport))
 
         csv_url = "https://www.draftkings.com/lineup/getavailableplayerscsv?contestTypeId={0}&draftGroupId={1}".format(
             contest_type_id[args.sport], args.draft_group

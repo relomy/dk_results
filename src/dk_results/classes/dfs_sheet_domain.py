@@ -30,15 +30,9 @@ def lineup_range_for_sport(sport: str) -> str:
     return f"{sport}!{lineup_range}"
 
 
-def build_values_for_vip_lineup(
-    user: dict[str, Any], players: list[dict[str, Any]]
-) -> list[list[Any]]:
-    values: list[list[Any]] = [
-        [user["user"], None, "PMR", user["pmr"], None, None, None, None]
-    ]
-    values.append(
-        ["Pos", "Name", "Own", "Salary", "Pts", "Value", "RT Proj", "Time", "Stats"]
-    )
+def build_values_for_vip_lineup(user: dict[str, Any], players: list[dict[str, Any]]) -> list[list[Any]]:
+    values: list[list[Any]] = [[user["user"], None, "PMR", user["pmr"], None, None, None, None]]
+    values.append(["Pos", "Name", "Own", "Salary", "Pts", "Value", "RT Proj", "Time", "Stats"])
     for player in players:
         name = player.get("name", "") or ""
         value_icon = player.get("valueIcon")

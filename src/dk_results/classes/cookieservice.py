@@ -9,11 +9,13 @@ from dotenv import load_dotenv
 from requests.cookies import RequestsCookieJar
 from rookiepy import chrome, chromium_based
 
+from dk_results.paths import repo_file
+
 load_dotenv()
 
 logger = logging.getLogger(__name__)
 
-PICKLE_FILE = "pickled_cookies_works.txt"
+PICKLE_FILE = str(repo_file("pickled_cookies_works.txt"))
 
 
 def get_rookie_cookies(domains: list[str] | None = None) -> list[dict[str, Any]]:
@@ -57,6 +59,8 @@ def load_cookies_from_pickle(
 ) -> RequestsCookieJar | None:
     """Load pickled cookies if file exists."""
     path = Path(filename)
+    if not path.is_absolute():
+        path = repo_file(filename)
     if path.exists():
         try:
             with path.open("rb") as f:
@@ -66,12 +70,13 @@ def load_cookies_from_pickle(
     return None
 
 
-def save_cookies_to_pickle(
-    cookies: Iterable[dict[str, Any]], filename: str = PICKLE_FILE
-) -> None:
+def save_cookies_to_pickle(cookies: Iterable[dict[str, Any]], filename: str = PICKLE_FILE) -> None:
     """Save cookies to pickle file."""
+    path = Path(filename)
+    if not path.is_absolute():
+        path = repo_file(filename)
     try:
-        with Path(filename).open("wb") as f:
+        with path.open("wb") as f:
             pickle.dump(cookies, f)
     except Exception as e:
         logger.error(f"Failed to save cookies: {e}")

@@ -120,14 +120,9 @@ def _format_message(sport: str, candidate: BonusCandidate, announced_count: int)
     points_text = f"+{_format_points(points)} pts"
     if meta["count_mode"] == "incremental" and announced_count > 1:
         total_points = points * announced_count
-        points_text = (
-            f"{points_text}, {_format_points(total_points)} total bonus pts"
-        )
+        points_text = f"{points_text}, {_format_points(total_points)} total bonus pts"
     action = meta["action"]
-    return (
-        f"{sport}: {candidate.display_name} ({ownership}) {action} "
-        f"({points_text}) (VIPs: {vip_part})"
-    )
+    return f"{sport}: {candidate.display_name} ({ownership}) {action} ({points_text}) (VIPs: {vip_part})"
 
 
 def _load_old_count(
@@ -195,9 +190,7 @@ def _cas_update_count(
     return cur.rowcount > 0
 
 
-def _collect_candidates(
-    sport: str, vip_lineups: list[dict[str, Any]]
-) -> list[BonusCandidate]:
+def _collect_candidates(sport: str, vip_lineups: list[dict[str, Any]]) -> list[BonusCandidate]:
     grouped: dict[tuple[str, str], dict[str, Any]] = {}
     for vip_lineup in vip_lineups:
         vip_name = str(vip_lineup.get("user", "")).strip()
@@ -229,9 +222,7 @@ def _collect_candidates(
                     }
                 grouped[key]["display_names"].add(display_name or normalized_name)
                 grouped[key]["count"] = max(grouped[key]["count"], count)
-                grouped[key]["max_ownership"] = max(
-                    grouped[key]["max_ownership"], ownership
-                )
+                grouped[key]["max_ownership"] = max(grouped[key]["max_ownership"], ownership)
                 if vip_name:
                     grouped[key]["vips"].add(vip_name)
     candidates: list[BonusCandidate] = []

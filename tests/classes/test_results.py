@@ -436,9 +436,7 @@ def test_results_uses_default_salary_filename(monkeypatch):
         return None
 
     monkeypatch.setattr(Results, "parse_salary_csv", fake_parse_salary_csv)
-    monkeypatch.setattr(
-        Results, "parse_contest_standings_rows", fake_parse_contest_standings_rows
-    )
+    monkeypatch.setattr(Results, "parse_contest_standings_rows", fake_parse_contest_standings_rows)
 
     Results(DummySport(), 1, "", standings_rows=[])
 
@@ -446,9 +444,7 @@ def test_results_uses_default_salary_filename(monkeypatch):
 
 
 def test_parse_salary_rows_skips_short_rows():
-    results = Results(
-        DummySport(), 1, "", salary_rows=_salary_rows(), standings_rows=_standings_rows()
-    )
+    results = Results(DummySport(), 1, "", salary_rows=_salary_rows(), standings_rows=_standings_rows())
     results.parse_salary_rows([[], ["X"]])
     assert "Captain" in results.players
 
@@ -471,9 +467,7 @@ def test_parse_contest_standings_rows_handles_non_cashing_and_showdown():
 
 
 def test_get_showdown_captain_percent_prints(capsys):
-    results = Results(
-        DummySport(), 1, "", salary_rows=_salary_rows(), standings_rows=_standings_rows()
-    )
+    results = Results(DummySport(), 1, "", salary_rows=_salary_rows(), standings_rows=_standings_rows())
     results.get_showdown_captain_percent("Captain", {"Captain": 1})
     assert "Captain" in capsys.readouterr().out
 
@@ -481,17 +475,13 @@ def test_get_showdown_captain_percent_prints(capsys):
 def test_load_standings(tmp_path):
     path = tmp_path / "standings.csv"
     path.write_text("a,b\n1,2\n")
-    results = Results(
-        DummySport(), 1, "", salary_rows=_salary_rows(), standings_rows=_standings_rows()
-    )
+    results = Results(DummySport(), 1, "", salary_rows=_salary_rows(), standings_rows=_standings_rows())
     rows = results.load_standings(str(path))
     assert rows == [["a", "b"], ["1", "2"]]
 
 
 def test_players_to_values_filters_by_ownership():
-    results = Results(
-        DummySport(), 1, "", salary_rows=_salary_rows(), standings_rows=_standings_rows()
-    )
+    results = Results(DummySport(), 1, "", salary_rows=_salary_rows(), standings_rows=_standings_rows())
     results.players["Captain"].ownership = 0.5
     results.players["Final Guy"].ownership = 0.0
 
@@ -500,9 +490,7 @@ def test_players_to_values_filters_by_ownership():
 
 
 def test_get_players_returns_dict():
-    results = Results(
-        DummySport(), 1, "", salary_rows=_salary_rows(), standings_rows=_standings_rows()
-    )
+    results = Results(DummySport(), 1, "", salary_rows=_salary_rows(), standings_rows=_standings_rows())
     assert results.get_players() is results.players
 
 
@@ -514,18 +502,13 @@ def test_results_parses_files_and_skips_empty_row(tmp_path, monkeypatch):
 
     salary_csv = tmp_path / "salary.csv"
     salary_csv.write_text(
-        "Position,,Name,,Roster Pos,Salary,Game Info,Team,APPG\n"
-        "QB,,Player A,,QB,5000,AAA@BBB 7:00PM,AAA,0\n"
+        "Position,,Name,,Roster Pos,Salary,Game Info,Team,APPG\nQB,,Player A,,QB,5000,AAA@BBB 7:00PM,AAA,0\n"
     )
 
     contests_dir = tmp_path / "contests"
     contests_dir.mkdir()
     standings_file = contests_dir / "contest-standings-1.csv"
-    standings_file.write_text(
-        "Rank,EntryId,User,PMR,Points,Lineup\n"
-        "\n"
-        "1,1,User,0,0,QB Player A\n"
-    )
+    standings_file.write_text("Rank,EntryId,User,PMR,Points,Lineup\n\n1,1,User,0,0,QB Player A\n")
 
     monkeypatch.chdir(tmp_path)
 

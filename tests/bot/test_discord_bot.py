@@ -5,9 +5,8 @@ import types
 from typing import cast
 
 import pytest
-from discord.ext import commands
-
 from bot import discord_bot
+from discord.ext import commands
 
 os.environ.setdefault("DFS_STATE_DIR", "/tmp")
 
@@ -135,9 +134,7 @@ async def test_contests_returns_live_contest(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_live_lists_all_live_contests(monkeypatch):
-    monkeypatch.setattr(
-        discord_bot, "_sport_choices", lambda: {"nba": DummySport, "nfl": DummySportTwo}
-    )
+    monkeypatch.setattr(discord_bot, "_sport_choices", lambda: {"nba": DummySport, "nfl": DummySportTwo})
 
     captured = {}
 
@@ -177,9 +174,7 @@ async def test_live_lists_all_live_contests(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_live_no_contests(monkeypatch):
-    monkeypatch.setattr(
-        discord_bot, "_sport_choices", lambda: {"nba": DummySport, "nfl": DummySportTwo}
-    )
+    monkeypatch.setattr(discord_bot, "_sport_choices", lambda: {"nba": DummySport, "nfl": DummySportTwo})
 
     class FakeContestDatabase:
         def __init__(self, *args, **kwargs):
@@ -251,9 +246,7 @@ async def test_on_command_error_unknown_command(monkeypatch):
         return None
 
     dummy_command = commands.Command(_dummy, name="fake")
-    await discord_bot.on_command_error(
-        _ctx(ctx), commands.CommandNotFound(f"Command {dummy_command} not found")
-    )
+    await discord_bot.on_command_error(_ctx(ctx), commands.CommandNotFound(f"Command {dummy_command} not found"))
     assert ctx.sent == []
 
 
@@ -272,9 +265,7 @@ def test_main_requires_token(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_help_lists_commands(monkeypatch):
-    monkeypatch.setattr(
-        discord_bot, "_sport_choices", lambda: {"nba": DummySport, "nfl": DummySportTwo}
-    )
+    monkeypatch.setattr(discord_bot, "_sport_choices", lambda: {"nba": DummySport, "nfl": DummySportTwo})
 
     ctx = FakeCtx()
     await discord_bot.help_command(_ctx(ctx))
@@ -291,9 +282,7 @@ async def test_help_lists_commands(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_sports_lists_supported(monkeypatch):
-    monkeypatch.setattr(
-        discord_bot, "_sport_choices", lambda: {"nba": DummySport, "nfl": DummySportTwo}
-    )
+    monkeypatch.setattr(discord_bot, "_sport_choices", lambda: {"nba": DummySport, "nfl": DummySportTwo})
     ctx = FakeCtx()
     await discord_bot.sports(_ctx(ctx))
     assert ctx.sent == ["Supported sports: NBA, NFL"]
@@ -301,9 +290,7 @@ async def test_sports_lists_supported(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_upcoming_lists_next_per_sport(monkeypatch):
-    monkeypatch.setattr(
-        discord_bot, "_sport_choices", lambda: {"nba": DummySport, "nfl": DummySportTwo}
-    )
+    monkeypatch.setattr(discord_bot, "_sport_choices", lambda: {"nba": DummySport, "nfl": DummySportTwo})
 
     class FakeContestDatabase:
         def __init__(self, *args, **kwargs):
@@ -392,10 +379,7 @@ def test_sheet_link_missing_gid(monkeypatch):
 def test_sheet_link_builds_url(monkeypatch):
     monkeypatch.setattr(discord_bot, "SPREADSHEET_ID", "sheet")
     monkeypatch.setattr(discord_bot, "SHEET_GID_MAP", {"NBA": 123})
-    assert (
-        discord_bot._sheet_link("NBA")
-        == "<https://docs.google.com/spreadsheets/d/sheet/edit#gid=123>"
-    )
+    assert discord_bot._sheet_link("NBA") == "<https://docs.google.com/spreadsheets/d/sheet/edit#gid=123>"
 
 
 def test_sport_sheet_title_prefers_sheet_name():

@@ -1,17 +1,15 @@
 import datetime
 import logging
-import logging.config
 import sqlite3
 
 from dk_results.classes.contest import Contest
+from dk_results.logging import configure_logging
 
-logging.config.fileConfig("logging.ini")
+configure_logging()
 
 
 class ContestDatabase:
-    def __init__(
-        self, sqlite3_database: str, logger: logging.Logger | None = None
-    ) -> None:
+    def __init__(self, sqlite3_database: str, logger: logging.Logger | None = None) -> None:
         """
         Initialize ContestDatabase with SQLite database file.
 
@@ -61,9 +59,7 @@ class ContestDatabase:
         dk_ids = [c.id for c in contests]
         if not dk_ids:
             return []
-        sql = "SELECT dk_id FROM contests WHERE dk_id IN ({})".format(
-            ", ".join("?" for _ in dk_ids)
-        )
+        sql = "SELECT dk_id FROM contests WHERE dk_id IN ({})".format(", ".join("?" for _ in dk_ids))
         cur = self.conn.cursor()
         cur.execute(sql, dk_ids)
         rows = cur.fetchall()
@@ -115,9 +111,7 @@ class ContestDatabase:
         """
         self.conn.close()
 
-    def sync_draft_group_start_dates(
-        self, draft_group_start_dates: dict[int, datetime.datetime]
-    ) -> int:
+    def sync_draft_group_start_dates(self, draft_group_start_dates: dict[int, datetime.datetime]) -> int:
         """
         Update start_date for contests in draft groups when the start time changes.
 
@@ -148,9 +142,7 @@ class ContestDatabase:
                 continue
             new_dt = new_dt.replace(microsecond=0)
             try:
-                existing_dt = datetime.datetime.fromisoformat(str(start_date)).replace(
-                    microsecond=0
-                )
+                existing_dt = datetime.datetime.fromisoformat(str(start_date)).replace(microsecond=0)
             except (TypeError, ValueError):
                 existing_dt = None
             if existing_dt != new_dt:
@@ -167,9 +159,7 @@ class ContestDatabase:
         self.conn.commit()
         return updates
 
-    def get_live_contest(
-        self, sport: str, entry_fee: int = 25, keyword: str = "%"
-    ) -> tuple | None:
+    def get_live_contest(self, sport: str, entry_fee: int = 25, keyword: str = "%") -> tuple | None:
         """
         Get a live contest matching the criteria. Prefer contests at or above the
         minimum entry fee; if none exist, fall back to the highest entry fee
@@ -259,9 +249,7 @@ class ContestDatabase:
             self.logger.error("sqlite error in get_live_contests(): %s", err.args[0])
             return []
 
-    def get_next_upcoming_contest(
-        self, sport: str, entry_fee: int = 25, keyword: str = "%"
-    ) -> tuple | None:
+    def get_next_upcoming_contest(self, sport: str, entry_fee: int = 25, keyword: str = "%") -> tuple | None:
         """
         Get the next upcoming contest matching the criteria.
 
@@ -291,9 +279,7 @@ class ContestDatabase:
             self.logger.debug("returning %s", row)
             return row if row else None
         except sqlite3.Error as err:
-            self.logger.error(
-                "sqlite error in get_next_upcoming_contest(): %s", err.args[0]
-            )
+            self.logger.error("sqlite error in get_next_upcoming_contest(): %s", err.args[0])
             return None
 
     def get_next_upcoming_contest_any(self, sport: str) -> tuple | None:
@@ -322,9 +308,7 @@ class ContestDatabase:
             self.logger.debug("returning %s", row)
             return row if row else None
         except sqlite3.Error as err:
-            self.logger.error(
-                "sqlite error in get_next_upcoming_contest_any(): %s", err.args[0]
-            )
+            self.logger.error("sqlite error in get_next_upcoming_contest_any(): %s", err.args[0])
             return None
 
     def get_contest_by_id(self, dk_id: int) -> tuple | None:
@@ -373,7 +357,5 @@ class ContestDatabase:
             cur.execute(sql, (entry_fee, sport, keyword, limit))
             return cur.fetchall()
         except sqlite3.Error as err:
-            self.logger.error(
-                "sqlite error in get_live_contest_candidates(): %s", err.args[0]
-            )
+            self.logger.error("sqlite error in get_live_contest_candidates(): %s", err.args[0])
             return []

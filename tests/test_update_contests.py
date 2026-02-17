@@ -4,7 +4,7 @@ import sqlite3
 
 import yaml
 
-import update_contests
+import dk_results.cli.update_contests as update_contests
 
 
 def test_parse_start_date_handles_str_and_datetime():
@@ -94,12 +94,8 @@ def test_warning_notification_sent_for_upcoming_contest(monkeypatch):
     monkeypatch.setattr(update_contests, "_sport_choices", lambda: {"nba": DummySport})
     monkeypatch.setattr(update_contests, "WARNING_SCHEDULES", {"default": [25]})
 
-    start_date = (datetime.datetime.now() + datetime.timedelta(minutes=10)).strftime(
-        "%Y-%m-%d %H:%M:%S"
-    )
-    later_start = (datetime.datetime.now() + datetime.timedelta(minutes=12)).strftime(
-        "%Y-%m-%d %H:%M:%S"
-    )
+    start_date = (datetime.datetime.now() + datetime.timedelta(minutes=10)).strftime("%Y-%m-%d %H:%M:%S")
+    later_start = (datetime.datetime.now() + datetime.timedelta(minutes=12)).strftime("%Y-%m-%d %H:%M:%S")
     conn.execute(
         """
         INSERT INTO contests (
@@ -171,9 +167,7 @@ def test_warning_notifications_sent_for_multiple_thresholds(monkeypatch):
     monkeypatch.setattr(update_contests, "_sport_choices", lambda: {"nba": DummySport})
     monkeypatch.setattr(update_contests, "WARNING_SCHEDULES", {"default": [25, 5]})
 
-    start_date = (datetime.datetime.now() + datetime.timedelta(minutes=3)).strftime(
-        "%Y-%m-%d %H:%M:%S"
-    )
+    start_date = (datetime.datetime.now() + datetime.timedelta(minutes=3)).strftime("%Y-%m-%d %H:%M:%S")
     conn.execute(
         """
         INSERT INTO contests (
@@ -234,13 +228,9 @@ def test_warning_logs_schedule_and_skip(monkeypatch):
 
     monkeypatch.setattr(update_contests, "_sport_choices", lambda: {"nba": DummySport})
     monkeypatch.setattr(update_contests, "_warning_schedule_for", lambda _sport: [25])
-    monkeypatch.setattr(
-        update_contests, "WARNING_SCHEDULES", {"default": [25], "nba": [25]}
-    )
+    monkeypatch.setattr(update_contests, "WARNING_SCHEDULES", {"default": [25], "nba": [25]})
 
-    start_date = (datetime.datetime.now() + datetime.timedelta(minutes=10)).strftime(
-        "%Y-%m-%d %H:%M:%S"
-    )
+    start_date = (datetime.datetime.now() + datetime.timedelta(minutes=10)).strftime("%Y-%m-%d %H:%M:%S")
     conn.execute(
         """
         INSERT INTO contests (
@@ -473,9 +463,7 @@ def test_db_update_contest_success():
     conn.execute(
         "CREATE TABLE contests (dk_id INTEGER PRIMARY KEY, positions_paid INTEGER, status TEXT, completed INTEGER)"
     )
-    conn.execute(
-        "INSERT INTO contests (dk_id, positions_paid, status, completed) VALUES (1, NULL, 'LIVE', 0)"
-    )
+    conn.execute("INSERT INTO contests (dk_id, positions_paid, status, completed) VALUES (1, NULL, 'LIVE', 0)")
     conn.commit()
 
     update_contests.db_update_contest(conn, [10, "COMPLETED", 1, 1])
@@ -706,12 +694,8 @@ def test_check_contests_for_completion_notification_branches(monkeypatch):
     )
     monkeypatch.setattr(update_contests, "_build_discord_sender", lambda: sender)
     monkeypatch.setattr(update_contests, "_sport_choices", lambda: {"NBA": DummySport})
-    monkeypatch.setattr(
-        update_contests, "db_get_next_upcoming_contest", lambda *_a, **_k: None
-    )
-    monkeypatch.setattr(
-        update_contests, "db_get_next_upcoming_contest_any", lambda *_a, **_k: None
-    )
+    monkeypatch.setattr(update_contests, "db_get_next_upcoming_contest", lambda *_a, **_k: None)
+    monkeypatch.setattr(update_contests, "db_get_next_upcoming_contest_any", lambda *_a, **_k: None)
 
     rows = [
         (1, 10, 0, None, "UPCOMING", 0, "Contest1", "2024-01-01 00:00:00", "NBA"),
@@ -833,7 +817,7 @@ def test_module_main_executes(monkeypatch):
         raise sqlite3.Error("boom")
 
     monkeypatch.setattr("sqlite3.connect", boom)
-    runpy.run_module("update_contests", run_name="__main__")
+    runpy.run_module("dk_results.cli.update_contests", run_name="__main__")
 
 
 def test_build_discord_sender_success_path(monkeypatch):
@@ -912,9 +896,7 @@ def test_check_contests_for_completion_warning_path(monkeypatch):
 
     sender = FakeSender()
 
-    start_date = (datetime.datetime.now() + datetime.timedelta(minutes=5)).strftime(
-        "%Y-%m-%d %H:%M:%S"
-    )
+    start_date = (datetime.datetime.now() + datetime.timedelta(minutes=5)).strftime("%Y-%m-%d %H:%M:%S")
 
     monkeypatch.setattr(update_contests, "_build_discord_sender", lambda: sender)
     monkeypatch.setattr(update_contests, "_sport_choices", lambda: {"NBA": DummySport})
@@ -962,9 +944,7 @@ def test_check_contests_for_completion_skips_missing_start_dt(monkeypatch):
         "db_get_next_upcoming_contest",
         lambda *_a, **_k: (1, "Contest", None, None, None),
     )
-    monkeypatch.setattr(
-        update_contests, "db_get_next_upcoming_contest_any", lambda *_a, **_k: None
-    )
+    monkeypatch.setattr(update_contests, "db_get_next_upcoming_contest_any", lambda *_a, **_k: None)
 
     update_contests.check_contests_for_completion(conn)
 
@@ -988,9 +968,7 @@ def test_check_contests_for_completion_warning_outside_window(monkeypatch):
 
     sender = FakeSender()
 
-    start_date = (datetime.datetime.now() + datetime.timedelta(hours=2)).strftime(
-        "%Y-%m-%d %H:%M:%S"
-    )
+    start_date = (datetime.datetime.now() + datetime.timedelta(hours=2)).strftime("%Y-%m-%d %H:%M:%S")
 
     monkeypatch.setattr(update_contests, "_build_discord_sender", lambda: sender)
     monkeypatch.setattr(update_contests, "_sport_choices", lambda: {"NBA": DummySport})
@@ -1002,9 +980,7 @@ def test_check_contests_for_completion_warning_outside_window(monkeypatch):
         "db_get_next_upcoming_contest",
         lambda *_a, **_k: (1, "Contest", None, None, start_date),
     )
-    monkeypatch.setattr(
-        update_contests, "db_get_next_upcoming_contest_any", lambda *_a, **_k: None
-    )
+    monkeypatch.setattr(update_contests, "db_get_next_upcoming_contest_any", lambda *_a, **_k: None)
 
     update_contests.check_contests_for_completion(conn)
 
@@ -1020,9 +996,7 @@ def test_check_contests_for_completion_logs_exception(monkeypatch):
     monkeypatch.setattr(
         update_contests,
         "db_get_incomplete_contests",
-        lambda _c: [
-            (1, 10, 0, None, "LIVE", 0, "Contest", "2024-01-01 00:00:00", "NBA")
-        ],
+        lambda _c: [(1, 10, 0, None, "LIVE", 0, "Contest", "2024-01-01 00:00:00", "NBA")],
     )
 
     def boom(_dk_id):

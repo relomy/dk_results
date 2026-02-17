@@ -284,9 +284,7 @@ def print_cron_job(contest, sport, draft_group_info=None):
     # print(
     #     f"{dl_interval} {cron_str} {dl_str} -s {sport} -dg {contest.draft_group} >> {out_str}"
     # )
-    print(
-        f"Download CSV for this slate:\n{dl_str} -s {sport} -dg {contest.draft_group} -f {file_str}\n"
-    )
+    print(f"Download CSV for this slate:\n{dl_str} -s {sport} -dg {contest.draft_group} -f {file_str}\n")
     print(
         f"{cron_config['get_interval']} {cron_str} {get_str} -s {sport} "
         f"-i {contest.id} -dg {contest.draft_group} >> {out_str}"
@@ -332,6 +330,7 @@ def print_sql_insert(contest):
     ]
     value_str = ", ".join(_sql_literal(v) for v in values)
     print(f"INSERT INTO contests ({', '.join(fields)}) VALUES ({value_str})")
+
 
 def print_stats(contests):
     stats = get_stats(contests, include_largest=True)
@@ -389,12 +388,8 @@ def main():
         choices=sorted(sport_class_choices),
         help="Use standard Sport subclasses (e.g. PGAShowdown, PGAWeekend).",
     )
-    parser.add_argument(
-        "-l", "--live", action="store_true", default="", help="Get live contests"
-    )
-    parser.add_argument(
-        "-e", "--entry", type=int, default=25, help="Entry fee (25 for $25)"
-    )
+    parser.add_argument("-l", "--live", action="store_true", default="", help="Get live contests")
+    parser.add_argument("-e", "--entry", type=int, default=25, help="Entry fee (25 for $25)")
     parser.add_argument(
         "--game-type-id",
         type=int,
@@ -425,9 +420,7 @@ def main():
             raise SystemExit("Sport-class mode requires getcontests response with DraftGroups.")
         draft_groups = set(get_draft_groups_from_response(response, sport_obj))
         response_contests = [
-            contest
-            for contest in get_contests_from_response(response)
-            if contest.get("dg") in draft_groups
+            contest for contest in get_contests_from_response(response) if contest.get("dg") in draft_groups
         ]
     else:
         selected_sport = args.sport

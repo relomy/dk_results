@@ -19,6 +19,7 @@ logger = logging.getLogger(__name__)
 _MANIFEST_VERSION = 1
 _VALID_SPORT_STATUS = {"ok", "stale", "error"}
 
+
 def _default_output_path(snapshot: dict[str, Any], sport: str) -> pathlib.Path:
     selected_id = str(snapshot.get("selection", {}).get("selected_contest_id") or "unknown")
     return pathlib.Path("fixtures") / f"{sport.lower()}-{selected_id}-fixture.json"
@@ -69,9 +70,7 @@ def _parse_bundle_item(raw_item: str) -> tuple[str, int]:
     try:
         contest_id = int(raw_contest_id)
     except ValueError as exc:
-        raise ValueError(
-            f"Invalid contest id in bundle item '{raw_item}'. Expected integer id."
-        ) from exc
+        raise ValueError(f"Invalid contest id in bundle item '{raw_item}'. Expected integer id.") from exc
     return sport, contest_id
 
 
@@ -146,9 +145,7 @@ def _build_latest_payload(
     generated_at = _coerce_iso(payload.get("generated_at"), "generated_at")
     available_sports = sorted(str(key) for key in (payload.get("sports") or {}).keys())
     date_utc = snapshot_at[:10]
-    yesterday_utc = (
-        datetime.fromisoformat(f"{date_utc}T00:00:00+00:00") - timedelta(days=1)
-    ).date().isoformat()
+    yesterday_utc = (datetime.fromisoformat(f"{date_utc}T00:00:00+00:00") - timedelta(days=1)).date().isoformat()
     return {
         "latest_snapshot_path": snapshot_rel_path,
         "snapshot_at": snapshot_at,
@@ -250,11 +247,7 @@ def run_publish_snapshot(args: Any) -> int:
         snapshots = []
 
     entry = _build_manifest_entry(payload, snapshot_rel_path, snapshot_path)
-    snapshots = [
-        item
-        for item in snapshots
-        if str(item.get("snapshot_at")) != entry["snapshot_at"]
-    ]
+    snapshots = [item for item in snapshots if str(item.get("snapshot_at")) != entry["snapshot_at"]]
     snapshots.append(entry)
     snapshots.sort(key=lambda item: str(item.get("snapshot_at") or ""), reverse=True)
 

@@ -52,9 +52,7 @@ class Draftkings:
         except Exception:
             for c in getattr(self.session, "cookies", []):
                 try:
-                    target_session.cookies.set(
-                        c.name, c.value, domain=c.domain, path=c.path
-                    )
+                    target_session.cookies.set(c.name, c.value, domain=c.domain, path=c.path)
                 except Exception:
                     pass
 
@@ -73,17 +71,12 @@ class Draftkings:
         """
         to = timeout or self.timeout_sec
         sess = session or self.session  # <-- NEW
-        url = (
-            f"https://api.draftkings.com/scores/v1/leaderboards/"
-            f"{dk_id}?format=json&embed=leaderboard"
-        )
+        url = f"https://api.draftkings.com/scores/v1/leaderboards/{dk_id}?format=json&embed=leaderboard"
         r = sess.get(url, timeout=to)
         r.raise_for_status()
         return r.json()
 
-    def get_contest_detail(
-        self, dk_id: int, timeout: Optional[int] = None
-    ) -> dict[str, Any]:
+    def get_contest_detail(self, dk_id: int, timeout: Optional[int] = None) -> dict[str, Any]:
         """
         Fetch contest detail JSON for a given contest id.
         """
@@ -115,15 +108,9 @@ class Draftkings:
     def _normalize_name(name: str) -> str:
         if not isinstance(name, str):
             return ""
-        return "".join(
-            c
-            for c in unicodedata.normalize("NFD", name)
-            if unicodedata.category(c) != "Mn"
-        )
+        return "".join(c for c in unicodedata.normalize("NFD", name) if unicodedata.category(c) != "Mn")
 
-    def _lookup_salary(
-        self, player_name: str, player_salary_map: dict[str, int] | None
-    ) -> int | None:
+    def _lookup_salary(self, player_name: str, player_salary_map: dict[str, int] | None) -> int | None:
         if not player_salary_map or not player_name:
             return None
         clean_name = player_name.strip()
@@ -150,9 +137,7 @@ class Draftkings:
         thread_sess = requests.Session()
         self.clone_auth_to(thread_sess)
 
-        scorecard_js = self.get_entry(
-            dg, entry_key, timeout=self.timeout_sec, session=thread_sess
-        )
+        scorecard_js = self.get_entry(dg, entry_key, timeout=self.timeout_sec, session=thread_sess)
 
         entries = scorecard_js.get("entries", [])
         if not entries:
@@ -233,9 +218,7 @@ class Draftkings:
         if vip_entries:
             for vip_name, entry_data in vip_entries.items():
                 if isinstance(entry_data, dict):
-                    entry_key = entry_data.get("entry_key") or entry_data.get(
-                        "entryKey"
-                    )
+                    entry_key = entry_data.get("entry_key") or entry_data.get("entryKey")
                     pmr = entry_data.get("pmr", "")
                     rank = entry_data.get("rank", "")
                     fantasy_points = entry_data.get("pts", "")
@@ -256,11 +239,7 @@ class Draftkings:
                 )
         else:
             js_leaderboard = self.get_leaderboard(dk_id, timeout=self.timeout_sec)
-            users_to_fetch = [
-                u
-                for u in js_leaderboard.get("leaderBoard", [])
-                if u.get("userName") in vips
-            ]
+            users_to_fetch = [u for u in js_leaderboard.get("leaderBoard", []) if u.get("userName") in vips]
 
         if not users_to_fetch:
             self.logger.debug("No VIP entries found to fetch.")
@@ -270,10 +249,7 @@ class Draftkings:
         vip_lineups: list[dict[str, Any]] = []
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             futures = {
-                executor.submit(
-                    self._fetch_user_lineup_worker, u, dg, player_salary_map
-                ): u
-                for u in users_to_fetch
+                executor.submit(self._fetch_user_lineup_worker, u, dg, player_salary_map): u for u in users_to_fetch
             }
             for fut in as_completed(futures):
                 user = futures[fut].get("userName", "<unknown>")
@@ -284,9 +260,7 @@ class Draftkings:
                         self.logger.debug("VIP %s had no roster data", user)
                         continue
 
-                    self.logger.info(
-                        "Found VIP lineup for user %s", result.get("user", user)
-                    )
+                    self.logger.info("Found VIP lineup for user %s", result.get("user", user))
                     vip_lineups.append(result)
                 except Exception as e:
                     # Best-effort logging at client level
@@ -312,10 +286,7 @@ class Draftkings:
         """
         to = timeout or self.timeout_sec
         sess = session or self.session  # <-- NEW
-        url = (
-            f"https://api.draftkings.com/scores/v2/entries/"
-            f"{draft_group}/{entry_key}?format=json&embed=roster"
-        )
+        url = f"https://api.draftkings.com/scores/v2/entries/{draft_group}/{entry_key}?format=json&embed=roster"
         r = sess.get(url, timeout=to)
         r.raise_for_status()
         return r.json()
@@ -332,11 +303,7 @@ class Draftkings:
         Download the full standings CSV (possibly as a ZIP) and return parsed rows.
         Returns None if the response is unexpected HTML.
         """
-        cdf = (
-            cookies_dump_file
-            if cookies_dump_file is not None
-            else self.cookies_dump_file
-        )
+        cdf = cookies_dump_file if cookies_dump_file is not None else self.cookies_dump_file
         cdir = contest_dir if contest_dir is not None else self.contest_dir
 
         url = f"https://www.draftkings.com/contest/exportfullstandingscsv/{contest_id}"
@@ -364,17 +331,13 @@ class Draftkings:
                         fp.write(r.content)
                     self.logger.debug("wrote standings CSV to %s", csv_path)
                 except Exception:
-                    self.logger.warning(
-                        "Failed to write standings CSV to disk.", exc_info=True
-                    )
+                    self.logger.warning("Failed to write standings CSV to disk.", exc_info=True)
             if cdf:
                 try:
                     with open(cdf, "wb") as fp:
                         pickle.dump(self.session.cookies, fp)
                 except Exception:
-                    self.logger.debug(
-                        "Skipping cookies dump; non-fatal.", exc_info=True
-                    )
+                    self.logger.debug("Skipping cookies dump; non-fatal.", exc_info=True)
             csvfile = r.content.decode("utf-8-sig")
             return list(csv.reader(csvfile.splitlines(), delimiter=","))
 
@@ -421,8 +384,7 @@ class Draftkings:
             self.logger.debug("CONTEST_TYPES [%s]: %s", sport, contest_types[sport])
 
         csv_url = (
-            "https://www.draftkings.com/lineup/getavailableplayerscsv?"
-            "contestTypeId={0}&draftGroupId={1}"
+            "https://www.draftkings.com/lineup/getavailableplayerscsv?contestTypeId={0}&draftGroupId={1}"
         ).format(contest_types[sport], draft_group)
 
         # send GET request
@@ -430,9 +392,7 @@ class Draftkings:
 
         # if not successful, raise an exception
         if response.status_code != 200:
-            raise Exception(
-                "Requests status != 200. It is: {0}".format(response.status_code)
-            )
+            raise Exception("Requests status != 200. It is: {0}".format(response.status_code))
 
         # dump html to file to avoid multiple requests
         Path(filename).parent.mkdir(parents=True, exist_ok=True)

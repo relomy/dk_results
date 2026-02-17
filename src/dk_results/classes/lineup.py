@@ -9,9 +9,7 @@ from .player import Player
 
 def normalize_name(name: str) -> str:
     """Strip accents from a given string and replace with letters without accents."""
-    return "".join(
-        c for c in unicodedata.normalize("NFD", name) if unicodedata.category(c) != "Mn"
-    )
+    return "".join(c for c in unicodedata.normalize("NFD", name) if unicodedata.category(c) != "Mn")
 
 
 def parse_lineup_string(
@@ -71,9 +69,7 @@ def parse_lineup_string(
 class Lineup:
     """A representation of a list of Players"""
 
-    def __init__(
-        self, sport_obj: Sport | Type[Sport], players: dict[str, Player], lineup_str: str
-    ) -> None:
+    def __init__(self, sport_obj: Sport | Type[Sport], players: dict[str, Player], lineup_str: str) -> None:
         self.sport_obj = sport_obj
         self.players = players
 

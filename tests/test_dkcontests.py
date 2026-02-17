@@ -2,9 +2,9 @@ import datetime
 import sys
 
 import pytest
-
-import dkcontests
 from classes.contest import Contest
+
+import dk_results.cli.dkcontests as dkcontests
 
 
 def _contest_payload(dk_id: int, *, entries: int = 200, fee: int = 25):
@@ -229,8 +229,7 @@ def test_main_passes_sport_class_choices_to_response_filters(monkeypatch):
     monkeypatch.setattr(
         dkcontests,
         "get_lobby_response",
-        lambda sport, live=False: captured.update({"sport": sport})
-        or {"Contests": [], "DraftGroups": []},
+        lambda sport, live=False: captured.update({"sport": sport}) or {"Contests": [], "DraftGroups": []},
     )
     monkeypatch.setattr(
         dkcontests,
@@ -257,9 +256,7 @@ def test_main_passes_sport_class_choices_to_response_filters(monkeypatch):
 
 
 def test_format_sport_class_game_type_help_lists_constraints():
-    help_text = dkcontests.format_sport_class_game_type_help(
-        dkcontests.get_sport_class_choices()
-    )
+    help_text = dkcontests.format_sport_class_game_type_help(dkcontests.get_sport_class_choices())
 
     assert "Sport-class gameTypeId constraints:" in help_text
     assert "PGAShowdown: 87" in help_text

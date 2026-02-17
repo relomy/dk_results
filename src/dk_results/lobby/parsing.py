@@ -54,18 +54,14 @@ def _parse_start_date(start_date_est: str) -> datetime.datetime:
     return datetime.datetime.fromisoformat(start_date_est[:-8])
 
 
-def get_draft_groups_from_response(
-    response: dict[str, Any], sport_obj: Type[Sport]
-) -> list[int]:
+def get_draft_groups_from_response(response: dict[str, Any], sport_obj: Type[Sport]) -> list[int]:
     """Extract allowed draft-group ids from lobby response."""
     response_draft_groups: list[int] = []
     skipped_dg_suffixes: list[str] = []
     suffix_patterns = sport_obj.get_suffix_patterns()
     allow_suffixless = sport_obj.allow_suffixless_draft_groups
     is_nfl_showdown = sport_obj.name == "NFLShowdown"
-    showdown_entries: list[
-        tuple[datetime.datetime, int, str, str | None, int, int, datetime.datetime]
-    ] = []
+    showdown_entries: list[tuple[datetime.datetime, int, str, str | None, int, int, datetime.datetime]] = []
 
     for draft_group in response["DraftGroups"]:
         tag = draft_group["DraftGroupTag"]
@@ -99,10 +95,7 @@ def get_draft_groups_from_response(
                 contest_type_id,
                 game_type_id,
                 level=logging.DEBUG,
-                reason=(
-                    "game type constraint "
-                    f"(!={sport_obj.contest_restraint_game_type_id}, got {game_type_id})"
-                ),
+                reason=(f"game type constraint (!={sport_obj.contest_restraint_game_type_id}, got {game_type_id})"),
             )
             continue
 
@@ -156,10 +149,7 @@ def get_draft_groups_from_response(
             )
             continue
 
-        if (
-            sport_obj.contest_restraint_time
-            and dt_start_date.time() < sport_obj.contest_restraint_time
-        ):
+        if sport_obj.contest_restraint_time and dt_start_date.time() < sport_obj.contest_restraint_time:
             log_draft_group_event(
                 "Skip",
                 sport_obj,

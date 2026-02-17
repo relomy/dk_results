@@ -14,9 +14,7 @@ class DfsSheetRepository:
         return self._client.get_values(cell_range)
 
     def write_range(self, values: Sequence[Sequence[Any]], cell_range: str) -> None:
-        self._client.write_values(
-            [list(row) for row in values], cell_range, value_input_option="USER_ENTERED"
-        )
+        self._client.write_values([list(row) for row in values], cell_range, value_input_option="USER_ENTERED")
 
     def clear_range(self, cell_range: str) -> None:
         self._client.clear_range(cell_range)

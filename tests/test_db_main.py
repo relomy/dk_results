@@ -1,12 +1,12 @@
 import datetime
 import json
-from collections import OrderedDict
 from argparse import Namespace
+from collections import OrderedDict
 from pathlib import Path
-from types import SimpleNamespace
 
-import db_main
 from classes.sport import NFLSport
+
+import dk_results.cli.db_main as db_main
 
 
 def _salary_csv_text() -> str:
@@ -19,7 +19,19 @@ def _salary_csv_text() -> str:
 
 def _standings_rows() -> list[list[str]]:
     return [
-        ["Rank", "EntryId", "EntryName", "TimeRemaining", "Points", "Lineup", "", "Player", "Roster Position", "%Drafted", "FPTS"],
+        [
+            "Rank",
+            "EntryId",
+            "EntryName",
+            "TimeRemaining",
+            "Points",
+            "Lineup",
+            "",
+            "Player",
+            "Roster Position",
+            "%Drafted",
+            "FPTS",
+        ],
         [
             "1",
             "111",
@@ -132,12 +144,7 @@ def test_main_snapshot_out_writes_opt_in_envelope(monkeypatch, tmp_path):
     out = tmp_path / "snapshot.json"
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(db_main, "load_dotenv", lambda: None)
-    monkeypatch.setattr(db_main.common_config, "load_json_config", lambda: {})
-    monkeypatch.setattr(
-        db_main.common_config,
-        "resolve_dk_results_settings",
-        lambda _cfg: SimpleNamespace(dfs_state_dir=None, spreadsheet_id=None),
-    )
+    monkeypatch.setattr(db_main, "load_and_apply_settings", lambda: None)
     monkeypatch.setattr(db_main.state, "contests_db_path", lambda: tmp_path / "contests.db")
     monkeypatch.setattr(db_main, "ContestDatabase", lambda _path: object())
     monkeypatch.setattr(db_main, "load_vips", lambda: [])
@@ -193,7 +200,7 @@ def test_write_snapshot_payload_is_byte_stable(tmp_path):
     db_main.write_snapshot_payload(out, payload)
 
     assert out.read_text(encoding="utf-8") == (
-        '{\n'
+        "{\n"
         '  "generated_at":"2026-01-01T00:00:00Z",\n'
         '  "schema_version":2,\n'
         '  "snapshot_at":"2026-01-01T00:00:00Z",\n'
@@ -201,7 +208,7 @@ def test_write_snapshot_payload_is_byte_stable(tmp_path):
         '    "nfl":{\n'
         '      "a":1,\n'
         '      "b":2\n'
-        '    }\n'
-        '  }\n'
-        '}\n'
+        "    }\n"
+        "  }\n"
+        "}\n"
     )

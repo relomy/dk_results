@@ -1,53 +1,42 @@
 import datetime
 import logging
-import logging.config
 import os
 import sqlite3
 from pathlib import Path
 from typing import Any
 
 import yaml
-from dfs_common import config as common_config
 from dfs_common import contests, state
 
 from dk_results.bot.discord_rest import DiscordRest
 from dk_results.classes.draftkings import Draftkings
 from dk_results.classes.sport import Sport
+from dk_results.config import load_and_apply_settings
+from dk_results.logging import configure_logging
+from dk_results.paths import repo_file
 
-# load the logging configuration
-logging.config.fileConfig("logging.ini")
+configure_logging()
 logger = logging.getLogger(__name__)
 
 try:
     from dotenv import load_dotenv
 except ImportError:  # pragma: no cover
+
     def load_dotenv(*_args, **_kwargs):
         return False
 
+
 load_dotenv()
-_config_data = common_config.load_json_config()
-_settings = common_config.resolve_dk_results_settings(_config_data)
-if _settings.dfs_state_dir and not os.getenv("DFS_STATE_DIR"):
-    os.environ["DFS_STATE_DIR"] = _settings.dfs_state_dir
-if _settings.spreadsheet_id and not os.getenv("SPREADSHEET_ID"):
-    os.environ["SPREADSHEET_ID"] = _settings.spreadsheet_id
-if not os.getenv("SHEET_GIDS_FILE") and _settings.sheet_gids_file:
-    os.environ["SHEET_GIDS_FILE"] = _settings.sheet_gids_file
-if not os.getenv("DISCORD_NOTIFICATIONS_ENABLED"):
-    os.environ["DISCORD_NOTIFICATIONS_ENABLED"] = (
-        "true" if _settings.discord_notifications_enabled else "false"
-    )
-if not os.getenv("CONTEST_WARNING_MINUTES"):
-    os.environ["CONTEST_WARNING_MINUTES"] = str(_settings.contest_warning_minutes)
+load_and_apply_settings()
 
 # constants
 COMPLETED_STATUSES = ["COMPLETED", "CANCELLED"]
 DISCORD_NOTIFICATIONS_ENABLED = os.getenv("DISCORD_NOTIFICATIONS_ENABLED", "true")
 SPREADSHEET_ID = os.getenv("SPREADSHEET_ID")
-SHEET_GIDS_FILE = os.getenv("SHEET_GIDS_FILE", "sheet_gids.yaml")
+SHEET_GIDS_FILE = os.getenv("SHEET_GIDS_FILE", str(repo_file("sheet_gids.yaml")))
 CONTEST_WARNING_MINUTES = int(os.getenv("CONTEST_WARNING_MINUTES", "25"))
 WARNING_SCHEDULE_FILE_ENV = "CONTEST_WARNING_SCHEDULE_FILE"
-DEFAULT_WARNING_SCHEDULE_FILE = "contest_warning_schedules.yaml"
+DEFAULT_WARNING_SCHEDULE_FILE = str(repo_file("contest_warning_schedules.yaml"))
 _DEFAULT_WARNING_SCHEDULE = [CONTEST_WARNING_MINUTES]
 
 SPORT_EMOJI = {
@@ -93,9 +82,7 @@ def _build_discord_sender() -> DiscordRest | None:
     token = os.getenv("DISCORD_BOT_TOKEN")
     channel_id_raw = os.getenv("DISCORD_CHANNEL_ID")
     if not token or not channel_id_raw:
-        logger.warning(
-            "DISCORD_BOT_TOKEN or DISCORD_CHANNEL_ID not set; notifications disabled."
-        )
+        logger.warning("DISCORD_BOT_TOKEN or DISCORD_CHANNEL_ID not set; notifications disabled.")
         return None
     try:
         channel_id = int(channel_id_raw)
@@ -109,6 +96,8 @@ def _load_sheet_gid_map() -> dict[str, int]:
     if not SHEET_GIDS_FILE:
         return {}
     path = Path(SHEET_GIDS_FILE)
+    if not path.is_absolute():
+        path = repo_file(SHEET_GIDS_FILE)
     if not path.is_file():
         return {}
     try:
@@ -141,9 +130,7 @@ def _normalize_warning_schedule(items: Any, *, key: str) -> list[int]:
         else:
             invalid += 1
     if invalid:
-        logger.warning(
-            "Dropped %d invalid warning schedule entries for %s.", invalid, key
-        )
+        logger.warning("Dropped %d invalid warning schedule entries for %s.", invalid, key)
     return sorted(normalized)
 
 
@@ -151,6 +138,8 @@ def _load_warning_schedule_map() -> dict[str, list[int]]:
     """Load per-sport warning schedules from YAML."""
     schedule_path = os.getenv(WARNING_SCHEDULE_FILE_ENV, DEFAULT_WARNING_SCHEDULE_FILE)
     path = Path(schedule_path)
+    if not path.is_absolute():
+        path = repo_file(schedule_path)
     if not path.is_file():
         return {"default": _DEFAULT_WARNING_SCHEDULE}
     try:
@@ -180,9 +169,7 @@ WARNING_SCHEDULES = _load_warning_schedule_map()
 def _warning_schedule_for(sport_name: str) -> list[int]:
     """Return warning schedule for a sport, falling back to default."""
     key = sport_name.lower()
-    return WARNING_SCHEDULES.get(key) or WARNING_SCHEDULES.get(
-        "default", _DEFAULT_WARNING_SCHEDULE
-    )
+    return WARNING_SCHEDULES.get(key) or WARNING_SCHEDULES.get("default", _DEFAULT_WARNING_SCHEDULE)
 
 
 def _sheet_link(sheet_title: str) -> str | None:
@@ -207,9 +194,7 @@ def _format_contest_announcement(
 ) -> str:
     url = _contest_url(dk_id)
     sheet_link = _sheet_link(sport_name)
-    sheet_part = (
-        f"📊 Sheet: [{sport_name}]({sheet_link})" if sheet_link else "📊 Sheet: n/a"
-    )
+    sheet_part = f"📊 Sheet: [{sport_name}]({sheet_link})" if sheet_link else "📊 Sheet: n/a"
     relative = None
     start_dt = _parse_start_date(start_date)
     if start_dt:
@@ -331,9 +316,7 @@ def check_contests_for_completion(conn) -> None:
                 )
                 logged_schedules.add(schedule_key)
             for warning_minutes in schedule:
-                if not (
-                    now < start_dt <= now + datetime.timedelta(minutes=warning_minutes)
-                ):
+                if not (now < start_dt <= now + datetime.timedelta(minutes=warning_minutes)):
                     continue
                 warning_key = f"warning:{warning_minutes}"
                 if db_has_notification(conn, dk_id, warning_key):
@@ -425,11 +408,7 @@ def check_contests_for_completion(conn) -> None:
             new_completed = contest_data["completed"]
 
             # if contest data is different, update it
-            if (
-                positions_paid != contest_data["positions_paid"]
-                or status != new_status
-                or completed != new_completed
-            ):
+            if positions_paid != contest_data["positions_paid"] or status != new_status or completed != new_completed:
                 db_update_contest(
                     conn,
                     [
@@ -455,10 +434,9 @@ def check_contests_for_completion(conn) -> None:
                 is_primary_live = bool(live_row and live_row[0] == dk_id)
 
                 is_new_live = status != "LIVE" and new_status == "LIVE"
-                is_new_completed = (
-                    status not in COMPLETED_STATUSES
-                    and new_status in COMPLETED_STATUSES
-                ) or (completed == 0 and new_completed == 1)
+                is_new_completed = (status not in COMPLETED_STATUSES and new_status in COMPLETED_STATUSES) or (
+                    completed == 0 and new_completed == 1
+                )
 
                 if is_new_live and is_primary_live:
                     logger.info(
@@ -466,11 +444,7 @@ def check_contests_for_completion(conn) -> None:
                         sport_name,
                         dk_id,
                     )
-                if (
-                    is_new_live
-                    and is_primary_live
-                    and not db_has_notification(conn, dk_id, "live")
-                ):
+                if is_new_live and is_primary_live and not db_has_notification(conn, dk_id, "live"):
                     message = _format_contest_announcement(
                         "Contest started",
                         sport_name,
@@ -498,9 +472,7 @@ def check_contests_for_completion(conn) -> None:
                     )
 
                 if is_new_completed:
-                    if db_has_notification(
-                        conn, dk_id, "live"
-                    ) and not db_has_notification(conn, dk_id, "completed"):
+                    if db_has_notification(conn, dk_id, "live") and not db_has_notification(conn, dk_id, "completed"):
                         message = _format_contest_announcement(
                             "Contest ended",
                             sport_name,
@@ -583,9 +555,7 @@ def db_update_contest(conn, contest_to_update) -> None:
         logger.error("sqlite error: %s", err.args[0])
 
 
-def db_get_live_contest(
-    conn, sport: str, entry_fee: int = 25, keyword: str = "%"
-) -> tuple | None:
+def db_get_live_contest(conn, sport: str, entry_fee: int = 25, keyword: str = "%") -> tuple | None:
     """Get a live contest matching the criteria."""
     cur = conn.cursor()
     try:
@@ -634,16 +604,12 @@ def db_get_incomplete_contests(conn):
         # return all rows
         return cur.fetchall()
     except sqlite3.Error as err:
-        logger.error(
-            f"sqlite error [check_db_contests_for_completion()]: {err.args[0]}"
-        )
+        logger.error(f"sqlite error [check_db_contests_for_completion()]: {err.args[0]}")
 
     return None
 
 
-def db_get_next_upcoming_contest(
-    conn, sport: str, entry_fee: int = 25, keyword: str = "%"
-) -> tuple | None:
+def db_get_next_upcoming_contest(conn, sport: str, entry_fee: int = 25, keyword: str = "%") -> tuple | None:
     """Get the next upcoming contest matching criteria."""
     try:
         cur = conn.cursor()
@@ -687,13 +653,12 @@ def db_get_next_upcoming_contest_any(conn, sport: str) -> tuple | None:
             logger.debug("returning %s", row)
         return row if row else None
     except sqlite3.Error as err:
-        logger.error(
-            "sqlite error in db_get_next_upcoming_contest_any(): %s", err.args[0]
-        )
+        logger.error("sqlite error in db_get_next_upcoming_contest_any(): %s", err.args[0])
         return None
 
 
 def main():
+    configure_logging()
     try:
         contests.init_schema(state.contests_db_path())
         conn = sqlite3.connect(_contests_db_path())

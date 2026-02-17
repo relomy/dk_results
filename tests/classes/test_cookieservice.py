@@ -1,8 +1,7 @@
 import pickle
 
-from requests.cookies import RequestsCookieJar
-
 from classes import cookieservice
+from requests.cookies import RequestsCookieJar
 
 
 def test_get_rookie_cookies_pi_path(monkeypatch):
@@ -88,9 +87,7 @@ def test_get_dk_cookies_uses_pickle(monkeypatch):
         "load_cookies_from_pickle",
         lambda: [{"name": "a", "value": "1", "domain": "example.com", "path": "/"}],
     )
-    monkeypatch.setattr(
-        cookieservice, "get_rookie_cookies", lambda *_args, **_kwargs: []
-    )
+    monkeypatch.setattr(cookieservice, "get_rookie_cookies", lambda *_args, **_kwargs: [])
 
     cookie_dict, jar = cookieservice.get_dk_cookies(use_pickle=True)
     assert cookie_dict == {"a": "1"}
@@ -102,9 +99,7 @@ def test_get_dk_cookies_falls_back_and_saves(monkeypatch):
     monkeypatch.setattr(
         cookieservice,
         "get_rookie_cookies",
-        lambda *_args, **_kwargs: [
-            {"name": "a", "value": "1", "domain": "example.com", "path": "/"}
-        ],
+        lambda *_args, **_kwargs: [{"name": "a", "value": "1", "domain": "example.com", "path": "/"}],
     )
 
     saved = {}
@@ -116,6 +111,4 @@ def test_get_dk_cookies_falls_back_and_saves(monkeypatch):
 
     cookie_dict, jar = cookieservice.get_dk_cookies(use_pickle=True)
     assert cookie_dict == {"a": "1"}
-    assert saved["cookies"] == [
-        {"name": "a", "value": "1", "domain": "example.com", "path": "/"}
-    ]
+    assert saved["cookies"] == [{"name": "a", "value": "1", "domain": "example.com", "path": "/"}]

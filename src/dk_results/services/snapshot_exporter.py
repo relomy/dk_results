@@ -4,26 +4,26 @@ import hashlib
 import json
 import logging
 import os
-import pathlib
 from typing import Any
-
-import yaml
 from zoneinfo import ZoneInfo
 
-from dfs_common import config as common_config
+import yaml
 from dfs_common import state
+
 from dk_results.classes.contestdatabase import ContestDatabase
 from dk_results.classes.draftkings import Draftkings
 from dk_results.classes.results import Results
 from dk_results.classes.sport import Sport
 from dk_results.classes.trainfinder import TrainFinder
+from dk_results.config import load_settings
+from dk_results.paths import repo_file
 
 logger = logging.getLogger(__name__)
 
-CONTEST_DIR = "contests"
-SALARY_DIR = "salary"
+CONTEST_DIR = str(repo_file("contests"))
+SALARY_DIR = str(repo_file("salary"))
 SALARY_LIMIT = 40000
-COOKIES_FILE = "pickled_cookies_works.txt"
+COOKIES_FILE = str(repo_file("pickled_cookies_works.txt"))
 CANDIDATE_LIMIT = 5
 DEFAULT_STANDINGS_LIMIT = 500
 
@@ -49,12 +49,13 @@ SOURCE_ENDPOINTS = [
 try:
     from dotenv import load_dotenv
 except ImportError:  # pragma: no cover
+
     def load_dotenv(*_args, **_kwargs):
         return False
 
 
 def load_vips() -> list[str]:
-    vip_path = pathlib.Path(__file__).resolve().parent.parent / "vips.yaml"
+    vip_path = repo_file("vips.yaml")
     try:
         with open(vip_path, "r") as f:
             vips = yaml.safe_load(f) or []
@@ -67,8 +68,7 @@ def load_vips() -> list[str]:
 
 def configure_runtime() -> None:
     load_dotenv()
-    cfg = common_config.load_json_config()
-    settings = common_config.resolve_dk_results_settings(cfg)
+    settings = load_settings()
     if settings.dfs_state_dir and not os.getenv("DFS_STATE_DIR"):
         os.environ["DFS_STATE_DIR"] = settings.dfs_state_dir
     if settings.spreadsheet_id and not os.getenv("SPREADSHEET_ID"):
@@ -361,24 +361,18 @@ def collect_snapshot_data(
             if contest_db is not None:
                 selected = contest_db.get_contest_by_id(int(contest_id))
             if not selected:
-                selected = _contest_row_from_detail(
-                    int(contest_id), dk.get_contest_detail(int(contest_id))
-                )
+                selected = _contest_row_from_detail(int(contest_id), dk.get_contest_detail(int(contest_id)))
         else:
             if contest_db is None:
                 raise RuntimeError("Contest DB unavailable for primary live selection")
-            live = contest_db.get_live_contest(
-                sport_cls.name, sport_cls.sheet_min_entry_fee, sport_cls.keyword
-            )
+            live = contest_db.get_live_contest(sport_cls.name, sport_cls.sheet_min_entry_fee, sport_cls.keyword)
             if live:
                 selected = contest_db.get_contest_by_id(int(live[0]))
 
         if not selected:
             raise RuntimeError(f"No contest found for sport={sport_cls.name}")
 
-        dk_id, contest_name, draft_group, positions_paid, start_date, entry_fee, entries = (
-            selected
-        )
+        dk_id, contest_name, draft_group, positions_paid, start_date, entry_fee, entries = selected
         logger.info("selected contest id=%s mode=%s", dk_id, mode)
 
         now_et = datetime.datetime.now(ZoneInfo("America/New_York"))
@@ -492,9 +486,7 @@ def collect_snapshot_data(
             for row in standings
             if row["ownership_remaining_total_pct"] is not None
         ]
-        ownership_remaining_total = (
-            sum(ownership_values) / len(ownership_values) if ownership_values else None
-        )
+        ownership_remaining_total = sum(ownership_values) / len(ownership_values) if ownership_values else None
 
         top_remaining_players: list[dict[str, Any]] = []
         if results.non_cashing_users > 0:
@@ -502,13 +494,10 @@ def collect_snapshot_data(
                 top_remaining_players.append(
                     {
                         "player_name": name,
-                        "ownership_remaining_pct": (float(count) / results.non_cashing_users)
-                        * 100,
+                        "ownership_remaining_pct": (float(count) / results.non_cashing_users) * 100,
                     }
                 )
-        top_remaining_players.sort(
-            key=lambda item: (-item["ownership_remaining_pct"], item["player_name"])
-        )
+        top_remaining_players.sort(key=lambda item: (-item["ownership_remaining_pct"], item["player_name"]))
         top_remaining_players = top_remaining_players[:10]
 
         cash_rank = results.min_rank if results.min_rank > 0 else None
@@ -518,8 +507,7 @@ def collect_snapshot_data(
             below_cash = [
                 row
                 for row in standings
-                if _rank_numeric(row["rank"]) is not None
-                and _rank_numeric(row["rank"]) > int(cash_rank)
+                if (rank_num := _rank_numeric(row["rank"])) is not None and rank_num > int(cash_rank)
             ]
             if below_cash and cash_points is not None:
                 first_below = below_cash[0]
@@ -556,7 +544,7 @@ def collect_snapshot_data(
         train_clusters.sort(
             key=lambda item: (
                 -item["user_count"],
-                -(item["points"] if item["points"] is not None else -10**9),
+                -(item["points"] if item["points"] is not None else -(10**9)),
                 item["lineup_signature"],
             )
         )
@@ -622,15 +610,9 @@ def build_snapshot(
         standings_limit=standings_limit,
     )
     snapshot = _merge_dict(_default_snapshot(sport), collected)
-    snapshot["snapshot_generated_at_utc"] = to_utc_iso(
-        datetime.datetime.now(datetime.timezone.utc)
-    )
+    snapshot["snapshot_generated_at_utc"] = to_utc_iso(datetime.datetime.now(datetime.timezone.utc))
 
-    missing = [
-        path
-        for path in _find_missing_fields(snapshot)
-        if not path.startswith("metadata.missing_fields")
-    ]
+    missing = [path for path in _find_missing_fields(snapshot) if not path.startswith("metadata.missing_fields")]
     snapshot["metadata"]["missing_fields"] = sorted(set(missing))
     return snapshot
 
@@ -662,8 +644,7 @@ def _normalize_value(value: Any, path: str, warnings: list[dict[str, Any]]) -> A
 
     if isinstance(value, list):
         return [
-            _normalize_value(item, f"{path}.{idx}" if path else str(idx), warnings)
-            for idx, item in enumerate(value)
+            _normalize_value(item, f"{path}.{idx}" if path else str(idx), warnings) for idx, item in enumerate(value)
         ]
 
     return value
@@ -685,13 +666,16 @@ def snapshot_to_json(snapshot: dict[str, Any]) -> str:
 
 
 def to_stable_json(payload: Any) -> str:
-    return json.dumps(
-        payload,
-        sort_keys=True,
-        indent=2,
-        separators=(",", ":"),
-        ensure_ascii=True,
-    ) + "\n"
+    return (
+        json.dumps(
+            payload,
+            sort_keys=True,
+            indent=2,
+            separators=(",", ":"),
+            ensure_ascii=True,
+        )
+        + "\n"
+    )
 
 
 def _cash_line_contract(cash_line: dict[str, Any]) -> dict[str, Any]:
@@ -737,9 +721,7 @@ def _ownership_watchlist_contract(ownership: dict[str, Any], updated_at: str) ->
         top_n_default = 10
     return {
         "updated_at": updated_at,
-        "ownership_remaining_total_pct": _to_float(
-            ownership.get("ownership_remaining_total_pct")
-        ),
+        "ownership_remaining_total_pct": _to_float(ownership.get("ownership_remaining_total_pct")),
         "top_n_default": top_n_default,
         "entries": entries,
     }
@@ -824,9 +806,7 @@ def _canonical_player_name(raw_name: Any, lookup: dict[str, str]) -> str | None:
     return None
 
 
-def _cluster_composition(
-    cluster: dict[str, Any], player_lookup: dict[str, str]
-) -> list[dict[str, Any]]:
+def _cluster_composition(cluster: dict[str, Any], player_lookup: dict[str, str]) -> list[dict[str, Any]]:
     signature = str(cluster.get("lineup_signature") or "").strip()
     if not signature:
         return []
@@ -908,12 +888,7 @@ def _vip_slots_from_lineup(lineup: Any, player_lookup: dict[str, str]) -> list[d
     for index, item in enumerate(lineup):
         if isinstance(item, dict):
             player_name = item.get("player_name") or item.get("name")
-            slot = (
-                item.get("slot")
-                or item.get("position")
-                or item.get("pos")
-                or f"SLOT_{index + 1}"
-            )
+            slot = item.get("slot") or item.get("position") or item.get("pos") or f"SLOT_{index + 1}"
             multiplier = item.get("multiplier")
         else:
             player_name = str(item)
@@ -950,24 +925,18 @@ def _vip_lineups_contract(
             entry_key = standings_row.get("entry_key")
         if display_name in (None, "") and entry_key not in (None, ""):
             display_name = str(entry_key)
-        current_points = (
-            row.get("pts") if row.get("pts") is not None else standings_row.get("points")
-        )
-        current_rank = (
-            row.get("rank") if row.get("rank") is not None else standings_row.get("rank")
-        )
+        current_points = row.get("pts") if row.get("pts") is not None else standings_row.get("points")
+        current_rank = row.get("rank") if row.get("rank") is not None else standings_row.get("rank")
         current_points_num = _to_float(current_points)
         current_rank_num = _rank_numeric(current_rank)
+        points_cutoff = cash_line.get("points_cutoff")
         cash_line_delta_points = (
-            float(current_points_num) - float(cash_line.get("points_cutoff"))
-            if isinstance(current_points_num, (int, float))
-            and isinstance(cash_line.get("points_cutoff"), (int, float))
+            float(current_points_num) - float(points_cutoff)
+            if isinstance(current_points_num, (int, float)) and isinstance(points_cutoff, (int, float))
             else None
         )
         payout_cents = _to_int(
-            row.get("payout_cents")
-            if row.get("payout_cents") is not None
-            else standings_row.get("payout_cents")
+            row.get("payout_cents") if row.get("payout_cents") is not None else standings_row.get("payout_cents")
         )
         is_cashing = payout_cents is not None
 
@@ -982,12 +951,8 @@ def _vip_lineups_contract(
                 "cash_line_delta_points": cash_line_delta_points,
                 "is_cashing": is_cashing,
                 "payout_cents": payout_cents,
-                "ownership_remaining_pct": _to_float(
-                    standings_row.get("ownership_remaining_pct")
-                ),
-                "pmr": _to_float(
-                    row.get("pmr") if row.get("pmr") is not None else standings_row.get("pmr")
-                ),
+                "ownership_remaining_pct": _to_float(standings_row.get("ownership_remaining_pct")),
+                "pmr": _to_float(row.get("pmr") if row.get("pmr") is not None else standings_row.get("pmr")),
             },
             "slots": _vip_slots_from_lineup(
                 row.get("lineup") if row.get("lineup") is not None else row.get("players"),
@@ -1065,11 +1030,7 @@ def _threat_metrics(
     vip_lineup_players: list[set[str]] = []
     for lineup in vip_lineups:
         slots = lineup.get("slots") or []
-        names = {
-            str(slot.get("player_name")).strip().lower()
-            for slot in slots
-            if slot.get("player_name")
-        }
+        names = {str(slot.get("player_name")).strip().lower() for slot in slots if slot.get("player_name")}
         vip_lineup_players.append(names)
 
     top_swing: list[dict[str, Any]] = []
@@ -1095,9 +1056,7 @@ def _threat_metrics(
     for lineup in vip_lineups:
         vip_remaining = (lineup.get("live") or {}).get("ownership_remaining_pct")
         uniqueness_delta = None
-        if isinstance(field_remaining_pct, (int, float)) and isinstance(
-            vip_remaining, (int, float)
-        ):
+        if isinstance(field_remaining_pct, (int, float)) and isinstance(vip_remaining, (int, float)):
             uniqueness_delta = float(field_remaining_pct) - float(vip_remaining)
         vip_vs_field.append(
             {
@@ -1296,6 +1255,8 @@ def build_dashboard_sport_snapshot(snapshot: dict[str, Any], generated_at: str) 
 
 def build_dashboard_envelope(sports: dict[str, dict[str, Any]]) -> dict[str, Any]:
     generated_at = to_utc_iso(datetime.datetime.now(datetime.timezone.utc))
+    if generated_at is None:
+        raise RuntimeError("Failed to build generated_at timestamp")
     output_sports: dict[str, Any] = {}
     for sport, snapshot in sorted(sports.items()):
         sport_snapshot = build_dashboard_sport_snapshot(snapshot, generated_at)

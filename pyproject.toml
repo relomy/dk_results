@@ -46,3 +46,6 @@ testpaths = ["tests"]
 pythonpath = ["src", "."]
 
 [tool.ty]
+
+[tool.ty.src]
+exclude = ["tests"]

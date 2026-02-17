@@ -1,5 +1,4 @@
 import pytest
-
 from bot.botinterface import BotInterface
 
 
@@ -34,7 +33,4 @@ def test_send_handles_callback_error():
 
     assert bot.sent
     assert "There was an error that occurred with the bot: boom" in bot.sent[0]
-    assert (
-        "Please report it at https://github.com/SwapnikKatkoori/sleeper-ff-bot/issues"
-        in bot.sent[0]
-    )
+    assert "Please report it at https://github.com/SwapnikKatkoori/sleeper-ff-bot/issues" in bot.sent[0]

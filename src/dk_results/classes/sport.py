@@ -44,13 +44,8 @@ class Sport:
     def get_suffix_patterns(cls) -> list[re.Pattern]:
         """Return compiled regex patterns for suffix filtering."""
         current_key = tuple(cls.suffixes)
-        if (
-            cls._compiled_suffix_patterns is None
-            or cls._suffix_patterns_cache_key != current_key
-        ):
-            cls._compiled_suffix_patterns = [
-                re.compile(pattern) for pattern in cls.suffixes
-            ]
+        if cls._compiled_suffix_patterns is None or cls._suffix_patterns_cache_key != current_key:
+            cls._compiled_suffix_patterns = [re.compile(pattern) for pattern in cls.suffixes]
             cls._suffix_patterns_cache_key = current_key
         return cls._compiled_suffix_patterns
 

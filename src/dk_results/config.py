@@ -22,9 +22,7 @@ def apply_environment_defaults(settings: common_config.DkResultsSettings) -> Non
     if not os.getenv("SHEET_GIDS_FILE") and settings.sheet_gids_file:
         os.environ["SHEET_GIDS_FILE"] = settings.sheet_gids_file
     if not os.getenv("DISCORD_NOTIFICATIONS_ENABLED"):
-        os.environ["DISCORD_NOTIFICATIONS_ENABLED"] = (
-            "true" if settings.discord_notifications_enabled else "false"
-        )
+        os.environ["DISCORD_NOTIFICATIONS_ENABLED"] = "true" if settings.discord_notifications_enabled else "false"
     if not os.getenv("CONTEST_WARNING_MINUTES"):
         os.environ["CONTEST_WARNING_MINUTES"] = str(settings.contest_warning_minutes)
 

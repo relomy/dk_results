@@ -1,13 +1,14 @@
 import logging
-import logging.config
 from typing import Type
 
 import pulp as pl
 
+from dk_results.logging import configure_logging
+
 from .player import Player
 from .sport import Sport
 
-logging.config.fileConfig("logging.ini")
+configure_logging()
 
 
 class Optimizer:
@@ -52,14 +53,10 @@ class Optimizer:
         for player in self.players:
             selected_positions = self.players[player].roster_pos
             for pos in selected_positions:
-                selected_players[(player, pos)] = pl.LpVariable(
-                    f"{player}_{pos}", 0, 1, pl.LpInteger
-                )
+                selected_players[(player, pos)] = pl.LpVariable(f"{player}_{pos}", 0, 1, pl.LpInteger)
         return selected_players
 
-    def define_budget_constraint(
-        self, selected_players: dict[tuple[str, str], pl.LpVariable]
-    ) -> None:
+    def define_budget_constraint(self, selected_players: dict[tuple[str, str], pl.LpVariable]) -> None:
         budget = 50000
         total_salary = sum(
             self.players[player].salary * selected_players[(player, pos)]
@@ -68,22 +65,14 @@ class Optimizer:
         )
         self.prob += (total_salary <= budget, "Budget Constraint")
 
-    def define_player_count_constraint(
-        self, selected_players: dict[tuple[str, str], pl.LpVariable]
-    ) -> None:
+    def define_player_count_constraint(self, selected_players: dict[tuple[str, str], pl.LpVariable]) -> None:
         for player in self.players:
             self.prob += (
-                sum(
-                    selected_players[player, pos]
-                    for pos in self.players[player].roster_pos
-                )
-                <= 1,
+                sum(selected_players[player, pos] for pos in self.players[player].roster_pos) <= 1,
                 f"Only one position for player {player}",
             )
 
-    def define_objective(
-        self, selected_players: dict[tuple[str, str], pl.LpVariable]
-    ) -> None:
+    def define_objective(self, selected_players: dict[tuple[str, str], pl.LpVariable]) -> None:
         self.prob += (
             sum(
                 self.players[player].fpts * selected_players[(player, pos)]
@@ -93,9 +82,7 @@ class Optimizer:
             "Total Points",
         )
 
-    def define_position_constraints(
-        self, selected_players: dict[tuple[str, str], pl.LpVariable]
-    ) -> None:
+    def define_position_constraints(self, selected_players: dict[tuple[str, str], pl.LpVariable]) -> None:
         for position in self.sport_obj.positions:
             x = self.create_position_constraint(selected_players, position)
             self.prob += x
@@ -113,9 +100,7 @@ class Optimizer:
     def solve_problem(self) -> None:
         pl.GLPK(msg=0).solve(self.prob)
 
-    def extract_optimal_lineup(
-        self, selected_players: dict[tuple[str, str], pl.LpVariable]
-    ) -> list[Player] | None:
+    def extract_optimal_lineup(self, selected_players: dict[tuple[str, str], pl.LpVariable]) -> list[Player] | None:
         optimal_players: list[Player] = []
         if self.prob.status == 1:
             total_points = 0.0

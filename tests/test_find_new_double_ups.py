@@ -2,22 +2,11 @@ import argparse
 import datetime
 import runpy
 import sys
-import types
 
 import pytest
-from dfs_common.discord import WebhookSender
-from requests.cookies import RequestsCookieJar
-
-import find_new_double_ups as find_mod
 from classes.contest import Contest
 from classes.sport import NFLShowdownSport, NFLSport, PGAShowdownSport, PGAWeekendSport, Sport
-from find_new_double_ups import (
-    _init_runtime,
-    parse_args,
-    process_sport,
-    send_discord_notification,
-    set_quiet_verbosity,
-)
+from dfs_common.discord import WebhookSender
 from lobby.common import get_salary_date, is_time_between, valid_date
 from lobby.double_ups import contest_meets_criteria, get_double_ups, get_stats
 from lobby.fetch import get_dk_lobby
@@ -28,6 +17,16 @@ from lobby.parsing import (
     get_draft_groups_from_response,
     log_draft_group_event,
 )
+from requests.cookies import RequestsCookieJar
+
+import dk_results.cli.find_new_double_ups as find_mod
+from dk_results.cli.find_new_double_ups import (
+    _init_runtime,
+    parse_args,
+    process_sport,
+    send_discord_notification,
+    set_quiet_verbosity,
+)
 
 
 def test_find_new_double_ups_exposes_webhook_sender():
@@ -35,22 +34,22 @@ def test_find_new_double_ups_exposes_webhook_sender():
 
 
 def test_init_runtime_keeps_existing_loggers(monkeypatch):
-    calls = {"dotenv": 0, "file_config_kwargs": None}
+    calls = {"dotenv": 0, "configure_logging": 0}
 
     monkeypatch.setattr(
-        "find_new_double_ups.load_dotenv",
+        "dk_results.cli.find_new_double_ups.load_dotenv",
         lambda *_a, **_k: calls.__setitem__("dotenv", calls["dotenv"] + 1),
     )
 
-    def fake_file_config(*_args, **kwargs):
-        calls["file_config_kwargs"] = kwargs
-
-    monkeypatch.setattr("find_new_double_ups.logging.config.fileConfig", fake_file_config)
+    monkeypatch.setattr(
+        "dk_results.cli.find_new_double_ups.configure_logging",
+        lambda: calls.__setitem__("configure_logging", calls["configure_logging"] + 1),
+    )
 
     _init_runtime()
 
     assert calls["dotenv"] == 1
-    assert calls["file_config_kwargs"] == {"disable_existing_loggers": False}
+    assert calls["configure_logging"] == 1
 
 
 def test_build_draft_group_start_map_filters_and_parses():
@@ -118,8 +117,8 @@ def test_process_sport_syncs_draft_group_start_dates(monkeypatch):
         def insert_contests(self, _contests):
             return None
 
-    monkeypatch.setattr("find_new_double_ups.get_dk_lobby", fake_get_dk_lobby)
-    monkeypatch.setattr("find_new_double_ups._upsert_contests", lambda *_a, **_k: None)
+    monkeypatch.setattr("dk_results.cli.find_new_double_ups.get_dk_lobby", fake_get_dk_lobby)
+    monkeypatch.setattr("dk_results.cli.find_new_double_ups._upsert_contests", lambda *_a, **_k: None)
     db = FakeDB()
 
     process_sport("NFL", {"NFL": NFLSport}, db, None)
@@ -134,13 +133,13 @@ def test_upsert_contests_uses_dfs_common(monkeypatch):
     contest = Contest(_contest_payload(303), "NBA")
     calls = {"db_path": None, "rows": None}
 
-    monkeypatch.setattr("find_new_double_ups.state.contests_db_path", lambda: "/tmp/contests.db")
+    monkeypatch.setattr("dk_results.cli.find_new_double_ups.state.contests_db_path", lambda: "/tmp/contests.db")
 
     def fake_upsert(db_path, rows):
         calls["db_path"] = db_path
         calls["rows"] = list(rows)
 
-    monkeypatch.setattr("find_new_double_ups.contests.upsert_contests", fake_upsert)
+    monkeypatch.setattr("dk_results.cli.find_new_double_ups.contests.upsert_contests", fake_upsert)
 
     find_mod._upsert_contests([contest])
 
@@ -504,7 +503,7 @@ def test_process_sport_sends_notification(monkeypatch):
         def send_message(self, message: str):
             self.sent.append(message)
 
-    monkeypatch.setattr("find_new_double_ups.get_dk_lobby", fake_get_dk_lobby)
+    monkeypatch.setattr("dk_results.cli.find_new_double_ups.get_dk_lobby", fake_get_dk_lobby)
 
     class DummySport(Sport):
         name = "NBA"
@@ -516,7 +515,7 @@ def test_process_sport_sends_notification(monkeypatch):
     monkeypatch.setenv("DFS_STATE_DIR", "/tmp")
     recorded = []
     monkeypatch.setattr(
-        "find_new_double_ups._upsert_contests", lambda contests: recorded.extend(contests)
+        "dk_results.cli.find_new_double_ups._upsert_contests", lambda contests: recorded.extend(contests)
     )
 
     process_sport("NBA", {"NBA": DummySport}, db, bot)
@@ -570,9 +569,7 @@ def test_get_stats_counts_duplicate_dubs():
 
 def test_is_time_between_standard_range():
     assert is_time_between(datetime.time(9, 0), datetime.time(17, 0), datetime.time(12, 0))
-    assert not is_time_between(
-        datetime.time(9, 0), datetime.time(17, 0), datetime.time(8, 0)
-    )
+    assert not is_time_between(datetime.time(9, 0), datetime.time(17, 0), datetime.time(8, 0))
 
 
 def test_parse_args_parses_sport_and_quiet(monkeypatch):
@@ -583,8 +580,10 @@ def test_parse_args_parses_sport_and_quiet(monkeypatch):
 
 
 def test_main_executes_with_fakes(monkeypatch, tmp_path):
-    fake_cookieservice = types.ModuleType("classes.cookieservice")
-    fake_cookieservice.get_dk_cookies = lambda *_a, **_k: ({}, RequestsCookieJar())
+    monkeypatch.setattr(
+        "dk_results.classes.cookieservice.get_dk_cookies",
+        lambda *_a, **_k: ({}, RequestsCookieJar()),
+    )
 
     class FakeDB:
         def __init__(self, *_a, **_k):
@@ -605,22 +604,18 @@ def test_main_executes_with_fakes(monkeypatch, tmp_path):
         def close(self):
             return None
 
-    fake_contestdatabase = types.ModuleType("classes.contestdatabase")
-    fake_contestdatabase.ContestDatabase = FakeDB
-
     class FakeResp:
         def json(self):
             return {"Contests": [], "DraftGroups": []}
 
-    monkeypatch.setitem(sys.modules, "classes.cookieservice", fake_cookieservice)
-    monkeypatch.setitem(sys.modules, "classes.contestdatabase", fake_contestdatabase)
+    monkeypatch.setattr("dk_results.cli.find_new_double_ups.ContestDatabase", FakeDB)
     monkeypatch.setattr("requests.get", lambda *_a, **_k: FakeResp())
     monkeypatch.setenv("DISCORD_WEBHOOK", "")
     monkeypatch.setenv("DFS_STATE_DIR", str(tmp_path))
-    monkeypatch.setattr("find_new_double_ups._upsert_contests", lambda *_a, **_k: None)
+    monkeypatch.setattr("dk_results.cli.find_new_double_ups._upsert_contests", lambda *_a, **_k: None)
     monkeypatch.setattr(sys, "argv", ["prog", "-s", "NFL"])
 
-    runpy.run_module("find_new_double_ups", run_name="__main__")
+    runpy.run_module("dk_results.cli.find_new_double_ups", run_name="__main__")
 
 
 def test_get_stats_counts_multiple_entry_fees():
@@ -637,8 +632,10 @@ def test_get_stats_counts_multiple_entry_fees():
 
 
 def test_main_with_webhook_and_quiet(monkeypatch):
-    fake_cookieservice = types.ModuleType("classes.cookieservice")
-    fake_cookieservice.get_dk_cookies = lambda *_a, **_k: ({}, RequestsCookieJar())
+    monkeypatch.setattr(
+        "dk_results.classes.cookieservice.get_dk_cookies",
+        lambda *_a, **_k: ({}, RequestsCookieJar()),
+    )
 
     class FakeDB:
         def __init__(self, *_a, **_k):
@@ -659,27 +656,25 @@ def test_main_with_webhook_and_quiet(monkeypatch):
         def close(self):
             return None
 
-    fake_contestdatabase = types.ModuleType("classes.contestdatabase")
-    fake_contestdatabase.ContestDatabase = FakeDB
-
     class FakeResp:
         def json(self):
             return {"Contests": [], "DraftGroups": []}
 
-    monkeypatch.setitem(sys.modules, "classes.cookieservice", fake_cookieservice)
-    monkeypatch.setitem(sys.modules, "classes.contestdatabase", fake_contestdatabase)
+    monkeypatch.setattr("dk_results.cli.find_new_double_ups.ContestDatabase", FakeDB)
     monkeypatch.setattr("requests.get", lambda *_a, **_k: FakeResp())
     monkeypatch.setenv("DISCORD_WEBHOOK", "https://example.test/hook")
     monkeypatch.setenv("DFS_STATE_DIR", "/tmp")
-    monkeypatch.setattr("find_new_double_ups._upsert_contests", lambda *_a, **_k: None)
+    monkeypatch.setattr("dk_results.cli.find_new_double_ups._upsert_contests", lambda *_a, **_k: None)
     monkeypatch.setattr(sys, "argv", ["prog", "-s", "NFL", "-q"])
 
-    runpy.run_module("find_new_double_ups", run_name="__main__")
+    runpy.run_module("dk_results.cli.find_new_double_ups", run_name="__main__")
 
 
 def test_main_resolves_db_path_once(monkeypatch):
-    fake_cookieservice = types.ModuleType("classes.cookieservice")
-    fake_cookieservice.get_dk_cookies = lambda *_a, **_k: ({}, RequestsCookieJar())
+    monkeypatch.setattr(
+        "dk_results.classes.cookieservice.get_dk_cookies",
+        lambda *_a, **_k: ({}, RequestsCookieJar()),
+    )
 
     class FakeDB:
         def __init__(self, *_a, **_k):
@@ -697,9 +692,6 @@ def test_main_resolves_db_path_once(monkeypatch):
         def close(self):
             return None
 
-    fake_contestdatabase = types.ModuleType("classes.contestdatabase")
-    fake_contestdatabase.ContestDatabase = FakeDB
-
     class FakeResp:
         def json(self):
             return {"Contests": [], "DraftGroups": []}
@@ -714,14 +706,13 @@ def test_main_resolves_db_path_once(monkeypatch):
         calls["init_schema"] += 1
         return "/tmp/contests.db"
 
-    monkeypatch.setitem(sys.modules, "classes.cookieservice", fake_cookieservice)
-    monkeypatch.setitem(sys.modules, "classes.contestdatabase", fake_contestdatabase)
+    monkeypatch.setattr("dk_results.cli.find_new_double_ups.ContestDatabase", FakeDB)
     monkeypatch.setattr("requests.get", lambda *_a, **_k: FakeResp())
-    monkeypatch.setattr("find_new_double_ups.state.contests_db_path", fake_contests_db_path)
-    monkeypatch.setattr("find_new_double_ups.contests.init_schema", fake_init_schema)
+    monkeypatch.setattr("dk_results.cli.find_new_double_ups.state.contests_db_path", fake_contests_db_path)
+    monkeypatch.setattr("dk_results.cli.find_new_double_ups.contests.init_schema", fake_init_schema)
     monkeypatch.setenv("DISCORD_WEBHOOK", "")
     monkeypatch.setattr(sys, "argv", ["prog", "-s", "NFL"])
 
-    runpy.run_module("find_new_double_ups", run_name="__main__")
+    runpy.run_module("dk_results.cli.find_new_double_ups", run_name="__main__")
 
     assert calls == {"contests_db_path": 1, "init_schema": 1}

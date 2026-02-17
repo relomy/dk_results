@@ -147,7 +147,5 @@ def test_contest_get_dt_from_timestamp_and_str_smoke():
         "NFL",
     )
 
-    assert contest.get_dt_from_timestamp("/Date(0)/") == datetime.datetime.fromtimestamp(
-        0
-    )
+    assert contest.get_dt_from_timestamp("/Date(0)/") == datetime.datetime.fromtimestamp(0)
     assert "Contest" in str(contest)

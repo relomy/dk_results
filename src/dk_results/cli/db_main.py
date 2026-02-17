@@ -1,7 +1,6 @@
 import argparse
 import datetime
 import logging
-import logging.config
 import os
 import pathlib
 import sqlite3
@@ -10,7 +9,6 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 import yaml
-from dfs_common import config as common_config
 from dfs_common import state
 from dfs_common.discord import WebhookSender
 
@@ -23,6 +21,9 @@ from dk_results.classes.results import Results
 from dk_results.classes.sheets_service import build_dfs_sheet_service
 from dk_results.classes.sport import Sport
 from dk_results.classes.trainfinder import TrainFinder
+from dk_results.config import load_and_apply_settings
+from dk_results.logging import configure_logging
+from dk_results.paths import repo_file
 from dk_results.services.snapshot_exporter import (
     DEFAULT_STANDINGS_LIMIT,
     build_snapshot,
@@ -31,32 +32,32 @@ from dk_results.services.snapshot_exporter import (
     to_utc_iso,
 )
 
-# load the logging configuration
-logging.config.fileConfig("logging.ini")
-
 logger = logging.getLogger(__name__)
 
 try:
     from dotenv import load_dotenv
 except ImportError:  # pragma: no cover
+
     def load_dotenv(*_args, **_kwargs):
         return False
+
 
 # typing helpers
 SportType = type[Sport]
 
 # Centralized constants
-CONTEST_DIR = "contests"
-SALARY_DIR = "salary"
+CONTEST_DIR = str(repo_file("contests"))
+SALARY_DIR = str(repo_file("salary"))
 SALARY_LIMIT = 40000
-COOKIES_FILE = "pickled_cookies_works.txt"
+COOKIES_FILE = str(repo_file("pickled_cookies_works.txt"))
 
 
 def _build_bonus_sender() -> WebhookSender | None:
-    notifications_enabled = (
-        os.getenv("DISCORD_NOTIFICATIONS_ENABLED", "true").strip().lower()
-        not in {"0", "false", "no"}
-    )
+    notifications_enabled = os.getenv("DISCORD_NOTIFICATIONS_ENABLED", "true").strip().lower() not in {
+        "0",
+        "false",
+        "no",
+    }
     if not notifications_enabled:
         return None
     webhook = os.getenv("DISCORD_BONUS_WEBHOOK") or os.getenv("DISCORD_WEBHOOK")
@@ -70,7 +71,7 @@ def load_vips() -> list[str]:
     Load VIP usernames from vips.yaml located next to this file.
     Returns an empty list if the file is missing or malformed.
     """
-    vip_path = pathlib.Path(__file__).parent / "vips.yaml"
+    vip_path = repo_file("vips.yaml")
     try:
         with open(vip_path, "r") as f:
             vips = yaml.safe_load(f) or []
@@ -80,14 +81,10 @@ def load_vips() -> list[str]:
         # Normalize to strings and strip whitespace
         return [str(x).strip() for x in vips if str(x).strip()]
     except FileNotFoundError:
-        logger.warning(
-            "vips.yaml not found at %s; proceeding with empty VIP list.", vip_path
-        )
+        logger.warning("vips.yaml not found at %s; proceeding with empty VIP list.", vip_path)
         return []
     except Exception as e:
-        logger.warning(
-            "Failed to load vips.yaml: %s; proceeding with empty VIP list.", e
-        )
+        logger.warning("Failed to load vips.yaml: %s; proceeding with empty VIP list.", e)
         return []
 
 
@@ -124,9 +121,7 @@ def write_players_to_sheet(
     dk_id = results.contest_id
     dg = draft_group
     if dg is None:
-        logger.warning(
-            "No draft group found for sport, cannot pull VIP lineups from API."
-        )
+        logger.warning("No draft group found for sport, cannot pull VIP lineups from API.")
         return
 
     vip_entries: dict[str, dict[str, Any] | str] = {}
@@ -139,9 +134,7 @@ def write_players_to_sheet(
             "rank": vip.rank,
             "pts": vip.pts,
         }
-    player_salary_map: dict[str, int] = {
-        name: player.salary for name, player in results.players.items()
-    }
+    player_salary_map: dict[str, int] = {name: player.salary for name, player in results.players.items()}
     vip_lineups: list[dict] = dk.get_vip_lineups(
         dk_id,
         dg,
@@ -199,9 +192,7 @@ def write_non_cashing_info(sheet: DfsSheetService, results: Results) -> None:
                     reverse=True,
                 )
             }
-            top_ten_players = [
-                p for p, _ in list(sorted_non_cashing_players.items())[:10]
-            ]
+            top_ten_players = [p for p, _ in list(sorted_non_cashing_players.items())[:10]]
             for p in top_ten_players:
                 count = results.non_cashing_players[p]
                 ownership = float(count / results.non_cashing_users)
@@ -226,9 +217,7 @@ def write_train_info(sheet: DfsSheetService, results: Results) -> None:
         )
         logger.info(f"total scores above salary ${SALARY_LIMIT}")
 
-        trains: dict[str, dict[str, Any]] = trainfinder.get_users_above_salary_spent(
-            SALARY_LIMIT
-        )
+        trains: dict[str, dict[str, Any]] = trainfinder.get_users_above_salary_spent(SALARY_LIMIT)
         delete_keys = [key for key in trains if trains[key]["count"] == 1]
         for key in delete_keys:
             del trains[key]
@@ -240,9 +229,7 @@ def write_train_info(sheet: DfsSheetService, results: Results) -> None:
         ]
         for k, v in sorted_trains.items():
             row = [v["rank"], v["count"], v["pts"], v["pmr"]]
-            logger.info(
-                f"Users: {v['count']} Score: {v['pts']} PMR: {v['pmr']} Lineup: {v['lineup']}"
-            )
+            logger.info(f"Users: {v['count']} Score: {v['pts']} PMR: {v['pmr']} Lineup: {v['lineup']}")
             lineupobj = v["lineup"]
             if lineupobj:
                 row.extend([player.name for player in lineupobj.lineup])
@@ -272,9 +259,7 @@ def process_sport(
     if sport_name not in choices:
         raise Exception("Could not find matching Sport subclass")
     sport_obj = choices[sport_name]
-    result = contest_database.get_live_contest(
-        sport_obj.name, sport_obj.sheet_min_entry_fee, sport_obj.keyword
-    )
+    result = contest_database.get_live_contest(sport_obj.name, sport_obj.sheet_min_entry_fee, sport_obj.keyword)
     if not result:
         logger.warning("There are no live contests for %s! Moving on.", sport_name)
         return None
@@ -318,9 +303,7 @@ def process_sport(
             optimizer = Optimizer(sport_obj, p)
             optimized_players = optimizer.get_optimal_lineup()
             if optimized_players:
-                optimized_players.sort(
-                    key=lambda x: (sport_obj.positions.index(x.pos), x.name)
-                )
+                optimized_players.sort(key=lambda x: (sport_obj.positions.index(x.pos), x.name))
             if optimized_players:
                 optimized_info = [
                     ["Pos", "Name", "Salary", "Pts", "Value", "Own%"],
@@ -384,12 +367,8 @@ def main() -> None:
     Use database and update Google Sheet with contest standings from DraftKings.
     """
     load_dotenv()
-    cfg = common_config.load_json_config()
-    settings = common_config.resolve_dk_results_settings(cfg)
-    if settings.dfs_state_dir and not os.getenv("DFS_STATE_DIR"):
-        os.environ["DFS_STATE_DIR"] = settings.dfs_state_dir
-    if settings.spreadsheet_id and not os.getenv("SPREADSHEET_ID"):
-        os.environ["SPREADSHEET_ID"] = settings.spreadsheet_id
+    load_and_apply_settings()
+    configure_logging()
 
     parser = argparse.ArgumentParser()
     sportz: list[SportType] = Sport.__subclasses__()

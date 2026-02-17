@@ -77,9 +77,7 @@ class Results:
 
         # if there's no salary file specified, use the sport/day for the filename
         if not salary_csv_fn:
-            salary_csv_fn = (
-                f"DKSalaries_{self.sport_obj.sport_name}_{datetime.now():%A}.csv"
-            )
+            salary_csv_fn = f"DKSalaries_{self.sport_obj.sport_name}_{datetime.now():%A}.csv"
 
         if salary_rows is not None:
             self.parse_salary_rows(salary_rows)
@@ -91,9 +89,7 @@ class Results:
 
         # contest_fn = 'contest-standings-73990354.csv'
         contest_dir = "contests"
-        contest_fn = os.path.join(
-            contest_dir, "contest-standings-{}.csv".format(self.contest_id)
-        )
+        contest_fn = os.path.join(contest_dir, "contest-standings-{}.csv".format(self.contest_id))
 
         # this pulls the DK users and updates the players stats
         if standings_rows is not None:
@@ -133,9 +129,7 @@ class Results:
             # ensure name doesn't have any weird characters
             name = normalize_name(name)
 
-            self.players[name] = Player(
-                name, pos, roster_pos, salary, game_info, team_abbv
-            )
+            self.players[name] = Player(name, pos, roster_pos, salary, game_info, team_abbv)
 
     def parse_contest_standings_csv(self, filename: str) -> None:
         """Parse CSV containing contest standings and player ownership."""
@@ -164,9 +158,7 @@ class Results:
             if core_blank:
                 # DK exports may include player-stat-only rows with blank entry columns.
                 player_stats = row[7:]
-                if player_stats and not all(
-                    s == "" or str(s).isspace() for s in player_stats
-                ):
+                if player_stats and not all(s == "" or str(s).isspace() for s in player_stats):
                     name, pos, ownership, fpts = player_stats
                     name = normalize_name(name)
                     try:
@@ -205,11 +197,7 @@ class Results:
                 self.vip_list.append(user)
 
             # keep track of minimum pts to cash
-            if (
-                self.positions_paid is not None
-                and parsed_rank is not None
-                and parsed_points is not None
-            ):
+            if self.positions_paid is not None and parsed_rank is not None and parsed_points is not None:
                 # set minimum cash pts
                 if self.positions_paid >= parsed_rank and self.min_cash_pts > parsed_points:
                     self.min_rank = parsed_rank
@@ -229,17 +217,13 @@ class Results:
 
                         for player in lineup_players:
                             if player.pos == "CPT":
-                                showdown_captains = self.add_player_to_dict(
-                                    player, showdown_captains
-                                )
+                                showdown_captains = self.add_player_to_dict(player, showdown_captains)
 
                             # we only care about players that are not done yet
                             if player.game_info == "Final":
                                 continue
 
-                            self.non_cashing_players = self.add_player_to_dict(
-                                player, self.non_cashing_players
-                            )
+                            self.non_cashing_players = self.add_player_to_dict(player, self.non_cashing_players)
 
                         self.non_cashing_users += 1
 
@@ -260,9 +244,7 @@ class Results:
                     self.logger.error("Player %s not found in players[] dict", name)
 
         if self.non_cashing_users > 0 and self.non_cashing_total_pmr > 0:
-            self.non_cashing_avg_pmr = (
-                self.non_cashing_total_pmr / self.non_cashing_users
-            )
+            self.non_cashing_avg_pmr = self.non_cashing_total_pmr / self.non_cashing_users
 
         self.logger.debug(
             "non_cashing: users {} total_pmr: {} avg_pmr: {}".format(
@@ -288,9 +270,7 @@ class Results:
             for cpt in top_ten_cpts:
                 self.get_showdown_captain_percent(cpt, showdown_captains)
 
-    def add_player_to_dict(
-        self, player: Player, dictionary: dict[str, int]
-    ) -> dict[str, int]:
+    def add_player_to_dict(self, player: Player, dictionary: dict[str, int]) -> dict[str, int]:
         if player.name not in dictionary:
             dictionary[player.name] = 0
 
@@ -299,17 +279,11 @@ class Results:
 
         return dictionary
 
-    def get_showdown_captain_percent(
-        self, player: str, showdown_captains: dict[str, int]
-    ) -> None:
+    def get_showdown_captain_percent(self, player: str, showdown_captains: dict[str, int]) -> None:
         percent = 0.0
         num_users = len(self.users)
         percent = float(showdown_captains[player] / num_users) * 100
-        print(
-            "{}: {:0.2f}% [{}/{}]".format(
-                player, percent, showdown_captains[player], num_users
-            )
-        )
+        print("{}: {:0.2f}% [{}/{}]".format(player, percent, showdown_captains[player], num_users))
 
     def load_standings(self, filename: str) -> list[list[str]]:
         """Load standings CSV and return list."""
@@ -321,17 +295,11 @@ class Results:
     def players_to_values(self, sport: str) -> list[list]:
         """Return list for DfsSheetService values."""
         # sort players by ownership
-        sorted_players = sorted(
-            self.players, key=lambda x: self.players[x].ownership, reverse=True
-        )
+        sorted_players = sorted(self.players, key=lambda x: self.players[x].ownership, reverse=True)
         # for p in self.players.values():
         #     print(p.perc)
         #     print()
-        return [
-            self.players[p].writeable(sport)
-            for p in sorted_players
-            if self.players[p].ownership > 0
-        ]
+        return [self.players[p].writeable(sport) for p in sorted_players if self.players[p].ownership > 0]
 
     def get_players(self) -> dict[str, Player]:
         return self.players

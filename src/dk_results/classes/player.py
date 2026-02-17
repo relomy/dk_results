@@ -1,12 +1,13 @@
 """Create a Player object to represent an athlete for a given sport."""
 
 import logging
-import logging.config
 from dataclasses import InitVar, dataclass, field
 from typing import Any
 
+from dk_results.logging import configure_logging
+
 # load the logging configuration
-logging.config.fileConfig("logging.ini")
+configure_logging()
 
 
 @dataclass
@@ -30,9 +31,7 @@ class Player:
 
     def __post_init__(self, salary_raw: int | str) -> None:
         self.logger = self.logger or logging.getLogger(__name__)
-        self.roster_pos = (
-            self.roster_pos_raw.split("/") if self.roster_pos_raw else []
-        )
+        self.roster_pos = self.roster_pos_raw.split("/") if self.roster_pos_raw else []
         self.salary = int(salary_raw)
 
     def update_stats(self, pos: str, perc: str, fpts: str) -> None:
@@ -91,9 +90,7 @@ class Player:
         )
 
     def __repr__(self) -> str:
-        return "Player({}, {}, {}, {}, {})".format(
-            self.name, self.pos, self.salary, self.game_info, self.team_abbv
-        )
+        return "Player({}, {}, {}, {}, {})".format(self.name, self.pos, self.salary, self.game_info, self.team_abbv)
 
     def writeable(self, sport: str) -> list[Any]:
         if sport in ["PGA", "GOLF"] or "PGA" in sport:

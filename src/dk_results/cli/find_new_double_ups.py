@@ -2,7 +2,6 @@
 
 import argparse
 import logging
-import logging.config
 from os import getenv
 from typing import Type
 
@@ -13,13 +12,13 @@ from dotenv import load_dotenv
 from dk_results.classes.contest import Contest
 from dk_results.classes.contestdatabase import ContestDatabase
 from dk_results.classes.sport import Sport
+from dk_results.config import load_and_apply_settings
 from dk_results.discord_roles import DISCORD_ROLE_MAP
 from dk_results.lobby.double_ups import get_double_ups
 from dk_results.lobby.fetch import DEFAULT_HEADERS, LOBBY_URL_TEMPLATE, get_dk_lobby, requests_fetch_json
 from dk_results.lobby.formatting import format_discord_messages
 from dk_results.lobby.parsing import build_draft_group_start_map
-
-LOGGING_CONFIG_FILE = "logging.ini"
+from dk_results.logging import configure_logging
 
 logger = logging.getLogger(__name__)
 
@@ -111,7 +110,8 @@ def process_sport(
 
     db.create_table()
     allowed_ids = set(draft_groups)
-    start_map = build_draft_group_start_map(response.get("DraftGroups", []), allowed_ids)
+    draft_groups_payload = response.get("DraftGroups", []) if isinstance(response, dict) else []
+    start_map = build_draft_group_start_map(draft_groups_payload, allowed_ids)
     if start_map:
         updated_groups = db.sync_draft_group_start_dates(start_map)
         if updated_groups:
@@ -131,7 +131,8 @@ def process_sport(
 def _init_runtime() -> None:
     """Initialize runtime-only side effects for CLI execution."""
     load_dotenv()
-    logging.config.fileConfig(LOGGING_CONFIG_FILE, disable_existing_loggers=False)
+    load_and_apply_settings()
+    configure_logging()
 
 
 def _load_lobby_cookies():

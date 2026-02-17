@@ -14,9 +14,7 @@ def valid_date(date_string: str) -> datetime.datetime:
 
 def get_salary_date(draft_group: dict) -> datetime.date:
     """Get salary date from a draft-group payload."""
-    return datetime.datetime.strptime(
-        draft_group["StartDateEst"].split("T")[0], "%Y-%m-%d"
-    ).date()
+    return datetime.datetime.strptime(draft_group["StartDateEst"].split("T")[0], "%Y-%m-%d").date()
 
 
 def is_time_between(

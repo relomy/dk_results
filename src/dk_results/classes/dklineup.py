@@ -8,6 +8,7 @@ from dk_results.classes.contestdatabase import ContestDatabase
 from dk_results.classes.dksession import DkSession
 from dk_results.classes.sheets_service import build_dfs_sheet_service
 from dk_results.classes.sport import Sport
+from dk_results.paths import repo_file
 
 
 class DkLineup:
@@ -20,7 +21,7 @@ class DkLineup:
 
         try:
             # Load the YAML file
-            with open("vips.yaml", "r") as file:
+            with repo_file("vips.yaml").open("r", encoding="utf-8") as file:
                 self.vips = yaml.safe_load(file)
         except FileNotFoundError:
             # Handle the case where the file doesn't exist
@@ -39,9 +40,7 @@ class DkLineup:
         )
         return response.json()["leaderBoard"]
 
-    def get_vip_users(
-        self, leaderboard: list[dict[str, Any]]
-    ) -> list[dict[str, Any]]:
+    def get_vip_users(self, leaderboard: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Filter leaderboard entries to VIP users from vips.yaml."""
         for user in leaderboard:
             if user["userName"] in self.vips:

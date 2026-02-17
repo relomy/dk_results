@@ -1,13 +1,13 @@
 """Create a User object to represent a DraftKings user."""
 
-import logging
-import logging.config
 from dataclasses import dataclass, field
+
+from dk_results.logging import configure_logging
 
 from .lineup import Lineup
 
 # load the logging configuration
-logging.config.fileConfig("logging.ini")
+configure_logging()
 
 
 @dataclass
@@ -46,6 +46,4 @@ class User:
         )
 
     def __repr__(self) -> str:
-        return "User({}, {}, {}, {}, {})".format(
-            self.name, self.rank, self.pmr, self.pts, self.lineup_str
-        )
+        return "User({}, {}, {}, {}, {})".format(self.name, self.rank, self.pmr, self.pts, self.lineup_str)

@@ -5,10 +5,9 @@ from types import SimpleNamespace
 from typing import cast
 
 import pytest
+from classes.draftkings import Draftkings
 from requests.cookies import RequestsCookieJar
 from requests.sessions import Session
-
-from classes.draftkings import Draftkings
 
 
 class _FakeResponse:
@@ -17,11 +16,7 @@ class _FakeResponse:
         self.headers = headers
         self.status_code = 200
         self.url = "https://example.test/contest/export"
-        self.text = (
-            content.decode("utf-8", errors="ignore")
-            if isinstance(content, bytes)
-            else str(content)
-        )
+        self.text = content.decode("utf-8", errors="ignore") if isinstance(content, bytes) else str(content)
 
 
 class _FakeSession:
@@ -123,11 +118,7 @@ class _Response:
         self.headers = headers or {}
         self.content = content
         self.url = "https://example.test"
-        self.text = (
-            content.decode("utf-8", errors="ignore")
-            if isinstance(content, bytes)
-            else str(content)
-        )
+        self.text = content.decode("utf-8", errors="ignore") if isinstance(content, bytes) else str(content)
 
     def raise_for_status(self):
         if self.status_code >= 400:
@@ -151,9 +142,7 @@ class _Session:
 
 class _Cookies:
     def __init__(self):
-        self._items = [
-            SimpleNamespace(name="a", value="1", domain="example.com", path="/")
-        ]
+        self._items = [SimpleNamespace(name="a", value="1", domain="example.com", path="/")]
 
     def get_dict(self):
         raise RuntimeError("boom")
@@ -375,9 +364,7 @@ def test_clone_auth_to_ignores_cookie_set_errors():
             raise RuntimeError("boom")
 
         def __iter__(self):
-            return iter(
-                [SimpleNamespace(name="a", value="1", domain="example.com", path="/")]
-            )
+            return iter([SimpleNamespace(name="a", value="1", domain="example.com", path="/")])
 
     class TargetCookies:
         def __init__(self):

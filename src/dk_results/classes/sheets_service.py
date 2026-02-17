@@ -24,6 +24,8 @@ def make_sheet_client(
     logger: logging.Logger | None = None,
 ) -> SheetClient:
     resolved_spreadsheet_id = _resolve_spreadsheet_id(spreadsheet_id)
+    if resolved_spreadsheet_id is None:
+        raise RuntimeError("SPREADSHEET_ID is not set.")
     if credentials_provider is None and service is None:
         credentials_provider = service_account_provider("client_secret.json")
     return SheetClient(

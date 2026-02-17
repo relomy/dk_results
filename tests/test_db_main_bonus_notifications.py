@@ -1,4 +1,4 @@
-import db_main
+import dk_results.cli.db_main as db_main
 
 
 def test_build_bonus_sender_respects_notifications_enabled(monkeypatch):

@@ -3,11 +3,10 @@ import hashlib
 import json
 from argparse import Namespace
 
-import pytest
-
 import commands.export_fixture as export_command
-import export_fixture
 import services.snapshot_exporter as snapshot_exporter
+
+import dk_results.cli.export_fixture as export_fixture
 
 
 def test_snapshot_includes_all_major_sections_even_when_null(monkeypatch):
@@ -54,14 +53,9 @@ def test_snapshot_includes_all_major_sections_even_when_null(monkeypatch):
 
 def test_load_vips_reads_repo_root_vips_yaml(monkeypatch, tmp_path):
     repo_root = tmp_path / "repo"
-    services_dir = repo_root / "services"
-    services_dir.mkdir(parents=True)
+    repo_root.mkdir(parents=True)
     (repo_root / "vips.yaml").write_text("- vip_one\n- vip_two\n", encoding="utf-8")
-    monkeypatch.setattr(
-        snapshot_exporter,
-        "__file__",
-        str(services_dir / "snapshot_exporter.py"),
-    )
+    monkeypatch.setattr(snapshot_exporter, "repo_file", lambda *parts: repo_root.joinpath(*parts))
 
     assert snapshot_exporter.load_vips() == ["vip_one", "vip_two"]
 
@@ -475,14 +469,35 @@ def test_run_export_fixture_emits_envelope_and_contract_sections(monkeypatch, tm
                 "reason": {"mode": "explicit_id"},
             },
             "cash_line": {"cutoff_type": "positions_paid", "rank": 200, "points": 250.5},
-            "vip_lineups": [{"username": "vip1", "entry_key": "1", "rank": 2, "pts": 249.0, "pmr": 12.0, "lineup": ["A", "B"]}],
+            "vip_lineups": [
+                {"username": "vip1", "entry_key": "1", "rank": 2, "pts": 249.0, "pmr": 12.0, "lineup": ["A", "B"]}
+            ],
             "players": [{"name": "A"}, {"name": "B"}],
             "ownership": {
                 "ownership_remaining_total_pct": 123.4,
                 "top_remaining_players": [{"player_name": "A", "ownership_remaining_pct": 40.0}],
             },
-            "train_clusters": [{"cluster_id": "abc123", "user_count": 2, "rank": 3, "points": 249.0, "pmr": 10.0, "lineup_signature": "A|B", "entry_keys": ["1"]}],
-            "standings": [{"entry_key": "1", "username": "u1", "rank": 2, "points": 249.0, "pmr": "12.0", "ownership_remaining_total_pct": "33.0"}],
+            "train_clusters": [
+                {
+                    "cluster_id": "abc123",
+                    "user_count": 2,
+                    "rank": 3,
+                    "points": 249.0,
+                    "pmr": 10.0,
+                    "lineup_signature": "A|B",
+                    "entry_keys": ["1"],
+                }
+            ],
+            "standings": [
+                {
+                    "entry_key": "1",
+                    "username": "u1",
+                    "rank": 2,
+                    "points": 249.0,
+                    "pmr": "12.0",
+                    "ownership_remaining_total_pct": "33.0",
+                }
+            ],
             "truncation": {
                 "applied": True,
                 "total_rows_before_truncation": 500,
@@ -667,9 +682,7 @@ def test_distance_to_cash_metrics_points_and_rank_delta(monkeypatch):
             "selection": {"selected_contest_id": 123, "reason": {}},
             "candidates": [],
             "cash_line": {"cutoff_type": "rank", "rank": 10, "points": 100.0},
-            "vip_lineups": [
-                {"entry_key": "vip-1", "pts": 102.5, "rank": 8, "username": "vip"}
-            ],
+            "vip_lineups": [{"entry_key": "vip-1", "pts": 102.5, "rank": 8, "username": "vip"}],
             "players": [{"name": "A"}, {"name": "C"}],
             "ownership": {"ownership_remaining_total_pct": 1.0, "top_remaining_players": []},
             "train_clusters": [],
@@ -752,9 +765,7 @@ def test_distance_to_cash_metrics_rank_only_emits_rank_delta(monkeypatch):
             "selection": {"selected_contest_id": 123, "reason": {}},
             "candidates": [],
             "cash_line": {"cutoff_type": "rank", "rank": 10, "points": None},
-            "vip_lineups": [
-                {"entry_key": "vip-1", "pts": None, "rank": 8, "username": "vip"}
-            ],
+            "vip_lineups": [{"entry_key": "vip-1", "pts": None, "rank": 8, "username": "vip"}],
             "players": [],
             "ownership": {"ownership_remaining_total_pct": 1.0, "top_remaining_players": []},
             "train_clusters": [],
@@ -823,7 +834,17 @@ def test_vip_lineups_support_user_and_players_shape(monkeypatch, tmp_path):
             "cash_line": {"cutoff_type": "rank", "rank": 10, "points": 100.0},
             "players": [{"name": "Alpha"}, {"name": "Beta"}],
             "ownership": {"ownership_remaining_total_pct": 1.0, "top_remaining_players": []},
-            "standings": [{"entry_key": "777", "username": "vip_user", "rank": "5", "points": "110.0", "pmr": "0", "ownership_remaining_total_pct": "20.0", "payout_cents": 1500}],
+            "standings": [
+                {
+                    "entry_key": "777",
+                    "username": "vip_user",
+                    "rank": "5",
+                    "points": "110.0",
+                    "pmr": "0",
+                    "ownership_remaining_total_pct": "20.0",
+                    "payout_cents": 1500,
+                }
+            ],
             "train_clusters": [],
             "vip_lineups": [
                 {
@@ -839,9 +860,7 @@ def test_vip_lineups_support_user_and_players_shape(monkeypatch, tmp_path):
         },
     )
     out = tmp_path / "vip-shape.json"
-    rc = export_command.run_export_fixture(
-        Namespace(sport="NBA", contest_id=1, out=str(out), standings_limit=100)
-    )
+    rc = export_command.run_export_fixture(Namespace(sport="NBA", contest_id=1, out=str(out), standings_limit=100))
     payload = json.loads(out.read_text(encoding="utf-8"))
     vip = payload["sports"]["nba"]["contests"][0]["vip_lineups"][0]
 
@@ -883,9 +902,7 @@ def test_vip_entry_key_backfill_requires_unique_display_name(monkeypatch, tmp_pa
         },
     )
     out = tmp_path / "vip-ambiguous.json"
-    rc = export_command.run_export_fixture(
-        Namespace(sport="NBA", contest_id=1, out=str(out), standings_limit=100)
-    )
+    rc = export_command.run_export_fixture(Namespace(sport="NBA", contest_id=1, out=str(out), standings_limit=100))
     payload = json.loads(out.read_text(encoding="utf-8"))
     vip = payload["sports"]["nba"]["contests"][0]["vip_lineups"][0]
 
@@ -918,9 +935,7 @@ def test_standings_is_cashing_derived_from_payout_presence(monkeypatch, tmp_path
         },
     )
     out = tmp_path / "cashing-rule.json"
-    rc = export_command.run_export_fixture(
-        Namespace(sport="NBA", contest_id=1, out=str(out), standings_limit=100)
-    )
+    rc = export_command.run_export_fixture(Namespace(sport="NBA", contest_id=1, out=str(out), standings_limit=100))
     payload = json.loads(out.read_text(encoding="utf-8"))
     rows = payload["sports"]["nba"]["contests"][0]["standings"]["rows"]
 

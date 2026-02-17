@@ -1,10 +1,10 @@
 import logging
-import logging.config
 
 from dk_results.classes.dksession import DkSession
+from dk_results.logging import configure_logging
 
 # load the logging configuration
-logging.config.fileConfig("logging.ini")
+configure_logging()
 logger = logging.getLogger(__name__)
 
 
@@ -48,9 +48,7 @@ vips = [
     "AdamLevitan",
 ]
 
-found_users = [
-    user for user in js_leaderboard["leaderBoard"] if user["userName"] in vips
-]
+found_users = [user for user in js_leaderboard["leaderBoard"] if user["userName"] in vips]
 
 for user in found_users:
     print(user["userName"])

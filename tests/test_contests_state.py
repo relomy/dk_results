@@ -1,9 +1,9 @@
 import pytest
-from dfs_common import state
-
 from classes.contest import Contest
 from classes.contestdatabase import ContestDatabase
-from find_new_double_ups import _upsert_contests
+from dfs_common import state
+
+from dk_results.cli.find_new_double_ups import _upsert_contests
 
 
 def _payload(dk_id: int):
@@ -67,8 +67,8 @@ def test_upsert_contests_uses_state_path_once(monkeypatch):
         captured["calls"] += 1
         assert rows
 
-    monkeypatch.setattr("find_new_double_ups.state.contests_db_path", fake_db_path)
-    monkeypatch.setattr("find_new_double_ups.contests.upsert_contests", fake_upsert)
+    monkeypatch.setattr("dk_results.cli.find_new_double_ups.state.contests_db_path", fake_db_path)
+    monkeypatch.setattr("dk_results.cli.find_new_double_ups.contests.upsert_contests", fake_upsert)
 
     _upsert_contests([contest])
 

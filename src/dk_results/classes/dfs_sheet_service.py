@@ -40,9 +40,7 @@ class DfsSheetService:
     def write_players(self, values: Sequence[Sequence[Any]]) -> None:
         self.repo.write_range(values, self.data_range)
 
-    def write_column(
-        self, column: str, values: Sequence[Sequence[Any]], start_row: int = 2
-    ) -> None:
+    def write_column(self, column: str, values: Sequence[Sequence[Any]], start_row: int = 2) -> None:
         cell_range = f"{self.sport}!{column}{start_row}:{column}"
         self.repo.write_range(values, cell_range)
 
@@ -61,9 +59,7 @@ class DfsSheetService:
         values = [["Last Updated", "", dt_updated.strftime("%Y-%m-%d %H:%M:%S")]]
         self.repo.write_range(values, cell_range)
 
-    def add_contest_details(
-        self, contest_name: str, positions_paid: int | None
-    ) -> None:
+    def add_contest_details(self, contest_name: str, positions_paid: int | None) -> None:
         cell_range = f"{self.sport}!X1:Y1"
         values = [[positions_paid, contest_name]]
         self.repo.write_range(values, cell_range)

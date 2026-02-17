@@ -43,20 +43,12 @@ def get_stats(contests: Sequence[Contest], *, include_largest: bool = False) -> 
             stats[start_date] = {"count": 0}
         stats[start_date]["count"] += 1
 
-        if (
-            contest.max_entry_count == 1
-            and contest.is_guaranteed
-            and contest.is_double_up
-        ):
+        if contest.max_entry_count == 1 and contest.is_guaranteed and contest.is_double_up:
             if "dubs" not in stats[start_date]:
                 stats[start_date]["dubs"] = {}
 
             if contest.entry_fee not in stats[start_date]["dubs"]:
-                stats[start_date]["dubs"][contest.entry_fee] = (
-                    {"count": 0, "largest": 0}
-                    if include_largest
-                    else 0
-                )
+                stats[start_date]["dubs"][contest.entry_fee] = {"count": 0, "largest": 0} if include_largest else 0
 
             if include_largest:
                 stats[start_date]["dubs"][contest.entry_fee]["count"] += 1

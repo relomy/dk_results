@@ -2,7 +2,6 @@ import datetime
 import sqlite3
 
 import pytest
-
 from classes.contest import Contest
 from classes.contestdatabase import ContestDatabase
 
@@ -91,9 +90,7 @@ def test_get_live_contest_is_deterministic_on_ties(contest_db):
         dk_id=5,
         entry_fee=20,
         entries=100,
-        start_date=(base_time - datetime.timedelta(hours=1)).strftime(
-            "%Y-%m-%d %H:%M:%S"
-        ),
+        start_date=(base_time - datetime.timedelta(hours=1)).strftime("%Y-%m-%d %H:%M:%S"),
     )
     _insert_contest(
         contest_db,
@@ -144,9 +141,7 @@ def test_sync_draft_group_start_dates_updates_only_changed_groups(contest_db):
 
     assert updates == 1
 
-    rows = list(
-        contest_db.conn.execute("SELECT dk_id, start_date FROM contests ORDER BY dk_id")
-    )
+    rows = list(contest_db.conn.execute("SELECT dk_id, start_date FROM contests ORDER BY dk_id"))
     assert rows == [
         (1, "2024-01-01 00:00:00"),
         (2, "2024-01-01 00:00:00"),
@@ -213,9 +208,7 @@ def test_sync_draft_group_start_dates_skips_none(contest_db):
     updates = contest_db.sync_draft_group_start_dates({10: None})
 
     assert updates == 0
-    row = contest_db.conn.execute(
-        "SELECT start_date FROM contests WHERE dk_id=1"
-    ).fetchone()
+    row = contest_db.conn.execute("SELECT start_date FROM contests WHERE dk_id=1").fetchone()
     assert row == ("2024-01-01 00:00:00",)
 
 
@@ -225,14 +218,10 @@ def test_sync_draft_group_start_dates_handles_invalid_existing_date(contest_db):
         "total_prizes, entries, entry_fee, entry_count, max_entry_count, completed) "
         "VALUES (1, 'NBA', 'Contest', 'bad-date', 10, 0, 0, 5, 0, 1, 0)"
     )
-    contest_db.conn.execute(
-        insert_sql
-    )
+    contest_db.conn.execute(insert_sql)
     contest_db.conn.commit()
 
-    updates = contest_db.sync_draft_group_start_dates(
-        {10: datetime.datetime(2024, 1, 2, 0, 0, 0)}
-    )
+    updates = contest_db.sync_draft_group_start_dates({10: datetime.datetime(2024, 1, 2, 0, 0, 0)})
 
     assert updates == 1
 
@@ -268,9 +257,7 @@ def test_get_live_contests_sqlite_error(monkeypatch):
 
 
 def test_get_next_upcoming_contest_returns_row(contest_db):
-    future = (datetime.datetime.now() + datetime.timedelta(days=1)).strftime(
-        "%Y-%m-%d %H:%M:%S"
-    )
+    future = (datetime.datetime.now() + datetime.timedelta(days=1)).strftime("%Y-%m-%d %H:%M:%S")
     insert_sql = (
         "INSERT INTO contests (dk_id, sport, name, start_date, draft_group, "
         "total_prizes, entries, entry_fee, entry_count, max_entry_count, completed) "
@@ -287,9 +274,7 @@ def test_get_next_upcoming_contest_returns_row(contest_db):
 
 
 def test_get_next_upcoming_contest_any_returns_row(contest_db):
-    future = (datetime.datetime.now() + datetime.timedelta(days=1)).strftime(
-        "%Y-%m-%d %H:%M:%S"
-    )
+    future = (datetime.datetime.now() + datetime.timedelta(days=1)).strftime("%Y-%m-%d %H:%M:%S")
     insert_sql = (
         "INSERT INTO contests (dk_id, sport, name, start_date, draft_group, "
         "total_prizes, entries, entry_fee, entry_count, max_entry_count, completed) "

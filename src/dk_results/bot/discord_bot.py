@@ -1,6 +1,5 @@
 import datetime
 import logging
-import logging.config
 import os
 import time
 from pathlib import Path
@@ -12,19 +11,21 @@ from discord.ext import commands
 
 from dk_results.classes.contestdatabase import ContestDatabase
 from dk_results.classes.sport import Sport
+from dk_results.logging import configure_logging
+from dk_results.paths import repo_file
 
-logging.config.fileConfig("logging.ini")
+configure_logging()
 logger = logging.getLogger(__name__)
 
 COMMAND_PREFIX = "!"
 BOT_TOKEN = os.getenv("DISCORD_BOT_TOKEN")
 START_TIME = time.time()
 SPREADSHEET_ID = os.getenv("SPREADSHEET_ID")
-SHEET_GIDS_FILE = os.getenv("SHEET_GIDS_FILE", "sheet_gids.yaml")
+SHEET_GIDS_FILE = os.getenv("SHEET_GIDS_FILE", str(repo_file("sheet_gids.yaml")))
 DISCORD_LOG_FILE = os.getenv("DISCORD_LOG_FILE")
 
 
-type SportType = type[Sport]
+SportType = type[Sport]
 
 
 def _load_sheet_gid_map() -> dict[str, int]:
@@ -33,6 +34,8 @@ def _load_sheet_gid_map() -> dict[str, int]:
         logger.info("SHEET_GIDS_FILE not set; sheet links disabled.")
         return {}
     path = Path(SHEET_GIDS_FILE)
+    if not path.is_absolute():
+        path = repo_file(SHEET_GIDS_FILE)
     if not path.is_file():
         logger.info("Sheet gid map not found at %s; sheet links disabled.", path)
         return {}
@@ -102,18 +105,12 @@ def _sport_emoji(sport_name: str) -> str:
 
 def _configure_discord_log_file() -> None:
     """Configure file logging for the Discord bot."""
-    log_path = (
-        Path(DISCORD_LOG_FILE)
-        if DISCORD_LOG_FILE
-        else Path(__file__).resolve().parents[1] / "logs" / "discord_bot.log"
-    )
+    log_path = Path(DISCORD_LOG_FILE) if DISCORD_LOG_FILE else repo_file("logs", "discord_bot.log")
     try:
         log_path.parent.mkdir(parents=True, exist_ok=True)
         handler = logging.FileHandler(log_path, mode="a")
         handler.setLevel(logging.DEBUG)
-        formatter = logging.Formatter(
-            "%(asctime)s %(name)s %(levelname)5s %(message)s", "%Y-%m-%d %H:%M:%S"
-        )
+        formatter = logging.Formatter("%(asctime)s %(name)s %(levelname)5s %(message)s", "%Y-%m-%d %H:%M:%S")
         handler.setFormatter(formatter)
         logger.addHandler(handler)
         logger.propagate = False
@@ -166,10 +163,7 @@ def _format_contest_row(row: tuple, sport_name: str, sheet_link: str | None) -> 
     dk_id, name, _, _, start_date = row
     # Wrap URL in angle brackets to prevent Discord from embedding a preview.
     url = f"<https://www.draftkings.com/contest/gamecenter/{dk_id}#/>"
-    return (
-        f"sport={sport_name}: dk_id={dk_id}, name={name}, "
-        f"start_date={start_date}, url={url}"
-    )
+    return f"sport={sport_name}: dk_id={dk_id}, name={name}, start_date={start_date}, url={url}"
 
 
 def _db_path() -> str:
@@ -180,9 +174,7 @@ def _fetch_live_contest(sport_cls: SportType) -> tuple | None:
     """Fetch a live contest matching a sport's criteria from the database."""
     contest_db = ContestDatabase(_db_path(), logger=logger)
     try:
-        return contest_db.get_live_contest(
-            sport_cls.name, sport_cls.sheet_min_entry_fee, sport_cls.keyword
-        )
+        return contest_db.get_live_contest(sport_cls.name, sport_cls.sheet_min_entry_fee, sport_cls.keyword)
     finally:
         contest_db.close()
 
@@ -283,10 +275,7 @@ async def contests(ctx: commands.Context, sport: str | None = None) -> None:
 
     sport_key = sport.lower()
     if sport_key not in choices:
-        await ctx.send(
-            f"Unknown sport '{sport}'. Allowed options: "
-            f"{_allowed_sports_label(choices)}"
-        )
+        await ctx.send(f"Unknown sport '{sport}'. Allowed options: {_allowed_sports_label(choices)}")
         return
 
     sport_choice = choices[sport_key]
@@ -354,9 +343,7 @@ async def upcoming(ctx: commands.Context) -> None:
             upcoming_match = contest_db.get_next_upcoming_contest(
                 sport_cls.name, sport_cls.sheet_min_entry_fee, sport_cls.keyword
             )
-            dk_id, name, _, _, start_date = (
-                upcoming_match if upcoming_match else upcoming_any
-            )
+            dk_id, name, _, _, start_date = upcoming_match if upcoming_match else upcoming_any
             suffix = "" if upcoming_match else " (failed criteria)"
             relative = _format_time_until(str(start_date))
             relative_part = f" ({relative})" if relative else ""
@@ -391,10 +378,7 @@ async def help_command(ctx: commands.Context) -> None:
     lines = [
         "!sankayadead -> responds 'ya man'",
         "!health -> shows bot uptime",
-        (
-            "!contests <sport> -> shows one live contest for that sport. "
-            f"Sports: {allowed}"
-        ),
+        (f"!contests <sport> -> shows one live contest for that sport. Sports: {allowed}"),
         "!live -> shows all live contests across supported sports",
         "!upcoming -> shows next upcoming contest per sport",
         "!sports -> lists supported sports",
@@ -413,9 +397,7 @@ async def sports(ctx: commands.Context) -> None:
 def main() -> None:
     """Start the Discord bot process."""
     if not BOT_TOKEN:
-        raise RuntimeError(
-            "DISCORD_BOT_TOKEN is not set. Set it before starting the Discord bot."
-        )
+        raise RuntimeError("DISCORD_BOT_TOKEN is not set. Set it before starting the Discord bot.")
     bot.run(BOT_TOKEN)
 
 
