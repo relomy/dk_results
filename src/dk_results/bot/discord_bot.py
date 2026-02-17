@@ -10,8 +10,8 @@ import yaml
 from dfs_common import state
 from discord.ext import commands
 
-from classes.contestdatabase import ContestDatabase
-from classes.sport import Sport
+from dk_results.classes.contestdatabase import ContestDatabase
+from dk_results.classes.sport import Sport
 
 logging.config.fileConfig("logging.ini")
 logger = logging.getLogger(__name__)

@@ -8,8 +8,8 @@ import time
 from dataclasses import dataclass
 from typing import Any
 
-from classes.bonus_rules import parse_bonus_counts
-from classes.lineup import normalize_name
+from dk_results.classes.bonus_rules import parse_bonus_counts
+from dk_results.classes.lineup import normalize_name
 
 BONUS_META: dict[str, dict[str, dict[str, Any]]] = {
     "GOLF": {

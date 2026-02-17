@@ -4,7 +4,7 @@ import pickle
 import requests
 from requests.cookies import RequestsCookieJar
 
-from classes.cookieservice import get_dk_cookies
+from dk_results.classes.cookieservice import get_dk_cookies
 
 logger = logging.getLogger(__name__)
 

@@ -1,7 +1,7 @@
 from collections.abc import Sequence
 from typing import Any
 
-from classes.contest import Contest
+from dk_results.classes.contest import Contest
 
 
 def contest_meets_criteria(contest: Contest, criteria: dict[str, Any]) -> bool:

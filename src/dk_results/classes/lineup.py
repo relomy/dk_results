@@ -2,7 +2,7 @@ import copy
 import unicodedata
 from typing import Type
 
-from classes.sport import Sport
+from dk_results.classes.sport import Sport
 
 from .player import Player
 

@@ -2,7 +2,7 @@ import datetime
 import logging
 from typing import Any, Type
 
-from classes.sport import Sport
+from dk_results.classes.sport import Sport
 
 logger = logging.getLogger(__name__)
 

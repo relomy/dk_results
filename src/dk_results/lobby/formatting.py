@@ -1,4 +1,4 @@
-from classes.contest import Contest
+from dk_results.classes.contest import Contest
 
 
 def format_discord_messages(contests: list[Contest]) -> str:

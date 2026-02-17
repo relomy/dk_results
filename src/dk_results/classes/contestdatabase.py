@@ -3,7 +3,7 @@ import logging
 import logging.config
 import sqlite3
 
-from classes.contest import Contest
+from dk_results.classes.contest import Contest
 
 logging.config.fileConfig("logging.ini")
 

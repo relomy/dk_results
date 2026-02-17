@@ -12,11 +12,11 @@ from zoneinfo import ZoneInfo
 
 from dfs_common import config as common_config
 from dfs_common import state
-from classes.contestdatabase import ContestDatabase
-from classes.draftkings import Draftkings
-from classes.results import Results
-from classes.sport import Sport
-from classes.trainfinder import TrainFinder
+from dk_results.classes.contestdatabase import ContestDatabase
+from dk_results.classes.draftkings import Draftkings
+from dk_results.classes.results import Results
+from dk_results.classes.sport import Sport
+from dk_results.classes.trainfinder import TrainFinder
 
 logger = logging.getLogger(__name__)
 

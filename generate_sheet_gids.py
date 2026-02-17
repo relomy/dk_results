@@ -1,16 +1,13 @@
 from pathlib import Path
+import sys
 
-import yaml
+_repo_root = Path(__file__).resolve().parent
+_src = _repo_root / "src"
+_src_str = str(_src)
+if _src.is_dir() and _src_str not in sys.path:
+    sys.path.insert(0, _src_str)
 
-from classes.sheets_service import fetch_sheet_gids
-
-
-def main() -> None:
-    gids = fetch_sheet_gids()
-    output_path = Path(__file__).with_name("sheet_gids.yaml")
-    output_path.write_text(yaml.safe_dump(gids, sort_keys=True), encoding="utf-8")
-    print(f"Wrote {len(gids)} sheet gids to {output_path}")
-
+from dk_results.cli.generate_sheet_gids import main
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

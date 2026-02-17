@@ -4,9 +4,9 @@ from typing import Any, Type
 import requests
 from requests.cookies import RequestsCookieJar
 
-from classes.draftkings import Draftkings
-from classes.sport import Sport
-from lobby.parsing import get_contests_from_response, get_draft_groups_from_response
+from dk_results.classes.draftkings import Draftkings
+from dk_results.classes.sport import Sport
+from dk_results.lobby.parsing import get_contests_from_response, get_draft_groups_from_response
 
 LOBBY_URL_TEMPLATE = "https://www.draftkings.com/lobby/getcontests?sport={sport}"
 
