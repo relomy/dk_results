@@ -45,6 +45,27 @@ Multi-sport bundle for testing with explicit IDs:
 uv run python export_fixture.py bundle --item NBA:188080404 --item GOLF:187937165 --out /tmp/dk-two-sport-bundle.json
 ```
 
+Publish helper for dashboard `latest.json` + UTC-day manifest entry from an existing snapshot:
+
+```bash
+uv run python export_fixture.py publish \
+  --snapshot /tmp/dk-two-sport-bundle.json \
+  --root /tmp/dashboard-data
+```
+
+This writes:
+- `/tmp/dashboard-data/latest.json`
+- `/tmp/dashboard-data/manifest/YYYY-MM-DD.json` (based on `snapshot_at`)
+
+Optional path override if your API-visible snapshot path differs from filesystem layout:
+
+```bash
+uv run python export_fixture.py publish \
+  --snapshot /tmp/dk-two-sport-bundle.json \
+  --root /tmp/dashboard-data \
+  --snapshot-path snapshots/live-2026-02-15T01-30-00Z.json
+```
+
 Notes:
 - The exporter reuses the same `dk_results` data sources/endpoints already in use (contest DB + existing `Draftkings` client methods); no new scraping endpoints are introduced.
 - Contest selection is deterministic and includes a `selection.reason` object plus compact candidate summary for transparency.

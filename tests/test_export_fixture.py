@@ -390,6 +390,30 @@ def test_standalone_main_bundle_routes_from_sys_argv(monkeypatch, tmp_path):
     assert called["items"] == ["NBA:123", "GOLF:456"]
 
 
+def test_standalone_main_publish_routes_publish_helper(monkeypatch, tmp_path):
+    called = {}
+
+    def fake_publish(args):
+        called["snapshot"] = args.snapshot
+        called["root"] = args.root
+        return 0
+
+    monkeypatch.setattr(export_fixture, "run_publish_snapshot", fake_publish)
+    rc = export_fixture.main(
+        [
+            "publish",
+            "--snapshot",
+            str(tmp_path / "snapshots" / "live.json"),
+            "--root",
+            str(tmp_path / "public"),
+        ]
+    )
+
+    assert rc == 0
+    assert called["snapshot"].endswith("live.json")
+    assert called["root"].endswith("public")
+
+
 def test_run_export_bundle_writes_two_sports(monkeypatch, tmp_path):
     monkeypatch.setattr(export_command, "configure_runtime", lambda: None)
 
@@ -573,6 +597,63 @@ def test_run_export_bundle_emits_contests_primary_contest_and_players(monkeypatc
     assert "selection" not in payload["sports"]["nba"]
     assert "contest" not in payload["sports"]["nba"]
     assert payload["sports"]["golf"]["contests"][0]["ownership_watchlist"]["top_n_default"] == 10
+
+
+def test_run_publish_snapshot_writes_latest_and_manifest(monkeypatch, tmp_path):
+    root = tmp_path / "public"
+    snapshot_file = root / "snapshots" / "live-1.json"
+    snapshot_file.parent.mkdir(parents=True, exist_ok=True)
+    snapshot_file.write_text(
+        snapshot_exporter.to_stable_json(
+            {
+                "schema_version": 2,
+                "snapshot_at": "2026-02-15T01:30:00Z",
+                "generated_at": "2026-02-15T01:30:05Z",
+                "sports": {
+                    "nba": {
+                        "status": "ok",
+                        "updated_at": "2026-02-15T01:30:00Z",
+                        "contests": [{"state": "live"}, {"state": "completed"}],
+                    }
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    args = Namespace(
+        snapshot=str(snapshot_file),
+        root=str(root),
+        snapshot_path=None,
+        latest_out=None,
+        manifest_dir=None,
+    )
+    rc = export_command.run_publish_snapshot(args)
+
+    latest = json.loads((root / "latest.json").read_text(encoding="utf-8"))
+    manifest = json.loads((root / "manifest" / "2026-02-15.json").read_text(encoding="utf-8"))
+
+    assert rc == 0
+    assert latest["latest_snapshot_path"] == "snapshots/live-1.json"
+    assert latest["manifest_today_path"] == "manifest/2026-02-15.json"
+    assert latest["manifest_yesterday_path"] == "manifest/2026-02-14.json"
+    assert latest["available_sports"] == ["nba"]
+    assert manifest["manifest_version"] == 1
+    assert manifest["date_utc"] == "2026-02-15"
+    assert len(manifest["snapshots"]) == 1
+    entry = manifest["snapshots"][0]
+    assert entry["snapshot_at"] == "2026-02-15T01:30:00Z"
+    assert entry["path"] == "snapshots/live-1.json"
+    assert entry["sports_present"] == ["nba"]
+    assert entry["contest_counts_by_sport"] == {"nba": 2}
+    assert entry["state_counts"] == {"completed": 1, "live": 1}
+    assert entry["sports_status"]["nba"]["status"] == "ok"
+
+    # Re-running with same snapshot_at updates in place (no duplicate entries).
+    rc_second = export_command.run_publish_snapshot(args)
+    manifest_second = json.loads((root / "manifest" / "2026-02-15.json").read_text(encoding="utf-8"))
+    assert rc_second == 0
+    assert len(manifest_second["snapshots"]) == 1
 
 
 def test_distance_to_cash_metrics_points_and_rank_delta(monkeypatch):
@@ -767,7 +848,9 @@ def test_vip_lineups_support_user_and_players_shape(monkeypatch, tmp_path):
     assert rc == 0
     assert vip["display_name"] == "vip_user"
     assert vip["entry_key"] == "777"
+    assert vip["slots"][0]["slot"] == "PG"
     assert vip["slots"][0]["player_name"] == "Alpha"
+    assert vip["slots"][1]["slot"] == "SG"
     assert vip["slots"][1]["player_name"] == "Beta"
     assert isinstance(vip["live"]["pmr"], float)
     assert isinstance(vip["live"]["current_rank"], int)

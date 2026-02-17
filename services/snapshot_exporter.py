@@ -908,7 +908,12 @@ def _vip_slots_from_lineup(lineup: Any, player_lookup: dict[str, str]) -> list[d
     for index, item in enumerate(lineup):
         if isinstance(item, dict):
             player_name = item.get("player_name") or item.get("name")
-            slot = item.get("slot") or item.get("position") or f"SLOT_{index + 1}"
+            slot = (
+                item.get("slot")
+                or item.get("position")
+                or item.get("pos")
+                or f"SLOT_{index + 1}"
+            )
             multiplier = item.get("multiplier")
         else:
             player_name = str(item)
