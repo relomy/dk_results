@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - master
+
+jobs:
+  verify:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Checkout dfs_common
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/dfs_common
+          path: .ci/dfs_common
+
+      - name: Link dfs_common sibling path
+        run: ln -sfn "$GITHUB_WORKSPACE/.ci/dfs_common" "$GITHUB_WORKSPACE/../dfs_common"
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Ruff Format Check
+        run: uv run ruff format --check .
+
+      - name: Ruff Check
+        run: uv run ruff check .
+
+      - name: Ty Check
+        run: uv run ty check
+
+      - name: Pytest
+        run: uv run pytest

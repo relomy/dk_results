@@ -4,6 +4,14 @@ Operational tooling for DraftKings contest tracking, Google Sheets updates, and 
 notifications (see `db_main.py:main`, `update_contests.py:check_contests_for_completion`,
 `find_new_double_ups.py:main`, `bot/discord_bot.py:main`).
 
+## Tooling
+
+- Setup: `uv sync`
+- Format: `uv run ruff format .`
+- Lint: `uv run ruff check .`
+- Types: `uv run ty check`
+- Tests: `uv run pytest`
+
 ## Shared Infrastructure
 
 - Google Sheets + Discord primitives are provided by `dfs_common`.
