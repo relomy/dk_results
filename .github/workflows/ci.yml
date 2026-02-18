@@ -19,10 +19,20 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Require dfs-common checkout token
+        env:
+          DFS_COMMON_CHECKOUT_TOKEN: ${{ secrets.DFS_COMMON_CHECKOUT_TOKEN }}
+        run: |
+          if [ -z "$DFS_COMMON_CHECKOUT_TOKEN" ]; then
+            echo "::error::Missing secret DFS_COMMON_CHECKOUT_TOKEN (read access to ${{ github.repository_owner }}/dfs-common)."
+            exit 1
+          fi
+
       - name: Checkout dfs_common
         uses: actions/checkout@v4
         with:
           repository: ${{ github.repository_owner }}/dfs-common
+          token: ${{ secrets.DFS_COMMON_CHECKOUT_TOKEN }}
           path: .ci/dfs_common
 
       - name: Link dfs_common sibling path
