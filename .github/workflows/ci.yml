@@ -22,7 +22,7 @@ jobs:
       - name: Checkout dfs_common
         uses: actions/checkout@v4
         with:
-          repository: ${{ github.repository_owner }}/dfs_common
+          repository: ${{ github.repository_owner }}/dfs-common
           path: .ci/dfs_common
 
       - name: Link dfs_common sibling path
