@@ -49,9 +49,6 @@ jobs:
       - name: Install dependencies
         run: uv sync
 
-      - name: Remove checked-out dfs_common source before lint
-        run: rm -rf "$GITHUB_WORKSPACE/.ci/dfs_common" "$GITHUB_WORKSPACE/../dfs_common"
-
       - name: Ruff Format Check
         run: uv run ruff format --check --exclude .ci .
 
