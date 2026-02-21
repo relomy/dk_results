@@ -789,6 +789,73 @@ def test_ownership_summary_omits_rows_with_missing_keys(monkeypatch):
     assert summary["per_vip"][0]["entry_key"] == "vip-1"
 
 
+def test_non_cashing_metrics_emits_users_avg_and_top_list(monkeypatch):
+    monkeypatch.setattr(
+        snapshot_exporter,
+        "collect_snapshot_data",
+        lambda **_kwargs: {
+            "snapshot_version": "v1",
+            "sport": "NBA",
+            "contest": {"contest_id": 123, "is_primary": True, "name": "x"},
+            "selection": {"selected_contest_id": 123, "reason": {}},
+            "candidates": [],
+            "cash_line": {},
+            "vip_lineups": [],
+            "players": [],
+            "ownership": {
+                "ownership_remaining_total_pct": 120.0,
+                "non_cashing_user_count": 109,
+                "non_cashing_avg_pmr": 342.83,
+                "top_remaining_players": [
+                    {"player_name": "Jalen Johnson", "ownership_remaining_pct": 92.66},
+                    {"player_name": "Javon Small", "ownership_remaining_pct": 88.99},
+                ],
+            },
+            "train_clusters": [],
+            "standings": [],
+            "truncation": {},
+            "metadata": {"warnings": [], "missing_fields": [], "source_endpoints": []},
+        },
+    )
+
+    snapshot = snapshot_exporter.build_snapshot(sport="NBA")
+    envelope = snapshot_exporter.build_dashboard_envelope({"NBA": snapshot})
+    non_cashing = envelope["sports"]["nba"]["contests"][0]["metrics"]["non_cashing"]
+
+    assert non_cashing["users_not_cashing"] == 109
+    assert non_cashing["avg_pmr_remaining"] == 342.83
+    assert non_cashing["top_remaining_players"][0]["player_name"] == "Jalen Johnson"
+    assert non_cashing["top_remaining_players"][0]["ownership_remaining_pct"] == 92.66
+
+
+def test_non_cashing_metrics_omits_when_no_source_fields(monkeypatch):
+    monkeypatch.setattr(
+        snapshot_exporter,
+        "collect_snapshot_data",
+        lambda **_kwargs: {
+            "snapshot_version": "v1",
+            "sport": "NBA",
+            "contest": {"contest_id": 123, "is_primary": True, "name": "x"},
+            "selection": {"selected_contest_id": 123, "reason": {}},
+            "candidates": [],
+            "cash_line": {},
+            "vip_lineups": [],
+            "players": [],
+            "ownership": {"ownership_remaining_total_pct": 120.0, "top_remaining_players": []},
+            "train_clusters": [],
+            "standings": [],
+            "truncation": {},
+            "metadata": {"warnings": [], "missing_fields": [], "source_endpoints": []},
+        },
+    )
+
+    snapshot = snapshot_exporter.build_snapshot(sport="NBA")
+    envelope = snapshot_exporter.build_dashboard_envelope({"NBA": snapshot})
+    metrics = envelope["sports"]["nba"]["contests"][0].get("metrics", {})
+
+    assert "non_cashing" not in metrics
+
+
 def test_threat_metrics_leverage_and_vip_counts(monkeypatch):
     monkeypatch.setattr(
         snapshot_exporter,

@@ -1234,6 +1234,47 @@ def _ownership_summary_metrics(vip_lineups: list[dict[str, Any]]) -> dict[str, A
     }
 
 
+def _non_cashing_metrics(ownership_source: dict[str, Any] | None) -> dict[str, Any] | None:
+    if not isinstance(ownership_source, dict):
+        return None
+
+    users_not_cashing = _rank_numeric(ownership_source.get("non_cashing_user_count"))
+    avg_pmr_remaining = _to_float(ownership_source.get("non_cashing_avg_pmr"))
+    top_source = ownership_source.get("top_remaining_players") or []
+
+    top_remaining_players: list[dict[str, Any]] = []
+    for row in top_source:
+        if not isinstance(row, dict):
+            continue
+        player_name = row.get("player_name") or row.get("display_name") or row.get("entry_key")
+        if player_name in (None, ""):
+            continue
+        player_row: dict[str, Any] = {
+            "player_name": player_name,
+        }
+        ownership_pct = _to_float(row.get("ownership_remaining_pct"))
+        if isinstance(ownership_pct, (int, float)):
+            player_row["ownership_remaining_pct"] = ownership_pct
+        top_remaining_players.append(player_row)
+
+    has_non_default = (
+        (isinstance(users_not_cashing, int) and users_not_cashing > 0)
+        or (isinstance(avg_pmr_remaining, (int, float)) and float(avg_pmr_remaining) > 0)
+        or len(top_remaining_players) > 0
+    )
+    if not has_non_default:
+        return None
+
+    metrics: dict[str, Any] = {}
+    if users_not_cashing is not None:
+        metrics["users_not_cashing"] = users_not_cashing
+    if avg_pmr_remaining is not None:
+        metrics["avg_pmr_remaining"] = avg_pmr_remaining
+    if top_remaining_players:
+        metrics["top_remaining_players"] = top_remaining_players
+    return metrics
+
+
 def _threat_metrics(
     ownership_watchlist: dict[str, Any] | None,
     vip_lineups: list[dict[str, Any]],
@@ -1453,6 +1494,9 @@ def build_dashboard_sport_snapshot(snapshot: dict[str, Any], generated_at: str) 
     )
     if threat:
         metrics["threat"] = threat
+    non_cashing = _non_cashing_metrics(ownership_source if isinstance(ownership_source, dict) else None)
+    if non_cashing:
+        metrics["non_cashing"] = non_cashing
     trains = _train_metrics(contest_object.get("train_clusters"))
     if trains:
         metrics["trains"] = trains
