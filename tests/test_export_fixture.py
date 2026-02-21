@@ -9,6 +9,23 @@ import services.snapshot_exporter as snapshot_exporter
 import dk_results.cli.export_fixture as export_fixture
 
 
+def _canonical_contest_seed(*, contest_id: int | str, name: str = "Contest", sport: str = "nba") -> dict:
+    return {
+        "contest_id": contest_id,
+        "name": name,
+        "sport": sport,
+        "contest_type": "classic",
+        "start_time": "2026-02-14T10:00:00Z",
+        "state": "live",
+        "entry_fee_cents": 1000,
+        "prize_pool_cents": 250000,
+        "currency": "USD",
+        "entries_count": 1000,
+        "max_entries": 1000,
+        "is_primary": True,
+    }
+
+
 def test_snapshot_includes_all_major_sections_even_when_null(monkeypatch):
     monkeypatch.setattr(
         snapshot_exporter,
@@ -202,7 +219,7 @@ def test_cli_export_fixture_calls_build_snapshot(monkeypatch, tmp_path):
             "snapshot_version": "v1",
             "snapshot_generated_at_utc": "2026-02-14T10:00:00Z",
             "sport": "NBA",
-            "contest": {"contest_id": "1", "is_primary": True},
+            "contest": _canonical_contest_seed(contest_id="1", name="NBA Contest"),
             "selection": {"selected_contest_id": "1", "reason": {}},
             "candidates": [],
             "cash_line": {},
@@ -238,7 +255,7 @@ def test_cli_export_fixture_defaults_out_path_when_missing(monkeypatch, tmp_path
             "snapshot_version": "v1",
             "snapshot_generated_at_utc": "2026-02-14T10:00:00Z",
             "sport": "NBA",
-            "contest": {"contest_id": "42", "is_primary": True},
+            "contest": _canonical_contest_seed(contest_id="42", name="NBA Contest"),
             "selection": {"selected_contest_id": "42", "reason": {}},
             "candidates": [],
             "cash_line": {},
@@ -416,7 +433,7 @@ def test_run_export_bundle_writes_two_sports(monkeypatch, tmp_path):
             "snapshot_version": "v1",
             "snapshot_generated_at_utc": "2026-02-14T10:00:00Z",
             "sport": sport,
-            "contest": {"contest_id": contest_id, "is_primary": True},
+            "contest": _canonical_contest_seed(contest_id=contest_id, name=f"{sport} Contest", sport=sport.lower()),
             "selection": {"selected_contest_id": contest_id, "reason": {}},
             "candidates": [],
             "cash_line": {},
@@ -458,11 +475,12 @@ def test_run_export_fixture_emits_envelope_and_contract_sections(monkeypatch, tm
             "snapshot_generated_at_utc": "2026-02-14T10:00:00Z",
             "sport": "NBA",
             "contest": {
-                "contest_id": 188080404,
-                "name": "NBA Single Entry",
-                "entries": 1000,
+                **_canonical_contest_seed(contest_id=188080404, name="NBA Single Entry"),
+                "start_time": "2026-02-14T01:00:00Z",
+                "entry_fee_cents": None,
+                "entry_fee": 10,
+                "prize_pool_cents": 500000,
                 "positions_paid": 200,
-                "is_primary": True,
             },
             "selection": {
                 "selected_contest_id": 188080404,
@@ -553,6 +571,7 @@ def test_run_export_fixture_emits_envelope_and_contract_sections(monkeypatch, tm
         assert field_name in contest
         assert contest[field_name] is not None
         assert type(contest[field_name]) is expected_type
+    assert contest["entry_fee_cents"] == 1000
     assert "start_time_utc" not in contest
     assert sport["primary_contest"]["contest_key"] is not None
     assert sport["primary_contest"]["contest_key"] == contest["contest_key"]
@@ -599,7 +618,7 @@ def test_run_export_bundle_emits_contests_primary_contest_and_players(monkeypatc
             "snapshot_version": "v1",
             "snapshot_generated_at_utc": "2026-02-14T10:00:00Z",
             "sport": sport,
-            "contest": {"contest_id": contest_id, "name": f"{sport} contest", "is_primary": True},
+            "contest": _canonical_contest_seed(contest_id=contest_id, name=f"{sport} contest", sport=sport.lower()),
             "selection": {"selected_contest_id": contest_id, "reason": {"mode": "explicit_id"}},
             "cash_line": {"cutoff_type": "positions_paid", "rank": 10, "points": 99.9},
             "vip_lineups": [],
@@ -1005,7 +1024,7 @@ def test_vip_lineups_support_user_and_players_shape(monkeypatch, tmp_path):
             "snapshot_version": "v1",
             "snapshot_generated_at_utc": "2026-02-14T10:00:00Z",
             "sport": "NBA",
-            "contest": {"contest_id": 1, "name": "x", "is_primary": True},
+            "contest": _canonical_contest_seed(contest_id=1, name="x"),
             "selection": {"selected_contest_id": 1, "reason": {"mode": "explicit_id"}},
             "cash_line": {"cutoff_type": "rank", "rank": 10, "points": 100.0},
             "players": [{"name": "Alpha"}, {"name": "Beta"}],
@@ -1062,7 +1081,7 @@ def test_vip_lineups_export_players_live_typed_fields(monkeypatch, tmp_path):
             "snapshot_version": "v1",
             "snapshot_generated_at_utc": "2026-02-14T10:00:00Z",
             "sport": "NBA",
-            "contest": {"contest_id": 1, "name": "x", "is_primary": True},
+            "contest": _canonical_contest_seed(contest_id=1, name="x"),
             "selection": {"selected_contest_id": 1, "reason": {"mode": "explicit_id"}},
             "cash_line": {"cutoff_type": "rank", "rank": 10, "points": 100.0},
             "players": [
@@ -1154,7 +1173,7 @@ def test_vip_entry_key_backfill_requires_unique_display_name(monkeypatch, tmp_pa
             "snapshot_version": "v1",
             "snapshot_generated_at_utc": "2026-02-14T10:00:00Z",
             "sport": "NBA",
-            "contest": {"contest_id": 1, "name": "x", "is_primary": True},
+            "contest": _canonical_contest_seed(contest_id=1, name="x"),
             "selection": {"selected_contest_id": 1, "reason": {"mode": "explicit_id"}},
             "cash_line": {"cutoff_type": "rank", "rank": 10, "points": 100.0},
             "players": [{"name": "Alpha"}],
@@ -1187,7 +1206,7 @@ def test_standings_is_cashing_derived_from_payout_presence(monkeypatch, tmp_path
             "snapshot_version": "v1",
             "snapshot_generated_at_utc": "2026-02-14T10:00:00Z",
             "sport": "NBA",
-            "contest": {"contest_id": 1, "name": "x", "is_primary": True},
+            "contest": _canonical_contest_seed(contest_id=1, name="x"),
             "selection": {"selected_contest_id": 1, "reason": {"mode": "explicit_id"}},
             "cash_line": {"cutoff_type": "rank", "rank": 10, "points": 100.0},
             "players": [],
@@ -1241,6 +1260,27 @@ def test_validate_canonical_snapshot_detects_disallowed_keys_and_numeric_strings
 
     assert "disallowed_key:sports.nba.contests.0.standings.rows.0.username" in violations
     assert "numeric_string:sports.nba.contests.0.standings.rows.0.points" in violations
+
+
+def test_normalize_contest_state_prefers_authoritative_flags():
+    assert snapshot_exporter._normalize_contest_state(None, 1) == "completed"
+    assert snapshot_exporter._normalize_contest_state("In Progress", 0) == "live"
+    assert snapshot_exporter._normalize_contest_state("scheduled", 0) == "upcoming"
+    assert snapshot_exporter._normalize_contest_state("", 0) is None
+
+
+def test_canonical_contest_contract_does_not_fabricate_missing_required_fields():
+    contest = snapshot_exporter._canonical_contest_contract(
+        {"contest_id": 123, "sport": "nba"},
+        sport="nba",
+    )
+
+    assert contest["contest_id"] == "123"
+    assert contest["contest_key"] == "nba:123"
+    assert contest["state"] is None
+    assert contest["entry_fee_cents"] is None
+    assert contest["prize_pool_cents"] is None
+    assert contest["start_time"] is None
 
 
 def test_dashboard_contract_gate_discriminates_envelope_vs_raw_shape():

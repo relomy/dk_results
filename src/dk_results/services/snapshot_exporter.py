@@ -361,6 +361,8 @@ def _contest_row_from_detail(dk_id: int, detail: dict[str, Any]) -> tuple:
         start_time,
         contest_detail.get("entryFee"),
         contest_detail.get("maximumEntries"),
+        contest_detail.get("contestState") or contest_detail.get("contestStatus"),
+        contest_detail.get("isCompleted"),
     )
 
 
@@ -407,7 +409,17 @@ def collect_snapshot_data(
         if not selected:
             raise RuntimeError(f"No contest found for sport={sport_cls.name}")
 
-        dk_id, contest_name, draft_group, positions_paid, start_date, entry_fee, entries = selected
+        dk_id, contest_name, draft_group, positions_paid, start_date, entry_fee, entries = selected[:7]
+        contest_state = None
+        contest_completed = None
+        if len(selected) >= 8:
+            contest_state = selected[7]
+        if len(selected) >= 9:
+            contest_completed = selected[8]
+        if contest_db is not None:
+            state_row = contest_db.get_contest_state(int(dk_id))
+            if state_row:
+                contest_state, contest_completed = state_row
         logger.info("selected contest id=%s mode=%s", dk_id, mode)
 
         now_et = datetime.datetime.now(ZoneInfo("America/New_York"))
@@ -589,11 +601,16 @@ def collect_snapshot_data(
             "contest": {
                 "contest_id": dk_id,
                 "name": contest_name,
+                "sport": sport_cls.name.lower(),
                 "draft_group": draft_group,
                 "start_time_utc": to_utc_iso(start_date),
                 "is_primary": True,
+                "contest_type": "classic",
+                "state": _normalize_contest_state(contest_state, contest_completed),
                 "entry_fee": entry_fee,
+                "currency": "USD",
                 "entries": entries,
+                "max_entries": entries,
                 "positions_paid": positions_paid,
             },
             "selection": {
@@ -1408,7 +1425,7 @@ def _money_to_cents(value: Any) -> int | None:
     if value in (None, ""):
         return None
     if isinstance(value, int):
-        return value
+        return value * 100
     if isinstance(value, float):
         return int(round(value * 100))
     text = str(value).strip()
@@ -1422,24 +1439,36 @@ def _money_to_cents(value: Any) -> int | None:
     return int(round(numeric * 100))
 
 
+def _normalize_contest_state(raw_state: Any, completed: Any) -> str | None:
+    if completed in (1, True, "1", "true", "True"):
+        return "completed"
+    text = _normalize_status_text(raw_state)
+    if not text:
+        return None
+    if text in {"scheduled", "upcoming", "pregame", "pre-game", "not started"}:
+        return "upcoming"
+    if text in {"live", "in progress", "in-progress", "started"}:
+        return "live"
+    if text in {"complete", "completed", "closed", "final"}:
+        return "completed"
+    if text in {"canceled", "cancelled", "postponed", "suspended"}:
+        return "cancelled"
+    return None
+
+
 def _canonical_contest_contract(
     contest: dict[str, Any],
     *,
     sport: str,
-    fallback_time: str,
 ) -> dict[str, Any]:
     contest_id_value = contest.get("contest_id")
-    contest_id = str(contest_id_value) if contest_id_value not in (None, "") else ""
+    contest_id = str(contest_id_value) if contest_id_value not in (None, "") else None
     sport_text = str(contest.get("sport") or sport or "").strip().lower()
     contest_key = contest.get("contest_key")
-    if contest_key in (None, ""):
-        contest_key = f"{sport_text}:{contest_id}" if sport_text and contest_id else ""
+    if contest_key in (None, "") and sport_text and contest_id:
+        contest_key = f"{sport_text}:{contest_id}"
 
-    start_time = (
-        to_utc_iso(contest.get("start_time"))
-        or to_utc_iso(contest.get("start_time_utc"))
-        or fallback_time
-    )
+    start_time = to_utc_iso(contest.get("start_time")) or to_utc_iso(contest.get("start_time_utc"))
     entry_fee_cents = _to_int_flexible(contest.get("entry_fee_cents"))
     if entry_fee_cents is None:
         entry_fee_cents = _money_to_cents(contest.get("entry_fee"))
@@ -1453,29 +1482,30 @@ def _canonical_contest_contract(
     if entries_count is None:
         entries_count = _to_int_flexible(contest.get("entries"))
     max_entries = _to_int_flexible(contest.get("max_entries"))
-    if max_entries is None:
-        max_entries = entries_count
 
-    contest_type = str(contest.get("contest_type") or "unknown")
-    state = str(contest.get("state") or "unknown")
-    currency = str(contest.get("currency") or "USD")
-    name = str(contest.get("name") or "")
+    contest_type_raw = contest.get("contest_type")
+    contest_type = str(contest_type_raw).strip() if contest_type_raw not in (None, "") else None
+    state = _normalize_contest_state(contest.get("state"), contest.get("completed"))
+    currency_raw = contest.get("currency")
+    currency = str(currency_raw).strip() if currency_raw not in (None, "") else None
+    name_raw = contest.get("name")
+    name = str(name_raw).strip() if name_raw not in (None, "") else None
 
     canonical: dict[str, Any] = dict(contest)
     canonical.update(
         {
             "contest_id": contest_id,
-            "contest_key": str(contest_key),
+            "contest_key": str(contest_key) if contest_key not in (None, "") else None,
             "name": name,
             "sport": sport_text,
             "contest_type": contest_type,
             "start_time": start_time,
             "state": state,
-            "entry_fee_cents": int(entry_fee_cents or 0),
-            "prize_pool_cents": int(prize_pool_cents or 0),
+            "entry_fee_cents": entry_fee_cents,
+            "prize_pool_cents": prize_pool_cents,
             "currency": currency,
-            "entries_count": int(entries_count or 0),
-            "max_entries": int(max_entries or 0),
+            "entries_count": entries_count,
+            "max_entries": max_entries,
         }
     )
     canonical.pop("entries", None)
@@ -1502,7 +1532,7 @@ def build_dashboard_sport_snapshot(snapshot: dict[str, Any], generated_at: str) 
     }
     standings_by_username = _unique_standings_by_display_name(standings_rows)
 
-    contest_object = _canonical_contest_contract(contest, sport=str(normalized.get("sport") or ""), fallback_time=updated_at)
+    contest_object = _canonical_contest_contract(contest, sport=str(normalized.get("sport") or ""))
     contest_object["is_primary"] = True
     for key in (
         "entries_count",
@@ -1694,7 +1724,68 @@ def validate_canonical_snapshot(payload: dict[str, Any]) -> list[str]:
         key = path.split(".")[-1]
         if key in CANONICAL_DISALLOWED_KEYS:
             violations.append(f"disallowed_key:{path}")
+        if key == "start_time_utc":
+            violations.append(f"disallowed_key:{path}")
         if isinstance(value, str) and _is_numeric_string(value):
             if not path.endswith(allowed_numeric_string_suffixes):
                 violations.append(f"numeric_string:{path}")
+
+    required_contest_fields: dict[str, type] = {
+        "contest_id": str,
+        "contest_key": str,
+        "name": str,
+        "sport": str,
+        "contest_type": str,
+        "start_time": str,
+        "state": str,
+        "entry_fee_cents": int,
+        "prize_pool_cents": int,
+        "currency": str,
+        "entries_count": int,
+        "max_entries": int,
+    }
+    valid_states = {"upcoming", "live", "completed", "cancelled"}
+    sports = payload.get("sports")
+    if isinstance(sports, dict):
+        for sport_key, sport_payload in sports.items():
+            if not isinstance(sport_payload, dict):
+                continue
+            contests = sport_payload.get("contests") or []
+            if not isinstance(contests, list):
+                continue
+            selected_contest: dict[str, Any] | None = None
+            for idx, contest in enumerate(contests):
+                if not isinstance(contest, dict):
+                    violations.append(f"invalid_type:sports.{sport_key}.contests.{idx}")
+                    continue
+                path_prefix = f"sports.{sport_key}.contests.{idx}"
+                for field_name, expected_type in required_contest_fields.items():
+                    value = contest.get(field_name)
+                    if value is None:
+                        violations.append(f"missing_required:{path_prefix}.{field_name}")
+                        continue
+                    if type(value) is not expected_type:
+                        violations.append(f"type_mismatch:{path_prefix}.{field_name}")
+                start_time_value = contest.get("start_time")
+                if isinstance(start_time_value, str) and to_utc_iso(start_time_value) is None:
+                    violations.append(f"invalid_datetime:{path_prefix}.start_time")
+                state_value = contest.get("state")
+                if isinstance(state_value, str) and state_value not in valid_states:
+                    violations.append(f"invalid_value:{path_prefix}.state")
+                if selected_contest is None and contest.get("is_primary") is True:
+                    selected_contest = contest
+            if selected_contest is None and contests:
+                first_contest = contests[0]
+                if isinstance(first_contest, dict):
+                    selected_contest = first_contest
+            primary_contest = sport_payload.get("primary_contest")
+            primary_path = f"sports.{sport_key}.primary_contest"
+            if isinstance(primary_contest, dict):
+                contest_key = primary_contest.get("contest_key")
+                if contest_key in (None, ""):
+                    violations.append(f"missing_required:{primary_path}.contest_key")
+                if selected_contest is not None:
+                    selected_key = selected_contest.get("contest_key")
+                    if contest_key != selected_key:
+                        violations.append(f"mismatch:{primary_path}.contest_key")
     return sorted(set(violations))
