@@ -4,6 +4,7 @@ import hashlib
 import json
 import logging
 import os
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -445,6 +446,13 @@ def collect_snapshot_data(
         )
         if not standings_rows:
             raise RuntimeError(f"Contest standings unavailable for contest_id={dk_id}")
+        leaderboard_payout_by_entry: dict[str, int] = {}
+        try:
+            leaderboard_payload = dk.get_leaderboard(int(dk_id))
+            if isinstance(leaderboard_payload, dict):
+                leaderboard_payout_by_entry = _leaderboard_payout_map(leaderboard_payload)
+        except Exception:
+            logger.warning("leaderboard payout lookup failed for contest_id=%s", dk_id, exc_info=True)
 
         vips = load_vips()
         results = Results(
@@ -484,15 +492,27 @@ def collect_snapshot_data(
 
         vip_lookup = {vip.name for vip in results.vip_list}
         standings = []
+        cash_points_cutoff = results.min_cash_pts if results.min_rank > 0 else None
         for user in results.users:
             parsed_rank = _rank_numeric(user.rank)
+            points = _to_float(user.pts)
+            entry_key = user.player_id
+            payout_cents = leaderboard_payout_by_entry.get(str(entry_key), None) if entry_key else None
+            if isinstance(payout_cents, int):
+                is_cashing = payout_cents > 0
+            elif isinstance(points, (int, float)) and isinstance(cash_points_cutoff, (int, float)):
+                is_cashing = float(points) >= float(cash_points_cutoff)
+            else:
+                is_cashing = False
             standings.append(
                 {
                     "rank": parsed_rank if parsed_rank is not None else user.rank,
-                    "entry_key": user.player_id,
+                    "entry_key": entry_key,
                     "username": user.name,
                     "pmr": _to_float(user.pmr),
-                    "points": _to_float(user.pts),
+                    "points": points,
+                    "payout_cents": payout_cents,
+                    "is_cashing": is_cashing,
                     "ownership_remaining_total_pct": _ownership_remaining_for_user(user),
                     "is_vip": user.name in vip_lookup,
                 }
@@ -814,7 +834,9 @@ def _normalize_standings_rows(rows: list[Any]) -> list[dict[str, Any]]:
                     else row.get("ownership_remaining_pct")
                 ),
                 "payout_cents": payout_cents,
-                "is_cashing": payout_cents is not None,
+                "is_cashing": bool(row.get("is_cashing"))
+                if isinstance(row.get("is_cashing"), bool)
+                else isinstance(payout_cents, int) and payout_cents > 0,
                 "is_vip": bool(row.get("is_vip")),
             }
         )
@@ -1111,7 +1133,12 @@ def _vip_lineups_contract(
         payout_cents = _to_int(
             row.get("payout_cents") if row.get("payout_cents") is not None else standings_row.get("payout_cents")
         )
-        is_cashing = payout_cents is not None
+        if isinstance(payout_cents, int):
+            is_cashing = payout_cents > 0
+        else:
+            is_cashing = bool(row.get("is_cashing")) if isinstance(row.get("is_cashing"), bool) else bool(
+                standings_row.get("is_cashing")
+            )
 
         mapped = {
             "display_name": display_name,
@@ -1431,6 +1458,64 @@ def _selection_reason_text(reason: Any, contest_id: Any) -> str | None:
     if reason is None:
         return None
     return str(reason)
+
+
+def _dollars_to_cents_half_up(value: Any) -> int | None:
+    if value in (None, ""):
+        return None
+    text = str(value).strip().replace("$", "").replace(",", "")
+    if not text:
+        return None
+    try:
+        dollars = Decimal(text)
+    except InvalidOperation:
+        return None
+    cents = (dollars * Decimal("100")).quantize(Decimal("1"), rounding=ROUND_HALF_UP)
+    return int(cents)
+
+
+def _leaderboard_row_payout_cents(row: dict[str, Any]) -> int | None:
+    winning_value_cents = _dollars_to_cents_half_up(row.get("winningValue"))
+    if winning_value_cents is not None:
+        return winning_value_cents
+
+    winnings = row.get("winnings")
+    if not isinstance(winnings, list):
+        return None
+
+    total_cents = 0
+    found_cash = False
+    for item in winnings:
+        if not isinstance(item, dict):
+            continue
+        description = str(item.get("description") or "").strip().lower()
+        if "cash" not in description:
+            continue
+        item_cents = _dollars_to_cents_half_up(item.get("value"))
+        if item_cents is None:
+            continue
+        found_cash = True
+        total_cents += item_cents
+    return total_cents if found_cash else None
+
+
+def _leaderboard_payout_map(payload: dict[str, Any]) -> dict[str, int]:
+    rows = payload.get("leaderBoard")
+    if not isinstance(rows, list):
+        return {}
+
+    payout_by_entry: dict[str, int] = {}
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        entry_key = row.get("entryKey")
+        if entry_key in (None, ""):
+            continue
+        payout_cents = _leaderboard_row_payout_cents(row)
+        if payout_cents is None:
+            continue
+        payout_by_entry[str(entry_key)] = payout_cents
+    return payout_by_entry
 
 
 def _money_to_cents(value: Any) -> int | None:
