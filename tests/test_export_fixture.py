@@ -535,6 +535,27 @@ def test_run_export_fixture_emits_envelope_and_contract_sections(monkeypatch, tm
     assert sport["primary_contest"]["contest_id"] == "188080404"
     assert sport["primary_contest"]["selection_reason"] == "explicit_id contest_id=188080404"
     assert contest["contest_id"] == "188080404"
+    required_canonical_fields = {
+        "contest_id": str,
+        "contest_key": str,
+        "name": str,
+        "sport": str,
+        "contest_type": str,
+        "start_time": str,
+        "state": str,
+        "entry_fee_cents": int,
+        "prize_pool_cents": int,
+        "currency": str,
+        "entries_count": int,
+        "max_entries": int,
+    }
+    for field_name, expected_type in required_canonical_fields.items():
+        assert field_name in contest
+        assert contest[field_name] is not None
+        assert type(contest[field_name]) is expected_type
+    assert "start_time_utc" not in contest
+    assert sport["primary_contest"]["contest_key"] is not None
+    assert sport["primary_contest"]["contest_key"] == contest["contest_key"]
     assert contest["is_primary"] is True
     assert contest["entries_count"] == 1000
     assert contest["live_metrics"]["cash_line"]["cutoff_type"] == "rank"
