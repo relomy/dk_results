@@ -1153,6 +1153,87 @@ def _distance_to_cash_metrics(
     return metrics
 
 
+def _normalize_status_text(value: Any) -> str:
+    text = str(value or "").strip().lower()
+    if not text:
+        return ""
+    return " ".join(text.split())
+
+
+def _status_bucket(value: Any) -> str:
+    normalized = _normalize_status_text(value)
+    if not normalized:
+        return "unknown"
+    if normalized.startswith("final"):
+        return "terminal"
+    if normalized in {"complete", "completed", "closed", "canceled", "cancelled", "postponed", "suspended"}:
+        return "terminal"
+    if normalized in {"scheduled", "in progress", "live", "pregame", "halftime"}:
+        return "active"
+    return "unknown"
+
+
+def _ownership_summary_metrics(vip_lineups: list[dict[str, Any]]) -> dict[str, Any] | None:
+    per_vip: list[dict[str, Any]] = []
+    for lineup in vip_lineups:
+        vip_entry_key = lineup.get("vip_entry_key")
+        entry_key = lineup.get("entry_key")
+        if vip_entry_key in (None, "") and entry_key in (None, ""):
+            continue
+
+        players_live = lineup.get("players_live") or []
+        total_ownership = 0.0
+        ownership_in_play = 0.0
+        has_total_input = False
+        has_in_play_input = False
+        is_partial = False
+
+        for player in players_live:
+            if not isinstance(player, dict):
+                continue
+            ownership = player.get("ownership_pct")
+            if not isinstance(ownership, (int, float)):
+                is_partial = True
+                continue
+
+            ownership_value = float(ownership)
+            total_ownership += ownership_value
+            has_total_input = True
+
+            status_bucket = _status_bucket(player.get("game_status"))
+            if status_bucket == "active":
+                ownership_in_play += ownership_value
+                has_in_play_input = True
+            elif status_bucket == "terminal":
+                has_in_play_input = True
+            else:
+                is_partial = True
+
+        if not has_total_input:
+            is_partial = True
+
+        row: dict[str, Any] = {
+            "vip_entry_key": vip_entry_key,
+            "entry_key": entry_key,
+            "display_name": lineup.get("display_name"),
+            "is_partial": is_partial,
+        }
+        if has_total_input:
+            row["total_ownership_pct"] = round(total_ownership, 4)
+        if has_in_play_input:
+            row["ownership_in_play_pct"] = round(ownership_in_play, 4)
+        per_vip.append(row)
+
+    if not per_vip:
+        return None
+
+    return {
+        "source": "vip_lineup_players",
+        "scope": "vip_lineup",
+        "per_vip": per_vip,
+    }
+
+
 def _threat_metrics(
     ownership_watchlist: dict[str, Any] | None,
     vip_lineups: list[dict[str, Any]],
@@ -1363,6 +1444,9 @@ def build_dashboard_sport_snapshot(snapshot: dict[str, Any], generated_at: str) 
         )
         if distance_to_cash:
             metrics["distance_to_cash"] = distance_to_cash
+        ownership_summary = _ownership_summary_metrics(contest_object["vip_lineups"])
+        if ownership_summary:
+            metrics["ownership_summary"] = ownership_summary
     threat = _threat_metrics(
         contest_object.get("ownership_watchlist"),
         contest_object.get("vip_lineups", []),

@@ -701,6 +701,94 @@ def test_distance_to_cash_metrics_points_and_rank_delta(monkeypatch):
     assert metrics["per_vip"][0]["rank_delta"] == 2
 
 
+def test_ownership_summary_metrics_per_vip_formulas(monkeypatch):
+    monkeypatch.setattr(
+        snapshot_exporter,
+        "collect_snapshot_data",
+        lambda **_kwargs: {
+            "snapshot_version": "v1",
+            "sport": "NBA",
+            "contest": {"contest_id": 123, "is_primary": True, "name": "x"},
+            "selection": {"selected_contest_id": 123, "reason": {}},
+            "candidates": [],
+            "cash_line": {"cutoff_type": "rank", "rank": 10, "points": 100.0},
+            "vip_lineups": [
+                {
+                    "entry_key": "vip-1",
+                    "username": "vip",
+                    "players": [
+                        {"pos": "PG", "name": "Javon Small", "ownership": 0.8467},
+                        {"pos": "SG", "name": "Anthony Edwards", "ownership": 0.7372},
+                        {"pos": "SF", "name": "Jahmai Mashack", "ownership": "31.39%"},
+                    ],
+                }
+            ],
+            "players": [
+                {"name": "Javon Small", "game_status": "In Progress"},
+                {"name": "Anthony Edwards", "game_status": "Final"},
+                {"name": "Jahmai Mashack", "game_status": "Halftime"},
+            ],
+            "ownership": {"ownership_remaining_total_pct": 1.0, "top_remaining_players": []},
+            "train_clusters": [],
+            "standings": [{"entry_key": "vip-1", "username": "vip"}],
+            "truncation": {},
+            "metadata": {"warnings": [], "missing_fields": [], "source_endpoints": []},
+        },
+    )
+
+    snapshot = snapshot_exporter.build_snapshot(sport="NBA")
+    envelope = snapshot_exporter.build_dashboard_envelope({"NBA": snapshot})
+    summary = envelope["sports"]["nba"]["contests"][0]["metrics"]["ownership_summary"]
+
+    assert summary["source"] == "vip_lineup_players"
+    assert summary["scope"] == "vip_lineup"
+    assert len(summary["per_vip"]) == 1
+    row = summary["per_vip"][0]
+    assert row["entry_key"] == "vip-1"
+    assert row["total_ownership_pct"] == 189.78
+    assert row["ownership_in_play_pct"] == 116.06
+    assert row["is_partial"] is False
+
+
+def test_ownership_summary_omits_rows_with_missing_keys(monkeypatch):
+    monkeypatch.setattr(
+        snapshot_exporter,
+        "collect_snapshot_data",
+        lambda **_kwargs: {
+            "snapshot_version": "v1",
+            "sport": "NBA",
+            "contest": {"contest_id": 123, "is_primary": True, "name": "x"},
+            "selection": {"selected_contest_id": 123, "reason": {}},
+            "candidates": [],
+            "cash_line": {},
+            "vip_lineups": [
+                {
+                    "entry_key": "vip-1",
+                    "username": "vip",
+                    "players": [{"pos": "PG", "name": "Javon Small", "ownership": 0.5, "game_status": "live"}],
+                },
+                {
+                    "username": "no_key_vip",
+                    "players": [{"pos": "SG", "name": "Anthony Edwards", "ownership": 0.4, "game_status": "live"}],
+                },
+            ],
+            "players": [{"name": "Javon Small", "game_status": "In Progress"}],
+            "ownership": {"ownership_remaining_total_pct": 1.0, "top_remaining_players": []},
+            "train_clusters": [],
+            "standings": [{"entry_key": "vip-1", "username": "vip"}],
+            "truncation": {},
+            "metadata": {"warnings": [], "missing_fields": [], "source_endpoints": []},
+        },
+    )
+
+    snapshot = snapshot_exporter.build_snapshot(sport="NBA")
+    envelope = snapshot_exporter.build_dashboard_envelope({"NBA": snapshot})
+    summary = envelope["sports"]["nba"]["contests"][0]["metrics"]["ownership_summary"]
+
+    assert len(summary["per_vip"]) == 1
+    assert summary["per_vip"][0]["entry_key"] == "vip-1"
+
+
 def test_threat_metrics_leverage_and_vip_counts(monkeypatch):
     monkeypatch.setattr(
         snapshot_exporter,
