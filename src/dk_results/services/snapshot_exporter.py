@@ -425,9 +425,11 @@ def collect_snapshot_data(
                 contest_state, contest_completed = state_row
             contract_metadata = contest_db.get_contest_contract_metadata(int(dk_id))
             if contract_metadata:
-                prize_pool, max_entries, db_entries = contract_metadata
-                if db_entries not in (None, ""):
-                    entries_count = db_entries
+                prize_pool, contest_capacity, db_entry_count = contract_metadata
+                if db_entry_count not in (None, ""):
+                    entries_count = db_entry_count
+                if contest_capacity not in (None, ""):
+                    max_entries = contest_capacity
         if max_entries in (None, ""):
             max_entries = entries_count
         logger.info("selected contest id=%s mode=%s", dk_id, mode)
@@ -1791,6 +1793,9 @@ def validate_canonical_snapshot(payload: dict[str, Any]) -> list[str]:
                     selected_contest = first_contest
             primary_contest = sport_payload.get("primary_contest")
             primary_path = f"sports.{sport_key}.primary_contest"
+            if contests and not isinstance(primary_contest, dict):
+                violations.append(f"missing_required:{primary_path}")
+                continue
             if isinstance(primary_contest, dict):
                 contest_key = primary_contest.get("contest_key")
                 if contest_key in (None, ""):

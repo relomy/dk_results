@@ -352,15 +352,15 @@ class ContestDatabase:
         """Fetch metadata needed for canonical contest contract fields."""
         cur = self.conn.cursor()
         try:
-            sql = "SELECT total_prizes, max_entry_count, entries FROM contests WHERE dk_id=? LIMIT 1"
+            sql = "SELECT total_prizes, entries, entry_count FROM contests WHERE dk_id=? LIMIT 1"
             cur.execute(sql, (dk_id,))
             row = cur.fetchone()
             if row is None:
                 return None
             total_prizes = row[0]
-            max_entry_count = row[1]
-            entries = row[2]
-            return total_prizes, max_entry_count, entries
+            entries = row[1]
+            entry_count = row[2]
+            return total_prizes, entries, entry_count
         except sqlite3.Error as err:
             self.logger.error("sqlite error in get_contest_contract_metadata(): %s", err.args[0])
             return None

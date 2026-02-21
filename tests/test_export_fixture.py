@@ -1336,6 +1336,14 @@ def test_validate_canonical_snapshot_detects_primary_contest_key_mismatch():
     assert "mismatch:sports.nba.primary_contest.contest_key" in violations
 
 
+def test_validate_canonical_snapshot_requires_primary_contest_when_contests_present():
+    payload = _valid_envelope_for_validation()
+    payload["sports"]["nba"].pop("primary_contest")
+    violations = snapshot_exporter.validate_canonical_snapshot(payload)
+
+    assert "missing_required:sports.nba.primary_contest" in violations
+
+
 def test_normalize_contest_state_prefers_authoritative_flags():
     assert snapshot_exporter._normalize_contest_state(None, 1) == "completed"
     assert snapshot_exporter._normalize_contest_state("In Progress", 0) == "live"
@@ -1377,7 +1385,7 @@ def test_collect_snapshot_data_sources_prize_pool_from_db_metadata(monkeypatch, 
             return ("In Progress", 0)
 
         def get_contest_contract_metadata(self, *_args, **_kwargs):
-            return (250000, 1500, 1000)
+            return (250000, 1500, 114)
 
         def close(self):
             return None
@@ -1425,6 +1433,7 @@ def test_collect_snapshot_data_sources_prize_pool_from_db_metadata(monkeypatch, 
 
     assert contest["prize_pool"] == 250000
     assert contest["max_entries"] == 1500
+    assert contest["entries"] == 114
 
 
 def test_dashboard_contract_gate_discriminates_envelope_vs_raw_shape():
