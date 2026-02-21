@@ -140,6 +140,41 @@ def _to_int(value: Any) -> int | None:
         return None
 
 
+def _to_int_flexible(value: Any) -> int | None:
+    if value in (None, ""):
+        return None
+    if isinstance(value, (int, float)):
+        return int(value)
+    text = str(value).strip()
+    if not text:
+        return None
+    text = text.replace("$", "").replace(",", "")
+    try:
+        return int(float(text))
+    except ValueError:
+        return None
+
+
+def _to_percent(value: Any) -> float | None:
+    if value in (None, ""):
+        return None
+    numeric: float | None
+    if isinstance(value, (int, float)):
+        numeric = float(value)
+    else:
+        text = str(value).strip()
+        if not text:
+            return None
+        if text.endswith("%"):
+            text = text[:-1].strip()
+        numeric = _to_float(text)
+    if numeric is None:
+        return None
+    if 0 <= numeric <= 1:
+        return numeric * 100
+    return numeric
+
+
 def _ownership_remaining_for_user(user: Any) -> float | None:
     lineup_obj = getattr(user, "lineupobj", None)
     if not lineup_obj:
@@ -806,6 +841,14 @@ def _canonical_player_name(raw_name: Any, lookup: dict[str, str]) -> str | None:
     return None
 
 
+def _canonical_or_raw_player_name(raw_name: Any, lookup: dict[str, str]) -> str | None:
+    name = str(raw_name or "").strip()
+    if not name:
+        return None
+    canonical = _canonical_player_name(name, lookup)
+    return canonical if canonical is not None else name
+
+
 def _cluster_composition(cluster: dict[str, Any], player_lookup: dict[str, str]) -> list[dict[str, Any]]:
     signature = str(cluster.get("lineup_signature") or "").strip()
     if not signature:
@@ -904,9 +947,110 @@ def _vip_slots_from_lineup(lineup: Any, player_lookup: dict[str, str]) -> list[d
     return slots
 
 
+def _build_player_status_lookup(players: list[Any]) -> dict[str, str]:
+    lookup: dict[str, str] = {}
+    for player in players:
+        if not isinstance(player, dict):
+            continue
+        name = str(player.get("name") or "").strip()
+        status = str(player.get("game_status") or "").strip()
+        if not name or not status:
+            continue
+        lookup[name.lower()] = status
+    return lookup
+
+
+def _vip_players_live_from_lineup(
+    lineup: Any,
+    player_lookup: dict[str, str],
+    player_status_lookup: dict[str, str],
+) -> list[dict[str, Any]]:
+    if not isinstance(lineup, list):
+        return []
+
+    rows: list[dict[str, Any]] = []
+    for index, item in enumerate(lineup):
+        if isinstance(item, dict):
+            raw_name = item.get("player_name") or item.get("name")
+            slot = item.get("slot") or item.get("position") or item.get("pos") or f"SLOT_{index + 1}"
+            ownership_pct = _to_percent(
+                item.get("ownership_pct") if item.get("ownership_pct") is not None else item.get("ownership")
+            )
+            salary = _to_int_flexible(item.get("salary"))
+            points = _to_float(item.get("points") if item.get("points") is not None else item.get("pts"))
+            value = _to_float(item.get("value"))
+            rt_projection = _to_float(
+                item.get("rt_projection") if item.get("rt_projection") is not None else item.get("rtProj")
+            )
+            time_remaining_display_raw = (
+                item.get("time_remaining_display")
+                if item.get("time_remaining_display") is not None
+                else item.get("timeStatus")
+            )
+            time_remaining_minutes = _to_float(
+                item.get("time_remaining_minutes")
+                if item.get("time_remaining_minutes") is not None
+                else time_remaining_display_raw
+            )
+            stats_text_raw = item.get("stats_text") if item.get("stats_text") is not None else item.get("stats")
+            game_status = item.get("game_status")
+        else:
+            raw_name = item
+            slot = f"SLOT_{index + 1}"
+            ownership_pct = None
+            salary = None
+            points = None
+            value = None
+            rt_projection = None
+            time_remaining_display_raw = None
+            time_remaining_minutes = None
+            stats_text_raw = None
+            game_status = None
+
+        player_name = _canonical_or_raw_player_name(raw_name, player_lookup)
+        if player_name is None:
+            continue
+
+        status_text = str(game_status).strip() if game_status not in (None, "") else ""
+        if not status_text:
+            status_text = player_status_lookup.get(player_name.lower(), "")
+
+        time_remaining_display = (
+            str(time_remaining_display_raw).strip() if time_remaining_display_raw not in (None, "") else ""
+        )
+        stats_text = str(stats_text_raw).strip() if stats_text_raw not in (None, "") else ""
+
+        live_row: dict[str, Any] = {
+            "slot": str(slot),
+            "player_name": player_name,
+        }
+        if status_text:
+            live_row["game_status"] = status_text
+        if isinstance(ownership_pct, (int, float)):
+            live_row["ownership_pct"] = float(ownership_pct)
+        if salary is not None:
+            live_row["salary"] = salary
+        if isinstance(points, (int, float)):
+            live_row["points"] = float(points)
+        if isinstance(value, (int, float)):
+            live_row["value"] = float(value)
+        if isinstance(rt_projection, (int, float)):
+            live_row["rt_projection"] = float(rt_projection)
+        if time_remaining_display:
+            live_row["time_remaining_display"] = time_remaining_display
+        if isinstance(time_remaining_minutes, (int, float)):
+            live_row["time_remaining_minutes"] = float(time_remaining_minutes)
+        if stats_text:
+            live_row["stats_text"] = stats_text
+        rows.append(live_row)
+
+    return rows
+
+
 def _vip_lineups_contract(
     vip_lineups: list[Any],
     player_lookup: dict[str, str],
+    player_status_lookup: dict[str, str],
     updated_at: str,
     standings_by_entry_key: dict[str, dict[str, Any]],
     standings_by_username: dict[str, dict[str, Any]],
@@ -957,6 +1101,11 @@ def _vip_lineups_contract(
             "slots": _vip_slots_from_lineup(
                 row.get("lineup") if row.get("lineup") is not None else row.get("players"),
                 player_lookup,
+            ),
+            "players_live": _vip_players_live_from_lineup(
+                row.get("players") if row.get("players") is not None else row.get("lineup"),
+                player_lookup,
+                player_status_lookup,
             ),
         }
         normalized.append(mapped)
@@ -1142,6 +1291,7 @@ def build_dashboard_sport_snapshot(snapshot: dict[str, Any], generated_at: str) 
     truncation = dict(normalized.get("truncation") or {})
     players = list(normalized.get("players") or [])
     player_lookup = _build_player_name_lookup(players)
+    player_status_lookup = _build_player_status_lookup(players)
     standings_rows = list(normalized.get("standings") or [])
     standings_rows = _normalize_standings_rows(standings_rows)
     standings_by_entry_key = {
@@ -1199,6 +1349,7 @@ def build_dashboard_sport_snapshot(snapshot: dict[str, Any], generated_at: str) 
         contest_object["vip_lineups"] = _vip_lineups_contract(
             vip_source,
             player_lookup,
+            player_status_lookup,
             updated_at,
             standings_by_entry_key,
             standings_by_username,
@@ -1330,6 +1481,7 @@ def validate_canonical_snapshot(payload: dict[str, Any]) -> list[str]:
         ".cluster_key",
         ".selection_reason",
         ".display_name",
+        ".time_remaining_display",
     )
 
     for path, value in _walk_paths(payload):
