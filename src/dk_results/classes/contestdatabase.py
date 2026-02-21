@@ -348,6 +348,23 @@ class ContestDatabase:
             self.logger.error("sqlite error in get_contest_state(): %s", err.args[0])
             return None
 
+    def get_contest_contract_metadata(self, dk_id: int) -> tuple[int | None, int | None, int | None] | None:
+        """Fetch metadata needed for canonical contest contract fields."""
+        cur = self.conn.cursor()
+        try:
+            sql = "SELECT total_prizes, max_entry_count, entries FROM contests WHERE dk_id=? LIMIT 1"
+            cur.execute(sql, (dk_id,))
+            row = cur.fetchone()
+            if row is None:
+                return None
+            total_prizes = row[0]
+            max_entry_count = row[1]
+            entries = row[2]
+            return total_prizes, max_entry_count, entries
+        except sqlite3.Error as err:
+            self.logger.error("sqlite error in get_contest_contract_metadata(): %s", err.args[0])
+            return None
+
     def get_live_contest_candidates(
         self, sport: str, entry_fee: int = 25, keyword: str = "%", limit: int = 5
     ) -> list[tuple]:

@@ -412,6 +412,9 @@ def collect_snapshot_data(
         dk_id, contest_name, draft_group, positions_paid, start_date, entry_fee, entries = selected[:7]
         contest_state = None
         contest_completed = None
+        prize_pool = None
+        max_entries = None
+        entries_count = entries
         if len(selected) >= 8:
             contest_state = selected[7]
         if len(selected) >= 9:
@@ -420,6 +423,13 @@ def collect_snapshot_data(
             state_row = contest_db.get_contest_state(int(dk_id))
             if state_row:
                 contest_state, contest_completed = state_row
+            contract_metadata = contest_db.get_contest_contract_metadata(int(dk_id))
+            if contract_metadata:
+                prize_pool, max_entries, db_entries = contract_metadata
+                if db_entries not in (None, ""):
+                    entries_count = db_entries
+        if max_entries in (None, ""):
+            max_entries = entries_count
         logger.info("selected contest id=%s mode=%s", dk_id, mode)
 
         now_et = datetime.datetime.now(ZoneInfo("America/New_York"))
@@ -609,8 +619,9 @@ def collect_snapshot_data(
                 "state": _normalize_contest_state(contest_state, contest_completed),
                 "entry_fee": entry_fee,
                 "currency": "USD",
-                "entries": entries,
-                "max_entries": entries,
+                "entries": entries_count,
+                "max_entries": max_entries,
+                "prize_pool": prize_pool,
                 "positions_paid": positions_paid,
             },
             "selection": {
