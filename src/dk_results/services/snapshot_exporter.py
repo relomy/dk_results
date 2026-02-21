@@ -1404,6 +1404,85 @@ def _selection_reason_text(reason: Any, contest_id: Any) -> str | None:
     return str(reason)
 
 
+def _money_to_cents(value: Any) -> int | None:
+    if value in (None, ""):
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return int(round(value * 100))
+    text = str(value).strip()
+    if not text:
+        return None
+    text = text.replace("$", "").replace(",", "")
+    try:
+        numeric = float(text)
+    except ValueError:
+        return None
+    return int(round(numeric * 100))
+
+
+def _canonical_contest_contract(
+    contest: dict[str, Any],
+    *,
+    sport: str,
+    fallback_time: str,
+) -> dict[str, Any]:
+    contest_id_value = contest.get("contest_id")
+    contest_id = str(contest_id_value) if contest_id_value not in (None, "") else ""
+    sport_text = str(contest.get("sport") or sport or "").strip().lower()
+    contest_key = contest.get("contest_key")
+    if contest_key in (None, ""):
+        contest_key = f"{sport_text}:{contest_id}" if sport_text and contest_id else ""
+
+    start_time = (
+        to_utc_iso(contest.get("start_time"))
+        or to_utc_iso(contest.get("start_time_utc"))
+        or fallback_time
+    )
+    entry_fee_cents = _to_int_flexible(contest.get("entry_fee_cents"))
+    if entry_fee_cents is None:
+        entry_fee_cents = _money_to_cents(contest.get("entry_fee"))
+    prize_pool_cents = _to_int_flexible(contest.get("prize_pool_cents"))
+    if prize_pool_cents is None:
+        prize_pool_cents = _to_int_flexible(contest.get("payout_cents"))
+    if prize_pool_cents is None:
+        prize_pool_cents = _money_to_cents(contest.get("prize_pool"))
+
+    entries_count = _to_int_flexible(contest.get("entries_count"))
+    if entries_count is None:
+        entries_count = _to_int_flexible(contest.get("entries"))
+    max_entries = _to_int_flexible(contest.get("max_entries"))
+    if max_entries is None:
+        max_entries = entries_count
+
+    contest_type = str(contest.get("contest_type") or "unknown")
+    state = str(contest.get("state") or "unknown")
+    currency = str(contest.get("currency") or "USD")
+    name = str(contest.get("name") or "")
+
+    canonical: dict[str, Any] = dict(contest)
+    canonical.update(
+        {
+            "contest_id": contest_id,
+            "contest_key": str(contest_key),
+            "name": name,
+            "sport": sport_text,
+            "contest_type": contest_type,
+            "start_time": start_time,
+            "state": state,
+            "entry_fee_cents": int(entry_fee_cents or 0),
+            "prize_pool_cents": int(prize_pool_cents or 0),
+            "currency": currency,
+            "entries_count": int(entries_count or 0),
+            "max_entries": int(max_entries or 0),
+        }
+    )
+    canonical.pop("entries", None)
+    canonical.pop("start_time_utc", None)
+    return canonical
+
+
 def build_dashboard_sport_snapshot(snapshot: dict[str, Any], generated_at: str) -> dict[str, Any]:
     normalized = normalize_snapshot_for_output(snapshot)
     updated_at = normalized.get("snapshot_generated_at_utc") or generated_at
@@ -1423,21 +1502,18 @@ def build_dashboard_sport_snapshot(snapshot: dict[str, Any], generated_at: str) 
     }
     standings_by_username = _unique_standings_by_display_name(standings_rows)
 
-    contest_object = dict(contest)
+    contest_object = _canonical_contest_contract(contest, sport=str(normalized.get("sport") or ""), fallback_time=updated_at)
     contest_object["is_primary"] = True
-    if "entries" in contest_object and "entries_count" not in contest_object:
-        contest_object["entries_count"] = contest_object.get("entries")
     for key in (
         "entries_count",
+        "max_entries",
         "positions_paid",
         "entry_fee_cents",
-        "payout_cents",
+        "prize_pool_cents",
         "draft_group",
     ):
         if key in contest_object:
             contest_object[key] = _rank_numeric(contest_object.get(key))
-    contest_object.pop("entries", None)
-    cash_line = _cash_line_contract(dict(normalized.get("cash_line") or {}))
     cash_line = _cash_line_contract(dict(normalized.get("cash_line") or {}))
 
     ownership_source = normalized.get("ownership")
@@ -1522,7 +1598,7 @@ def build_dashboard_sport_snapshot(snapshot: dict[str, Any], generated_at: str) 
     if contest_id is not None:
         sport_snapshot["primary_contest"] = {
             "contest_id": contest_id,
-            "contest_key": contest.get("contest_key"),
+            "contest_key": contest_object.get("contest_key"),
             "selection_reason": _selection_reason_text(selection.get("reason"), contest_id),
             "selected_at": generated_at,
         }
