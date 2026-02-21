@@ -354,6 +354,20 @@ def _contest_row_from_detail(dk_id: int, detail: dict[str, Any]) -> tuple:
     if payout_summary:
         positions_paid = payout_summary[0].get("maxPosition")
     start_time = contest_detail.get("contestStartTime")
+    prize_pool = (
+        contest_detail.get("totalPrizePool")
+        or contest_detail.get("totalPrizes")
+        or contest_detail.get("totalPayouts")
+        or contest_detail.get("totalPayout")
+        or contest_detail.get("prizePool")
+        or contest_detail.get("payout")
+    )
+    max_entries_per_user = (
+        contest_detail.get("maxEntriesPerUser")
+        or contest_detail.get("maximumEntriesPerUser")
+        or contest_detail.get("maxEntriesPerPerson")
+        or contest_detail.get("maxEntryCount")
+    )
     return (
         dk_id,
         contest_detail.get("name"),
@@ -364,6 +378,8 @@ def _contest_row_from_detail(dk_id: int, detail: dict[str, Any]) -> tuple:
         contest_detail.get("maximumEntries"),
         contest_detail.get("contestState") or contest_detail.get("contestStatus"),
         contest_detail.get("isCompleted"),
+        prize_pool,
+        max_entries_per_user,
     )
 
 
@@ -420,6 +436,10 @@ def collect_snapshot_data(
             contest_state = selected[7]
         if len(selected) >= 9:
             contest_completed = selected[8]
+        if len(selected) >= 10 and selected[9] not in (None, ""):
+            prize_pool = selected[9]
+        if len(selected) >= 11 and selected[10] not in (None, ""):
+            max_entries_per_user = selected[10]
         if contest_db is not None:
             state_row = contest_db.get_contest_state(int(dk_id))
             if state_row:
@@ -1604,11 +1624,14 @@ def _canonical_contest_contract(
             "entry_fee_cents": entry_fee_cents,
             "prize_pool_cents": prize_pool_cents,
             "currency": currency,
-            "entries_count": entries_count,
             "max_entries": max_entries,
             "max_entries_per_user": max_entries_per_user,
         }
     )
+    if entries_count is None:
+        canonical.pop("entries_count", None)
+    else:
+        canonical["entries_count"] = entries_count
     canonical.pop("entries", None)
     canonical.pop("start_time_utc", None)
     return canonical
