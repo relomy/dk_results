@@ -332,6 +332,42 @@ class ContestDatabase:
             self.logger.error("sqlite error in get_contest_by_id(): %s", err.args[0])
             return None
 
+    def get_contest_state(self, dk_id: int) -> tuple[str | None, int | None] | None:
+        """Fetch state and completion flags for one contest."""
+        cur = self.conn.cursor()
+        try:
+            sql = "SELECT status, completed FROM contests WHERE dk_id=? LIMIT 1"
+            cur.execute(sql, (dk_id,))
+            row = cur.fetchone()
+            if row is None:
+                return None
+            status_value = row[0]
+            completed_value = row[1]
+            return status_value, completed_value
+        except sqlite3.Error as err:
+            self.logger.error("sqlite error in get_contest_state(): %s", err.args[0])
+            return None
+
+    def get_contest_contract_metadata(
+        self, dk_id: int
+    ) -> tuple[int | None, int | None, int | None, int | None] | None:
+        """Fetch metadata needed for canonical contest contract fields."""
+        cur = self.conn.cursor()
+        try:
+            sql = "SELECT total_prizes, entries, max_entry_count, entry_count FROM contests WHERE dk_id=? LIMIT 1"
+            cur.execute(sql, (dk_id,))
+            row = cur.fetchone()
+            if row is None:
+                return None
+            total_prizes = row[0]
+            entries = row[1]
+            max_entry_count = row[2]
+            entry_count = row[3]
+            return total_prizes, entries, max_entry_count, entry_count
+        except sqlite3.Error as err:
+            self.logger.error("sqlite error in get_contest_contract_metadata(): %s", err.args[0])
+            return None
+
     def get_live_contest_candidates(
         self, sport: str, entry_fee: int = 25, keyword: str = "%", limit: int = 5
     ) -> list[tuple]:
