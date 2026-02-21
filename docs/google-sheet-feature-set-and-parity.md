@@ -48,7 +48,7 @@ Planning and implementation artifacts are maintained in repo docs and branch his
    - Fallback to payout presence only when that metrics row is unavailable.
 2. Ownership precedence:
    - `contest.ownership_watchlist` remains canonical threat source.
-   - `contest.metrics.ownership_summary` is derived from that same source and must declare scope/source.
+   - `contest.metrics.ownership_summary` is derived from `vip_lineups[].players_live` and must declare scope/source (`vip_lineup_players` / `vip_lineup`).
 3. `players_live[]` typing:
    - Define units and nullability explicitly (percent values, numeric salary/points/value/projection, raw display strings where needed).
 4. Validation timing:
