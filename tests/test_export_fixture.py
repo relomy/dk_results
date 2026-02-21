@@ -1642,6 +1642,210 @@ def test_collect_snapshot_data_uses_points_cutoff_when_payout_unavailable(monkey
     assert contest["vip_lineups"][0]["live"]["is_cashing"] is True
 
 
+def test_collect_snapshot_data_uses_winnings_cash_fallback_when_winning_value_missing(monkeypatch, tmp_path):
+    class _FakeSport:
+        name = "NBA"
+        sheet_min_entry_fee = 25
+        keyword = "%"
+
+    class _FakePlayer:
+        name = "A"
+        pos = "PG"
+        roster_pos = ["PG"]
+        salary = 5000
+        team_abbv = "LAL"
+        game_info = "Final"
+        matchup_info = "LAL@BOS"
+        ownership = 0.2
+        fpts = 12.0
+        value = 2.4
+
+    class _FakeUser:
+        rank = 6
+        player_id = "ek1"
+        name = "vip1"
+        pmr = "0"
+        pts = 336.25
+
+    class _FakeContestDb:
+        def get_live_contest_candidates(self, *_args, **_kwargs):
+            return []
+
+        def get_contest_by_id(self, *_args, **_kwargs):
+            return (123, "NBA Contest", 777, 50, "2026-02-14 01:00:00", 10, 1500)
+
+        def get_contest_state(self, *_args, **_kwargs):
+            return ("In Progress", 0)
+
+        def get_contest_contract_metadata(self, *_args, **_kwargs):
+            return (250000, 1500, 1, 114)
+
+        def close(self):
+            return None
+
+    class _FakeDraftKings:
+        def download_salary_csv(self, _sport, _draft_group, filename):
+            path = tmp_path / "salary.csv"
+            path.write_text("Position,Name,Salary\nPG,A,5000\n", encoding="utf-8")
+
+        def get_leaderboard(self, *_args, **_kwargs):
+            return {
+                "leaderBoard": [
+                    {
+                        "entryKey": "ek1",
+                        "winningValue": None,
+                        "winnings": [
+                            {"description": "Ticket", "value": 5},
+                            {"description": "Cash", "value": 20.126},
+                        ],
+                    }
+                ]
+            }
+
+        def download_contest_rows(self, *_args, **_kwargs):
+            return [
+                ["Rank", "EntryId", "EntryName", "TimeRemaining", "Points", "Lineup"],
+                ["6", "ek1", "vip1", "0", "336.25", "PG A"],
+            ]
+
+        def get_vip_lineups(self, *_args, **_kwargs):
+            return [{"user": "vip1", "entry_key": "ek1", "players": [{"slot": "PG", "name": "A"}]}]
+
+    class _FakeResults:
+        def __init__(self, *_args, **_kwargs):
+            self.vip_list = [_FakeUser()]
+            self.players = {"A": _FakePlayer()}
+            self.users = [_FakeUser()]
+            self.non_cashing_users = 0
+            self.non_cashing_players = {}
+            self.non_cashing_avg_pmr = 0.0
+            self.min_rank = 50
+            self.min_cash_pts = 325.25
+
+    class _FakeTrainFinder:
+        def __init__(self, _users):
+            pass
+
+        def get_users_above_salary_spent(self, _limit):
+            return {}
+
+    monkeypatch.setattr(snapshot_exporter, "_sport_choices", lambda: {"NBA": _FakeSport})
+    monkeypatch.setattr(snapshot_exporter, "ContestDatabase", lambda _path: _FakeContestDb())
+    monkeypatch.setattr(snapshot_exporter, "Draftkings", _FakeDraftKings)
+    monkeypatch.setattr(snapshot_exporter, "Results", _FakeResults)
+    monkeypatch.setattr(snapshot_exporter, "TrainFinder", _FakeTrainFinder)
+    monkeypatch.setattr(snapshot_exporter, "load_vips", lambda: ["vip1"])
+    monkeypatch.setattr(snapshot_exporter.state, "contests_db_path", lambda: tmp_path / "contests.db")
+    monkeypatch.setattr(snapshot_exporter, "SALARY_DIR", str(tmp_path))
+
+    snapshot = snapshot_exporter.collect_snapshot_data(sport="NBA", contest_id=123, standings_limit=10)
+    assert snapshot["standings"][0]["payout_cents"] == 2013
+
+    sport_payload = snapshot_exporter.build_dashboard_sport_snapshot(snapshot, "2026-02-14T02:00:00Z")
+    contest = sport_payload["contests"][0]
+    assert contest["standings"]["rows"][0]["payout_cents"] == 2013
+    assert contest["standings"]["rows"][0]["is_cashing"] is True
+    assert contest["vip_lineups"][0]["live"]["payout_cents"] == 2013
+    assert contest["vip_lineups"][0]["live"]["is_cashing"] is True
+
+
+def test_collect_snapshot_data_winning_value_precedence_over_winnings(monkeypatch, tmp_path):
+    class _FakeSport:
+        name = "NBA"
+        sheet_min_entry_fee = 25
+        keyword = "%"
+
+    class _FakePlayer:
+        name = "A"
+        pos = "PG"
+        roster_pos = ["PG"]
+        salary = 5000
+        team_abbv = "LAL"
+        game_info = "Final"
+        matchup_info = "LAL@BOS"
+        ownership = 0.2
+        fpts = 12.0
+        value = 2.4
+
+    class _FakeUser:
+        rank = 6
+        player_id = "ek1"
+        name = "vip1"
+        pmr = "0"
+        pts = 336.25
+
+    class _FakeContestDb:
+        def get_live_contest_candidates(self, *_args, **_kwargs):
+            return []
+
+        def get_contest_by_id(self, *_args, **_kwargs):
+            return (123, "NBA Contest", 777, 50, "2026-02-14 01:00:00", 10, 1500)
+
+        def get_contest_state(self, *_args, **_kwargs):
+            return ("In Progress", 0)
+
+        def get_contest_contract_metadata(self, *_args, **_kwargs):
+            return (250000, 1500, 1, 114)
+
+        def close(self):
+            return None
+
+    class _FakeDraftKings:
+        def download_salary_csv(self, _sport, _draft_group, filename):
+            path = tmp_path / "salary.csv"
+            path.write_text("Position,Name,Salary\nPG,A,5000\n", encoding="utf-8")
+
+        def get_leaderboard(self, *_args, **_kwargs):
+            return {
+                "leaderBoard": [
+                    {
+                        "entryKey": "ek1",
+                        "winningValue": 20,
+                        "winnings": [{"description": "Cash", "value": 12}],
+                    }
+                ]
+            }
+
+        def download_contest_rows(self, *_args, **_kwargs):
+            return [
+                ["Rank", "EntryId", "EntryName", "TimeRemaining", "Points", "Lineup"],
+                ["6", "ek1", "vip1", "0", "336.25", "PG A"],
+            ]
+
+        def get_vip_lineups(self, *_args, **_kwargs):
+            return [{"user": "vip1", "entry_key": "ek1", "players": [{"slot": "PG", "name": "A"}]}]
+
+    class _FakeResults:
+        def __init__(self, *_args, **_kwargs):
+            self.vip_list = [_FakeUser()]
+            self.players = {"A": _FakePlayer()}
+            self.users = [_FakeUser()]
+            self.non_cashing_users = 0
+            self.non_cashing_players = {}
+            self.non_cashing_avg_pmr = 0.0
+            self.min_rank = 50
+            self.min_cash_pts = 325.25
+
+    class _FakeTrainFinder:
+        def __init__(self, _users):
+            pass
+
+        def get_users_above_salary_spent(self, _limit):
+            return {}
+
+    monkeypatch.setattr(snapshot_exporter, "_sport_choices", lambda: {"NBA": _FakeSport})
+    monkeypatch.setattr(snapshot_exporter, "ContestDatabase", lambda _path: _FakeContestDb())
+    monkeypatch.setattr(snapshot_exporter, "Draftkings", _FakeDraftKings)
+    monkeypatch.setattr(snapshot_exporter, "Results", _FakeResults)
+    monkeypatch.setattr(snapshot_exporter, "TrainFinder", _FakeTrainFinder)
+    monkeypatch.setattr(snapshot_exporter, "load_vips", lambda: ["vip1"])
+    monkeypatch.setattr(snapshot_exporter.state, "contests_db_path", lambda: tmp_path / "contests.db")
+    monkeypatch.setattr(snapshot_exporter, "SALARY_DIR", str(tmp_path))
+
+    snapshot = snapshot_exporter.collect_snapshot_data(sport="NBA", contest_id=123, standings_limit=10)
+    assert snapshot["standings"][0]["payout_cents"] == 2000
+
+
 def test_dashboard_contract_gate_discriminates_envelope_vs_raw_shape():
     raw_snapshot_out_shape = {
         "schema_version": 2,
