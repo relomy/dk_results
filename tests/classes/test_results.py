@@ -4,7 +4,7 @@ import logging
 import classes.results as results_module
 from classes.optimizer import Optimizer
 from classes.results import Results
-from classes.sport import NFLSport
+from classes.sport import NBASport, NFLSport
 
 
 def _sample_salary_rows():
@@ -242,7 +242,7 @@ def test_parse_contest_standings_rows_sums_ownership_and_combines_positions():
     assert player.ownership == 0.65
     values = results.players_to_values("NFL")
     tom_brady = next(row for row in values if row[1] == "Tom Brady")
-    assert tom_brady[0] == "QB/FLEX"
+    assert tom_brady[0] == "QB"
 
 
 def test_parse_contest_standings_rows_warns_when_summed_ownership_exceeds_100(caplog):
@@ -294,6 +294,50 @@ def test_combined_standings_position_does_not_change_optimizer_inputs():
     selected_players = optimizer.create_decision_variables()
     assert ("Tom Brady", "QB") in selected_players
     assert ("Tom Brady", "FLEX") not in selected_players
+
+
+def test_nba_dual_position_player_uses_salary_position_and_optimizer_slots():
+    salary_rows = [
+        [
+            "Position",
+            "ID",
+            "Name",
+            "ID2",
+            "Roster Position",
+            "Salary",
+            "Game Info",
+            "TeamAbbrev",
+            "AvgPoints",
+        ],
+        ["PG/SG", "", "Combo Guard", "", "PG/SG/G/UTIL", "7000", "AAA@BBB 7:00PM ET", "AAA", ""],
+    ]
+    standings_rows = [
+        ["rank", "player_id", "name", "pmr", "pts", "lineup_str", "", "Player", "Roster Position", "%Drafted", "FPTS"],
+        ["1", "111", "UserA", "0", "120", "PG Combo Guard", "", "Combo Guard", "PG", "40.00%", "20"],
+        ["2", "222", "UserB", "0", "110", "SG Combo Guard", "", "Combo Guard", "SG", "20.00%", "20"],
+    ]
+
+    results = results_module.Results(
+        sport_obj=NBASport,
+        contest_id=1,
+        salary_csv_fn="unused.csv",
+        positions_paid=1,
+        salary_rows=salary_rows,
+        standings_rows=standings_rows,
+    )
+
+    combo_guard = results.players["Combo Guard"]
+    assert combo_guard.pos == "PG/SG"
+    assert combo_guard.standings_pos == "PG/SG"
+    combo_guard_row = next(row for row in results.players_to_values("NBA") if row[1] == "Combo Guard")
+    assert combo_guard_row[0] == "PG/SG"
+
+    optimizer = Optimizer(NBASport, results.get_players())
+    selected_players = optimizer.create_decision_variables()
+    assert ("Combo Guard", "PG") in selected_players
+    assert ("Combo Guard", "SG") in selected_players
+    assert ("Combo Guard", "G") in selected_players
+    assert ("Combo Guard", "UTIL") in selected_players
 
 
 def test_parse_lineup_string_handles_locked_and_unknown_players():
