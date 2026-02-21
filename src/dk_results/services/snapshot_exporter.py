@@ -344,7 +344,14 @@ def _find_missing_fields(value: Any, path: str = "") -> list[str]:
         return missing
     if value is None:
         return [path]
-    return []
+    return [] 
+
+
+def _first_not_blank(*values: Any) -> Any:
+    for value in values:
+        if value not in (None, ""):
+            return value
+    return None
 
 
 def _contest_row_from_detail(dk_id: int, detail: dict[str, Any]) -> tuple:
@@ -354,19 +361,19 @@ def _contest_row_from_detail(dk_id: int, detail: dict[str, Any]) -> tuple:
     if payout_summary:
         positions_paid = payout_summary[0].get("maxPosition")
     start_time = contest_detail.get("contestStartTime")
-    prize_pool = (
-        contest_detail.get("totalPrizePool")
-        or contest_detail.get("totalPrizes")
-        or contest_detail.get("totalPayouts")
-        or contest_detail.get("totalPayout")
-        or contest_detail.get("prizePool")
-        or contest_detail.get("payout")
+    prize_pool = _first_not_blank(
+        contest_detail.get("totalPrizePool"),
+        contest_detail.get("totalPrizes"),
+        contest_detail.get("totalPayouts"),
+        contest_detail.get("totalPayout"),
+        contest_detail.get("prizePool"),
+        contest_detail.get("payout"),
     )
-    max_entries_per_user = (
-        contest_detail.get("maxEntriesPerUser")
-        or contest_detail.get("maximumEntriesPerUser")
-        or contest_detail.get("maxEntriesPerPerson")
-        or contest_detail.get("maxEntryCount")
+    max_entries_per_user = _first_not_blank(
+        contest_detail.get("maxEntriesPerUser"),
+        contest_detail.get("maximumEntriesPerUser"),
+        contest_detail.get("maxEntriesPerPerson"),
+        contest_detail.get("maxEntryCount"),
     )
     return (
         dk_id,

@@ -1846,6 +1846,39 @@ def test_collect_snapshot_data_winning_value_precedence_over_winnings(monkeypatc
     assert snapshot["standings"][0]["payout_cents"] == 2000
 
 
+def test_leaderboard_row_payout_cents_uses_winnings_cash_when_winning_value_missing():
+    row = {
+        "winningValue": None,
+        "winnings": [
+            {"description": "Ticket", "value": 7},
+            {"description": "Cash", "value": 10.005},
+            {"description": "cash bonus", "value": 0.995},
+        ],
+    }
+    assert snapshot_exporter._leaderboard_row_payout_cents(row) == 1101
+
+
+def test_contest_row_from_detail_preserves_zero_prize_pool():
+    row = snapshot_exporter._contest_row_from_detail(
+        123,
+        {
+            "contestDetail": {
+                "name": "Contest",
+                "draftGroupId": 7,
+                "contestStartTime": "2026-02-14T01:00:00Z",
+                "entryFee": 10,
+                "maximumEntries": 100,
+                "contestState": "live",
+                "isCompleted": False,
+                "totalPrizePool": 0,
+                "totalPayouts": 1000,
+                "payoutSummary": [{"maxPosition": 10}],
+            }
+        },
+    )
+    assert row[9] == 0
+
+
 def test_collect_snapshot_data_marks_not_cashing_when_payout_and_cutoff_unavailable(monkeypatch, tmp_path):
     class _FakeSport:
         name = "NBA"
