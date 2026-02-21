@@ -22,6 +22,7 @@ def _canonical_contest_seed(*, contest_id: int | str, name: str = "Contest", spo
         "currency": "USD",
         "entries_count": 1000,
         "max_entries": 1000,
+        "max_entries_per_user": 1,
         "is_primary": True,
     }
 
@@ -588,14 +589,15 @@ def test_run_export_fixture_emits_envelope_and_contract_sections(monkeypatch, tm
         "entry_fee_cents": int,
         "prize_pool_cents": int,
         "currency": str,
-        "entries_count": int,
         "max_entries": int,
+        "max_entries_per_user": int,
     }
     for field_name, expected_type in required_canonical_fields.items():
         assert field_name in contest
         assert contest[field_name] is not None
         assert type(contest[field_name]) is expected_type
     assert contest["entry_fee_cents"] == 1000
+    assert isinstance(contest.get("entries_count"), int)
     assert "start_time_utc" not in contest
     assert sport["primary_contest"]["contest_key"] is not None
     assert sport["primary_contest"]["contest_key"] == contest["contest_key"]
@@ -1298,8 +1300,8 @@ def test_validate_canonical_snapshot_has_required_field_and_type_coverage():
         "entry_fee_cents": "missing_required:sports.nba.contests.0.entry_fee_cents",
         "prize_pool_cents": "missing_required:sports.nba.contests.0.prize_pool_cents",
         "currency": "missing_required:sports.nba.contests.0.currency",
-        "entries_count": "missing_required:sports.nba.contests.0.entries_count",
         "max_entries": "missing_required:sports.nba.contests.0.max_entries",
+        "max_entries_per_user": "missing_required:sports.nba.contests.0.max_entries_per_user",
     }
     for field_name, expected_violation in required_field_cases.items():
         payload = _valid_envelope_for_validation()
@@ -1320,12 +1322,22 @@ def test_validate_canonical_snapshot_has_required_field_and_type_coverage():
         "currency": 123,
         "entries_count": "1000",
         "max_entries": "1000",
+        "max_entries_per_user": "1",
     }
     for field_name, wrong_value in wrong_type_cases.items():
         payload = _valid_envelope_for_validation()
         payload["sports"]["nba"]["contests"][0][field_name] = wrong_value
         violations = snapshot_exporter.validate_canonical_snapshot(payload)
         assert f"type_mismatch:sports.nba.contests.0.{field_name}" in violations
+
+
+def test_validate_canonical_snapshot_allows_omitting_entries_count():
+    payload = _valid_envelope_for_validation()
+    payload["sports"]["nba"]["contests"][0].pop("entries_count")
+    violations = snapshot_exporter.validate_canonical_snapshot(payload)
+
+    assert "missing_required:sports.nba.contests.0.entries_count" not in violations
+    assert "type_mismatch:sports.nba.contests.0.entries_count" not in violations
 
 
 def test_validate_canonical_snapshot_detects_primary_contest_key_mismatch():
@@ -1363,6 +1375,7 @@ def test_canonical_contest_contract_does_not_fabricate_missing_required_fields()
     assert contest["entry_fee_cents"] is None
     assert contest["prize_pool_cents"] is None
     assert contest["start_time"] is None
+    assert contest["max_entries_per_user"] is None
 
 
 def test_collect_snapshot_data_sources_prize_pool_from_db_metadata(monkeypatch, tmp_path):
@@ -1385,7 +1398,7 @@ def test_collect_snapshot_data_sources_prize_pool_from_db_metadata(monkeypatch, 
             return ("In Progress", 0)
 
         def get_contest_contract_metadata(self, *_args, **_kwargs):
-            return (250000, 1500, 114)
+            return (250000, 1500, 1, 114)
 
         def close(self):
             return None
@@ -1433,7 +1446,8 @@ def test_collect_snapshot_data_sources_prize_pool_from_db_metadata(monkeypatch, 
 
     assert contest["prize_pool"] == 250000
     assert contest["max_entries"] == 1500
-    assert contest["entries"] == 114
+    assert contest["max_entries_per_user"] == 1
+    assert contest["entries"] == 1500
 
 
 def test_dashboard_contract_gate_discriminates_envelope_vs_raw_shape():

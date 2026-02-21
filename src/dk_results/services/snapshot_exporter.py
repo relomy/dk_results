@@ -413,8 +413,8 @@ def collect_snapshot_data(
         contest_state = None
         contest_completed = None
         prize_pool = None
-        max_entries = None
-        entries_count = entries
+        max_entries = entries
+        max_entries_per_user = None
         if len(selected) >= 8:
             contest_state = selected[7]
         if len(selected) >= 9:
@@ -425,13 +425,11 @@ def collect_snapshot_data(
                 contest_state, contest_completed = state_row
             contract_metadata = contest_db.get_contest_contract_metadata(int(dk_id))
             if contract_metadata:
-                prize_pool, contest_capacity, db_entry_count = contract_metadata
-                if db_entry_count not in (None, ""):
-                    entries_count = db_entry_count
+                prize_pool, contest_capacity, per_user_limit, _db_entry_count = contract_metadata
                 if contest_capacity not in (None, ""):
                     max_entries = contest_capacity
-        if max_entries in (None, ""):
-            max_entries = entries_count
+                if per_user_limit not in (None, ""):
+                    max_entries_per_user = per_user_limit
         logger.info("selected contest id=%s mode=%s", dk_id, mode)
 
         now_et = datetime.datetime.now(ZoneInfo("America/New_York"))
@@ -621,8 +619,9 @@ def collect_snapshot_data(
                 "state": _normalize_contest_state(contest_state, contest_completed),
                 "entry_fee": entry_fee,
                 "currency": "USD",
-                "entries": entries_count,
+                "entries": max_entries,
                 "max_entries": max_entries,
+                "max_entries_per_user": max_entries_per_user,
                 "prize_pool": prize_pool,
                 "positions_paid": positions_paid,
             },
@@ -1492,9 +1491,12 @@ def _canonical_contest_contract(
         prize_pool_cents = _money_to_cents(contest.get("prize_pool"))
 
     entries_count = _to_int_flexible(contest.get("entries_count"))
-    if entries_count is None:
-        entries_count = _to_int_flexible(contest.get("entries"))
     max_entries = _to_int_flexible(contest.get("max_entries"))
+    if max_entries is None:
+        max_entries = _to_int_flexible(contest.get("entries"))
+    max_entries_per_user = _to_int_flexible(contest.get("max_entries_per_user"))
+    if max_entries_per_user is None:
+        max_entries_per_user = _to_int_flexible(contest.get("max_entry_count"))
 
     contest_type_raw = contest.get("contest_type")
     contest_type = str(contest_type_raw).strip() if contest_type_raw not in (None, "") else None
@@ -1519,6 +1521,7 @@ def _canonical_contest_contract(
             "currency": currency,
             "entries_count": entries_count,
             "max_entries": max_entries,
+            "max_entries_per_user": max_entries_per_user,
         }
     )
     canonical.pop("entries", None)
@@ -1754,8 +1757,8 @@ def validate_canonical_snapshot(payload: dict[str, Any]) -> list[str]:
         "entry_fee_cents": int,
         "prize_pool_cents": int,
         "currency": str,
-        "entries_count": int,
         "max_entries": int,
+        "max_entries_per_user": int,
     }
     valid_states = {"upcoming", "live", "completed", "cancelled"}
     sports = payload.get("sports")
@@ -1779,6 +1782,12 @@ def validate_canonical_snapshot(payload: dict[str, Any]) -> list[str]:
                         continue
                     if type(value) is not expected_type:
                         violations.append(f"type_mismatch:{path_prefix}.{field_name}")
+                if "entries_count" in contest:
+                    entries_count = contest.get("entries_count")
+                    if entries_count is None:
+                        violations.append(f"type_mismatch:{path_prefix}.entries_count")
+                    elif type(entries_count) is not int:
+                        violations.append(f"type_mismatch:{path_prefix}.entries_count")
                 start_time_value = contest.get("start_time")
                 if isinstance(start_time_value, str) and to_utc_iso(start_time_value) is None:
                     violations.append(f"invalid_datetime:{path_prefix}.start_time")
