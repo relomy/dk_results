@@ -202,9 +202,8 @@ default: [25]
 
 ## Logging
 
-Logging is configured via `logging.ini` and loaded by most modules using
-`logging.config.fileConfig()` (`update_contests.py`, `db_main.py`,
-`classes/contestdatabase.py`, `classes/dfs_sheet_service.py`).
+Logging is configured centrally in `src/dk_results/logging.py` via
+`configure_logging()`, with `LOG_LEVEL` controlling root verbosity.
 
 Bonus announcement logging (`classes/bonus_announcements.py`) uses:
 

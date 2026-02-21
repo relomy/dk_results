@@ -3,12 +3,10 @@
 from __future__ import annotations
 
 import logging
-import logging.config
 import os
 
-from dk_results.paths import repo_file
-
 NOISY_LIBRARY_LOGGERS = ("googleapiclient.discovery", "urllib3")
+_HANDLER_MARKER = "_dk_results_configured_handler"
 
 
 def _resolve_level(default: str = "DEBUG") -> int:
@@ -22,18 +20,17 @@ def _configure_library_log_levels() -> None:
 
 
 def configure_logging() -> logging.Logger:
-    config_path = repo_file("logging.ini")
-    if config_path.is_file():
-        logging.config.fileConfig(str(config_path), disable_existing_loggers=False)
-        logger = logging.getLogger()
-        logger.setLevel(_resolve_level())
-        _configure_library_log_levels()
-        return logger
-
     logger = logging.getLogger()
+    for handler in logger.handlers:
+        if getattr(handler, _HANDLER_MARKER, False):
+            logger.setLevel(_resolve_level())
+            _configure_library_log_levels()
+            return logger
+
     if not logger.handlers:
         handler = logging.StreamHandler()
         handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s [%(name)s] %(message)s"))
+        setattr(handler, _HANDLER_MARKER, True)
         logger.addHandler(handler)
     logger.setLevel(_resolve_level())
     _configure_library_log_levels()
