@@ -2,8 +2,7 @@
 
 This document captures the current Google Sheet live feature set and how `dk_results` should expose canonical data for `dk_dashboard` parity.
 
-Companion design doc (local planning artifact, not repo-portable):
-- `2026-02-21-google-sheet-parity-to-dashboard-design.md` (stored in local Codex plans directory)
+Planning and implementation artifacts are maintained in repo docs and branch history; this file tracks the stable feature-level parity baseline.
 
 ## Feature Set (from current sheet)
 1. Player ownership standings (position, name, team, matchup, salary, ownership, points, value).
@@ -21,19 +20,26 @@ Companion design doc (local planning artifact, not repo-portable):
   - present but empty = empty state
 
 ## Current Coverage Summary
-- Covered now: player standings core table, distance-to-cash, threat/leverage baseline, train ranking/top-N.
-- Partial: VIP player-level row detail, ownership summary split (total vs in-play), non-cashing summary promotion.
-- Known caveat: payout fields are often null in live flow; live cashing should be metrics-derived when distance-to-cash metrics are present.
+- Covered now (schema v2 + additive metrics):
+  - player standings fields for parity columns (`position`, `matchup`, `salary`, `ownership_pct`, `fantasy_points`, `value`, status)
+  - distance-to-cash metrics (`contest.metrics.distance_to_cash`)
+  - threat/leverage metrics (`contest.metrics.threat`)
+  - train ranking/top-N metrics (`contest.metrics.trains`)
+  - VIP player-level row detail (`vip_lineups[].players_live[]`)
+  - ownership summary split (`contest.metrics.ownership_summary`)
+  - non-cashing summary (`contest.metrics.non_cashing`)
+- Live cashing caveat remains:
+  - payout fields may be null in active contests, so consumers should prefer distance-to-cash metrics when present.
 
-## Recommended Next Contract Additions
-1. `contest.vip_lineups[].players_live[]` for full VIP per-player stats.
-2. `contest.metrics.ownership_summary` with explicit total/in-play percentages and scope.
-3. `contest.metrics.non_cashing` with users_not_cashing and avg_pmr_remaining.
-4. Contest metadata normalization (`state`, `contest_type`, `entry_fee_cents`, `prize_pool_cents`, etc.).
+## Shipped Contract Additions (Schema v2)
+1. `contest.vip_lineups[].players_live[]` for VIP per-player live stats rows.
+2. `contest.metrics.ownership_summary` for per-VIP total/in-play ownership summary.
+3. `contest.metrics.non_cashing` for users-not-cashing and PMR/top-remaining summaries.
+4. Stable per-VIP keying support (`vip_entry_key` additive, fallback `entry_key`) for deterministic consumer joins.
 
 ## Delivery Approach
-1. Parity tranche: add missing fields, render sheet-equivalent panels.
-2. Stabilization tranche: contract/type/doc reconciliation and compatibility tests.
+1. Parity tranche: complete (fields and metrics needed for sheet-equivalent panels are exported).
+2. Stabilization tranche: continue contract/type/doc reconciliation and compatibility tests.
 3. Superset tranche: trends, decision cards, alerts, manifest-driven recaps.
 
 ## Contract Guardrails (Authoritative)
