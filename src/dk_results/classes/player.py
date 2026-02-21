@@ -93,11 +93,12 @@ class Player:
         return "Player({}, {}, {}, {}, {})".format(self.name, self.pos, self.salary, self.game_info, self.team_abbv)
 
     def writeable(self, sport: str) -> list[Any]:
+        display_pos = self.standings_pos or self.pos
         if sport in ["PGA", "GOLF"] or "PGA" in sport:
-            return [self.pos, self.name, self.salary, self.ownership, self.fpts]
+            return [display_pos, self.name, self.salary, self.ownership, self.fpts]
 
         return [
-            self.pos,
+            display_pos,
             self.name,
             self.team_abbv,
             self.matchup_info,

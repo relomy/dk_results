@@ -1,6 +1,8 @@
 import datetime
+import logging
 
 import classes.results as results_module
+from classes.optimizer import Optimizer
 from classes.results import Results
 from classes.sport import NFLSport
 
@@ -215,6 +217,83 @@ def test_parse_contest_standings_rows_processes_player_stats_only_rows():
     assert player.standings_pos == "QB"
     assert player.ownership == 0.5
     assert player.fpts == 20.0
+
+
+def test_parse_contest_standings_rows_sums_ownership_and_combines_positions():
+    salary_rows = _sample_salary_rows()
+    salary_rows[1][6] = "NE@NYJ 1:00PM ET"
+    standings_rows = [
+        ["rank", "player_id", "name", "pmr", "pts", "lineup_str", "", "Player", "Roster Position", "%Drafted", "FPTS"],
+        ["1", "111", "UserA", "0", "120", "QB Tom Brady RB Derrick Henry"],
+        ["2", "222", "UserB", "0", "110", "QB Tom Brady RB Derrick Henry", "", "Tom Brady", "QB", "40.00%", "20"],
+        ["3", "333", "UserC", "0", "100", "QB Tom Brady RB Derrick Henry", "", "Tom Brady", "FLEX", "25.00%", "20"],
+    ]
+    results = results_module.Results(
+        sport_obj=NFLSport,
+        contest_id=1,
+        salary_csv_fn="unused.csv",
+        positions_paid=1,
+        salary_rows=salary_rows,
+        standings_rows=standings_rows,
+    )
+
+    player = results.players["Tom Brady"]
+    assert player.standings_pos == "QB/FLEX"
+    assert player.ownership == 0.65
+    values = results.players_to_values("NFL")
+    tom_brady = next(row for row in values if row[1] == "Tom Brady")
+    assert tom_brady[0] == "QB/FLEX"
+
+
+def test_parse_contest_standings_rows_warns_when_summed_ownership_exceeds_100(caplog):
+    salary_rows = _sample_salary_rows()
+    salary_rows[1][6] = "NE@NYJ 1:00PM ET"
+    standings_rows = [
+        ["rank", "player_id", "name", "pmr", "pts", "lineup_str", "", "Player", "Roster Position", "%Drafted", "FPTS"],
+        ["1", "111", "UserA", "0", "120", "QB Tom Brady RB Derrick Henry", "", "Tom Brady", "QB", "80.00%", "20"],
+        ["2", "222", "UserB", "0", "110", "QB Tom Brady RB Derrick Henry", "", "Tom Brady", "FLEX", "40.00%", "20"],
+    ]
+
+    with caplog.at_level(logging.WARNING):
+        results_module.Results(
+            sport_obj=NFLSport,
+            contest_id=1,
+            salary_csv_fn="unused.csv",
+            positions_paid=1,
+            salary_rows=salary_rows,
+            standings_rows=standings_rows,
+        )
+
+    assert "Ownership exceeds 100%" in caplog.text
+    assert "Tom Brady" in caplog.text
+
+
+def test_combined_standings_position_does_not_change_optimizer_inputs():
+    salary_rows = _sample_salary_rows()
+    salary_rows[1][6] = "NE@NYJ 1:00PM ET"
+    standings_rows = [
+        ["rank", "player_id", "name", "pmr", "pts", "lineup_str", "", "Player", "Roster Position", "%Drafted", "FPTS"],
+        ["1", "111", "UserA", "0", "120", "QB Tom Brady RB Derrick Henry", "", "Tom Brady", "QB", "40.00%", "20"],
+        ["2", "222", "UserB", "0", "110", "QB Tom Brady RB Derrick Henry", "", "Tom Brady", "FLEX", "25.00%", "20"],
+    ]
+
+    results = results_module.Results(
+        sport_obj=NFLSport,
+        contest_id=1,
+        salary_csv_fn="unused.csv",
+        positions_paid=1,
+        salary_rows=salary_rows,
+        standings_rows=standings_rows,
+    )
+
+    tom_brady = results.players["Tom Brady"]
+    assert tom_brady.standings_pos == "QB/FLEX"
+    assert tom_brady.pos == "QB"
+
+    optimizer = Optimizer(NFLSport, results.get_players())
+    selected_players = optimizer.create_decision_variables()
+    assert ("Tom Brady", "QB") in selected_players
+    assert ("Tom Brady", "FLEX") not in selected_players
 
 
 def test_parse_lineup_string_handles_locked_and_unknown_players():

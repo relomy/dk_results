@@ -4,6 +4,7 @@ import csv
 import io
 import logging
 import os
+from collections.abc import Mapping
 from datetime import datetime
 from typing import Any, Iterable, Type
 
@@ -145,6 +146,7 @@ class Results:
 
         # showdown only
         showdown_captains = {}
+        aggregated_player_stats: dict[str, dict[str, Any]] = {}
 
         # create a copy of player list
         # player_list = self.players
@@ -157,14 +159,7 @@ class Results:
             core_blank = all(str(col).strip() == "" for col in row[:6])
             if core_blank:
                 # DK exports may include player-stat-only rows with blank entry columns.
-                player_stats = row[7:]
-                if player_stats and not all(s == "" or str(s).isspace() for s in player_stats):
-                    name, pos, ownership, fpts = player_stats
-                    name = normalize_name(name)
-                    try:
-                        self.players[name].update_stats(pos, ownership, fpts)
-                    except KeyError:
-                        self.logger.error("Player %s not found in players[] dict", name)
+                self._accumulate_player_stats(row, aggregated_player_stats)
                 continue
 
             rank, player_id, name, pmr, points, lineup = row[:6]
@@ -227,21 +222,9 @@ class Results:
 
                         self.non_cashing_users += 1
 
-            player_stats = row[7:]
-            if player_stats:
-                # continue if empty (sometimes happens on the player columns in the standings)
-                if all(s == "" or s.isspace() for s in player_stats):
-                    continue
+            self._accumulate_player_stats(row, aggregated_player_stats)
 
-                name, pos, ownership, fpts = player_stats
-                name = normalize_name(name)
-
-                # if 'Jr.' in name:
-                #     name = name.replace('Jr.', 'Jr')
-                try:
-                    self.players[name].update_stats(pos, ownership, fpts)
-                except KeyError:
-                    self.logger.error("Player %s not found in players[] dict", name)
+        self._apply_aggregated_player_stats(aggregated_player_stats)
 
         if self.non_cashing_users > 0 and self.non_cashing_total_pmr > 0:
             self.non_cashing_avg_pmr = self.non_cashing_total_pmr / self.non_cashing_users
@@ -303,3 +286,90 @@ class Results:
 
     def get_players(self) -> dict[str, Player]:
         return self.players
+
+    @staticmethod
+    def _extract_player_stats(row: list[str]) -> tuple[str, str, float, float] | None:
+        if len(row) < 10:
+            return None
+
+        raw_name = str(row[7]).strip()
+        raw_pos = str(row[8]).strip() if len(row) > 8 else ""
+        raw_ownership = str(row[9]).strip() if len(row) > 9 else ""
+        raw_fpts = str(row[10]).strip() if len(row) > 10 else ""
+        if not raw_name or not raw_ownership:
+            return None
+
+        try:
+            ownership_pct = float(raw_ownership.replace("%", ""))
+        except (TypeError, ValueError):
+            return None
+
+        fpts = 0.0
+        if raw_fpts:
+            try:
+                fpts = float(raw_fpts)
+            except (TypeError, ValueError):
+                fpts = 0.0
+
+        return normalize_name(raw_name), raw_pos, ownership_pct, fpts
+
+    def _accumulate_player_stats(
+        self,
+        row: list[str],
+        aggregated_player_stats: dict[str, dict[str, Any]],
+    ) -> None:
+        stats = self._extract_player_stats(row)
+        if not stats:
+            return
+
+        name, position, ownership_pct, fpts = stats
+        player_agg = aggregated_player_stats.setdefault(
+            name,
+            {
+                "ownership_pct_sum": 0.0,
+                "positions": set(),
+                "fpts": 0.0,
+                "row_count": 0,
+            },
+        )
+        player_agg["ownership_pct_sum"] += ownership_pct
+        if position:
+            player_agg["positions"].add(position)
+        player_agg["fpts"] = max(float(player_agg["fpts"]), fpts)
+        player_agg["row_count"] += 1
+
+    def _merge_positions(self, positions: set[str], fallback: str) -> str:
+        if not positions:
+            return fallback
+        ordered_positions = tuple(dict.fromkeys(self.sport_obj.positions))
+        order_map = {pos: idx for idx, pos in enumerate(ordered_positions)}
+        merged = sorted(positions, key=lambda pos: (order_map.get(pos, len(order_map)), pos))
+        return "/".join(merged)
+
+    def _apply_aggregated_player_stats(self, aggregated_player_stats: Mapping[str, dict[str, Any]]) -> None:
+        for name, stats in aggregated_player_stats.items():
+            player = self.players.get(name)
+            if player is None:
+                self.logger.error("Player %s not found in players[] dict", name)
+                continue
+
+            ownership_pct_sum = float(stats["ownership_pct_sum"])
+            merged_position = self._merge_positions(set(stats["positions"]), player.pos)
+            player.standings_pos = merged_position
+            player.ownership = ownership_pct_sum / 100
+            player.fpts = float(stats["fpts"])
+
+            if player.fpts > 0:
+                player.value = player.fpts / (player.salary / 1000)
+            else:
+                player.value = 0
+            player.matchup_info = player.get_matchup_info()
+
+            if ownership_pct_sum > 100:
+                self.logger.warning(
+                    "Ownership exceeds 100%% for %s: %.2f%% across %d rows (positions: %s)",
+                    name,
+                    ownership_pct_sum,
+                    int(stats["row_count"]),
+                    merged_position,
+                )
