@@ -973,3 +973,31 @@ def test_validate_canonical_snapshot_detects_disallowed_keys_and_numeric_strings
 
     assert "disallowed_key:sports.nba.contests.0.standings.rows.0.username" in violations
     assert "numeric_string:sports.nba.contests.0.standings.rows.0.points" in violations
+
+
+def test_dashboard_contract_gate_discriminates_envelope_vs_raw_shape():
+    raw_snapshot_out_shape = {
+        "schema_version": 2,
+        "snapshot_at": "2026-02-14T00:00:00Z",
+        "generated_at": "2026-02-14T00:00:00Z",
+        "contest": {},
+        "selection": {},
+        "vip_lineups": [],
+        "standings": [],
+    }
+    envelope = {
+        "schema_version": 2,
+        "snapshot_at": "2026-02-14T00:00:00Z",
+        "generated_at": "2026-02-14T00:00:00Z",
+        "sports": {
+            "nba": {
+                "status": "ok",
+                "updated_at": "2026-02-14T00:00:00Z",
+                "players": [],
+                "contests": [],
+            }
+        },
+    }
+
+    assert snapshot_exporter.is_dashboard_envelope(raw_snapshot_out_shape) is False
+    assert snapshot_exporter.is_dashboard_envelope(envelope) is True

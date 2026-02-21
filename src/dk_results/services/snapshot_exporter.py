@@ -1269,6 +1269,30 @@ def build_dashboard_envelope(sports: dict[str, dict[str, Any]]) -> dict[str, Any
     }
 
 
+def is_dashboard_envelope(payload: Any) -> bool:
+    if not isinstance(payload, dict):
+        return False
+
+    # Legacy/raw payload roots are not part of the dashboard envelope contract.
+    legacy_root_keys = {"contest", "selection", "vip_lineups", "standings", "cash_line"}
+    if any(key in payload for key in legacy_root_keys):
+        return False
+
+    sports = payload.get("sports")
+    if not isinstance(sports, dict):
+        return False
+
+    for sport_payload in sports.values():
+        if not isinstance(sport_payload, dict):
+            return False
+        if not isinstance(sport_payload.get("contests"), list):
+            return False
+        if not isinstance(sport_payload.get("players"), list):
+            return False
+
+    return True
+
+
 def _is_numeric_string(value: str) -> bool:
     text = value.strip()
     if not text:
