@@ -518,6 +518,7 @@ def test_run_export_fixture_emits_envelope_and_contract_sections(monkeypatch, tm
             "players": [{"name": "A"}, {"name": "B"}],
             "ownership": {
                 "ownership_remaining_total_pct": 123.4,
+                "watchlist_entries": [{"entry_key": "1", "display_name": "A", "ownership_remaining_pct": 40.0}],
                 "top_remaining_players": [{"player_name": "A", "ownership_remaining_pct": 40.0}],
             },
             "train_clusters": [
@@ -813,6 +814,7 @@ def test_ownership_summary_metrics_per_vip_formulas(monkeypatch):
     assert row["entry_key"] == "vip-1"
     assert row["total_ownership_pct"] == 189.78
     assert row["ownership_in_play_pct"] == 116.06
+    assert row["ownership_in_play_source"] == "vip_lineup_players_status"
     assert row["is_partial"] is False
 
 
@@ -870,6 +872,10 @@ def test_non_cashing_metrics_emits_users_avg_and_top_list(monkeypatch):
             "players": [],
             "ownership": {
                 "ownership_remaining_total_pct": 120.0,
+                "non_cashing_top_remaining_players": [
+                    {"player_name": "Jalen Johnson", "ownership_remaining_pct": 92.66},
+                    {"player_name": "Javon Small", "ownership_remaining_pct": 88.99},
+                ],
                 "non_cashing_user_count": 109,
                 "non_cashing_avg_pmr": 342.83,
                 "top_remaining_players": [
@@ -894,7 +900,7 @@ def test_non_cashing_metrics_emits_users_avg_and_top_list(monkeypatch):
     assert non_cashing["top_remaining_players"][0]["ownership_remaining_pct"] == 92.66
 
 
-def test_non_cashing_metrics_omits_when_no_source_fields(monkeypatch):
+def test_non_cashing_metrics_uses_legacy_top_remaining_players_when_new_source_missing(monkeypatch):
     monkeypatch.setattr(
         snapshot_exporter,
         "collect_snapshot_data",
@@ -907,7 +913,201 @@ def test_non_cashing_metrics_omits_when_no_source_fields(monkeypatch):
             "cash_line": {},
             "vip_lineups": [],
             "players": [],
-            "ownership": {"ownership_remaining_total_pct": 120.0, "top_remaining_players": []},
+            "ownership": {
+                "ownership_remaining_total_pct": 120.0,
+                "non_cashing_user_count": 9,
+                "non_cashing_avg_pmr": 22.4,
+                "top_remaining_players": [
+                    {"player_name": "Legacy Only", "ownership_remaining_pct": 77.7},
+                ],
+            },
+            "train_clusters": [],
+            "standings": [],
+            "truncation": {},
+            "metadata": {"warnings": [], "missing_fields": [], "source_endpoints": []},
+        },
+    )
+
+    snapshot = snapshot_exporter.build_snapshot(sport="NBA")
+    envelope = snapshot_exporter.build_dashboard_envelope({"NBA": snapshot})
+    non_cashing = envelope["sports"]["nba"]["contests"][0]["metrics"]["non_cashing"]
+
+    assert non_cashing["users_not_cashing"] == 9
+    assert non_cashing["avg_pmr_remaining"] == 22.4
+    assert non_cashing["top_remaining_players"][0]["player_name"] == "Legacy Only"
+
+
+def test_non_cashing_metrics_top_list_is_capped_and_sorted(monkeypatch):
+    top_rows = [{"player_name": f"Player {index:02d}", "ownership_remaining_pct": float(index)} for index in range(15)]
+    # Tie rows to validate stable secondary sort by name.
+    top_rows.extend(
+        [
+            {"player_name": "Tie B", "ownership_remaining_pct": 20.0},
+            {"player_name": "Tie A", "ownership_remaining_pct": 20.0},
+        ]
+    )
+    monkeypatch.setattr(
+        snapshot_exporter,
+        "collect_snapshot_data",
+        lambda **_kwargs: {
+            "snapshot_version": "v1",
+            "sport": "NBA",
+            "contest": {"contest_id": 123, "is_primary": True, "name": "x"},
+            "selection": {"selected_contest_id": 123, "reason": {}},
+            "candidates": [],
+            "cash_line": {},
+            "vip_lineups": [],
+            "players": [],
+            "ownership": {
+                "ownership_remaining_total_pct": 120.0,
+                "non_cashing_user_count": 20,
+                "non_cashing_avg_pmr": 10.0,
+                "non_cashing_top_remaining_players": top_rows,
+            },
+            "train_clusters": [],
+            "standings": [],
+            "truncation": {},
+            "metadata": {"warnings": [], "missing_fields": [], "source_endpoints": []},
+        },
+    )
+
+    snapshot = snapshot_exporter.build_snapshot(sport="NBA")
+    envelope = snapshot_exporter.build_dashboard_envelope({"NBA": snapshot})
+    players = envelope["sports"]["nba"]["contests"][0]["metrics"]["non_cashing"]["top_remaining_players"]
+
+    assert len(players) == 10
+    assert players[0]["player_name"] == "Tie A"
+    assert players[1]["player_name"] == "Tie B"
+    assert players[0]["ownership_remaining_pct"] == 20.0
+
+
+def test_non_cashing_metrics_prefers_new_source_when_both_sources_present(monkeypatch):
+    monkeypatch.setattr(
+        snapshot_exporter,
+        "collect_snapshot_data",
+        lambda **_kwargs: {
+            "snapshot_version": "v1",
+            "sport": "NBA",
+            "contest": {"contest_id": 123, "is_primary": True, "name": "x"},
+            "selection": {"selected_contest_id": 123, "reason": {}},
+            "candidates": [],
+            "cash_line": {},
+            "vip_lineups": [],
+            "players": [],
+            "ownership": {
+                "ownership_remaining_total_pct": 120.0,
+                "non_cashing_user_count": 3,
+                "non_cashing_avg_pmr": 10.0,
+                "non_cashing_top_remaining_players": [
+                    {"player_name": "Primary Source", "ownership_remaining_pct": 66.6},
+                ],
+                "top_remaining_players": [
+                    {"player_name": "Legacy Source", "ownership_remaining_pct": 99.9},
+                ],
+            },
+            "train_clusters": [],
+            "standings": [],
+            "truncation": {},
+            "metadata": {"warnings": [], "missing_fields": [], "source_endpoints": []},
+        },
+    )
+
+    snapshot = snapshot_exporter.build_snapshot(sport="NBA")
+    envelope = snapshot_exporter.build_dashboard_envelope({"NBA": snapshot})
+    non_cashing = envelope["sports"]["nba"]["contests"][0]["metrics"]["non_cashing"]
+
+    names = [row["player_name"] for row in non_cashing.get("top_remaining_players", [])]
+    assert names == ["Primary Source"]
+
+
+def test_non_cashing_metrics_emits_name_only_row_when_ownership_invalid(monkeypatch):
+    monkeypatch.setattr(
+        snapshot_exporter,
+        "collect_snapshot_data",
+        lambda **_kwargs: {
+            "snapshot_version": "v1",
+            "sport": "NBA",
+            "contest": {"contest_id": 123, "is_primary": True, "name": "x"},
+            "selection": {"selected_contest_id": 123, "reason": {}},
+            "candidates": [],
+            "cash_line": {},
+            "vip_lineups": [],
+            "players": [],
+            "ownership": {
+                "ownership_remaining_total_pct": 120.0,
+                "non_cashing_user_count": 2,
+                "non_cashing_avg_pmr": 1.5,
+                "non_cashing_top_remaining_players": [{"player_name": "Name Only", "ownership_remaining_pct": "n/a"}],
+            },
+            "train_clusters": [],
+            "standings": [],
+            "truncation": {},
+            "metadata": {"warnings": [], "missing_fields": [], "source_endpoints": []},
+        },
+    )
+
+    snapshot = snapshot_exporter.build_snapshot(sport="NBA")
+    envelope = snapshot_exporter.build_dashboard_envelope({"NBA": snapshot})
+    rows = envelope["sports"]["nba"]["contests"][0]["metrics"]["non_cashing"]["top_remaining_players"]
+
+    assert rows[0]["player_name"] == "Name Only"
+    assert "ownership_remaining_pct" not in rows[0]
+
+
+def test_non_cashing_metrics_emits_zero_values_when_source_fields_present(monkeypatch):
+    monkeypatch.setattr(
+        snapshot_exporter,
+        "collect_snapshot_data",
+        lambda **_kwargs: {
+            "snapshot_version": "v1",
+            "sport": "NBA",
+            "contest": {"contest_id": 123, "is_primary": True, "name": "x"},
+            "selection": {"selected_contest_id": 123, "reason": {}},
+            "candidates": [],
+            "cash_line": {},
+            "vip_lineups": [],
+            "players": [],
+            "ownership": {
+                "ownership_remaining_total_pct": 120.0,
+                "non_cashing_user_count": 0,
+                "non_cashing_avg_pmr": 0.0,
+                "non_cashing_top_remaining_players": [],
+                "top_remaining_players": [],
+            },
+            "train_clusters": [],
+            "standings": [],
+            "truncation": {},
+            "metadata": {"warnings": [], "missing_fields": [], "source_endpoints": []},
+        },
+    )
+
+    snapshot = snapshot_exporter.build_snapshot(sport="NBA")
+    envelope = snapshot_exporter.build_dashboard_envelope({"NBA": snapshot})
+    non_cashing = envelope["sports"]["nba"]["contests"][0]["metrics"]["non_cashing"]
+
+    assert non_cashing["users_not_cashing"] == 0
+    assert non_cashing["avg_pmr_remaining"] == 0.0
+
+
+def test_non_cashing_metrics_omits_when_source_normalizes_to_no_usable_values(monkeypatch):
+    monkeypatch.setattr(
+        snapshot_exporter,
+        "collect_snapshot_data",
+        lambda **_kwargs: {
+            "snapshot_version": "v1",
+            "sport": "NBA",
+            "contest": {"contest_id": 123, "is_primary": True, "name": "x"},
+            "selection": {"selected_contest_id": 123, "reason": {}},
+            "candidates": [],
+            "cash_line": {},
+            "vip_lineups": [],
+            "players": [],
+            "ownership": {
+                "ownership_remaining_total_pct": 120.0,
+                "non_cashing_user_count": "n/a",
+                "non_cashing_avg_pmr": "n/a",
+                "non_cashing_top_remaining_players": [{"player_name": "", "ownership_remaining_pct": "n/a"}],
+            },
             "train_clusters": [],
             "standings": [],
             "truncation": {},
@@ -920,6 +1120,556 @@ def test_non_cashing_metrics_omits_when_no_source_fields(monkeypatch):
     metrics = envelope["sports"]["nba"]["contests"][0].get("metrics", {})
 
     assert "non_cashing" not in metrics
+
+
+def test_ownership_watchlist_entries_fallback_to_standings_rows(monkeypatch):
+    monkeypatch.setattr(
+        snapshot_exporter,
+        "collect_snapshot_data",
+        lambda **_kwargs: {
+            "snapshot_version": "v1",
+            "sport": "NBA",
+            "contest": {"contest_id": 123, "is_primary": True, "name": "x"},
+            "selection": {"selected_contest_id": 123, "reason": {}},
+            "candidates": [],
+            "cash_line": {},
+            "vip_lineups": [],
+            "players": [],
+            "ownership": {
+                "ownership_remaining_total_pct": 125.8,
+                "top_remaining_players": [],
+            },
+            "train_clusters": [],
+            "standings": [
+                {
+                    "entry_key": "vip-1",
+                    "username": "Cubbiesftw23",
+                    "rank": 12,
+                    "points": 299.0,
+                    "pmr": 24.0,
+                    "ownership_remaining_total_pct": 145.51,
+                },
+                {
+                    "entry_key": "vip-2",
+                    "username": "Mcoleman1902",
+                    "rank": 22,
+                    "points": 288.0,
+                    "pmr": 21.0,
+                    "ownership_remaining_total_pct": 129.97,
+                },
+            ],
+            "truncation": {},
+            "metadata": {"warnings": [], "missing_fields": [], "source_endpoints": []},
+        },
+    )
+
+    snapshot = snapshot_exporter.build_snapshot(sport="NBA")
+    envelope = snapshot_exporter.build_dashboard_envelope({"NBA": snapshot})
+    entries = envelope["sports"]["nba"]["contests"][0]["ownership_watchlist"]["entries"]
+
+    assert len(entries) == 2
+    assert entries[0]["entry_key"] == "vip-1"
+    assert entries[0]["display_name"] == "Cubbiesftw23"
+    assert entries[0]["ownership_remaining_pct"] == 145.51
+
+
+def test_watchlist_entries_non_empty_source_is_authoritative(monkeypatch):
+    monkeypatch.setattr(
+        snapshot_exporter,
+        "collect_snapshot_data",
+        lambda **_kwargs: {
+            "snapshot_version": "v1",
+            "sport": "NBA",
+            "contest": {"contest_id": 123, "is_primary": True, "name": "x"},
+            "selection": {"selected_contest_id": 123, "reason": {}},
+            "candidates": [],
+            "cash_line": {},
+            "vip_lineups": [],
+            "players": [],
+            "ownership": {
+                "ownership_remaining_total_pct": 125.8,
+                "watchlist_entries": [
+                    {"entry_key": "explicit-1", "display_name": "Explicit A", "ownership_remaining_pct": 20.0},
+                    {"entry_key": "explicit-2", "display_name": "Explicit B", "ownership_remaining_pct": 10.0},
+                ],
+            },
+            "train_clusters": [],
+            "standings": [
+                {
+                    "entry_key": "standings-1",
+                    "username": "Standings A",
+                    "rank": 1,
+                    "points": 330.0,
+                    "pmr": 9.0,
+                    "ownership_remaining_total_pct": 90.0,
+                }
+            ],
+            "truncation": {},
+            "metadata": {"warnings": [], "missing_fields": [], "source_endpoints": []},
+        },
+    )
+
+    snapshot = snapshot_exporter.build_snapshot(sport="NBA")
+    envelope = snapshot_exporter.build_dashboard_envelope({"NBA": snapshot})
+    entries = envelope["sports"]["nba"]["contests"][0]["ownership_watchlist"]["entries"]
+
+    assert [entry["entry_key"] for entry in entries] == ["explicit-1", "explicit-2"]
+
+
+def test_ownership_watchlist_uses_standings_fallback_when_explicit_entries_empty_even_with_legacy_rows(monkeypatch):
+    monkeypatch.setattr(
+        snapshot_exporter,
+        "collect_snapshot_data",
+        lambda **_kwargs: {
+            "snapshot_version": "v1",
+            "sport": "NBA",
+            "contest": {"contest_id": 123, "is_primary": True, "name": "x"},
+            "selection": {"selected_contest_id": 123, "reason": {}},
+            "candidates": [],
+            "cash_line": {},
+            "vip_lineups": [],
+            "players": [],
+            "ownership": {
+                "ownership_remaining_total_pct": 125.8,
+                "watchlist_entries": [],
+                "top_remaining_players": [
+                    {"player_name": "Legacy Player Row", "ownership_remaining_pct": 95.0},
+                ],
+            },
+            "train_clusters": [],
+            "standings": [
+                {
+                    "entry_key": "vip-1",
+                    "username": "Cubbiesftw23",
+                    "rank": 12,
+                    "points": 299.0,
+                    "pmr": 24.0,
+                    "ownership_remaining_total_pct": 145.51,
+                },
+                {
+                    "entry_key": "vip-2",
+                    "username": "Mcoleman1902",
+                    "rank": 22,
+                    "points": 288.0,
+                    "pmr": 21.0,
+                    "ownership_remaining_total_pct": 129.97,
+                },
+            ],
+            "truncation": {},
+            "metadata": {"warnings": [], "missing_fields": [], "source_endpoints": []},
+        },
+    )
+
+    snapshot = snapshot_exporter.build_snapshot(sport="NBA")
+    envelope = snapshot_exporter.build_dashboard_envelope({"NBA": snapshot})
+    entries = envelope["sports"]["nba"]["contests"][0]["ownership_watchlist"]["entries"]
+
+    assert [entry["display_name"] for entry in entries] == ["Cubbiesftw23", "Mcoleman1902"]
+    assert all(entry.get("entry_key") for entry in entries)
+    assert "Legacy Player Row" not in [entry["display_name"] for entry in entries]
+
+
+def test_ownership_watchlist_entries_are_capped_and_sorted(monkeypatch):
+    watch_rows = [
+        {
+            "entry_key": f"e-{index:02d}",
+            "display_name": f"Entry {index:02d}",
+            "ownership_remaining_pct": float(index),
+            "current_rank": 50 - index,
+            "current_points": 200.0 + index,
+            "pmr": 10.0,
+        }
+        for index in range(12)
+    ]
+    # tie on ownership to validate deterministic name ordering
+    watch_rows.extend(
+        [
+            {"entry_key": "tie-b", "display_name": "Tie B", "ownership_remaining_pct": 20.0, "current_rank": 9},
+            {"entry_key": "tie-a", "display_name": "Tie A", "ownership_remaining_pct": 20.0, "current_rank": 9},
+        ]
+    )
+
+    monkeypatch.setattr(
+        snapshot_exporter,
+        "collect_snapshot_data",
+        lambda **_kwargs: {
+            "snapshot_version": "v1",
+            "sport": "NBA",
+            "contest": {"contest_id": 123, "is_primary": True, "name": "x"},
+            "selection": {"selected_contest_id": 123, "reason": {}},
+            "candidates": [],
+            "cash_line": {},
+            "vip_lineups": [],
+            "players": [],
+            "ownership": {
+                "ownership_remaining_total_pct": 125.8,
+                "watchlist_entries": watch_rows,
+            },
+            "train_clusters": [],
+            "standings": [],
+            "truncation": {},
+            "metadata": {"warnings": [], "missing_fields": [], "source_endpoints": []},
+        },
+    )
+
+    snapshot = snapshot_exporter.build_snapshot(sport="NBA")
+    envelope = snapshot_exporter.build_dashboard_envelope({"NBA": snapshot})
+    entries = envelope["sports"]["nba"]["contests"][0]["ownership_watchlist"]["entries"]
+
+    assert len(entries) == 10
+    assert entries[0]["display_name"] == "Tie A"
+    assert entries[1]["display_name"] == "Tie B"
+
+
+def test_ownership_watchlist_ignores_legacy_player_level_rows(monkeypatch):
+    monkeypatch.setattr(
+        snapshot_exporter,
+        "collect_snapshot_data",
+        lambda **_kwargs: {
+            "snapshot_version": "v1",
+            "sport": "NBA",
+            "contest": {"contest_id": 123, "is_primary": True, "name": "x"},
+            "selection": {"selected_contest_id": 123, "reason": {}},
+            "candidates": [],
+            "cash_line": {},
+            "vip_lineups": [],
+            "players": [],
+            "ownership": {
+                "ownership_remaining_total_pct": 120.0,
+                "top_remaining_players": [
+                    {"player_name": "Legacy Player", "ownership_remaining_pct": 88.0},
+                ],
+            },
+            "train_clusters": [],
+            "standings": [],
+            "truncation": {},
+            "metadata": {"warnings": [], "missing_fields": [], "source_endpoints": []},
+        },
+    )
+
+    snapshot = snapshot_exporter.build_snapshot(sport="NBA")
+    envelope = snapshot_exporter.build_dashboard_envelope({"NBA": snapshot})
+    entries = envelope["sports"]["nba"]["contests"][0]["ownership_watchlist"]["entries"]
+
+    assert entries == []
+
+
+def test_ownership_summary_in_play_falls_back_to_live_remaining_when_status_missing(monkeypatch):
+    monkeypatch.setattr(
+        snapshot_exporter,
+        "collect_snapshot_data",
+        lambda **_kwargs: {
+            "snapshot_version": "v1",
+            "sport": "NBA",
+            "contest": {"contest_id": 123, "is_primary": True, "name": "x"},
+            "selection": {"selected_contest_id": 123, "reason": {}},
+            "candidates": [],
+            "cash_line": {},
+            "vip_lineups": [
+                {
+                    "entry_key": "vip-1",
+                    "username": "vip",
+                    "players": [
+                        {"pos": "PG", "name": "Player A", "ownership": 0.55},
+                        {"pos": "SG", "name": "Player B", "ownership": 0.45},
+                    ],
+                }
+            ],
+            "players": [{"name": "Player A"}, {"name": "Player B"}],
+            "ownership": {"ownership_remaining_total_pct": 120.0, "top_remaining_players": []},
+            "train_clusters": [],
+            "standings": [
+                {
+                    "entry_key": "vip-1",
+                    "username": "vip",
+                    "ownership_remaining_total_pct": 38.4,
+                }
+            ],
+            "truncation": {},
+            "metadata": {"warnings": [], "missing_fields": [], "source_endpoints": []},
+        },
+    )
+
+    snapshot = snapshot_exporter.build_snapshot(sport="NBA")
+    envelope = snapshot_exporter.build_dashboard_envelope({"NBA": snapshot})
+    row = envelope["sports"]["nba"]["contests"][0]["metrics"]["ownership_summary"]["per_vip"][0]
+
+    assert row["total_ownership_pct"] == 100.0
+    assert row["ownership_in_play_pct"] == 38.4
+    assert row["ownership_in_play_source"] == "lineup_live_remaining"
+    assert row["is_partial"] is True
+
+
+def test_ownership_summary_in_play_prefers_status_derived_value_over_live_remaining_fallback(monkeypatch):
+    monkeypatch.setattr(
+        snapshot_exporter,
+        "collect_snapshot_data",
+        lambda **_kwargs: {
+            "snapshot_version": "v1",
+            "sport": "NBA",
+            "contest": {"contest_id": 123, "is_primary": True, "name": "x"},
+            "selection": {"selected_contest_id": 123, "reason": {}},
+            "candidates": [],
+            "cash_line": {},
+            "vip_lineups": [
+                {
+                    "entry_key": "vip-1",
+                    "username": "vip",
+                    "players": [
+                        {"pos": "PG", "name": "Player A", "ownership": 0.55, "game_status": "In Progress"},
+                        {"pos": "SG", "name": "Player B", "ownership": 0.45, "game_status": "Final"},
+                    ],
+                }
+            ],
+            "players": [{"name": "Player A"}, {"name": "Player B"}],
+            "ownership": {"ownership_remaining_total_pct": 120.0, "top_remaining_players": []},
+            "train_clusters": [],
+            "standings": [
+                {
+                    "entry_key": "vip-1",
+                    "username": "vip",
+                    "ownership_remaining_total_pct": 12.34,
+                }
+            ],
+            "truncation": {},
+            "metadata": {"warnings": [], "missing_fields": [], "source_endpoints": []},
+        },
+    )
+
+    snapshot = snapshot_exporter.build_snapshot(sport="NBA")
+    envelope = snapshot_exporter.build_dashboard_envelope({"NBA": snapshot})
+    row = envelope["sports"]["nba"]["contests"][0]["metrics"]["ownership_summary"]["per_vip"][0]
+
+    assert row["ownership_in_play_pct"] == 55.0
+    assert row["ownership_in_play_source"] == "vip_lineup_players_status"
+
+
+def test_ownership_summary_marks_partial_when_no_usable_in_play_source(monkeypatch):
+    monkeypatch.setattr(
+        snapshot_exporter,
+        "collect_snapshot_data",
+        lambda **_kwargs: {
+            "snapshot_version": "v1",
+            "sport": "NBA",
+            "contest": {"contest_id": 123, "is_primary": True, "name": "x"},
+            "selection": {"selected_contest_id": 123, "reason": {}},
+            "candidates": [],
+            "cash_line": {},
+            "vip_lineups": [
+                {
+                    "entry_key": "vip-1",
+                    "username": "vip",
+                    "players": [
+                        {"pos": "PG", "name": "Player A", "ownership": 0.55, "game_status": "Unknown"},
+                        {"pos": "SG", "name": "Player B", "ownership": 0.45, "game_status": ""},
+                    ],
+                }
+            ],
+            "players": [{"name": "Player A"}, {"name": "Player B"}],
+            "ownership": {"ownership_remaining_total_pct": 120.0, "top_remaining_players": []},
+            "train_clusters": [],
+            "standings": [{"entry_key": "vip-1", "username": "vip"}],
+            "truncation": {},
+            "metadata": {"warnings": [], "missing_fields": [], "source_endpoints": []},
+        },
+    )
+
+    snapshot = snapshot_exporter.build_snapshot(sport="NBA")
+    envelope = snapshot_exporter.build_dashboard_envelope({"NBA": snapshot})
+    row = envelope["sports"]["nba"]["contests"][0]["metrics"]["ownership_summary"]["per_vip"][0]
+
+    assert row["is_partial"] is True
+    assert "ownership_in_play_pct" not in row
+    assert "ownership_in_play_source" not in row
+
+
+def test_watchlist_entries_have_deterministic_order_for_tied_ownership(monkeypatch):
+    monkeypatch.setattr(
+        snapshot_exporter,
+        "collect_snapshot_data",
+        lambda **_kwargs: {
+            "snapshot_version": "v1",
+            "sport": "NBA",
+            "contest": {"contest_id": 123, "is_primary": True, "name": "x"},
+            "selection": {"selected_contest_id": 123, "reason": {}},
+            "candidates": [],
+            "cash_line": {},
+            "vip_lineups": [],
+            "players": [],
+            "ownership": {
+                "ownership_remaining_total_pct": 150.0,
+                "watchlist_entries": [],
+                "top_remaining_players": [],
+            },
+            "train_clusters": [],
+            "standings": [
+                {
+                    "entry_key": "c",
+                    "username": "Charlie",
+                    "rank": 5,
+                    "points": 200.0,
+                    "pmr": 10.0,
+                    "ownership_remaining_total_pct": 50.0,
+                },
+                {
+                    "entry_key": "a",
+                    "username": "Alpha",
+                    "rank": 3,
+                    "points": 210.0,
+                    "pmr": 12.0,
+                    "ownership_remaining_total_pct": 50.0,
+                },
+                {
+                    "entry_key": "b",
+                    "username": "Bravo",
+                    "rank": 3,
+                    "points": 205.0,
+                    "pmr": 11.0,
+                    "ownership_remaining_total_pct": 50.0,
+                },
+            ],
+            "truncation": {},
+            "metadata": {"warnings": [], "missing_fields": [], "source_endpoints": []},
+        },
+    )
+
+    snapshot = snapshot_exporter.build_snapshot(sport="NBA")
+    envelope = snapshot_exporter.build_dashboard_envelope({"NBA": snapshot})
+    entries = envelope["sports"]["nba"]["contests"][0]["ownership_watchlist"]["entries"]
+
+    assert [entry["display_name"] for entry in entries] == ["Alpha", "Bravo", "Charlie"]
+
+
+def test_ownership_watchlist_total_pct_preserves_over_100_and_omits_invalid(monkeypatch):
+    monkeypatch.setattr(
+        snapshot_exporter,
+        "collect_snapshot_data",
+        lambda **_kwargs: {
+            "snapshot_version": "v1",
+            "sport": "NBA",
+            "contest": {"contest_id": 123, "is_primary": True, "name": "x"},
+            "selection": {"selected_contest_id": 123, "reason": {}},
+            "candidates": [],
+            "cash_line": {},
+            "vip_lineups": [],
+            "players": [],
+            "ownership": {"ownership_remaining_total_pct": 175.25, "watchlist_entries": []},
+            "train_clusters": [],
+            "standings": [],
+            "truncation": {},
+            "metadata": {"warnings": [], "missing_fields": [], "source_endpoints": []},
+        },
+    )
+
+    snapshot = snapshot_exporter.build_snapshot(sport="NBA")
+    envelope = snapshot_exporter.build_dashboard_envelope({"NBA": snapshot})
+    watchlist = envelope["sports"]["nba"]["contests"][0]["ownership_watchlist"]
+    assert watchlist["ownership_remaining_total_pct"] == 175.25
+
+    monkeypatch.setattr(
+        snapshot_exporter,
+        "collect_snapshot_data",
+        lambda **_kwargs: {
+            "snapshot_version": "v1",
+            "sport": "NBA",
+            "contest": {"contest_id": 123, "is_primary": True, "name": "x"},
+            "selection": {"selected_contest_id": 123, "reason": {}},
+            "candidates": [],
+            "cash_line": {},
+            "vip_lineups": [],
+            "players": [],
+            "ownership": {"ownership_remaining_total_pct": "not-a-number", "watchlist_entries": []},
+            "train_clusters": [],
+            "standings": [],
+            "truncation": {},
+            "metadata": {"warnings": [], "missing_fields": [], "source_endpoints": []},
+        },
+    )
+
+    snapshot = snapshot_exporter.build_snapshot(sport="NBA")
+    envelope = snapshot_exporter.build_dashboard_envelope({"NBA": snapshot})
+    watchlist = envelope["sports"]["nba"]["contests"][0]["ownership_watchlist"]
+    assert watchlist["ownership_remaining_total_pct"] is None
+
+
+def test_build_dashboard_sport_snapshot_does_not_mutate_input_ownership_payload():
+    snapshot = {
+        "snapshot_version": "v1",
+        "snapshot_generated_at_utc": "2026-02-21T10:00:00Z",
+        "sport": "NBA",
+        "contest": {
+            "contest_id": "123",
+            "name": "x",
+            "sport": "nba",
+            "contest_type": "classic",
+            "start_time": "2026-02-21T10:00:00Z",
+            "state": "live",
+            "entry_fee_cents": 1000,
+            "prize_pool_cents": 100000,
+            "currency": "USD",
+            "max_entries": 100,
+            "max_entries_per_user": 1,
+        },
+        "selection": {"selected_contest_id": "123", "reason": {}},
+        "cash_line": {"cutoff_type": "rank", "rank": 10, "points": 100.0},
+        "vip_lineups": [],
+        "players": [],
+        "ownership": {"ownership_remaining_total_pct": 50.0, "watchlist_entries": []},
+        "standings": [],
+        "train_clusters": [],
+        "truncation": {},
+        "metadata": {"warnings": [], "missing_fields": [], "source_endpoints": []},
+    }
+    before = json.dumps(snapshot["ownership"], sort_keys=True)
+    _ = snapshot_exporter.build_dashboard_sport_snapshot(snapshot, "2026-02-21T10:00:00Z")
+    after = json.dumps(snapshot["ownership"], sort_keys=True)
+    assert after == before
+
+
+def test_watchlist_ordering_is_stable_with_duplicate_display_names(monkeypatch):
+    monkeypatch.setattr(
+        snapshot_exporter,
+        "collect_snapshot_data",
+        lambda **_kwargs: {
+            "snapshot_version": "v1",
+            "sport": "NBA",
+            "contest": {"contest_id": 123, "is_primary": True, "name": "x"},
+            "selection": {"selected_contest_id": 123, "reason": {}},
+            "candidates": [],
+            "cash_line": {},
+            "vip_lineups": [],
+            "players": [],
+            "ownership": {"ownership_remaining_total_pct": 120.0, "watchlist_entries": []},
+            "train_clusters": [],
+            "standings": [
+                {
+                    "entry_key": "dup-2",
+                    "username": "SameName",
+                    "rank": 9,
+                    "points": 250.0,
+                    "pmr": 9.0,
+                    "ownership_remaining_total_pct": 60.0,
+                },
+                {
+                    "entry_key": "dup-1",
+                    "username": "SameName",
+                    "rank": 4,
+                    "points": 260.0,
+                    "pmr": 8.0,
+                    "ownership_remaining_total_pct": 60.0,
+                },
+            ],
+            "truncation": {},
+            "metadata": {"warnings": [], "missing_fields": [], "source_endpoints": []},
+        },
+    )
+
+    snapshot = snapshot_exporter.build_snapshot(sport="NBA")
+    envelope = snapshot_exporter.build_dashboard_envelope({"NBA": snapshot})
+    entries = envelope["sports"]["nba"]["contests"][0]["ownership_watchlist"]["entries"]
+
+    assert [entry["entry_key"] for entry in entries] == ["dup-1", "dup-2"]
+    assert [entry["current_rank"] for entry in entries] == [4, 9]
 
 
 def test_threat_metrics_leverage_and_vip_counts(monkeypatch):
@@ -945,6 +1695,10 @@ def test_threat_metrics_leverage_and_vip_counts(monkeypatch):
             "players": [{"name": "A"}, {"name": "C"}],
             "ownership": {
                 "ownership_remaining_total_pct": 120.0,
+                "watchlist_entries": [
+                    {"entry_key": "entry-a", "display_name": "A", "ownership_remaining_pct": 40.0},
+                    {"entry_key": "entry-b", "display_name": "B", "ownership_remaining_pct": 20.0},
+                ],
                 "top_remaining_players": [
                     {"player_name": "A", "ownership_remaining_pct": 40.0},
                     {"player_name": "B", "ownership_remaining_pct": 20.0},
@@ -1448,6 +2202,119 @@ def test_collect_snapshot_data_sources_prize_pool_from_db_metadata(monkeypatch, 
     assert contest["max_entries"] == 1500
     assert contest["max_entries_per_user"] == 1
     assert contest["entries"] == 1500
+
+
+def test_collect_snapshot_data_ownership_totals_and_watchlist_are_pre_truncation(monkeypatch, tmp_path):
+    class _FakeSport:
+        name = "NBA"
+        sheet_min_entry_fee = 25
+        keyword = "%"
+
+    class _LineupPlayer:
+        def __init__(self, ownership: float):
+            self.game_info = "In Progress"
+            self.ownership = ownership
+            self.name = "A"
+
+    class _LineupObj:
+        def __init__(self, ownership: float):
+            self.lineup = [_LineupPlayer(ownership)]
+
+    class _FakeUser:
+        def __init__(self, *, rank: int, entry_key: str, name: str, points: float, ownership: float):
+            self.rank = rank
+            self.player_id = entry_key
+            self.name = name
+            self.pmr = "10.0"
+            self.pts = points
+            self.lineupobj = _LineupObj(ownership)
+
+    class _FakePlayer:
+        name = "A"
+        pos = "PG"
+        roster_pos = ["PG"]
+        salary = 5000
+        team_abbv = "LAL"
+        game_info = "In Progress"
+        matchup_info = "LAL@BOS"
+        ownership = 0.2
+        fpts = 12.0
+        value = 2.4
+
+    class _FakeContestDb:
+        def get_live_contest_candidates(self, *_args, **_kwargs):
+            return []
+
+        def get_contest_by_id(self, *_args, **_kwargs):
+            return (123, "NBA Contest", 777, 50, "2026-02-14 01:00:00", 10, 1500)
+
+        def get_contest_state(self, *_args, **_kwargs):
+            return ("In Progress", 0)
+
+        def get_contest_contract_metadata(self, *_args, **_kwargs):
+            return (250000, 1500, 1, 114)
+
+        def close(self):
+            return None
+
+    class _FakeDraftKings:
+        def download_salary_csv(self, _sport, _draft_group, filename):
+            path = tmp_path / "salary.csv"
+            path.write_text("Position,Name,Salary\nPG,A,5000\n", encoding="utf-8")
+
+        def download_contest_rows(self, *_args, **_kwargs):
+            return [
+                ["Rank", "EntryId", "EntryName", "TimeRemaining", "Points", "Lineup"],
+                ["1", "ek1", "vip1", "0", "336.25", "PG A"],
+                ["2", "ek2", "vip2", "0", "320.0", "PG A"],
+            ]
+
+        def get_vip_lineups(self, *_args, **_kwargs):
+            return []
+
+        def get_leaderboard(self, *_args, **_kwargs):
+            return {"leaderBoard": []}
+
+    class _FakeResults:
+        def __init__(self, *_args, **_kwargs):
+            user_one = _FakeUser(rank=1, entry_key="ek1", name="vip1", points=336.25, ownership=0.2)
+            user_two = _FakeUser(rank=2, entry_key="ek2", name="vip2", points=320.0, ownership=0.8)
+            self.vip_list = [user_one, user_two]
+            self.players = {"A": _FakePlayer()}
+            self.users = [user_one, user_two]
+            self.non_cashing_users = 0
+            self.non_cashing_players = {}
+            self.non_cashing_avg_pmr = 0.0
+            self.min_rank = 50
+            self.min_cash_pts = 300.0
+
+    class _FakeTrainFinder:
+        def __init__(self, _users):
+            pass
+
+        def get_users_above_salary_spent(self, _limit):
+            return {}
+
+    monkeypatch.setattr(snapshot_exporter, "_sport_choices", lambda: {"NBA": _FakeSport})
+    monkeypatch.setattr(snapshot_exporter, "ContestDatabase", lambda _path: _FakeContestDb())
+    monkeypatch.setattr(snapshot_exporter, "Draftkings", _FakeDraftKings)
+    monkeypatch.setattr(snapshot_exporter, "Results", _FakeResults)
+    monkeypatch.setattr(snapshot_exporter, "TrainFinder", _FakeTrainFinder)
+    monkeypatch.setattr(snapshot_exporter, "load_vips", lambda: ["vip1", "vip2"])
+    monkeypatch.setattr(snapshot_exporter.state, "contests_db_path", lambda: tmp_path / "contests.db")
+    monkeypatch.setattr(snapshot_exporter, "SALARY_DIR", str(tmp_path))
+
+    snapshot = snapshot_exporter.collect_snapshot_data(sport="NBA", contest_id=123, standings_limit=1)
+
+    # 20% and 80% remaining should average to 50%, independent of standings truncation.
+    assert snapshot["ownership"]["ownership_remaining_total_pct"] == 50.0
+    assert snapshot["truncation"]["applied"] is True
+    assert snapshot["truncation"]["total_rows_before_truncation"] == 2
+    assert snapshot["truncation"]["total_rows_after_truncation"] == 1
+    assert len(snapshot["standings"]) == 1
+    # watchlist entries are sourced from full standings (top ownership first).
+    assert snapshot["ownership"]["watchlist_entries"][0]["entry_key"] == "ek2"
+    assert snapshot["ownership"]["watchlist_entries"][0]["ownership_remaining_pct"] == 80.0
 
 
 def test_collect_snapshot_data_uses_leaderboard_payout_for_cashing(monkeypatch, tmp_path):

@@ -4,7 +4,7 @@ import hashlib
 import json
 import logging
 import os
-from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -579,15 +579,11 @@ def collect_snapshot_data(
             )
         )
 
-        total_before = len(standings)
-        limit = standings_limit if standings_limit and standings_limit > 0 else None
-        applied = bool(limit and total_before > limit)
-        if applied and limit is not None:
-            standings = standings[:limit]
+        full_standings = list(standings)
 
         ownership_values = [
             row["ownership_remaining_total_pct"]
-            for row in standings
+            for row in full_standings
             if row["ownership_remaining_total_pct"] is not None
         ]
         ownership_remaining_total = sum(ownership_values) / len(ownership_values) if ownership_values else None
@@ -604,13 +600,47 @@ def collect_snapshot_data(
         top_remaining_players.sort(key=lambda item: (-item["ownership_remaining_pct"], item["player_name"]))
         top_remaining_players = top_remaining_players[:10]
 
+        watchlist_entries: list[dict[str, Any]] = []
+        for row in sorted(
+            full_standings,
+            key=lambda item: (
+                -(float(item["ownership_remaining_total_pct"]))
+                if isinstance(item.get("ownership_remaining_total_pct"), (int, float))
+                else float("-inf"),
+                _rank_numeric(item.get("rank")) if _rank_numeric(item.get("rank")) is not None else 10**9,
+                str(item.get("username") or ""),
+            ),
+        ):
+            ownership_remaining_pct = row.get("ownership_remaining_total_pct")
+            if not isinstance(ownership_remaining_pct, (int, float)):
+                continue
+            watchlist_entries.append(
+                {
+                    "entry_key": row.get("entry_key"),
+                    "display_name": row.get("username"),
+                    "ownership_remaining_pct": ownership_remaining_pct,
+                    "current_rank": _rank_numeric(row.get("rank")),
+                    "current_points": _to_float(row.get("points")),
+                    "pmr": _to_float(row.get("pmr")),
+                }
+            )
+        watchlist_entries = watchlist_entries[:10]
+
+        total_before = len(full_standings)
+        limit = standings_limit if standings_limit and standings_limit > 0 else None
+        applied = bool(limit and total_before > limit)
+        if applied and limit is not None:
+            standings = full_standings[:limit]
+        else:
+            standings = full_standings
+
         cash_rank = results.min_rank if results.min_rank > 0 else None
         cash_points = results.min_cash_pts if cash_rank is not None else None
         cash_delta = None
         if cash_rank is not None:
             below_cash = [
                 row
-                for row in standings
+                for row in full_standings
                 if (rank_num := _rank_numeric(row["rank"])) is not None and rank_num > int(cash_rank)
             ]
             if below_cash and cash_points is not None:
@@ -696,6 +726,8 @@ def collect_snapshot_data(
                 "ownership_remaining_total_pct": ownership_remaining_total,
                 "non_cashing_user_count": results.non_cashing_users,
                 "non_cashing_avg_pmr": results.non_cashing_avg_pmr,
+                "watchlist_entries": watchlist_entries,
+                "non_cashing_top_remaining_players": top_remaining_players,
                 "top_remaining_players": top_remaining_players,
             },
             "train_clusters": train_clusters,
@@ -805,24 +837,6 @@ def _cash_line_contract(cash_line: dict[str, Any]) -> dict[str, Any]:
 
 
 def _ownership_watchlist_contract(ownership: dict[str, Any], updated_at: str) -> dict[str, Any]:
-    entries: list[dict[str, Any]] = []
-    for row in ownership.get("top_remaining_players") or []:
-        if not isinstance(row, dict):
-            continue
-        entry_key = row.get("entry_key")
-        display_name = row.get("display_name") or row.get("player_name")
-        if display_name in (None, "") and entry_key not in (None, ""):
-            display_name = str(entry_key)
-        entries.append(
-            {
-                "display_name": display_name,
-                "ownership_remaining_pct": _to_float(row.get("ownership_remaining_pct")),
-                "entry_key": entry_key,
-                "current_rank": _rank_numeric(row.get("current_rank")),
-                "current_points": _to_float(row.get("current_points")),
-                "pmr": _to_float(row.get("pmr")),
-            }
-        )
     top_n_default_raw = ownership.get("top_n_default")
     if isinstance(top_n_default_raw, (int, float)):
         top_n_default = int(top_n_default_raw)
@@ -830,12 +844,81 @@ def _ownership_watchlist_contract(ownership: dict[str, Any], updated_at: str) ->
         top_n_default = 10
     if top_n_default <= 0:
         top_n_default = 10
+
+    entries: list[dict[str, Any]] = []
+    source_rows = ownership.get("watchlist_entries")
+    if not isinstance(source_rows, list):
+        source_rows = []
+    for row in source_rows:
+        if not isinstance(row, dict):
+            continue
+        entry_key = row.get("entry_key")
+        display_name = row.get("display_name") or row.get("username")
+        if display_name in (None, "") and entry_key not in (None, ""):
+            display_name = str(entry_key)
+        ownership_remaining_pct = _to_float(
+            row.get("ownership_remaining_pct")
+            if row.get("ownership_remaining_pct") is not None
+            else row.get("ownership_remaining_total_pct")
+        )
+        entries.append(
+            {
+                "display_name": display_name,
+                "ownership_remaining_pct": ownership_remaining_pct,
+                "entry_key": entry_key,
+                "current_rank": _rank_numeric(
+                    row.get("current_rank") if row.get("current_rank") is not None else row.get("rank")
+                ),
+                "current_points": _to_float(
+                    row.get("current_points") if row.get("current_points") is not None else row.get("points")
+                ),
+                "pmr": _to_float(row.get("pmr")),
+            }
+        )
+
+    entries.sort(
+        key=lambda item: (
+            0 if isinstance(item.get("ownership_remaining_pct"), (int, float)) else 1,
+            -float(item.get("ownership_remaining_pct") or 0),
+            item.get("current_rank") if isinstance(item.get("current_rank"), int) else 10**9,
+            str(item.get("display_name") or ""),
+            str(item.get("entry_key") or ""),
+        )
+    )
+    entries = entries[:top_n_default]
+
     return {
         "updated_at": updated_at,
         "ownership_remaining_total_pct": _to_float(ownership.get("ownership_remaining_total_pct")),
         "top_n_default": top_n_default,
         "entries": entries,
     }
+
+
+def _watchlist_entries_from_standings(rows: list[dict[str, Any]], limit: int = 10) -> list[dict[str, Any]]:
+    derived: list[dict[str, Any]] = []
+    for row in rows:
+        ownership_remaining_pct = _to_float(row.get("ownership_remaining_pct"))
+        if not isinstance(ownership_remaining_pct, (int, float)):
+            continue
+        derived.append(
+            {
+                "entry_key": row.get("entry_key"),
+                "display_name": row.get("display_name"),
+                "ownership_remaining_pct": ownership_remaining_pct,
+                "current_rank": _rank_numeric(row.get("rank")),
+                "current_points": _to_float(row.get("points")),
+                "pmr": _to_float(row.get("pmr")),
+            }
+        )
+    derived.sort(
+        key=lambda item: (
+            -float(item.get("ownership_remaining_pct") or 0),
+            _rank_numeric(item.get("current_rank")) if _rank_numeric(item.get("current_rank")) is not None else 10**9,
+            str(item.get("display_name") or ""),
+        )
+    )
+    return derived[: max(1, limit)]
 
 
 def _normalize_standings_rows(rows: list[Any]) -> list[dict[str, Any]]:
@@ -1269,6 +1352,7 @@ def _ownership_summary_metrics(vip_lineups: list[dict[str, Any]]) -> dict[str, A
         ownership_in_play = 0.0
         has_total_input = False
         has_in_play_input = False
+        ownership_in_play_source: str | None = None
         is_partial = False
 
         for player in players_live:
@@ -1287,13 +1371,22 @@ def _ownership_summary_metrics(vip_lineups: list[dict[str, Any]]) -> dict[str, A
             if status_bucket == "active":
                 ownership_in_play += ownership_value
                 has_in_play_input = True
+                ownership_in_play_source = "vip_lineup_players_status"
             elif status_bucket == "terminal":
                 has_in_play_input = True
+                ownership_in_play_source = "vip_lineup_players_status"
             else:
                 is_partial = True
 
         if not has_total_input:
             is_partial = True
+        if not has_in_play_input:
+            live_remaining = _to_float((lineup.get("live") or {}).get("ownership_remaining_pct"))
+            if isinstance(live_remaining, (int, float)):
+                ownership_in_play = float(live_remaining)
+                has_in_play_input = True
+                ownership_in_play_source = "lineup_live_remaining"
+                is_partial = True
 
         row: dict[str, Any] = {
             "vip_entry_key": vip_entry_key,
@@ -1305,6 +1398,8 @@ def _ownership_summary_metrics(vip_lineups: list[dict[str, Any]]) -> dict[str, A
             row["total_ownership_pct"] = round(total_ownership, 4)
         if has_in_play_input:
             row["ownership_in_play_pct"] = round(ownership_in_play, 4)
+            if ownership_in_play_source:
+                row["ownership_in_play_source"] = ownership_in_play_source
         per_vip.append(row)
 
     if not per_vip:
@@ -1321,9 +1416,23 @@ def _non_cashing_metrics(ownership_source: dict[str, Any] | None) -> dict[str, A
     if not isinstance(ownership_source, dict):
         return None
 
+    has_source_fields = any(
+        key in ownership_source
+        for key in (
+            "non_cashing_user_count",
+            "non_cashing_avg_pmr",
+            "non_cashing_top_remaining_players",
+            "top_remaining_players",
+        )
+    )
+    if not has_source_fields:
+        return None
+
     users_not_cashing = _rank_numeric(ownership_source.get("non_cashing_user_count"))
     avg_pmr_remaining = _to_float(ownership_source.get("non_cashing_avg_pmr"))
-    top_source = ownership_source.get("top_remaining_players") or []
+    top_source = ownership_source.get("non_cashing_top_remaining_players")
+    if not isinstance(top_source, list):
+        top_source = ownership_source.get("top_remaining_players") or []
 
     top_remaining_players: list[dict[str, Any]] = []
     for row in top_source:
@@ -1340,13 +1449,14 @@ def _non_cashing_metrics(ownership_source: dict[str, Any] | None) -> dict[str, A
             player_row["ownership_remaining_pct"] = ownership_pct
         top_remaining_players.append(player_row)
 
-    has_non_default = (
-        (isinstance(users_not_cashing, int) and users_not_cashing > 0)
-        or (isinstance(avg_pmr_remaining, (int, float)) and float(avg_pmr_remaining) > 0)
-        or len(top_remaining_players) > 0
+    top_remaining_players.sort(
+        key=lambda item: (
+            0 if isinstance(item.get("ownership_remaining_pct"), (int, float)) else 1,
+            -float(item.get("ownership_remaining_pct") or 0),
+            str(item.get("player_name") or ""),
+        )
     )
-    if not has_non_default:
-        return None
+    top_remaining_players = top_remaining_players[:10]
 
     metrics: dict[str, Any] = {}
     if users_not_cashing is not None:
@@ -1355,6 +1465,8 @@ def _non_cashing_metrics(ownership_source: dict[str, Any] | None) -> dict[str, A
         metrics["avg_pmr_remaining"] = avg_pmr_remaining
     if top_remaining_players:
         metrics["top_remaining_players"] = top_remaining_players
+    if not metrics:
+        return None
     return metrics
 
 
@@ -1679,6 +1791,14 @@ def build_dashboard_sport_snapshot(snapshot: dict[str, Any], generated_at: str) 
 
     ownership_source = normalized.get("ownership")
     if isinstance(ownership_source, dict):
+        ownership_source = dict(ownership_source)
+        top_n_default = _rank_numeric(ownership_source.get("top_n_default")) or 10
+        existing_entries = ownership_source.get("watchlist_entries")
+        has_existing_entries = isinstance(existing_entries, list) and len(existing_entries) > 0
+        if not has_existing_entries:
+            derived_entries = _watchlist_entries_from_standings(standings_rows, limit=top_n_default)
+            if derived_entries:
+                ownership_source["watchlist_entries"] = derived_entries
         contest_object["ownership_watchlist"] = _ownership_watchlist_contract(
             ownership_source,
             updated_at,
