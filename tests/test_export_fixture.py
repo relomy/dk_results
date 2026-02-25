@@ -235,28 +235,34 @@ def test_json_output_is_byte_stable():
     assert out1.endswith("\n")
 
 
-def test_cli_export_fixture_calls_build_snapshot(monkeypatch, tmp_path):
+def test_cli_export_fixture_calls_snapshot_v3_envelope_builder(monkeypatch, tmp_path):
     called = {}
 
-    def fake_build_snapshot(**kwargs):
-        called.update(kwargs)
+    def fake_build_snapshot_v3_envelope(selected_contests, *, standings_limit, generated_at=None):
+        called["selected_contests"] = selected_contests
+        called["standings_limit"] = standings_limit
+        called["generated_at"] = generated_at
         return {
-            "snapshot_version": "v1",
-            "snapshot_generated_at_utc": "2026-02-14T10:00:00Z",
-            "sport": "NBA",
-            "contest": _canonical_contest_seed(contest_id="1", name="NBA Contest"),
-            "selection": {"selected_contest_id": "1", "reason": {}},
-            "candidates": [],
-            "cash_line": {},
-            "vip_lineups": [],
-            "ownership": {"ownership_remaining_total_pct": 1.0},
-            "train_clusters": [],
-            "standings": [],
-            "truncation": {},
-            "metadata": {"warnings": [], "missing_fields": [], "source_endpoints": []},
+            "schema_version": 3,
+            "snapshot_at": "2026-02-14T10:00:00Z",
+            "generated_at": "2026-02-14T10:00:00Z",
+            "sports": {
+                "nba": {
+                    "status": "ok",
+                    "updated_at": "2026-02-14T10:00:00Z",
+                    "players": [],
+                    "primary_contest": {
+                        "contest_id": "1",
+                        "contest_key": "nba:1",
+                        "selection_reason": {"mode": "explicit_id"},
+                        "selected_at": "2026-02-14T10:00:00Z",
+                    },
+                    "contests": [],
+                }
+            },
         }
 
-    monkeypatch.setattr(export_command, "build_snapshot", fake_build_snapshot)
+    monkeypatch.setattr(export_command, "build_snapshot_v3_envelope", fake_build_snapshot_v3_envelope)
     args = Namespace(
         sport="nba",
         contest_id=None,
@@ -266,7 +272,7 @@ def test_cli_export_fixture_calls_build_snapshot(monkeypatch, tmp_path):
     rc = export_command.run_export_fixture(args)
 
     assert rc == 0
-    assert called["sport"] == "NBA"
+    assert called["selected_contests"] == {"NBA": None}
     assert called["standings_limit"] == 500
 
 
@@ -275,21 +281,25 @@ def test_cli_export_fixture_defaults_out_path_when_missing(monkeypatch, tmp_path
     monkeypatch.setattr(export_command, "configure_runtime", lambda: None)
     monkeypatch.setattr(
         export_command,
-        "build_snapshot",
-        lambda **_kwargs: {
-            "snapshot_version": "v1",
-            "snapshot_generated_at_utc": "2026-02-14T10:00:00Z",
-            "sport": "NBA",
-            "contest": _canonical_contest_seed(contest_id="42", name="NBA Contest"),
-            "selection": {"selected_contest_id": "42", "reason": {}},
-            "candidates": [],
-            "cash_line": {},
-            "vip_lineups": [],
-            "ownership": {"ownership_remaining_total_pct": 1.0},
-            "train_clusters": [],
-            "standings": [],
-            "truncation": {},
-            "metadata": {"warnings": [], "missing_fields": [], "source_endpoints": []},
+        "build_snapshot_v3_envelope",
+        lambda *_args, **_kwargs: {
+            "schema_version": 3,
+            "snapshot_at": "2026-02-14T10:00:00Z",
+            "generated_at": "2026-02-14T10:00:00Z",
+            "sports": {
+                "nba": {
+                    "status": "ok",
+                    "updated_at": "2026-02-14T10:00:00Z",
+                    "players": [],
+                    "primary_contest": {
+                        "contest_id": "42",
+                        "contest_key": "nba:42",
+                        "selection_reason": {"mode": "explicit_id"},
+                        "selected_at": "2026-02-14T10:00:00Z",
+                    },
+                    "contests": [],
+                }
+            },
         },
     )
     args = Namespace(
@@ -453,25 +463,20 @@ def test_standalone_main_publish_routes_publish_helper(monkeypatch, tmp_path):
 def test_run_export_bundle_writes_two_sports(monkeypatch, tmp_path):
     monkeypatch.setattr(export_command, "configure_runtime", lambda: None)
 
-    def _fake_build_snapshot(*, sport: str, contest_id: int | None, standings_limit: int):
+    def _fake_build_snapshot_v3_envelope(selected_contests, *, standings_limit, generated_at=None):
+        assert selected_contests == {"NBA": 123, "GOLF": 456}
+        assert standings_limit == 42
         return {
-            "snapshot_version": "v1",
-            "snapshot_generated_at_utc": "2026-02-14T10:00:00Z",
-            "sport": sport,
-            "contest": _canonical_contest_seed(contest_id=contest_id, name=f"{sport} Contest", sport=sport.lower()),
-            "selection": {"selected_contest_id": contest_id, "reason": {}},
-            "candidates": [],
-            "cash_line": {},
-            "vip_lineups": [],
-            "players": [{"name": "A"}, {"name": "C"}],
-            "ownership": {"ownership_remaining_total_pct": 1.0},
-            "train_clusters": [],
-            "standings": [],
-            "truncation": {"limit": standings_limit},
-            "metadata": {"warnings": [], "missing_fields": [], "source_endpoints": []},
+            "schema_version": 3,
+            "snapshot_at": "2026-02-14T10:00:00Z",
+            "generated_at": "2026-02-14T10:00:00Z",
+            "sports": {
+                "nba": {"primary_contest": {"contest_id": "123"}},
+                "golf": {"primary_contest": {"contest_id": "456"}},
+            },
         }
 
-    monkeypatch.setattr(export_command, "build_snapshot", _fake_build_snapshot)
+    monkeypatch.setattr(export_command, "build_snapshot_v3_envelope", _fake_build_snapshot_v3_envelope)
     out = tmp_path / "bundle.json"
     args = Namespace(
         item=["NBA:123", "GOLF:456"],
@@ -483,7 +488,7 @@ def test_run_export_bundle_writes_two_sports(monkeypatch, tmp_path):
     payload = out.read_text(encoding="utf-8")
 
     assert rc == 0
-    assert '"schema_version":2' in payload
+    assert '"schema_version":3' in payload
     assert '"nba"' in payload
     assert '"golf"' in payload
     assert '"contest_id":"123"' in payload
@@ -492,26 +497,18 @@ def test_run_export_bundle_writes_two_sports(monkeypatch, tmp_path):
 
 def test_run_export_bundle_applies_generated_at_override(monkeypatch, tmp_path):
     monkeypatch.setattr(export_command, "configure_runtime", lambda: None)
+    called = {}
 
-    def _fake_build_snapshot(*, sport: str, contest_id: int | None, standings_limit: int):
+    def _fake_build_snapshot_v3_envelope(selected_contests, *, standings_limit, generated_at=None):
+        called["generated_at"] = generated_at
         return {
-            "snapshot_version": "v1",
-            "snapshot_generated_at_utc": "2026-02-14T10:00:00Z",
-            "sport": sport,
-            "contest": _canonical_contest_seed(contest_id=contest_id, name=f"{sport} Contest", sport=sport.lower()),
-            "selection": {"selected_contest_id": contest_id, "reason": {}},
-            "candidates": [],
-            "cash_line": {},
-            "vip_lineups": [],
-            "players": [{"name": "A"}],
-            "ownership": {"ownership_remaining_total_pct": 1.0},
-            "train_clusters": [],
-            "standings": [],
-            "truncation": {"limit": standings_limit},
-            "metadata": {"warnings": [], "missing_fields": [], "source_endpoints": []},
+            "schema_version": 3,
+            "snapshot_at": generated_at,
+            "generated_at": generated_at,
+            "sports": {"nba": {"primary_contest": {"contest_id": "123"}}},
         }
 
-    monkeypatch.setattr(export_command, "build_snapshot", _fake_build_snapshot)
+    monkeypatch.setattr(export_command, "build_snapshot_v3_envelope", _fake_build_snapshot_v3_envelope)
     out = tmp_path / "bundle-generated-at.json"
     args = Namespace(
         item=["NBA:123"],
@@ -524,31 +521,25 @@ def test_run_export_bundle_applies_generated_at_override(monkeypatch, tmp_path):
     payload = json.loads(out.read_text(encoding="utf-8"))
 
     assert rc == 0
+    assert called["generated_at"] == "2026-02-25T11:22:33.999+00:00"
     assert payload["generated_at"] == "2026-02-25T11:22:33Z"
 
 
 def test_run_export_fixture_applies_generated_at_override(monkeypatch, tmp_path):
     monkeypatch.setattr(export_command, "configure_runtime", lambda: None)
+    called = {}
 
     monkeypatch.setattr(
         export_command,
-        "build_snapshot",
-        lambda **_kwargs: {
-            "snapshot_version": "v1",
-            "snapshot_generated_at_utc": "2026-02-14T10:00:00Z",
-            "sport": "NBA",
-            "contest": _canonical_contest_seed(contest_id="123", name="NBA Contest"),
-            "selection": {"selected_contest_id": "123", "reason": {}},
-            "candidates": [],
-            "cash_line": {},
-            "vip_lineups": [],
-            "players": [{"name": "A"}],
-            "ownership": {"ownership_remaining_total_pct": 1.0},
-            "train_clusters": [],
-            "standings": [],
-            "truncation": {"limit": 42},
-            "metadata": {"warnings": [], "missing_fields": [], "source_endpoints": []},
-        },
+        "build_snapshot_v3_envelope",
+        lambda *_args, **kwargs: (
+            called.update({"generated_at": kwargs.get("generated_at")}) or {
+                "schema_version": 3,
+                "snapshot_at": kwargs.get("generated_at"),
+                "generated_at": kwargs.get("generated_at"),
+                "sports": {"nba": {"primary_contest": {"contest_id": "123"}}},
+            }
+        ),
     )
     out = tmp_path / "fixture-generated-at.json"
     args = Namespace(
@@ -563,6 +554,7 @@ def test_run_export_fixture_applies_generated_at_override(monkeypatch, tmp_path)
     payload = json.loads(out.read_text(encoding="utf-8"))
 
     assert rc == 0
+    assert called["generated_at"] == "2026-02-25T11:22:33.999+00:00"
     assert payload["generated_at"] == "2026-02-25T11:22:33Z"
 
 
@@ -570,59 +562,30 @@ def test_run_export_fixture_emits_envelope_and_contract_sections(monkeypatch, tm
     monkeypatch.setattr(export_command, "configure_runtime", lambda: None)
     monkeypatch.setattr(
         export_command,
-        "build_snapshot",
-        lambda **_kwargs: {
-            "snapshot_version": "v1",
-            "snapshot_generated_at_utc": "2026-02-14T10:00:00Z",
-            "sport": "NBA",
-            "contest": {
-                **_canonical_contest_seed(contest_id=188080404, name="NBA Single Entry"),
-                "start_time": "2026-02-14T01:00:00Z",
-                "entry_fee_cents": None,
-                "entry_fee": 10,
-                "prize_pool_cents": 500000,
-                "positions_paid": 200,
-            },
-            "selection": {
-                "selected_contest_id": 188080404,
-                "reason": {"mode": "explicit_id"},
-            },
-            "cash_line": {"cutoff_type": "positions_paid", "rank": 200, "points": 250.5},
-            "vip_lineups": [
-                {"username": "vip1", "entry_key": "1", "rank": 2, "pts": 249.0, "pmr": 12.0, "lineup": ["A", "B"]}
-            ],
-            "players": [{"name": "A"}, {"name": "B"}],
-            "ownership": {
-                "ownership_remaining_total_pct": 123.4,
-                "watchlist_entries": [{"entry_key": "1", "display_name": "A", "ownership_remaining_pct": 40.0}],
-                "top_remaining_players": [{"player_name": "A", "ownership_remaining_pct": 40.0}],
-            },
-            "train_clusters": [
-                {
-                    "cluster_id": "abc123",
-                    "user_count": 2,
-                    "rank": 3,
-                    "points": 249.0,
-                    "pmr": 10.0,
-                    "lineup_signature": "A|B",
-                    "entry_keys": ["1"],
+        "build_snapshot_v3_envelope",
+        lambda *_args, **_kwargs: {
+            "schema_version": 3,
+            "snapshot_at": "2026-02-14T10:00:00Z",
+            "generated_at": "2026-02-14T10:00:00Z",
+            "sports": {
+                "nba": {
+                    "status": "ok",
+                    "updated_at": "2026-02-14T10:00:00Z",
+                    "players": [{"name": "A"}, {"name": "B"}],
+                    "primary_contest": {
+                        "contest_id": "188080404",
+                        "contest_key": "nba:188080404",
+                        "selection_reason": {"mode": "explicit_id"},
+                        "selected_at": "2026-02-14T10:00:00Z",
+                    },
+                    "contests": [
+                        {
+                            **_canonical_contest_seed(contest_id="188080404", name="NBA Single Entry", sport="nba"),
+                            "contest_key": "nba:188080404",
+                        }
+                    ],
                 }
-            ],
-            "standings": [
-                {
-                    "entry_key": "1",
-                    "username": "u1",
-                    "rank": 2,
-                    "points": 249.0,
-                    "pmr": "12.0",
-                    "ownership_remaining_total_pct": "33.0",
-                }
-            ],
-            "truncation": {
-                "applied": True,
-                "total_rows_before_truncation": 500,
             },
-            "metadata": {"warnings": [], "missing_fields": [], "source_endpoints": []},
         },
     )
 
@@ -641,7 +604,7 @@ def test_run_export_fixture_emits_envelope_and_contract_sections(monkeypatch, tm
     contest = sport["contests"][0]
 
     assert rc == 0
-    assert payload["schema_version"] == 2
+    assert payload["schema_version"] == 3
     assert payload["generated_at"].endswith("Z")
     assert payload["snapshot_at"].endswith("Z")
     assert set(sport.keys()) == {
@@ -653,7 +616,7 @@ def test_run_export_fixture_emits_envelope_and_contract_sections(monkeypatch, tm
     }
     assert sport["status"] == "ok"
     assert sport["primary_contest"]["contest_id"] == "188080404"
-    assert sport["primary_contest"]["selection_reason"] == "explicit_id contest_id=188080404"
+    assert isinstance(sport["primary_contest"]["selection_reason"], dict)
     assert contest["contest_id"] == "188080404"
     required_canonical_fields = {
         "contest_id": str,
@@ -666,74 +629,55 @@ def test_run_export_fixture_emits_envelope_and_contract_sections(monkeypatch, tm
         "entry_fee_cents": int,
         "prize_pool_cents": int,
         "currency": str,
+        "entries_count": int,
         "max_entries": int,
-        "max_entries_per_user": int,
     }
     for field_name, expected_type in required_canonical_fields.items():
         assert field_name in contest
         assert contest[field_name] is not None
         assert type(contest[field_name]) is expected_type
     assert contest["entry_fee_cents"] == 1000
-    assert isinstance(contest.get("entries_count"), int)
-    assert "start_time_utc" not in contest
-    assert sport["primary_contest"]["contest_key"] is not None
-    assert sport["primary_contest"]["contest_key"] == contest["contest_key"]
-    assert contest["is_primary"] is True
     assert contest["entries_count"] == 1000
-    assert contest["live_metrics"]["cash_line"]["cutoff_type"] == "rank"
-    assert contest["live_metrics"]["cash_line"]["rank_cutoff"] == 200
-    assert contest["live_metrics"]["cash_line"]["points_cutoff"] == 250.5
-    assert contest["ownership_watchlist"]["entries"][0]["display_name"] == "A"
-    assert contest["ownership_watchlist"]["top_n_default"] == 10
-    assert "ownership_remaining_total_pct" in contest["ownership_watchlist"]
-    assert contest["standings"]["is_truncated"] is True
-    assert contest["standings"]["total_rows"] == 500
-    assert contest["standings"]["rows"][0]["display_name"] == "u1"
-    assert "ownership_remaining_pct" in contest["standings"]["rows"][0]
-    assert "ownership_remaining_total_pct" not in contest["standings"]["rows"][0]
-    assert isinstance(contest["standings"]["rows"][0]["pmr"], float)
-    assert contest["train_clusters"]["clusters"][0]["composition"][0]["player_name"] == "A"
-    assert contest["train_clusters"]["cluster_rule"] == {"type": "shared_slots", "min_shared": 2}
-    assert contest["train_clusters"]["clusters"][0]["cluster_key"] == "abc123"
-    assert contest["train_clusters"]["clusters"][0]["entry_count"] == 2
-    assert contest["train_clusters"]["clusters"][0]["sample_entries"][0]["entry_key"] == "1"
-    assert contest["train_clusters"]["clusters"][0]["sample_entries"][0]["display_name"] == "u1"
-    assert contest["vip_lineups"][0]["slots"][0]["player_name"] == "A"
-    assert contest["vip_lineups"][0]["display_name"] == "vip1"
-    assert contest["vip_lineups"][0]["live"]["current_rank"] == 2
-    assert contest["vip_lineups"][0]["live"]["pmr"] == 12.0
-    assert isinstance(contest["vip_lineups"][0]["live"]["pmr"], float)
-    assert "username" not in json.dumps(payload)
-    assert "selection" not in sport
-    assert "contest" not in sport
-    assert "metadata" not in sport
-    assert "candidates" not in sport
-    assert "cash_line" not in sport
-    assert "ownership" not in sport
-    assert "standings" not in sport
+    assert sport["primary_contest"]["contest_key"] == contest["contest_key"]
 
 
 def test_run_export_bundle_emits_contests_primary_contest_and_players(monkeypatch, tmp_path):
     monkeypatch.setattr(export_command, "configure_runtime", lambda: None)
 
-    def _fake_build_snapshot(*, sport: str, contest_id: int | None, standings_limit: int):
+    def _fake_build_snapshot_v3_envelope(_selected_contests, *, standings_limit, generated_at=None):
         return {
-            "snapshot_version": "v1",
-            "snapshot_generated_at_utc": "2026-02-14T10:00:00Z",
-            "sport": sport,
-            "contest": _canonical_contest_seed(contest_id=contest_id, name=f"{sport} contest", sport=sport.lower()),
-            "selection": {"selected_contest_id": contest_id, "reason": {"mode": "explicit_id"}},
-            "cash_line": {"cutoff_type": "positions_paid", "rank": 10, "points": 99.9},
-            "vip_lineups": [],
-            "players": [{"name": "Player One"}],
-            "ownership": {"ownership_remaining_total_pct": 10.0, "top_remaining_players": []},
-            "train_clusters": [],
-            "standings": [],
-            "truncation": {"applied": False, "total_rows_before_truncation": 0},
-            "metadata": {"warnings": [], "missing_fields": [], "source_endpoints": []},
+            "schema_version": 3,
+            "snapshot_at": "2026-02-14T10:00:00Z",
+            "generated_at": "2026-02-14T10:00:00Z",
+            "sports": {
+                "nba": {
+                    "status": "ok",
+                    "updated_at": "2026-02-14T10:00:00Z",
+                    "players": [{"name": "Player One"}],
+                    "primary_contest": {"contest_id": "123", "contest_key": "nba:123"},
+                    "contests": [
+                        {
+                            **_canonical_contest_seed(contest_id="123", name="NBA contest", sport="nba"),
+                            "contest_key": "nba:123",
+                        }
+                    ],
+                },
+                "golf": {
+                    "status": "ok",
+                    "updated_at": "2026-02-14T10:00:00Z",
+                    "players": [],
+                    "primary_contest": {"contest_id": "456", "contest_key": "golf:456"},
+                    "contests": [
+                        {
+                            **_canonical_contest_seed(contest_id="456", name="GOLF contest", sport="golf"),
+                            "contest_key": "golf:456",
+                        }
+                    ],
+                },
+            },
         }
 
-    monkeypatch.setattr(export_command, "build_snapshot", _fake_build_snapshot)
+    monkeypatch.setattr(export_command, "build_snapshot_v3_envelope", _fake_build_snapshot_v3_envelope)
 
     out = tmp_path / "bundle-contract.json"
     rc = export_command.run_export_bundle(
@@ -746,15 +690,11 @@ def test_run_export_bundle_emits_contests_primary_contest_and_players(monkeypatc
     payload = json.loads(out.read_text(encoding="utf-8"))
 
     assert rc == 0
-    assert payload["schema_version"] == 2
+    assert payload["schema_version"] == 3
     assert sorted(payload["sports"].keys()) == ["golf", "nba"]
     assert payload["sports"]["nba"]["primary_contest"]["contest_id"] == "123"
-    assert isinstance(payload["sports"]["nba"]["primary_contest"]["selection_reason"], str)
     assert payload["sports"]["golf"]["contests"][0]["contest_id"] == "456"
     assert payload["sports"]["nba"]["players"][0]["name"] == "Player One"
-    assert "selection" not in payload["sports"]["nba"]
-    assert "contest" not in payload["sports"]["nba"]
-    assert payload["sports"]["golf"]["contests"][0]["ownership_watchlist"]["top_n_default"] == 10
 
 
 def test_run_publish_snapshot_writes_latest_and_manifest(monkeypatch, tmp_path):

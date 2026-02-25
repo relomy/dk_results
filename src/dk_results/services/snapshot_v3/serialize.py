@@ -9,7 +9,7 @@ from typing import Any
 from dk_results.services.json_stable import to_stable_json
 
 
-def _to_rfc3339_utc_seconds(value: str) -> str:
+def normalize_rfc3339_utc_seconds(value: str) -> str:
     parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
     if parsed.tzinfo is None:
         parsed = parsed.replace(tzinfo=timezone.utc)
@@ -30,5 +30,5 @@ def serialize_payload(
     if not chosen_generated_at and require_generated_at:
         raise ValueError("generated_at is required when deterministic serialization is enabled")
     if chosen_generated_at:
-        normalized["generated_at"] = _to_rfc3339_utc_seconds(str(chosen_generated_at))
+        normalized["generated_at"] = normalize_rfc3339_utc_seconds(str(chosen_generated_at))
     return to_stable_json(normalized)
