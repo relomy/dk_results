@@ -6,7 +6,7 @@ import copy
 from datetime import datetime, timezone
 from typing import Any
 
-from dk_results.services.snapshot_exporter import to_stable_json
+from dk_results.services.json_stable import to_stable_json
 
 
 def _to_rfc3339_utc_seconds(value: str) -> str:
@@ -32,4 +32,3 @@ def serialize_payload(
     if chosen_generated_at:
         normalized["generated_at"] = _to_rfc3339_utc_seconds(str(chosen_generated_at))
     return to_stable_json(normalized)
-

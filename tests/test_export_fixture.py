@@ -527,6 +527,45 @@ def test_run_export_bundle_applies_generated_at_override(monkeypatch, tmp_path):
     assert payload["generated_at"] == "2026-02-25T11:22:33Z"
 
 
+def test_run_export_fixture_applies_generated_at_override(monkeypatch, tmp_path):
+    monkeypatch.setattr(export_command, "configure_runtime", lambda: None)
+
+    monkeypatch.setattr(
+        export_command,
+        "build_snapshot",
+        lambda **_kwargs: {
+            "snapshot_version": "v1",
+            "snapshot_generated_at_utc": "2026-02-14T10:00:00Z",
+            "sport": "NBA",
+            "contest": _canonical_contest_seed(contest_id="123", name="NBA Contest"),
+            "selection": {"selected_contest_id": "123", "reason": {}},
+            "candidates": [],
+            "cash_line": {},
+            "vip_lineups": [],
+            "players": [{"name": "A"}],
+            "ownership": {"ownership_remaining_total_pct": 1.0},
+            "train_clusters": [],
+            "standings": [],
+            "truncation": {"limit": 42},
+            "metadata": {"warnings": [], "missing_fields": [], "source_endpoints": []},
+        },
+    )
+    out = tmp_path / "fixture-generated-at.json"
+    args = Namespace(
+        sport="NBA",
+        contest_id=123,
+        out=str(out),
+        standings_limit=42,
+        generated_at="2026-02-25T11:22:33.999+00:00",
+    )
+
+    rc = export_command.run_export_fixture(args)
+    payload = json.loads(out.read_text(encoding="utf-8"))
+
+    assert rc == 0
+    assert payload["generated_at"] == "2026-02-25T11:22:33Z"
+
+
 def test_run_export_fixture_emits_envelope_and_contract_sections(monkeypatch, tmp_path):
     monkeypatch.setattr(export_command, "configure_runtime", lambda: None)
     monkeypatch.setattr(
