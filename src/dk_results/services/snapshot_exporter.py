@@ -195,6 +195,31 @@ def _ownership_remaining_for_user(user: Any) -> float | None:
     return total
 
 
+def _avg_salary_per_player_remaining(users: list[Any]) -> float | None:
+    total_salary = 0.0
+    remaining_slots = 0
+    saw_any_slot = False
+    for user in users:
+        lineup_obj = getattr(user, "lineupobj", None)
+        if not lineup_obj:
+            continue
+        for player in getattr(lineup_obj, "lineup", []):
+            saw_any_slot = True
+            if str(getattr(player, "game_info", "")).strip() == "Final":
+                continue
+            salary = _to_float(getattr(player, "salary", None))
+            if not isinstance(salary, (int, float)):
+                continue
+            total_salary += float(salary)
+            remaining_slots += 1
+
+    if remaining_slots > 0:
+        return total_salary / float(remaining_slots)
+    if saw_any_slot:
+        return 0.0
+    return None
+
+
 def _lineup_signature(user: Any) -> str:
     lineup_obj = getattr(user, "lineupobj", None)
     if not lineup_obj:
@@ -587,6 +612,7 @@ def collect_snapshot_data(
             if row["ownership_remaining_total_pct"] is not None
         ]
         ownership_remaining_total = sum(ownership_values) / len(ownership_values) if ownership_values else None
+        avg_salary_per_player_remaining = _avg_salary_per_player_remaining(results.users)
 
         top_remaining_players: list[dict[str, Any]] = []
         if results.non_cashing_users > 0:
@@ -724,6 +750,7 @@ def collect_snapshot_data(
             "players": players,
             "ownership": {
                 "ownership_remaining_total_pct": ownership_remaining_total,
+                "avg_salary_per_player_remaining": avg_salary_per_player_remaining,
                 "non_cashing_user_count": results.non_cashing_users,
                 "non_cashing_avg_pmr": results.non_cashing_avg_pmr,
                 "watchlist_entries": watchlist_entries,
@@ -1472,6 +1499,7 @@ def _non_cashing_metrics(ownership_source: dict[str, Any] | None) -> dict[str, A
 
 def _threat_metrics(
     ownership_watchlist: dict[str, Any] | None,
+    ownership_source: dict[str, Any] | None,
     vip_lineups: list[dict[str, Any]],
 ) -> dict[str, Any] | None:
     if not ownership_watchlist:
@@ -1499,21 +1527,36 @@ def _threat_metrics(
         names = {str(slot.get("player_name")).strip().lower() for slot in slots if slot.get("player_name")}
         vip_lineup_players.append(names)
 
+    top_swing_source: list[dict[str, Any]] = []
+    if isinstance(ownership_source, dict):
+        source_rows = ownership_source.get("non_cashing_top_remaining_players")
+        if not isinstance(source_rows, list):
+            source_rows = ownership_source.get("top_remaining_players")
+        if isinstance(source_rows, list):
+            top_swing_source = [row for row in source_rows if isinstance(row, dict)]
+
+    top_n_default = _rank_numeric((ownership_watchlist or {}).get("top_n_default")) or 10
+    if top_n_default <= 0:
+        top_n_default = 10
+
     top_swing: list[dict[str, Any]] = []
-    for entry in sorted(
-        entries,
-        key=lambda item: item.get("ownership_remaining_pct") or 0,
-        reverse=True,
-    ):
-        name = entry.get("display_name") or entry.get("entry_key")
-        if not name:
+    for row in sorted(
+        top_swing_source,
+        key=lambda item: (
+            0 if isinstance(_to_float(item.get("ownership_remaining_pct")), (int, float)) else 1,
+            -float(_to_float(item.get("ownership_remaining_pct")) or 0),
+            str(item.get("player_name") or item.get("display_name") or item.get("entry_key") or ""),
+        ),
+    )[:top_n_default]:
+        name = row.get("player_name") or row.get("display_name") or row.get("entry_key")
+        if name in (None, ""):
             continue
         name_key = str(name).strip().lower()
         vip_count = sum(1 for names in vip_lineup_players if name_key in names)
         top_swing.append(
             {
                 "player_name": name,
-                "remaining_ownership_pct": entry.get("ownership_remaining_pct"),
+                "remaining_ownership_pct": _to_float(row.get("ownership_remaining_pct")),
                 "vip_count": vip_count,
             }
         )
@@ -1847,6 +1890,7 @@ def build_dashboard_sport_snapshot(snapshot: dict[str, Any], generated_at: str) 
             metrics["ownership_summary"] = ownership_summary
     threat = _threat_metrics(
         contest_object.get("ownership_watchlist"),
+        ownership_source if isinstance(ownership_source, dict) else None,
         contest_object.get("vip_lineups", []),
     )
     if threat:
@@ -1859,10 +1903,15 @@ def build_dashboard_sport_snapshot(snapshot: dict[str, Any], generated_at: str) 
         metrics["trains"] = trains
     if metrics:
         contest_object["metrics"] = {"updated_at": updated_at, **metrics}
-    contest_object["live_metrics"] = {
+    live_metrics: dict[str, Any] = {
         "updated_at": updated_at,
         "cash_line": cash_line,
     }
+    if isinstance(ownership_source, dict):
+        avg_salary_per_player_remaining = _to_float(ownership_source.get("avg_salary_per_player_remaining"))
+        if isinstance(avg_salary_per_player_remaining, (int, float)):
+            live_metrics["avg_salary_per_player_remaining"] = float(avg_salary_per_player_remaining)
+    contest_object["live_metrics"] = live_metrics
     contest_object.pop("ownership", None)
     contest_object.pop("selection", None)
     contest_object.pop("truncation", None)

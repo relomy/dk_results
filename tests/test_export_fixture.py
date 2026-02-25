@@ -1729,6 +1729,62 @@ def test_threat_metrics_leverage_and_vip_counts(monkeypatch):
     assert threat["vip_vs_field_leverage"][0]["uniqueness_delta_pct"] == 90.0
 
 
+def test_threat_top_swing_uses_player_level_source_not_watchlist_usernames(monkeypatch):
+    monkeypatch.setattr(
+        snapshot_exporter,
+        "collect_snapshot_data",
+        lambda **_kwargs: {
+            "snapshot_version": "v1",
+            "sport": "NBA",
+            "contest": {"contest_id": 123, "is_primary": True, "name": "x"},
+            "selection": {"selected_contest_id": 123, "reason": {}},
+            "candidates": [],
+            "cash_line": {"cutoff_type": "points", "points": 100.0},
+            "vip_lineups": [
+                {
+                    "entry_key": "vip-1",
+                    "pts": 99.0,
+                    "rank": 50,
+                    "username": "vip",
+                    "players": [{"name": "Jalen Johnson"}, {"name": "Cam Spencer"}],
+                }
+            ],
+            "players": [{"name": "Jalen Johnson"}, {"name": "Cam Spencer"}],
+            "ownership": {
+                "ownership_remaining_total_pct": 120.0,
+                "watchlist_entries": [
+                    {"entry_key": "entry-a", "display_name": "hoagies69", "ownership_remaining_pct": 40.0},
+                    {"entry_key": "entry-b", "display_name": "ryhenicee", "ownership_remaining_pct": 20.0},
+                ],
+                "non_cashing_top_remaining_players": [
+                    {"player_name": "Jalen Johnson", "ownership_remaining_pct": 40.0},
+                    {"player_name": "Cam Spencer", "ownership_remaining_pct": 20.0},
+                ],
+            },
+            "train_clusters": [],
+            "standings": [
+                {
+                    "entry_key": "vip-1",
+                    "username": "vip",
+                    "ownership_remaining_total_pct": 30.0,
+                }
+            ],
+            "truncation": {},
+            "metadata": {"warnings": [], "missing_fields": [], "source_endpoints": []},
+        },
+    )
+
+    snapshot = snapshot_exporter.build_snapshot(sport="NBA")
+    envelope = snapshot_exporter.build_dashboard_envelope({"NBA": snapshot})
+    threat = envelope["sports"]["nba"]["contests"][0]["metrics"]["threat"]
+
+    player_names = [row["player_name"] for row in threat.get("top_swing_players", [])]
+    assert player_names[:2] == ["Jalen Johnson", "Cam Spencer"]
+    assert "hoagies69" not in player_names
+    assert "ryhenicee" not in player_names
+    assert threat["top_swing_players"][0]["vip_count"] == 1
+
+
 def test_distance_to_cash_metrics_rank_only_emits_rank_delta(monkeypatch):
     monkeypatch.setattr(
         snapshot_exporter,
@@ -1758,6 +1814,133 @@ def test_distance_to_cash_metrics_rank_only_emits_rank_delta(monkeypatch):
     assert len(metrics["per_vip"]) == 1
     assert metrics["per_vip"][0]["rank_delta"] == 2
     assert "points_delta" not in metrics["per_vip"][0]
+
+
+def test_collect_snapshot_data_emits_avg_salary_per_player_remaining(monkeypatch, tmp_path):
+    class _FakeSport:
+        name = "NBA"
+        sheet_min_entry_fee = 25
+        keyword = "%"
+
+    class _LineupPlayer:
+        def __init__(self, salary: int, game_info: str):
+            self.game_info = game_info
+            self.ownership = 0.2
+            self.name = "A"
+            self.salary = salary
+
+    class _LineupObj:
+        def __init__(self, players):
+            self.lineup = players
+
+    class _FakeUser:
+        def __init__(self, *, rank: int, entry_key: str, name: str, points: float, lineup_players: list[_LineupPlayer]):
+            self.rank = rank
+            self.player_id = entry_key
+            self.name = name
+            self.pmr = "10.0"
+            self.pts = points
+            self.lineupobj = _LineupObj(lineup_players)
+
+    class _FakePlayer:
+        name = "A"
+        pos = "PG"
+        roster_pos = ["PG"]
+        salary = 5000
+        team_abbv = "LAL"
+        game_info = "In Progress"
+        matchup_info = "LAL@BOS"
+        ownership = 0.2
+        fpts = 12.0
+        value = 2.4
+
+    class _FakeContestDb:
+        def get_live_contest_candidates(self, *_args, **_kwargs):
+            return []
+
+        def get_contest_by_id(self, *_args, **_kwargs):
+            return (123, "NBA Contest", 777, 50, "2026-02-14 01:00:00", 10, 1500)
+
+        def get_contest_state(self, *_args, **_kwargs):
+            return ("In Progress", 0)
+
+        def get_contest_contract_metadata(self, *_args, **_kwargs):
+            return (250000, 1500, 1, 114)
+
+        def close(self):
+            return None
+
+    class _FakeDraftKings:
+        def download_salary_csv(self, _sport, _draft_group, filename):
+            path = tmp_path / "salary.csv"
+            path.write_text("Position,Name,Salary\nPG,A,5000\n", encoding="utf-8")
+
+        def download_contest_rows(self, *_args, **_kwargs):
+            return [
+                ["Rank", "EntryId", "EntryName", "TimeRemaining", "Points", "Lineup"],
+                ["1", "ek1", "vip1", "0", "336.25", "PG A"],
+                ["2", "ek2", "vip2", "0", "320.0", "PG A"],
+            ]
+
+        def get_vip_lineups(self, *_args, **_kwargs):
+            return []
+
+        def get_leaderboard(self, *_args, **_kwargs):
+            return {"leaderBoard": []}
+
+    class _FakeResults:
+        def __init__(self, *_args, **_kwargs):
+            user_one = _FakeUser(
+                rank=1,
+                entry_key="ek1",
+                name="vip1",
+                points=336.25,
+                lineup_players=[
+                    _LineupPlayer(salary=6000, game_info="In Progress"),
+                    _LineupPlayer(salary=7000, game_info="Final"),
+                ],
+            )
+            user_two = _FakeUser(
+                rank=2,
+                entry_key="ek2",
+                name="vip2",
+                points=320.0,
+                lineup_players=[
+                    _LineupPlayer(salary=8000, game_info="In Progress"),
+                    _LineupPlayer(salary=7500, game_info="Final"),
+                ],
+            )
+            self.vip_list = [user_one, user_two]
+            self.players = {"A": _FakePlayer()}
+            self.users = [user_one, user_two]
+            self.non_cashing_users = 0
+            self.non_cashing_players = {}
+            self.non_cashing_avg_pmr = 0.0
+            self.min_rank = 50
+            self.min_cash_pts = 300.0
+
+    class _FakeTrainFinder:
+        def __init__(self, _users):
+            pass
+
+        def get_users_above_salary_spent(self, _limit):
+            return {}
+
+    monkeypatch.setattr(snapshot_exporter, "_sport_choices", lambda: {"NBA": _FakeSport})
+    monkeypatch.setattr(snapshot_exporter, "ContestDatabase", lambda _path: _FakeContestDb())
+    monkeypatch.setattr(snapshot_exporter, "Draftkings", _FakeDraftKings)
+    monkeypatch.setattr(snapshot_exporter, "Results", _FakeResults)
+    monkeypatch.setattr(snapshot_exporter, "TrainFinder", _FakeTrainFinder)
+    monkeypatch.setattr(snapshot_exporter, "load_vips", lambda: ["vip1", "vip2"])
+    monkeypatch.setattr(snapshot_exporter.state, "contests_db_path", lambda: tmp_path / "contests.db")
+    monkeypatch.setattr(snapshot_exporter, "SALARY_DIR", str(tmp_path))
+
+    snapshot = snapshot_exporter.build_snapshot(sport="NBA", contest_id=123)
+    envelope = snapshot_exporter.build_dashboard_envelope({"NBA": snapshot})
+    live_metrics = envelope["sports"]["nba"]["contests"][0]["live_metrics"]
+
+    # Remaining slots are salary 6000 and 8000 => avg 7000.
+    assert live_metrics["avg_salary_per_player_remaining"] == 7000.0
 
 
 def test_train_metrics_ranked_and_top_clusters(monkeypatch):
