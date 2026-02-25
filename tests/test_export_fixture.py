@@ -490,6 +490,43 @@ def test_run_export_bundle_writes_two_sports(monkeypatch, tmp_path):
     assert '"contest_id":"456"' in payload
 
 
+def test_run_export_bundle_applies_generated_at_override(monkeypatch, tmp_path):
+    monkeypatch.setattr(export_command, "configure_runtime", lambda: None)
+
+    def _fake_build_snapshot(*, sport: str, contest_id: int | None, standings_limit: int):
+        return {
+            "snapshot_version": "v1",
+            "snapshot_generated_at_utc": "2026-02-14T10:00:00Z",
+            "sport": sport,
+            "contest": _canonical_contest_seed(contest_id=contest_id, name=f"{sport} Contest", sport=sport.lower()),
+            "selection": {"selected_contest_id": contest_id, "reason": {}},
+            "candidates": [],
+            "cash_line": {},
+            "vip_lineups": [],
+            "players": [{"name": "A"}],
+            "ownership": {"ownership_remaining_total_pct": 1.0},
+            "train_clusters": [],
+            "standings": [],
+            "truncation": {"limit": standings_limit},
+            "metadata": {"warnings": [], "missing_fields": [], "source_endpoints": []},
+        }
+
+    monkeypatch.setattr(export_command, "build_snapshot", _fake_build_snapshot)
+    out = tmp_path / "bundle-generated-at.json"
+    args = Namespace(
+        item=["NBA:123"],
+        out=str(out),
+        standings_limit=42,
+        generated_at="2026-02-25T11:22:33.999+00:00",
+    )
+
+    rc = export_command.run_export_bundle(args)
+    payload = json.loads(out.read_text(encoding="utf-8"))
+
+    assert rc == 0
+    assert payload["generated_at"] == "2026-02-25T11:22:33Z"
+
+
 def test_run_export_fixture_emits_envelope_and_contract_sections(monkeypatch, tmp_path):
     monkeypatch.setattr(export_command, "configure_runtime", lambda: None)
     monkeypatch.setattr(

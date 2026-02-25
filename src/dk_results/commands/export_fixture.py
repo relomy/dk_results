@@ -13,6 +13,7 @@ from dk_results.services.snapshot_exporter import (
     to_stable_json,
     validate_canonical_snapshot,
 )
+from dk_results.services.snapshot_v3.serialize import serialize_payload
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +44,10 @@ def run_export_fixture(args: Any) -> int:
     if violations:
         logger.error("canonical contract violations=%s", ",".join(violations))
         raise ValueError("Canonical snapshot validation failed")
-    json_text = to_stable_json(envelope)
+    json_text = serialize_payload(
+        envelope,
+        generated_at=getattr(args, "generated_at", None),
+    )
     out_path = pathlib.Path(args.out) if getattr(args, "out", None) else _default_output_path(snapshot, sport)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(json_text, encoding="utf-8")
@@ -100,7 +104,13 @@ def run_export_bundle(args: Any) -> int:
         raise ValueError("Canonical snapshot validation failed")
     out_path = pathlib.Path(args.out)
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text(to_stable_json(payload), encoding="utf-8")
+    out_path.write_text(
+        serialize_payload(
+            payload,
+            generated_at=getattr(args, "generated_at", None),
+        ),
+        encoding="utf-8",
+    )
 
     logger.info("bundle candidate count=%d", len(parsed_items))
     logger.info("bundle output path=%s", out_path)

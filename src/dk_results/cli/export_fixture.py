@@ -17,6 +17,10 @@ def build_parser() -> argparse.ArgumentParser:
         default=DEFAULT_STANDINGS_LIMIT,
         help="Maximum number of standings rows to include",
     )
+    parser.add_argument(
+        "--generated-at",
+        help="Optional RFC3339 timestamp override for deterministic generated_at output.",
+    )
     return parser
 
 
@@ -34,6 +38,10 @@ def build_bundle_parser() -> argparse.ArgumentParser:
         type=int,
         default=DEFAULT_STANDINGS_LIMIT,
         help="Maximum number of standings rows to include per sport",
+    )
+    parser.add_argument(
+        "--generated-at",
+        help="Optional RFC3339 timestamp override for deterministic generated_at output.",
     )
     return parser
 
