@@ -79,6 +79,7 @@ def test_builder_places_live_metrics_and_metrics_and_omits_unavailable_sections(
 
     contest = payload["contests"][0]
     assert "live_metrics" in contest
+    assert contest["live_metrics"]["updated_at"] == "2026-02-25T10:11:12Z"
     assert contest["live_metrics"]["cash_line"]["points_cutoff"] == 250.5
     assert contest["live_metrics"]["avg_salary_per_player_remaining"] == 6158.0
     assert "metrics" in contest

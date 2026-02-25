@@ -2,9 +2,117 @@
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from dk_results.services.snapshot_exporter import DEFAULT_STANDINGS_LIMIT, collect_snapshot_data
+
+
+def _to_float(value: Any) -> float | None:
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, str):
+        text = value.strip().replace("$", "").replace(",", "")
+        if not text:
+            return None
+        try:
+            return float(text)
+        except ValueError:
+            return None
+    return None
+
+
+def _is_live_from_slot(slot: dict[str, Any]) -> bool:
+    raw_is_live = slot.get("is_live")
+    if isinstance(raw_is_live, bool):
+        return raw_is_live
+
+    for key in ("time_remaining_minutes", "timeRemaining", "timeStatus", "time_remaining_display"):
+        minutes = _to_float(slot.get(key))
+        if minutes is not None:
+            return minutes > 0
+
+    status_text = str(slot.get("game_status") or slot.get("status") or "").strip().lower()
+    if not status_text:
+        return False
+    if any(marker in status_text for marker in ("in progress", "live")):
+        return True
+    if any(marker in status_text for marker in ("final", "complete", "locked")):
+        return False
+    return False
+
+
+def _synth_player_key(player_name: Any) -> str | None:
+    name = str(player_name or "").strip().lower()
+    if not name:
+        return None
+    slug = re.sub(r"[^a-z0-9]+", "-", name).strip("-")
+    return f"name:{slug}" if slug else None
+
+
+def _normalize_vip_lineup_rows(raw_vip_lineups: list[Any], standings: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    standings_entry_key_by_name = {
+        str(row.get("username")).strip().lower(): str(row.get("entry_key"))
+        for row in standings
+        if isinstance(row, dict) and row.get("username") not in (None, "") and row.get("entry_key") not in (None, "")
+    }
+
+    normalized_rows: list[dict[str, Any]] = []
+    for row in raw_vip_lineups:
+        if not isinstance(row, dict):
+            continue
+
+        display_name = row.get("display_name") or row.get("user") or row.get("username")
+        entry_key = row.get("entry_key")
+        if entry_key in (None, "") and display_name not in (None, ""):
+            entry_key = standings_entry_key_by_name.get(str(display_name).strip().lower())
+        vip_entry_key = row.get("vip_entry_key") if row.get("vip_entry_key") not in (None, "") else entry_key
+
+        players_source = row.get("players_live")
+        if not isinstance(players_source, list):
+            players_source = row.get("lineup")
+        if not isinstance(players_source, list):
+            players_source = row.get("players")
+        if not isinstance(players_source, list):
+            players_source = []
+
+        players_live: list[dict[str, Any]] = []
+        for slot in players_source:
+            if not isinstance(slot, dict):
+                continue
+            player_name = slot.get("player_name") or slot.get("name")
+            if player_name in (None, ""):
+                continue
+            player_key = slot.get("player_key") or _synth_player_key(player_name)
+            live_slot: dict[str, Any] = {"player_name": str(player_name)}
+            if player_key not in (None, ""):
+                live_slot["player_key"] = str(player_key)
+            salary = _to_float(slot.get("salary"))
+            if salary is not None:
+                live_slot["salary"] = int(round(salary))
+            live_slot["is_live"] = _is_live_from_slot(slot)
+            players_live.append(live_slot)
+
+        normalized: dict[str, Any] = {}
+        if display_name not in (None, ""):
+            normalized["display_name"] = str(display_name)
+        if entry_key not in (None, ""):
+            normalized["entry_key"] = str(entry_key)
+        if vip_entry_key not in (None, ""):
+            normalized["vip_entry_key"] = str(vip_entry_key)
+
+        for key in ("rank", "pts", "pmr"):
+            value = row.get(key)
+            if value not in (None, ""):
+                normalized[key] = value
+
+        if players_live:
+            normalized["players_live"] = players_live
+
+        if normalized:
+            normalized_rows.append(normalized)
+
+    return normalized_rows
 
 
 def collect_raw_bundle(
@@ -20,36 +128,8 @@ def collect_raw_bundle(
     )
 
     standings = list(raw.get("standings") or [])
-    selected_entry_keys = {
-        str(row.get("entry_key"))
-        for row in standings
-        if isinstance(row, dict) and row.get("entry_key") not in (None, "")
-    }
-
-    vip_lineups: list[dict[str, Any]] = []
-    for row in list(raw.get("vip_lineups") or []):
-        if not isinstance(row, dict):
-            continue
-        entry_key = row.get("entry_key")
-        if entry_key in (None, ""):
-            continue
-        if str(entry_key) in selected_entry_keys:
-            vip_lineups.append(row)
-
-    train_clusters: list[dict[str, Any]] = []
-    for cluster in list(raw.get("train_clusters") or []):
-        if not isinstance(cluster, dict):
-            continue
-        kept_entry_keys = [
-            str(entry_key)
-            for entry_key in list(cluster.get("entry_keys") or [])
-            if entry_key not in (None, "") and str(entry_key) in selected_entry_keys
-        ]
-        if not kept_entry_keys:
-            continue
-        cluster_copy = dict(cluster)
-        cluster_copy["entry_keys"] = kept_entry_keys
-        train_clusters.append(cluster_copy)
+    vip_lineups = _normalize_vip_lineup_rows(list(raw.get("vip_lineups") or []), standings)
+    train_clusters = [cluster for cluster in list(raw.get("train_clusters") or []) if isinstance(cluster, dict)]
 
     selection = dict(raw.get("selection") or {})
     return {

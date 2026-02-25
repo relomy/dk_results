@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import Any, Iterable
 
 
@@ -9,7 +10,7 @@ def _to_float(value: Any) -> float | None:
     if isinstance(value, (int, float)):
         return float(value)
     if isinstance(value, str):
-        text = value.strip()
+        text = value.strip().replace("$", "").replace(",", "")
         if not text:
             return None
         try:
@@ -37,6 +38,14 @@ def _to_int(value: Any) -> int | None:
         except ValueError:
             return None
     return None
+
+
+def _synth_player_key(player_name: Any) -> str | None:
+    name = str(player_name or "").strip().lower()
+    if not name:
+        return None
+    slug = re.sub(r"[^a-z0-9]+", "-", name).strip("-")
+    return f"name:{slug}" if slug else None
 
 
 def _sorted_vip_rows(vip_lineups: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -87,14 +96,19 @@ def derive_distance_to_cash(raw_bundle: dict[str, Any]) -> dict[str, Any] | None
 
 def _iter_vip_lineup_player_keys(vip_lineups: list[dict[str, Any]]) -> Iterable[str]:
     for lineup_row in vip_lineups:
-        slots = lineup_row.get("lineup")
+        slots = lineup_row.get("players_live")
+        if not isinstance(slots, list):
+            slots = lineup_row.get("lineup")
+        if not isinstance(slots, list):
+            slots = lineup_row.get("players")
         if not isinstance(slots, list):
             continue
         seen_in_lineup: set[str] = set()
         for slot in slots:
             if not isinstance(slot, dict):
                 continue
-            player_key = slot.get("player_key")
+            player_name = slot.get("player_name") or slot.get("name")
+            player_key = slot.get("player_key") or _synth_player_key(player_name)
             if player_key in (None, ""):
                 continue
             normalized_key = str(player_key)
@@ -126,29 +140,35 @@ def derive_threat(raw_bundle: dict[str, Any]) -> dict[str, Any] | None:
             continue
         player_key = row.get("player_key")
         player_name = row.get("player_name")
-        ownership_remaining_pct = _to_float(row.get("ownership_remaining_pct"))
-        if player_key in (None, "") or player_name in (None, "") or ownership_remaining_pct is None:
+        if player_name in (None, ""):
             continue
+        if player_key in (None, ""):
+            player_key = _synth_player_key(player_name)
+        if player_key in (None, ""):
+            continue
+
+        ownership_remaining_pct = _to_float(row.get("ownership_remaining_pct"))
 
         normalized_key = str(player_key)
         if normalized_key in seen_player_keys:
             raise ValueError(f"duplicate player_key in threat rows: {normalized_key}")
         seen_player_keys.add(normalized_key)
 
-        top_swing_players.append(
-            {
-                "player_key": normalized_key,
-                "player_name": str(player_name),
-                "ownership_remaining_pct": round(ownership_remaining_pct, 2),
-                "vip_count": int(vip_counts.get(normalized_key, 0)),
-            }
-        )
+        threat_row: dict[str, Any] = {
+            "player_key": normalized_key,
+            "player_name": str(player_name),
+            "vip_count": int(vip_counts.get(normalized_key, 0)),
+        }
+        if ownership_remaining_pct is not None:
+            threat_row["ownership_remaining_pct"] = round(ownership_remaining_pct, 2)
+        top_swing_players.append(threat_row)
 
     if not top_swing_players:
         return None
 
     top_swing_players.sort(
         key=lambda row: (
+            row.get("ownership_remaining_pct") is None,
             -(row.get("ownership_remaining_pct") or 0.0),
             str(row.get("player_key") or ""),
         )
@@ -162,13 +182,25 @@ def derive_avg_salary_per_player_remaining(raw_bundle: dict[str, Any]) -> float 
 
     live_slot_salaries: list[float] = []
     for lineup_row in vip_lineups:
-        slots = lineup_row.get("lineup")
+        slots = lineup_row.get("players_live")
+        if not isinstance(slots, list):
+            slots = lineup_row.get("lineup")
+        if not isinstance(slots, list):
+            slots = lineup_row.get("players")
         if not isinstance(slots, list):
             continue
         for slot in slots:
             if not isinstance(slot, dict):
                 continue
-            if slot.get("is_live") is not True:
+            is_live = slot.get("is_live")
+            if not isinstance(is_live, bool):
+                time_remaining = _to_float(
+                    slot.get("time_remaining_minutes")
+                    if slot.get("time_remaining_minutes") is not None
+                    else slot.get("timeStatus")
+                )
+                is_live = bool(time_remaining and time_remaining > 0)
+            if not is_live:
                 continue
             salary = _to_float(slot.get("salary"))
             if salary is None:

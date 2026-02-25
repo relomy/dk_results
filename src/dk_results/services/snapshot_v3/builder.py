@@ -87,6 +87,7 @@ def _build_contest(raw_bundle: dict[str, Any], derived: dict[str, Any], generate
         live_metrics["avg_salary_per_player_remaining"] = float(avg_salary_remaining)
 
     if live_metrics:
+        live_metrics["updated_at"] = generated_at
         contest["live_metrics"] = live_metrics
 
     metrics: dict[str, Any] = {}
