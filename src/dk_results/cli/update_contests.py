@@ -663,7 +663,8 @@ def _build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None):
-    _build_parser().parse_args(argv)
+    argv_list = list(argv) if argv is not None else []
+    _build_parser().parse_args(argv_list)
     configure_logging()
     try:
         contests.init_schema(state.contests_db_path())
