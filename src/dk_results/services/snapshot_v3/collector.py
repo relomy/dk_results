@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from dk_results.services.snapshot_exporter import DEFAULT_STANDINGS_LIMIT, collect_snapshot_data
@@ -19,6 +20,61 @@ def _to_float(value: Any) -> float | None:
         except ValueError:
             return None
     return None
+
+
+def _normalize_name(value: Any) -> str:
+    return str(value or "").strip().lower()
+
+
+def _slug(value: Any) -> str:
+    normalized = _normalize_name(value)
+    if not normalized:
+        return ""
+    return re.sub(r"[^a-z0-9]+", "-", normalized).strip("-")
+
+
+def _derive_composite_player_key(sport: str, row: dict[str, Any]) -> str | None:
+    name_slug = _slug(row.get("name") or row.get("player_name"))
+    if not name_slug:
+        return None
+    team_slug = _slug(row.get("team") or row.get("team_abbv")) or "na"
+    pos_slug = _slug(row.get("position") or row.get("pos")) or "na"
+    salary_num = _to_float(row.get("salary"))
+    salary_part = str(int(round(salary_num))) if salary_num is not None else "na"
+    return f"{sport.lower()}:{name_slug}:{team_slug}:{salary_part}:{pos_slug}"
+
+
+def _normalize_players(
+    raw_players: list[Any],
+    sport: str,
+) -> tuple[list[dict[str, Any]], dict[str, str]]:
+    normalized_players: list[dict[str, Any]] = []
+    keys_by_name: dict[str, set[str]] = {}
+
+    for row in raw_players:
+        if not isinstance(row, dict):
+            continue
+        mapped = dict(row)
+        player_key = row.get("player_key")
+        if player_key in (None, ""):
+            player_key = _derive_composite_player_key(sport, row)
+        if player_key not in (None, ""):
+            mapped["player_key"] = str(player_key)
+        normalized_players.append(mapped)
+
+        name_key = _normalize_name(mapped.get("name") or mapped.get("player_name"))
+        if not name_key:
+            continue
+        if mapped.get("player_key") in (None, ""):
+            continue
+        keys_by_name.setdefault(name_key, set()).add(str(mapped.get("player_key")))
+
+    unique_name_to_key: dict[str, str] = {}
+    for name_key, keys in keys_by_name.items():
+        if len(keys) == 1:
+            unique_name_to_key[name_key] = next(iter(keys))
+
+    return normalized_players, unique_name_to_key
 
 
 def _is_live_from_slot(slot: dict[str, Any]) -> bool:
@@ -53,7 +109,12 @@ def _is_live_from_slot(slot: dict[str, Any]) -> bool:
     return False
 
 
-def _normalize_vip_lineup_rows(raw_vip_lineups: list[Any], standings: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _normalize_vip_lineup_rows(
+    raw_vip_lineups: list[Any],
+    standings: list[dict[str, Any]],
+    sport: str,
+    unique_name_to_player_key: dict[str, str],
+) -> list[dict[str, Any]]:
     standings_entry_key_by_name = {
         str(row.get("username")).strip().lower(): str(row.get("entry_key"))
         for row in standings
@@ -87,6 +148,16 @@ def _normalize_vip_lineup_rows(raw_vip_lineups: list[Any], standings: list[dict[
             if player_name in (None, ""):
                 continue
             player_key = slot.get("player_key")
+            if player_key in (None, ""):
+                player_key = unique_name_to_player_key.get(_normalize_name(player_name))
+            if player_key in (None, ""):
+                player_key = _derive_composite_player_key(
+                    sport,
+                    {
+                        **slot,
+                        "player_name": player_name,
+                    },
+                )
             live_slot: dict[str, Any] = {"player_name": str(player_name)}
             if player_key not in (None, ""):
                 live_slot["player_key"] = str(player_key)
@@ -118,6 +189,66 @@ def _normalize_vip_lineup_rows(raw_vip_lineups: list[Any], standings: list[dict[
     return normalized_rows
 
 
+def _build_unique_name_to_player_key_from_vip_lineups(vip_lineups: list[dict[str, Any]]) -> dict[str, str]:
+    keys_by_name: dict[str, set[str]] = {}
+
+    for vip_row in vip_lineups:
+        if not isinstance(vip_row, dict):
+            continue
+        slots = vip_row.get("players_live")
+        if not isinstance(slots, list):
+            continue
+        for slot in slots:
+            if not isinstance(slot, dict):
+                continue
+            player_name = slot.get("player_name") or slot.get("name")
+            player_key = slot.get("player_key")
+            if player_name in (None, "") or player_key in (None, ""):
+                continue
+            keys_by_name.setdefault(_normalize_name(player_name), set()).add(str(player_key))
+
+    unique_name_to_key: dict[str, str] = {}
+    for name_key, keys in keys_by_name.items():
+        if len(keys) == 1:
+            unique_name_to_key[name_key] = next(iter(keys))
+
+    return unique_name_to_key
+
+
+def _merge_unique_name_to_player_keys(
+    primary: dict[str, str],
+    secondary: dict[str, str],
+) -> dict[str, str]:
+    merged = dict(primary)
+    for name_key, key in secondary.items():
+        existing = merged.get(name_key)
+        if existing is None:
+            merged[name_key] = key
+            continue
+        if existing != key:
+            merged.pop(name_key, None)
+    return merged
+
+
+def _normalize_top_remaining_players(
+    rows: list[Any],
+    unique_name_to_player_key: dict[str, str],
+) -> list[dict[str, Any]]:
+    normalized_rows: list[dict[str, Any]] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        mapped = dict(row)
+        player_name = mapped.get("player_name")
+        player_key = mapped.get("player_key")
+        if player_key in (None, "") and player_name not in (None, ""):
+            player_key = unique_name_to_player_key.get(_normalize_name(player_name))
+        if player_key not in (None, ""):
+            mapped["player_key"] = str(player_key)
+        normalized_rows.append(mapped)
+    return normalized_rows
+
+
 def collect_raw_bundle(
     *,
     sport: str,
@@ -131,8 +262,26 @@ def collect_raw_bundle(
     )
 
     standings = list(raw.get("standings") or [])
-    vip_lineups = _normalize_vip_lineup_rows(list(raw.get("vip_lineups") or []), standings)
+    players, unique_name_to_player_key = _normalize_players(
+        list(raw.get("players") or []),
+        str(raw.get("sport") or sport),
+    )
+    vip_lineups = _normalize_vip_lineup_rows(
+        list(raw.get("vip_lineups") or []),
+        standings,
+        str(raw.get("sport") or sport),
+        unique_name_to_player_key,
+    )
+    unique_name_to_player_key = _merge_unique_name_to_player_keys(
+        unique_name_to_player_key,
+        _build_unique_name_to_player_key_from_vip_lineups(vip_lineups),
+    )
     train_clusters = [cluster for cluster in list(raw.get("train_clusters") or []) if isinstance(cluster, dict)]
+    ownership = dict(raw.get("ownership") or {})
+    for field in ("non_cashing_top_remaining_players", "top_remaining_players"):
+        rows = ownership.get(field)
+        if isinstance(rows, list):
+            ownership[field] = _normalize_top_remaining_players(rows, unique_name_to_player_key)
 
     selection = dict(raw.get("selection") or {})
     return {
@@ -142,8 +291,8 @@ def collect_raw_bundle(
         "selection_reason": selection.get("reason"),
         "candidates": list(raw.get("candidates") or []),
         "cash_line": dict(raw.get("cash_line") or {}),
-        "players": list(raw.get("players") or []),
-        "ownership": dict(raw.get("ownership") or {}),
+        "players": players,
+        "ownership": ownership,
         "standings": standings,
         "vip_lineups": vip_lineups,
         "train_clusters": train_clusters,

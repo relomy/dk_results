@@ -143,7 +143,7 @@ def test_validate_v3_envelope_detects_unknown_threat_player_key() -> None:
     ) in violations
 
 
-def test_validate_v3_envelope_detects_unknown_train_sample_entry_reference() -> None:
+def test_validate_v3_envelope_allows_train_entry_keys_outside_truncated_standings() -> None:
     payload = _valid_envelope()
     payload["sports"]["nba"]["contests"][0]["train_clusters"] = [
         {
@@ -153,11 +153,22 @@ def test_validate_v3_envelope_detects_unknown_train_sample_entry_reference() -> 
         }
     ]
     violations = validate_v3_envelope(payload)
+    assert not any("train_clusters[0].entry_keys" in message for message in violations)
+    assert not any("sample_entries[0].entry_key" in message for message in violations)
+
+
+def test_validate_v3_envelope_detects_train_sample_entry_not_in_cluster_entries() -> None:
+    payload = _valid_envelope()
+    payload["sports"]["nba"]["contests"][0]["train_clusters"] = [
+        {
+            "cluster_key": "cluster-1",
+            "entry_keys": ["e1", "e2"],
+            "sample_entries": [{"entry_key": "e3"}],
+        }
+    ]
+    violations = validate_v3_envelope(payload)
     assert (
-        "sports.nba.contests[0].train_clusters[0].entry_keys "
-        "contains unknown standings entry_key unknown-entry"
-    ) in violations
-    assert (
-        "sports.nba.contests[0].train_clusters[0].sample_entries[0].entry_key must match standings entry_key"
+        "sports.nba.contests[0].train_clusters[0].sample_entries[0].entry_key must match "
+        "train_clusters[0].entry_keys"
         in violations
     )

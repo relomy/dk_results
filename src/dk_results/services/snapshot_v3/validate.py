@@ -133,32 +133,18 @@ def _collect_known_player_keys(sport_payload: dict[str, Any], contest: dict[str,
 def _validate_train_cluster_references(sport: str, contest: dict[str, Any]) -> list[str]:
     violations: list[str] = []
 
-    standings = contest.get("standings")
-    if not isinstance(standings, list):
-        return violations
-    known_entry_keys = {
-        str(row.get("entry_key"))
-        for row in standings
-        if isinstance(row, dict) and row.get("entry_key") not in (None, "")
-    }
-    if not known_entry_keys:
-        return violations
-
     train_clusters = contest.get("train_clusters")
     if not isinstance(train_clusters, list):
         return violations
+
     for cluster_index, cluster in enumerate(train_clusters):
         if not isinstance(cluster, dict):
             continue
-        for entry_key in list(cluster.get("entry_keys") or []):
-            if entry_key in (None, ""):
-                continue
-            normalized = str(entry_key)
-            if normalized not in known_entry_keys:
-                violations.append(
-                    f"sports.{sport}.contests[0].train_clusters[{cluster_index}].entry_keys "
-                    f"contains unknown standings entry_key {normalized}"
-                )
+        cluster_entry_keys = {
+            str(entry_key)
+            for entry_key in list(cluster.get("entry_keys") or [])
+            if entry_key not in (None, "")
+        }
         sample_entries = cluster.get("sample_entries")
         if not isinstance(sample_entries, list):
             continue
@@ -168,10 +154,10 @@ def _validate_train_cluster_references(sport: str, contest: dict[str, Any]) -> l
             sample_key = sample.get("entry_key")
             if sample_key in (None, ""):
                 continue
-            if str(sample_key) not in known_entry_keys:
+            if str(sample_key) not in cluster_entry_keys:
                 violations.append(
                     f"sports.{sport}.contests[0].train_clusters[{cluster_index}].sample_entries[{sample_index}]."
-                    "entry_key must match standings entry_key"
+                    f"entry_key must match train_clusters[{cluster_index}].entry_keys"
                 )
 
     return violations

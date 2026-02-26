@@ -1,4 +1,5 @@
 from dk_results.services.snapshot_v3.collector import collect_raw_bundle
+from dk_results.services.snapshot_v3.derive import derive_threat
 
 
 def test_collect_raw_bundle_returns_expected_raw_shape(monkeypatch) -> None:
@@ -61,7 +62,7 @@ def test_collect_raw_bundle_keeps_vips_without_entry_key_and_does_not_truncate_t
         {"entry_key": "e1", "vip_entry_key": "e1", "display_name": "keep"},
         {
             "display_name": "vip-without-key",
-            "players_live": [{"player_name": "A", "is_live": False}],
+            "players_live": [{"player_name": "A", "player_key": "nba:a:na:na:na", "is_live": False}],
         },
     ]
     assert raw["train_clusters"] == [
@@ -104,3 +105,52 @@ def test_collect_raw_bundle_marks_textual_live_status_as_live(monkeypatch) -> No
     assert players_live[0]["is_live"] is True
     assert players_live[1]["player_name"] == "Player B"
     assert players_live[1]["is_live"] is False
+
+
+def test_collect_raw_bundle_maps_top_remaining_players_from_vip_slots_when_players_missing(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "dk_results.services.snapshot_v3.collector.collect_snapshot_data",
+        lambda **_kwargs: {
+            "sport": "NBA",
+            "contest": {"contest_id": "123", "name": "Contest"},
+            "selection": {"selected_contest_id": "123", "reason": {"mode": "explicit_id"}},
+            "standings": [],
+            "vip_lineups": [
+                {
+                    "user": "vip1",
+                    "players": [
+                        {"name": "Player A", "salary": "$10,300", "timeStatus": "In Progress"},
+                    ],
+                }
+            ],
+            "train_clusters": [],
+            "players": [],
+            "cash_line": {},
+            "ownership": {
+                "non_cashing_top_remaining_players": [
+                    {"player_name": "Player A", "ownership_remaining_pct": 80.0}
+                ]
+            },
+            "metadata": {},
+            "truncation": {},
+            "candidates": [],
+        },
+    )
+
+    raw = collect_raw_bundle(sport="NBA", contest_id=123, standings_limit=10)
+    vip_slot = raw["vip_lineups"][0]["players_live"][0]
+    top_row = raw["ownership"]["non_cashing_top_remaining_players"][0]
+    threat = derive_threat(raw)
+
+    assert vip_slot["player_key"] == "nba:player-a:na:10300:na"
+    assert top_row["player_key"] == "nba:player-a:na:10300:na"
+    assert threat == {
+        "top_swing_players": [
+            {
+                "player_key": "nba:player-a:na:10300:na",
+                "player_name": "Player A",
+                "ownership_remaining_pct": 80.0,
+                "vip_count": 1,
+            }
+        ]
+    }
