@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import re
 from typing import Any
 
 from dk_results.services.snapshot_exporter import DEFAULT_STANDINGS_LIMIT, collect_snapshot_data
@@ -32,22 +31,26 @@ def _is_live_from_slot(slot: dict[str, Any]) -> bool:
         if minutes is not None:
             return minutes > 0
 
-    status_text = str(slot.get("game_status") or slot.get("status") or "").strip().lower()
-    if not status_text:
-        return False
-    if any(marker in status_text for marker in ("in progress", "live")):
-        return True
-    if any(marker in status_text for marker in ("final", "complete", "locked")):
-        return False
+    text_candidates = [
+        slot.get("timeStatus"),
+        slot.get("time_remaining_display"),
+        slot.get("timeRemaining"),
+        slot.get("game_status"),
+        slot.get("status"),
+    ]
+    live_markers = ("in progress", "live", "q1", "q2", "q3", "q4", "ot", "thru", "hole")
+    final_markers = ("final", "complete", "completed", "locked", "postponed", "canceled", "cancelled")
+    for raw_text in text_candidates:
+        status_text = str(raw_text or "").strip().lower()
+        if not status_text or status_text in {"-", "--"}:
+            continue
+        if any(marker in status_text for marker in final_markers):
+            return False
+        if any(marker in status_text for marker in live_markers):
+            return True
+        if ":" in status_text:
+            return True
     return False
-
-
-def _synth_player_key(player_name: Any) -> str | None:
-    name = str(player_name or "").strip().lower()
-    if not name:
-        return None
-    slug = re.sub(r"[^a-z0-9]+", "-", name).strip("-")
-    return f"name:{slug}" if slug else None
 
 
 def _normalize_vip_lineup_rows(raw_vip_lineups: list[Any], standings: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -83,7 +86,7 @@ def _normalize_vip_lineup_rows(raw_vip_lineups: list[Any], standings: list[dict[
             player_name = slot.get("player_name") or slot.get("name")
             if player_name in (None, ""):
                 continue
-            player_key = slot.get("player_key") or _synth_player_key(player_name)
+            player_key = slot.get("player_key")
             live_slot: dict[str, Any] = {"player_name": str(player_name)}
             if player_key not in (None, ""):
                 live_slot["player_key"] = str(player_key)

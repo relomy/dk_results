@@ -12,7 +12,7 @@ def _valid_envelope() -> dict:
             "nba": {
                 "status": "ok",
                 "updated_at": "2026-02-25T10:00:00Z",
-                "players": [{"name": "A"}],
+                "players": [{"name": "A", "player_key": "nba:1"}],
                 "primary_contest": {
                     "contest_id": "188080404",
                     "contest_key": "nba:188080404",
@@ -59,6 +59,17 @@ def _valid_envelope() -> dict:
 
 def test_validate_v3_envelope_accepts_valid_payload() -> None:
     assert validate_v3_envelope(_valid_envelope()) == []
+
+
+def test_validate_v3_envelope_requires_top_level_timestamp_fields_and_non_empty_sports() -> None:
+    payload = _valid_envelope()
+    payload.pop("snapshot_at")
+    payload.pop("generated_at")
+    payload["sports"] = {}
+    violations = validate_v3_envelope(payload)
+    assert "snapshot_at is required" in violations
+    assert "generated_at is required" in violations
+    assert "sports must contain at least one sport payload" in violations
 
 
 def test_validate_v3_envelope_enforces_contest_required_fields_and_types() -> None:
@@ -120,3 +131,33 @@ def test_validate_v3_envelope_detects_primary_contest_key_mismatch() -> None:
     payload["sports"]["nba"]["primary_contest"]["contest_key"] = "nba:other"
     violations = validate_v3_envelope(payload)
     assert "sports.nba.primary_contest.contest_key must match contests[0].contest_key" in violations
+
+
+def test_validate_v3_envelope_detects_unknown_threat_player_key() -> None:
+    payload = _valid_envelope()
+    payload["sports"]["nba"]["contests"][0]["metrics"]["threat"]["top_swing_players"][0]["player_key"] = "nba:999"
+    violations = validate_v3_envelope(payload)
+    assert (
+        "sports.nba.contests[0].metrics.threat.top_swing_players[0].player_key "
+        "is not in known contest player set"
+    ) in violations
+
+
+def test_validate_v3_envelope_detects_unknown_train_sample_entry_reference() -> None:
+    payload = _valid_envelope()
+    payload["sports"]["nba"]["contests"][0]["train_clusters"] = [
+        {
+            "cluster_key": "cluster-1",
+            "entry_keys": ["e1", "unknown-entry"],
+            "sample_entries": [{"entry_key": "unknown-entry"}],
+        }
+    ]
+    violations = validate_v3_envelope(payload)
+    assert (
+        "sports.nba.contests[0].train_clusters[0].entry_keys "
+        "contains unknown standings entry_key unknown-entry"
+    ) in violations
+    assert (
+        "sports.nba.contests[0].train_clusters[0].sample_entries[0].entry_key must match standings entry_key"
+        in violations
+    )

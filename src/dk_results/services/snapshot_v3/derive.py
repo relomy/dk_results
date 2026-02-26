@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import re
 from typing import Any, Iterable
 
 
@@ -38,14 +37,6 @@ def _to_int(value: Any) -> int | None:
         except ValueError:
             return None
     return None
-
-
-def _synth_player_key(player_name: Any) -> str | None:
-    name = str(player_name or "").strip().lower()
-    if not name:
-        return None
-    slug = re.sub(r"[^a-z0-9]+", "-", name).strip("-")
-    return f"name:{slug}" if slug else None
 
 
 def _sorted_vip_rows(vip_lineups: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -107,8 +98,7 @@ def _iter_vip_lineup_player_keys(vip_lineups: list[dict[str, Any]]) -> Iterable[
         for slot in slots:
             if not isinstance(slot, dict):
                 continue
-            player_name = slot.get("player_name") or slot.get("name")
-            player_key = slot.get("player_key") or _synth_player_key(player_name)
+            player_key = slot.get("player_key")
             if player_key in (None, ""):
                 continue
             normalized_key = str(player_key)
@@ -142,8 +132,6 @@ def derive_threat(raw_bundle: dict[str, Any]) -> dict[str, Any] | None:
         player_name = row.get("player_name")
         if player_name in (None, ""):
             continue
-        if player_key in (None, ""):
-            player_key = _synth_player_key(player_name)
         if player_key in (None, ""):
             continue
 
@@ -199,8 +187,33 @@ def derive_avg_salary_per_player_remaining(raw_bundle: dict[str, Any]) -> float 
                     if slot.get("time_remaining_minutes") is not None
                     else slot.get("timeStatus")
                 )
-                is_live = bool(time_remaining and time_remaining > 0)
-            if not is_live:
+                if time_remaining is not None:
+                    is_live = time_remaining > 0
+                else:
+                    text_candidates = [
+                        slot.get("timeStatus"),
+                        slot.get("time_remaining_display"),
+                        slot.get("timeRemaining"),
+                        slot.get("game_status"),
+                        slot.get("status"),
+                    ]
+                    live_markers = ("in progress", "live", "q1", "q2", "q3", "q4", "ot", "thru", "hole")
+                    final_markers = ("final", "complete", "completed", "locked", "postponed", "canceled", "cancelled")
+                    is_live = False
+                    for raw_text in text_candidates:
+                        status_text = str(raw_text or "").strip().lower()
+                        if not status_text or status_text in {"-", "--"}:
+                            continue
+                        if any(marker in status_text for marker in final_markers):
+                            is_live = False
+                            break
+                        if any(marker in status_text for marker in live_markers):
+                            is_live = True
+                            break
+                        if ":" in status_text:
+                            is_live = True
+                            break
+            if is_live is not True:
                 continue
             salary = _to_float(slot.get("salary"))
             if salary is None:

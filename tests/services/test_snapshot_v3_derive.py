@@ -105,7 +105,7 @@ def test_threat_vip_count_joins_on_player_key_only() -> None:
     assert threat["top_swing_players"][0]["vip_count"] == 1
 
 
-def test_threat_vip_count_supports_raw_vip_players_shape_with_synthesized_keys() -> None:
+def test_threat_drops_rows_without_player_key() -> None:
     raw = {
         "ownership": {
             "non_cashing_top_remaining_players": [
@@ -120,14 +120,7 @@ def test_threat_vip_count_supports_raw_vip_players_shape_with_synthesized_keys()
 
     threat = derive_threat(raw)
 
-    assert threat["top_swing_players"] == [
-        {
-            "player_key": "name:player-a",
-            "player_name": "Player A",
-            "ownership_remaining_pct": 80.0,
-            "vip_count": 2,
-        }
-    ]
+    assert threat is None
 
 
 def test_threat_rejects_duplicate_player_key_rows() -> None:
@@ -174,13 +167,13 @@ def test_avg_salary_per_player_remaining_supports_raw_vip_players_shape() -> Non
         "vip_lineups": [
             {
                 "players": [
-                    {"name": "Player A", "salary": "$10,300", "timeStatus": "18"},
+                    {"name": "Player A", "salary": "$10,300", "timeStatus": "In Progress"},
                     {"name": "Player B", "salary": "$7,800", "timeStatus": "0"},
                 ]
             },
             {
                 "players": [
-                    {"name": "Player C", "salary": "$9,300", "timeStatus": "36"},
+                    {"name": "Player C", "salary": "$9,300", "timeStatus": "Q3 08:20"},
                 ]
             },
         ]
