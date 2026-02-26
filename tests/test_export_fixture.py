@@ -1994,44 +1994,66 @@ def test_train_metrics_ranked_and_top_clusters(monkeypatch):
     assert trains["top_clusters"][0]["cluster_key"] == "c2"
 
 
+def _fixture_export_v3_envelope(*, vip_lineups=None, standings=None, players=None):
+    return {
+        "schema_version": 3,
+        "snapshot_at": "2026-02-14T10:00:00Z",
+        "generated_at": "2026-02-14T10:00:00Z",
+        "sports": {
+            "nba": {
+                "status": "ok",
+                "updated_at": "2026-02-14T10:00:00Z",
+                "players": players or [],
+                "primary_contest": {
+                    "contest_id": "1",
+                    "contest_key": "nba:1",
+                    "selection_reason": {"mode": "explicit_id"},
+                    "selected_at": "2026-02-14T10:00:00Z",
+                },
+                "contests": [
+                    {
+                        "contest_id": "1",
+                        "contest_key": "nba:1",
+                        "is_primary": True,
+                        "name": "x",
+                        "sport": "nba",
+                        "contest_type": "classic",
+                        "start_time": "2026-02-14T10:00:00Z",
+                        "state": "live",
+                        "entry_fee_cents": 1000,
+                        "prize_pool_cents": 100000,
+                        "currency": "USD",
+                        "max_entries": 100,
+                        "max_entries_per_user": 1,
+                        "vip_lineups": vip_lineups or [],
+                        "standings": standings or [],
+                    }
+                ],
+            }
+        },
+    }
+
+
 def test_vip_lineups_support_user_and_players_shape(monkeypatch, tmp_path):
     monkeypatch.setattr(export_command, "configure_runtime", lambda: None)
     monkeypatch.setattr(
         export_command,
-        "build_snapshot",
-        lambda **_kwargs: {
-            "snapshot_version": "v1",
-            "snapshot_generated_at_utc": "2026-02-14T10:00:00Z",
-            "sport": "NBA",
-            "contest": _canonical_contest_seed(contest_id=1, name="x"),
-            "selection": {"selected_contest_id": 1, "reason": {"mode": "explicit_id"}},
-            "cash_line": {"cutoff_type": "rank", "rank": 10, "points": 100.0},
-            "players": [{"name": "Alpha"}, {"name": "Beta"}],
-            "ownership": {"ownership_remaining_total_pct": 1.0, "top_remaining_players": []},
-            "standings": [
+        "build_snapshot_v3_envelope",
+        lambda *_args, **_kwargs: _fixture_export_v3_envelope(
+            vip_lineups=[
                 {
+                    "display_name": "vip_user",
                     "entry_key": "777",
-                    "username": "vip_user",
-                    "rank": "5",
-                    "points": "110.0",
-                    "pmr": "0",
-                    "ownership_remaining_total_pct": "20.0",
-                    "payout_cents": 1500,
+                    "slots": [{"slot": "PG", "player_name": "Alpha"}, {"slot": "SG", "player_name": "Beta"}],
+                    "live": {
+                        "current_rank": 5,
+                        "pmr": 0.0,
+                        "is_cashing": True,
+                        "payout_cents": 1500,
+                    },
                 }
-            ],
-            "train_clusters": [],
-            "vip_lineups": [
-                {
-                    "user": "vip_user",
-                    "pts": 110.0,
-                    "rank": 5,
-                    "pmr": 0.0,
-                    "players": [{"pos": "PG", "name": "Alpha"}, {"pos": "SG", "name": "Beta"}],
-                }
-            ],
-            "truncation": {"applied": False, "total_rows_before_truncation": 1},
-            "metadata": {"warnings": [], "missing_fields": [], "source_endpoints": []},
-        },
+            ]
+        ),
     )
     out = tmp_path / "vip-shape.json"
     rc = export_command.run_export_fixture(Namespace(sport="NBA", contest_id=1, out=str(out), standings_limit=100))
@@ -2055,66 +2077,34 @@ def test_vip_lineups_export_players_live_typed_fields(monkeypatch, tmp_path):
     monkeypatch.setattr(export_command, "configure_runtime", lambda: None)
     monkeypatch.setattr(
         export_command,
-        "build_snapshot",
-        lambda **_kwargs: {
-            "snapshot_version": "v1",
-            "snapshot_generated_at_utc": "2026-02-14T10:00:00Z",
-            "sport": "NBA",
-            "contest": _canonical_contest_seed(contest_id=1, name="x"),
-            "selection": {"selected_contest_id": 1, "reason": {"mode": "explicit_id"}},
-            "cash_line": {"cutoff_type": "rank", "rank": 10, "points": 100.0},
-            "players": [
-                {"name": "Javon Small", "game_status": "In Progress"},
-                {"name": "Anthony Edwards", "game_status": "Final"},
-            ],
-            "ownership": {"ownership_remaining_total_pct": 1.0, "top_remaining_players": []},
-            "standings": [
+        "build_snapshot_v3_envelope",
+        lambda *_args, **_kwargs: _fixture_export_v3_envelope(
+            vip_lineups=[
                 {
+                    "display_name": "vip_user",
                     "entry_key": "777",
-                    "username": "vip_user",
-                    "rank": "5",
-                    "points": "110.0",
-                    "pmr": "0",
-                    "ownership_remaining_total_pct": "20.0",
-                    "payout_cents": 1500,
-                }
-            ],
-            "train_clusters": [],
-            "vip_lineups": [
-                {
-                    "user": "vip_user",
-                    "pts": 110.0,
-                    "rank": 5,
-                    "pmr": 0.0,
-                    "players": [
+                    "players_live": [
                         {
-                            "pos": "PG",
-                            "name": "Javon Small",
-                            "ownership": 0.8467,
-                            "salary": "$3,500",
-                            "pts": "7.25",
-                            "value": "2.07",
-                            "rtProj": "21.11",
-                            "timeStatus": "38.02",
-                            "stats": "1 REB, 1 STL, 4 PTS",
+                            "slot": "PG",
+                            "player_name": "Javon Small",
+                            "game_status": "In Progress",
+                            "ownership_pct": 84.67,
+                            "salary": 3500,
+                            "points": 7.25,
+                            "value": 2.07,
+                            "rt_projection": 21.11,
+                            "time_remaining_display": "38.02",
+                            "time_remaining_minutes": 38.02,
+                            "stats_text": "1 REB, 1 STL, 4 PTS",
                         },
                         {
-                            "pos": "C",
-                            "name": "LOCKED 🔒",
-                            "ownership": "",
-                            "salary": "",
-                            "pts": "",
-                            "value": "",
-                            "rtProj": "",
-                            "timeStatus": "",
-                            "stats": "",
+                            "slot": "C",
+                            "player_name": "LOCKED 🔒",
                         },
                     ],
                 }
-            ],
-            "truncation": {"applied": False, "total_rows_before_truncation": 1},
-            "metadata": {"warnings": [], "missing_fields": [], "source_endpoints": []},
-        },
+            ]
+        ),
     )
     out = tmp_path / "vip-players-live.json"
     rc = export_command.run_export_fixture(Namespace(sport="NBA", contest_id=1, out=str(out), standings_limit=100))
@@ -2147,25 +2137,16 @@ def test_vip_entry_key_backfill_requires_unique_display_name(monkeypatch, tmp_pa
     monkeypatch.setattr(export_command, "configure_runtime", lambda: None)
     monkeypatch.setattr(
         export_command,
-        "build_snapshot",
-        lambda **_kwargs: {
-            "snapshot_version": "v1",
-            "snapshot_generated_at_utc": "2026-02-14T10:00:00Z",
-            "sport": "NBA",
-            "contest": _canonical_contest_seed(contest_id=1, name="x"),
-            "selection": {"selected_contest_id": 1, "reason": {"mode": "explicit_id"}},
-            "cash_line": {"cutoff_type": "rank", "rank": 10, "points": 100.0},
-            "players": [{"name": "Alpha"}],
-            "ownership": {"ownership_remaining_total_pct": 1.0, "top_remaining_players": []},
-            "standings": [
-                {"entry_key": "111", "username": "dup_user", "rank": 5, "points": 110.0, "pmr": 0.0},
-                {"entry_key": "222", "username": "dup_user", "rank": 8, "points": 101.0, "pmr": 1.0},
-            ],
-            "train_clusters": [],
-            "vip_lineups": [{"user": "dup_user", "players": [{"pos": "PG", "name": "Alpha"}]}],
-            "truncation": {"applied": False, "total_rows_before_truncation": 2},
-            "metadata": {"warnings": [], "missing_fields": [], "source_endpoints": []},
-        },
+        "build_snapshot_v3_envelope",
+        lambda *_args, **_kwargs: _fixture_export_v3_envelope(
+            vip_lineups=[
+                {
+                    "display_name": "dup_user",
+                    "entry_key": None,
+                    "slots": [{"slot": "PG", "player_name": "Alpha"}],
+                }
+            ]
+        ),
     )
     out = tmp_path / "vip-ambiguous.json"
     rc = export_command.run_export_fixture(Namespace(sport="NBA", contest_id=1, out=str(out), standings_limit=100))
@@ -2180,30 +2161,18 @@ def test_standings_is_cashing_derived_from_payout_presence(monkeypatch, tmp_path
     monkeypatch.setattr(export_command, "configure_runtime", lambda: None)
     monkeypatch.setattr(
         export_command,
-        "build_snapshot",
-        lambda **_kwargs: {
-            "snapshot_version": "v1",
-            "snapshot_generated_at_utc": "2026-02-14T10:00:00Z",
-            "sport": "NBA",
-            "contest": _canonical_contest_seed(contest_id=1, name="x"),
-            "selection": {"selected_contest_id": 1, "reason": {"mode": "explicit_id"}},
-            "cash_line": {"cutoff_type": "rank", "rank": 10, "points": 100.0},
-            "players": [],
-            "ownership": {"ownership_remaining_total_pct": 1.0, "top_remaining_players": []},
-            "standings": [
-                {"entry_key": "a", "username": "u1", "rank": 1, "points": 120.0, "pmr": 0.0, "payout_cents": "2500"},
-                {"entry_key": "b", "username": "u2", "rank": 40, "points": 90.0, "pmr": 2.0, "payout_cents": None},
-            ],
-            "train_clusters": [],
-            "vip_lineups": [],
-            "truncation": {"applied": False, "total_rows_before_truncation": 2},
-            "metadata": {"warnings": [], "missing_fields": [], "source_endpoints": []},
-        },
+        "build_snapshot_v3_envelope",
+        lambda *_args, **_kwargs: _fixture_export_v3_envelope(
+            standings=[
+                {"entry_key": "a", "username": "u1", "rank": 1, "points": 120.0, "pmr": 0.0, "payout_cents": 2500, "is_cashing": True},
+                {"entry_key": "b", "username": "u2", "rank": 40, "points": 90.0, "pmr": 2.0, "payout_cents": None, "is_cashing": False},
+            ]
+        ),
     )
     out = tmp_path / "cashing-rule.json"
     rc = export_command.run_export_fixture(Namespace(sport="NBA", contest_id=1, out=str(out), standings_limit=100))
     payload = json.loads(out.read_text(encoding="utf-8"))
-    rows = payload["sports"]["nba"]["contests"][0]["standings"]["rows"]
+    rows = payload["sports"]["nba"]["contests"][0]["standings"]
 
     assert rc == 0
     assert rows[0]["payout_cents"] == 2500
