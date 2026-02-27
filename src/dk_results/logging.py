@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import os
 
-NOISY_LIBRARY_LOGGERS = ("googleapiclient.discovery", "urllib3")
+NOISY_LIBRARY_LOGGERS = ("googleapiclient.discovery", "urllib3", "rookie.browser")
 _HANDLER_MARKER = "_dk_results_configured_handler"
 
 
