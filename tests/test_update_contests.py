@@ -1039,3 +1039,409 @@ def test_main_help_exits_without_runtime(monkeypatch):
         update_contests.main(["--help"])
 
     assert exc.value.code == 0
+
+
+def _soft_finish_conn() -> sqlite3.Connection:
+    conn = sqlite3.connect(":memory:")
+    conn.execute(
+        """
+        CREATE TABLE contests (
+            dk_id INTEGER PRIMARY KEY,
+            sport varchar(10) NOT NULL,
+            name varchar(50) NOT NULL,
+            start_date datetime NOT NULL,
+            draft_group INTEGER NOT NULL,
+            total_prizes INTEGER NOT NULL,
+            entries INTEGER NOT NULL,
+            positions_paid INTEGER,
+            entry_fee INTEGER NOT NULL,
+            entry_count INTEGER NOT NULL,
+            max_entry_count INTEGER NOT NULL,
+            completed INTEGER NOT NULL DEFAULT 0,
+            status TEXT
+        );
+        """
+    )
+    update_contests.create_notifications_table(conn)
+    return conn
+
+
+def _insert_live_contest_row(conn: sqlite3.Connection, *, dk_id: int = 1001, draft_group: int = 77) -> None:
+    conn.execute(
+        """
+        INSERT INTO contests (
+            dk_id, sport, name, start_date, draft_group, total_prizes, entries,
+            positions_paid, entry_fee, entry_count, max_entry_count, completed, status
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            dk_id,
+            "NBA",
+            "Primary Live Contest",
+            "2024-01-01 00:00:00",
+            draft_group,
+            0,
+            5000,
+            100,
+            25,
+            5000,
+            5000,
+            0,
+            "LIVE",
+        ),
+    )
+    conn.commit()
+
+
+def _make_leaderboard_payload(
+    *,
+    top_score=229,
+    cashing_score=185.5,
+    leader_time=0,
+    last_winning_time=0,
+    rows: list[dict] | None = None,
+) -> dict:
+    if rows is None:
+        rows = [
+            {
+                "userName": "FooBar",
+                "timeRemaining": 0,
+                "fantasyPoints": top_score,
+                "winningValue": 100.0,
+                "winnings": [{"value": 100.0, "description": "Cash"}],
+            },
+            {
+                "userName": "OtherUser",
+                "timeRemaining": 0,
+                "fantasyPoints": cashing_score,
+                "winningValue": 0.0,
+                "winnings": [],
+            },
+        ]
+    return {
+        "leader": {"timeRemaining": leader_time, "fantasyPoints": top_score},
+        "lastWinningEntry": {"timeRemaining": last_winning_time, "fantasyPoints": cashing_score},
+        "leaderBoard": rows,
+    }
+
+
+def _configure_soft_finish_test_env(
+    monkeypatch,
+    tmp_path,
+    *,
+    payloads: list[dict],
+    get_contest_data_fn=None,
+    live_dk_id: int = 1001,
+):
+    class DummySport:
+        name = "NBA"
+        sheet_min_entry_fee = 25
+        keyword = "%"
+
+    class FakeSender:
+        def __init__(self):
+            self.messages = []
+
+        def send_message(self, message: str):
+            self.messages.append(message)
+
+    sender = FakeSender()
+    monkeypatch.setattr(update_contests, "_build_discord_sender", lambda: sender)
+    monkeypatch.setattr(update_contests, "_sport_choices", lambda: {"NBA": DummySport})
+    monkeypatch.setattr(update_contests, "_warning_schedule_for", lambda _sport: [])
+    monkeypatch.setattr(update_contests, "db_get_next_upcoming_contest", lambda *_a, **_k: None)
+    monkeypatch.setattr(update_contests, "db_get_next_upcoming_contest_any", lambda *_a, **_k: None)
+    monkeypatch.setattr(
+        update_contests,
+        "db_get_live_contest",
+        lambda *_a, **_k: (live_dk_id, "Primary Live Contest", 77, 100, "2024-01-01 00:00:00"),
+    )
+    if get_contest_data_fn is None:
+        def default_get_contest_data(_dk_id):
+            return {"positions_paid": 100, "status": "LIVE", "completed": 0, "entries": 5000}
+
+        get_contest_data_fn = default_get_contest_data
+    monkeypatch.setattr(update_contests, "get_contest_data", get_contest_data_fn)
+
+    payload_iter = iter(payloads)
+
+    class FakeDK:
+        def __init__(self):
+            pass
+
+        def get_leaderboard(self, _dk_id, timeout=None, session=None):
+            try:
+                return next(payload_iter)
+            except StopIteration:
+                return payloads[-1]
+
+    monkeypatch.setattr(update_contests, "Draftkings", FakeDK)
+
+    vip_file = tmp_path / "vips.yaml"
+    vip_file.write_text("- foobar\n- MissingVip\n")
+    monkeypatch.setattr(update_contests, "repo_file", lambda *_parts: vip_file)
+    return sender
+
+
+def test_soft_finish_sends_summary_once(monkeypatch, tmp_path):
+    conn = _soft_finish_conn()
+    _insert_live_contest_row(conn)
+    sender = _configure_soft_finish_test_env(
+        monkeypatch,
+        tmp_path,
+        payloads=[_make_leaderboard_payload()],
+    )
+
+    update_contests.check_contests_for_completion(conn)
+
+    assert len(sender.messages) == 1
+    assert any("Contest soft-finished" in message for message in sender.messages)
+    assert any("Top score" in message for message in sender.messages)
+    assert any("Cashing score" in message for message in sender.messages)
+
+
+def test_soft_finish_does_not_resend_for_same_summary(monkeypatch, tmp_path):
+    conn = _soft_finish_conn()
+    _insert_live_contest_row(conn)
+    payload = _make_leaderboard_payload(top_score=221.5, cashing_score=180.25)
+    sender = _configure_soft_finish_test_env(monkeypatch, tmp_path, payloads=[payload, payload])
+
+    update_contests.check_contests_for_completion(conn)
+    update_contests.check_contests_for_completion(conn)
+
+    assert len(sender.messages) == 1
+
+
+def test_soft_finish_resends_when_summary_changes(monkeypatch, tmp_path):
+    conn = _soft_finish_conn()
+    _insert_live_contest_row(conn)
+    payload_a = _make_leaderboard_payload(top_score=221.5, cashing_score=180.25)
+    payload_b = _make_leaderboard_payload(top_score=223.0, cashing_score=181.0)
+    sender = _configure_soft_finish_test_env(monkeypatch, tmp_path, payloads=[payload_a, payload_b])
+
+    update_contests.check_contests_for_completion(conn)
+    update_contests.check_contests_for_completion(conn)
+
+    assert len(sender.messages) == 2
+
+
+def test_soft_finish_vip_matching_is_case_insensitive_visible_rows_only(monkeypatch, tmp_path):
+    conn = _soft_finish_conn()
+    _insert_live_contest_row(conn)
+    payload = _make_leaderboard_payload(
+        rows=[
+            {
+                "userName": "FooBar",
+                "timeRemaining": 0,
+                "fantasyPoints": 220,
+                "winningValue": 150,
+                "winnings": [{"value": 150, "description": "Cash"}],
+            },
+            {
+                "userName": "NonVip",
+                "timeRemaining": 0,
+                "fantasyPoints": 210,
+                "winningValue": 100,
+                "winnings": [{"value": 100, "description": "Cash"}],
+            },
+        ]
+    )
+    sender = _configure_soft_finish_test_env(monkeypatch, tmp_path, payloads=[payload])
+
+    update_contests.check_contests_for_completion(conn)
+
+    msg = sender.messages[0]
+    assert "FooBar" in msg
+    assert "MissingVip" not in msg
+
+
+def test_soft_finish_equivalent_numeric_payloads_do_not_duplicate_end_to_end(monkeypatch, tmp_path):
+    conn = _soft_finish_conn()
+    _insert_live_contest_row(conn)
+    payload_ints = _make_leaderboard_payload(top_score=123, cashing_score=99)
+    payload_decimals = _make_leaderboard_payload(top_score=123.00, cashing_score=99.0)
+    sender = _configure_soft_finish_test_env(monkeypatch, tmp_path, payloads=[payload_ints, payload_decimals])
+
+    update_contests.check_contests_for_completion(conn)
+    update_contests.check_contests_for_completion(conn)
+
+    assert len(sender.messages) == 1
+
+
+def test_soft_finish_vip_case_variant_payloads_do_not_duplicate(monkeypatch, tmp_path):
+    conn = _soft_finish_conn()
+    _insert_live_contest_row(conn)
+    payload_a = _make_leaderboard_payload(
+        rows=[
+            {
+                "userName": "FooBar",
+                "timeRemaining": 0,
+                "fantasyPoints": 220,
+                "winningValue": 100,
+                "winnings": [{"value": 100, "description": "Cash"}],
+            }
+        ]
+    )
+    payload_b = _make_leaderboard_payload(
+        rows=[
+            {
+                "userName": "foobar",
+                "timeRemaining": 0,
+                "fantasyPoints": 220,
+                "winningValue": 100,
+                "winnings": [{"value": 100, "description": "Cash"}],
+            }
+        ]
+    )
+    sender = _configure_soft_finish_test_env(monkeypatch, tmp_path, payloads=[payload_a, payload_b])
+
+    update_contests.check_contests_for_completion(conn)
+    update_contests.check_contests_for_completion(conn)
+
+    assert len(sender.messages) == 1
+
+
+def test_soft_finish_missing_or_non_numeric_time_remaining_blocks_send(monkeypatch, tmp_path):
+    conn = _soft_finish_conn()
+    _insert_live_contest_row(conn)
+    payload_valid = _make_leaderboard_payload(top_score=220.5, cashing_score=180.0)
+    payload_bad_time_remaining = _make_leaderboard_payload(
+        top_score=221.5,
+        cashing_score=181.0,
+        rows=[
+            {
+                "userName": "FooBar",
+                "timeRemaining": "N/A",
+                "fantasyPoints": 221.5,
+                "winningValue": 100,
+                "winnings": [{"value": 100, "description": "Cash"}],
+            }
+        ],
+    )
+    payload_missing_time_remaining = _make_leaderboard_payload(
+        top_score=223.0,
+        cashing_score=182.0,
+        rows=[
+            {
+                "userName": "FooBar",
+                "fantasyPoints": 223.0,
+                "winningValue": 100,
+                "winnings": [{"value": 100, "description": "Cash"}],
+            }
+        ],
+    )
+    payload_none_time_remaining = _make_leaderboard_payload(
+        top_score=224.0,
+        cashing_score=183.0,
+        rows=[
+            {
+                "userName": "FooBar",
+                "timeRemaining": None,
+                "fantasyPoints": 224.0,
+                "winningValue": 100,
+                "winnings": [{"value": 100, "description": "Cash"}],
+            }
+        ],
+    )
+    sender = _configure_soft_finish_test_env(
+        monkeypatch,
+        tmp_path,
+        payloads=[
+            payload_valid,
+            payload_bad_time_remaining,
+            payload_missing_time_remaining,
+            payload_none_time_remaining,
+        ],
+    )
+
+    update_contests.check_contests_for_completion(conn)
+    update_contests.check_contests_for_completion(conn)
+    update_contests.check_contests_for_completion(conn)
+    update_contests.check_contests_for_completion(conn)
+
+    assert len(sender.messages) == 1
+
+
+def test_soft_finish_missing_contest_state_fields_skips_safely(monkeypatch, tmp_path):
+    conn = _soft_finish_conn()
+    _insert_live_contest_row(conn, dk_id=1001)
+    payload_a = _make_leaderboard_payload(top_score=220.5, cashing_score=180.0)
+    payload_b = _make_leaderboard_payload(top_score=222.0, cashing_score=181.5)
+
+    live_state = {"value": {"positions_paid": 100, "status": "LIVE", "completed": 0, "entries": 5000}}
+
+    def fake_get_contest_data(dk_id):
+        if dk_id == 1001:
+            return {"positions_paid": 100, "status": "LIVE", "completed": 0, "entries": 5000}
+        if dk_id == 2002:
+            return live_state["value"]
+        return {"positions_paid": 100, "status": "LIVE", "completed": 0, "entries": 5000}
+
+    sender = _configure_soft_finish_test_env(
+        monkeypatch,
+        tmp_path,
+        payloads=[payload_a, payload_b, payload_b],
+        get_contest_data_fn=fake_get_contest_data,
+        live_dk_id=2002,
+    )
+
+    update_contests.check_contests_for_completion(conn)
+    live_state["value"] = {"positions_paid": 100, "status": "LIVE"}  # missing completed
+    update_contests.check_contests_for_completion(conn)
+    live_state["value"] = {"positions_paid": 100, "completed": 0}  # missing status
+    update_contests.check_contests_for_completion(conn)
+
+    assert len(sender.messages) == 1
+
+
+def test_soft_finish_non_int_completed_values_skip_safely(monkeypatch, tmp_path):
+    conn = _soft_finish_conn()
+    _insert_live_contest_row(conn, dk_id=1001)
+    payload = _make_leaderboard_payload(top_score=220.5, cashing_score=180.0)
+
+    live_state = {"value": {"positions_paid": 100, "status": "LIVE", "completed": 0, "entries": 5000}}
+
+    def fake_get_contest_data(dk_id):
+        if dk_id == 1001:
+            return {"positions_paid": 100, "status": "LIVE", "completed": 0, "entries": 5000}
+        if dk_id == 2002:
+            return live_state["value"]
+        return {"positions_paid": 100, "status": "LIVE", "completed": 0, "entries": 5000}
+
+    sender = _configure_soft_finish_test_env(
+        monkeypatch,
+        tmp_path,
+        payloads=[payload, payload, payload],
+        get_contest_data_fn=fake_get_contest_data,
+        live_dk_id=2002,
+    )
+
+    update_contests.check_contests_for_completion(conn)
+    live_state["value"] = {"positions_paid": 100, "status": "LIVE", "completed": "0"}  # wrong type
+    update_contests.check_contests_for_completion(conn)
+    live_state["value"] = {"positions_paid": 100, "status": "LIVE", "completed": False}  # wrong type
+    update_contests.check_contests_for_completion(conn)
+
+    assert len(sender.messages) == 1
+
+
+def test_soft_finish_runs_despite_skip_draft_groups_short_circuit(monkeypatch, tmp_path):
+    conn = _soft_finish_conn()
+    _insert_live_contest_row(conn, dk_id=1001, draft_group=77)
+    _insert_live_contest_row(conn, dk_id=1002, draft_group=77)
+    payload = _make_leaderboard_payload(top_score=220.5, cashing_score=180.0)
+
+    def fake_get_contest_data(_dk_id):
+        return {"positions_paid": 100, "status": "LIVE", "completed": 0, "entries": 5000}
+
+    sender = _configure_soft_finish_test_env(
+        monkeypatch,
+        tmp_path,
+        payloads=[payload],
+        get_contest_data_fn=fake_get_contest_data,
+        live_dk_id=1002,
+    )
+
+    update_contests.check_contests_for_completion(conn)
+
+    assert len(sender.messages) == 1

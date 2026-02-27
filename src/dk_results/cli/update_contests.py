@@ -1,8 +1,11 @@
 import argparse
 import datetime
+import hashlib
+import json
 import logging
 import os
 import sqlite3
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any
 
@@ -280,6 +283,221 @@ def _parse_start_date(start_date: Any) -> datetime.datetime | None:
         return None
 
 
+def _to_decimal(value: Any) -> Decimal | None:
+    if value is None or isinstance(value, bool):
+        return None
+    if isinstance(value, str):
+        value = value.strip()
+        if not value:
+            return None
+    try:
+        return Decimal(str(value))
+    except (InvalidOperation, ValueError, TypeError):
+        return None
+
+
+def _is_zero_time_remaining(value: Any) -> bool:
+    parsed = _to_decimal(value)
+    return parsed is not None and parsed == 0
+
+
+def _canonical_score_text(value: Any) -> str | None:
+    parsed = _to_decimal(value)
+    if parsed is None:
+        return None
+    normalized = parsed.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    return f"{normalized:.2f}"
+
+
+def _vip_key(name: Any) -> str:
+    if not isinstance(name, str):
+        return ""
+    return name.strip().lower()
+
+
+def _load_vips() -> list[str]:
+    path = repo_file("vips.yaml")
+    if not path.is_file():
+        return []
+    try:
+        data = yaml.safe_load(path.read_text()) or []
+    except Exception:
+        logger.warning("failed to load vips.yaml from %s", path)
+        return []
+    if not isinstance(data, list):
+        return []
+    vips: list[str] = []
+    for item in data:
+        name = str(item).strip()
+        if name:
+            vips.append(name)
+    return vips
+
+
+def _leaderboard_cash_value(row: dict[str, Any]) -> Decimal:
+    winning_value = _to_decimal(row.get("winningValue"))
+    if winning_value is not None:
+        return winning_value
+
+    winnings = row.get("winnings")
+    if not isinstance(winnings, list):
+        return Decimal("0")
+
+    total = Decimal("0")
+    for item in winnings:
+        if not isinstance(item, dict):
+            continue
+        description = str(item.get("description", "")).lower()
+        if "cash" not in description:
+            continue
+        cash = _to_decimal(item.get("value"))
+        if cash is None:
+            continue
+        total += cash
+    return total
+
+
+def _soft_finish_eligible(payload: dict[str, Any]) -> bool:
+    leader = payload.get("leader")
+    last_winning = payload.get("lastWinningEntry")
+    leaderboard_rows = payload.get("leaderBoard")
+    if not isinstance(leader, dict) or not isinstance(last_winning, dict):
+        return False
+    if not isinstance(leaderboard_rows, list) or not leaderboard_rows:
+        return False
+    if not _is_zero_time_remaining(leader.get("timeRemaining")):
+        return False
+    if not _is_zero_time_remaining(last_winning.get("timeRemaining")):
+        return False
+    for row in leaderboard_rows:
+        if not isinstance(row, dict):
+            return False
+        if not _is_zero_time_remaining(row.get("timeRemaining")):
+            return False
+    return True
+
+
+def _canonical_vips(vips_cashed: list[str]) -> list[str]:
+    unique: dict[str, str] = {}
+    for name in vips_cashed:
+        cleaned = str(name).strip()
+        key = _vip_key(cleaned)
+        if not key or key in unique:
+            continue
+        unique[key] = cleaned
+    return sorted(unique.values(), key=lambda vip: vip.lower())
+
+
+def _soft_finish_event_key(
+    *,
+    sport_name: str,
+    dk_id: int,
+    top_score: Any,
+    cashing_score: Any,
+    vips_cashed: list[str],
+) -> str:
+    vip_key_payload = sorted({_vip_key(name) for name in vips_cashed if _vip_key(name)})
+    payload = {
+        "sport": sport_name.upper(),
+        "dk_id": int(dk_id),
+        "top_score": _canonical_score_text(top_score),
+        "cashing_score": _canonical_score_text(cashing_score),
+        "vips_cashed": vip_key_payload,
+    }
+    serialized = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
+    digest = hashlib.sha256(serialized.encode("utf-8")).hexdigest()
+    return f"soft_finish:{digest}"
+
+
+def _format_soft_finish_announcement(
+    *,
+    sport_name: str,
+    contest_name: str,
+    start_date: str,
+    dk_id: int,
+    top_score: str,
+    cashing_score: str,
+    vips_cashed: list[str],
+) -> str:
+    vip_text = ", ".join(vips_cashed) if vips_cashed else "none"
+    base = _format_contest_announcement(
+        "Contest soft-finished",
+        sport_name,
+        contest_name,
+        start_date,
+        dk_id,
+    )
+    return "\n".join(
+        [
+            base,
+            f"• 🏆 Top score: {top_score}",
+            f"• 💵 Cashing score: {cashing_score}",
+            f"• ⭐ VIPs cashed (visible rows): {vip_text}",
+        ]
+    )
+
+
+def _maybe_send_soft_finish_announcement(
+    conn,
+    sender: DiscordRest,
+    *,
+    sport_name: str,
+    contest_name: str,
+    start_date: str,
+    dk_id: int,
+) -> None:
+    leaderboard_payload = Draftkings().get_leaderboard(dk_id)
+    if not _soft_finish_eligible(leaderboard_payload):
+        return
+
+    leader = leaderboard_payload.get("leader", {})
+    last_winning = leaderboard_payload.get("lastWinningEntry", {})
+    top_score_raw = leader.get("fantasyPoints")
+    cashing_score_raw = last_winning.get("fantasyPoints")
+    top_score = _canonical_score_text(top_score_raw)
+    cashing_score = _canonical_score_text(cashing_score_raw)
+    if top_score is None or cashing_score is None:
+        return
+
+    vip_keys = {_vip_key(name) for name in _load_vips() if _vip_key(name)}
+    cashed_lookup: dict[str, str] = {}
+    for row in leaderboard_payload.get("leaderBoard", []):
+        if not isinstance(row, dict):
+            continue
+        username_raw = row.get("userName")
+        username = str(username_raw).strip() if username_raw is not None else ""
+        key = _vip_key(username)
+        if not key or key not in vip_keys:
+            continue
+        if _leaderboard_cash_value(row) <= 0:
+            continue
+        if key not in cashed_lookup:
+            cashed_lookup[key] = username
+    vips_cashed = _canonical_vips(list(cashed_lookup.values()))
+
+    event_key = _soft_finish_event_key(
+        sport_name=sport_name,
+        dk_id=dk_id,
+        top_score=top_score,
+        cashing_score=cashing_score,
+        vips_cashed=vips_cashed,
+    )
+    if db_has_notification(conn, dk_id, event_key):
+        return
+
+    message = _format_soft_finish_announcement(
+        sport_name=sport_name,
+        contest_name=contest_name,
+        start_date=start_date,
+        dk_id=dk_id,
+        top_score=top_score,
+        cashing_score=cashing_score,
+        vips_cashed=vips_cashed,
+    )
+    sender.send_message(message)
+    db_insert_notification(conn, dk_id, event_key)
+
+
 def check_contests_for_completion(conn) -> None:
     """Check each contest for completion/positions_paid data."""
     create_notifications_table(conn)
@@ -507,6 +725,47 @@ def check_contests_for_completion(conn) -> None:
                         )
         except Exception as error:
             logger.error(error)
+
+    if sender:
+        for sport_cls in sport_choices.values():
+            live_row = db_get_live_contest(
+                conn,
+                sport_cls.name,
+                sport_cls.sheet_min_entry_fee,
+                sport_cls.keyword,
+            )
+            if not live_row:
+                continue
+            live_dk_id, live_contest_name, _live_draft_group, _live_positions_paid, live_start_date = live_row
+            contest_state = get_contest_data(live_dk_id)
+            if not isinstance(contest_state, dict):
+                continue
+
+            state_status = contest_state.get("status")
+            state_completed = contest_state.get("completed")
+            if not isinstance(state_status, str):
+                continue
+            if type(state_completed) is not int:
+                continue
+            if state_status != "LIVE" or state_completed != 0:
+                continue
+
+            try:
+                _maybe_send_soft_finish_announcement(
+                    conn,
+                    sender,
+                    sport_name=sport_cls.name,
+                    contest_name=str(live_contest_name),
+                    start_date=str(live_start_date),
+                    dk_id=int(live_dk_id),
+                )
+            except Exception:
+                logger.warning(
+                    "soft-finish evaluation failed for %s dk_id=%s",
+                    sport_cls.name,
+                    live_dk_id,
+                    exc_info=True,
+                )
 
 
 def get_contest_data(dk_id) -> dict | None:
