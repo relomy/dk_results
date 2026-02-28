@@ -13,6 +13,7 @@ dependencies = [
     "dotenv",
     "discord",
     "dfs-common",
+    "cryptography>=46.0.5",
 ]
 
 [dependency-groups]
