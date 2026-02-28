@@ -1157,6 +1157,7 @@ def _configure_soft_finish_test_env(
         lambda *_a, **_k: (live_dk_id, "Primary Live Contest", 77, 100, "2024-01-01 00:00:00"),
     )
     if get_contest_data_fn is None:
+
         def default_get_contest_data(_dk_id):
             return {"positions_paid": 100, "status": "LIVE", "completed": 0, "entries": 5000}
 
