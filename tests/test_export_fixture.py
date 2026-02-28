@@ -2133,7 +2133,7 @@ def test_vip_lineups_export_players_live_typed_fields(monkeypatch, tmp_path):
     assert "ownership_pct" not in row1
 
 
-def test_vip_entry_key_backfill_requires_unique_display_name(monkeypatch, tmp_path):
+def test_export_fixture_preserves_missing_vip_entry_key(monkeypatch, tmp_path):
     monkeypatch.setattr(export_command, "configure_runtime", lambda: None)
     monkeypatch.setattr(
         export_command,
@@ -2164,8 +2164,24 @@ def test_standings_is_cashing_derived_from_payout_presence(monkeypatch, tmp_path
         "build_snapshot_v3_envelope",
         lambda *_args, **_kwargs: _fixture_export_v3_envelope(
             standings=[
-                {"entry_key": "a", "username": "u1", "rank": 1, "points": 120.0, "pmr": 0.0, "payout_cents": 2500, "is_cashing": True},
-                {"entry_key": "b", "username": "u2", "rank": 40, "points": 90.0, "pmr": 2.0, "payout_cents": None, "is_cashing": False},
+                {
+                    "entry_key": "a",
+                    "username": "u1",
+                    "rank": 1,
+                    "points": 120.0,
+                    "pmr": 0.0,
+                    "payout_cents": 2500,
+                    "is_cashing": True,
+                },
+                {
+                    "entry_key": "b",
+                    "username": "u2",
+                    "rank": 40,
+                    "points": 90.0,
+                    "pmr": 2.0,
+                    "payout_cents": None,
+                    "is_cashing": False,
+                },
             ]
         ),
     )

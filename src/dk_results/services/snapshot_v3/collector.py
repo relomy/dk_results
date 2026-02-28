@@ -115,10 +115,20 @@ def _normalize_vip_lineup_rows(
     sport: str,
     unique_name_to_player_key: dict[str, str],
 ) -> list[dict[str, Any]]:
+    standings_entry_keys_by_name: dict[str, set[str]] = {}
+    for row in standings:
+        if not isinstance(row, dict):
+            continue
+        username = row.get("username")
+        entry_key = row.get("entry_key")
+        if username in (None, "") or entry_key in (None, ""):
+            continue
+        standings_entry_keys_by_name.setdefault(str(username).strip().lower(), set()).add(str(entry_key))
+
     standings_entry_key_by_name = {
-        str(row.get("username")).strip().lower(): str(row.get("entry_key"))
-        for row in standings
-        if isinstance(row, dict) and row.get("username") not in (None, "") and row.get("entry_key") not in (None, "")
+        name: next(iter(entry_keys))
+        for name, entry_keys in standings_entry_keys_by_name.items()
+        if len(entry_keys) == 1
     }
 
     normalized_rows: list[dict[str, Any]] = []

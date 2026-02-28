@@ -71,6 +71,40 @@ def test_collect_raw_bundle_keeps_vips_without_entry_key_and_does_not_truncate_t
     ]
 
 
+def test_collect_raw_bundle_does_not_backfill_entry_key_from_ambiguous_display_name(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "dk_results.services.snapshot_v3.collector.collect_snapshot_data",
+        lambda **_kwargs: {
+            "sport": "NBA",
+            "contest": {"contest_id": "123", "name": "Contest"},
+            "selection": {"selected_contest_id": "123", "reason": {"mode": "explicit_id"}},
+            "standings": [
+                {"entry_key": "e1", "username": "dup-user"},
+                {"entry_key": "e2", "username": "dup-user"},
+            ],
+            "vip_lineups": [
+                {"user": "dup-user", "players": [{"name": "A"}]},
+            ],
+            "train_clusters": [],
+            "players": [],
+            "cash_line": {},
+            "ownership": {},
+            "metadata": {},
+            "truncation": {},
+            "candidates": [],
+        },
+    )
+
+    raw = collect_raw_bundle(sport="NBA", contest_id=123, standings_limit=10)
+
+    assert raw["vip_lineups"] == [
+        {
+            "display_name": "dup-user",
+            "players_live": [{"player_name": "A", "player_key": "nba:a:na:na:na", "is_live": False}],
+        }
+    ]
+
+
 def test_collect_raw_bundle_marks_textual_live_status_as_live(monkeypatch) -> None:
     monkeypatch.setattr(
         "dk_results.services.snapshot_v3.collector.collect_snapshot_data",
