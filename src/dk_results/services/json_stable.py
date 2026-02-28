@@ -17,4 +17,3 @@ def to_stable_json(payload: Any) -> str:
         )
         + "\n"
     )
-

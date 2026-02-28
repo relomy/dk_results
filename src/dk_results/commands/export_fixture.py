@@ -39,9 +39,7 @@ def run_export_fixture(args: Any) -> int:
     json_text = serialize_payload(envelope)
 
     sport_payload = envelope.get("sports", {}).get(sport.lower()) if isinstance(envelope.get("sports"), dict) else {}
-    primary_contest = (
-        sport_payload.get("primary_contest") if isinstance(sport_payload, dict) else {}
-    )
+    primary_contest = sport_payload.get("primary_contest") if isinstance(sport_payload, dict) else {}
     selected_id = str((primary_contest or {}).get("contest_id") or contest_id or "unknown")
 
     out_path = (

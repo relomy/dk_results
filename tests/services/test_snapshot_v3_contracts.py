@@ -14,12 +14,10 @@ def test_single_contest_required_per_sport_payload() -> None:
     violations = validate_single_contest({"contests": [{"contest_key": "nba:1"}]})
     assert violations == []
 
-    assert validate_single_contest({"contests": []}) == [
+    assert validate_single_contest({"contests": []}) == ["sport_payload.contests must contain exactly 1 contest"]
+    assert validate_single_contest({"contests": [{"contest_key": "nba:1"}, {"contest_key": "nba:2"}]}) == [
         "sport_payload.contests must contain exactly 1 contest"
     ]
-    assert validate_single_contest(
-        {"contests": [{"contest_key": "nba:1"}, {"contest_key": "nba:2"}]}
-    ) == ["sport_payload.contests must contain exactly 1 contest"]
 
 
 def test_top_swing_players_require_player_key_and_player_name() -> None:

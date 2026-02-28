@@ -161,9 +161,7 @@ def test_collect_raw_bundle_maps_top_remaining_players_from_vip_slots_when_playe
             "players": [],
             "cash_line": {},
             "ownership": {
-                "non_cashing_top_remaining_players": [
-                    {"player_name": "Player A", "ownership_remaining_pct": 80.0}
-                ]
+                "non_cashing_top_remaining_players": [{"player_name": "Player A", "ownership_remaining_pct": 80.0}]
             },
             "metadata": {},
             "truncation": {},

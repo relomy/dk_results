@@ -348,9 +348,7 @@ class ContestDatabase:
             self.logger.error("sqlite error in get_contest_state(): %s", err.args[0])
             return None
 
-    def get_contest_contract_metadata(
-        self, dk_id: int
-    ) -> tuple[int | None, int | None, int | None, int | None] | None:
+    def get_contest_contract_metadata(self, dk_id: int) -> tuple[int | None, int | None, int | None, int | None] | None:
         """Fetch metadata needed for canonical contest contract fields."""
         cur = self.conn.cursor()
         try:

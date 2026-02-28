@@ -533,7 +533,8 @@ def test_run_export_fixture_applies_generated_at_override(monkeypatch, tmp_path)
         export_command,
         "build_snapshot_v3_envelope",
         lambda *_args, **kwargs: (
-            called.update({"generated_at": kwargs.get("generated_at")}) or {
+            called.update({"generated_at": kwargs.get("generated_at")})
+            or {
                 "schema_version": 3,
                 "snapshot_at": kwargs.get("generated_at"),
                 "generated_at": kwargs.get("generated_at"),

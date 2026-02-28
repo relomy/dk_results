@@ -37,9 +37,7 @@ def _valid_envelope() -> dict:
                         "train_clusters": [{"cluster_key": "c1", "contest_id": "188080404"}],
                         "metrics": {
                             "updated_at": "2026-02-25T10:00:00Z",
-                            "distance_to_cash": {
-                                "per_vip": [{"vip_entry_key": "v1", "points_delta": 1.5}]
-                            },
+                            "distance_to_cash": {"per_vip": [{"vip_entry_key": "v1", "points_delta": 1.5}]},
                             "threat": {
                                 "top_swing_players": [
                                     {
@@ -92,16 +90,14 @@ def test_validate_v3_envelope_enforces_contest_required_fields_and_types() -> No
         payload_missing = deepcopy(base)
         payload_missing["sports"]["nba"]["contests"][0].pop(field, None)
         violations_missing = validate_v3_envelope(payload_missing)
-        assert any(
-            violation.endswith(f"contests[0].{field} is required") for violation in violations_missing
-        ), field
+        assert any(violation.endswith(f"contests[0].{field} is required") for violation in violations_missing), field
 
         payload_bad_type = deepcopy(base)
         payload_bad_type["sports"]["nba"]["contests"][0][field] = [] if isinstance(valid_value, str) else "bad"
         violations_bad_type = validate_v3_envelope(payload_bad_type)
-        assert any(
-            violation.endswith(f"contests[0].{field} has invalid type") for violation in violations_bad_type
-        ), field
+        assert any(violation.endswith(f"contests[0].{field} has invalid type") for violation in violations_bad_type), (
+            field
+        )
 
 
 def test_validate_v3_envelope_requires_exactly_one_contest() -> None:
@@ -138,8 +134,7 @@ def test_validate_v3_envelope_detects_unknown_threat_player_key() -> None:
     payload["sports"]["nba"]["contests"][0]["metrics"]["threat"]["top_swing_players"][0]["player_key"] = "nba:999"
     violations = validate_v3_envelope(payload)
     assert (
-        "sports.nba.contests[0].metrics.threat.top_swing_players[0].player_key "
-        "is not in known contest player set"
+        "sports.nba.contests[0].metrics.threat.top_swing_players[0].player_key is not in known contest player set"
     ) in violations
 
 
@@ -169,6 +164,5 @@ def test_validate_v3_envelope_detects_train_sample_entry_not_in_cluster_entries(
     violations = validate_v3_envelope(payload)
     assert (
         "sports.nba.contests[0].train_clusters[0].sample_entries[0].entry_key must match "
-        "train_clusters[0].entry_keys"
-        in violations
+        "train_clusters[0].entry_keys" in violations
     )

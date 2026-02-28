@@ -369,7 +369,7 @@ def _find_missing_fields(value: Any, path: str = "") -> list[str]:
         return missing
     if value is None:
         return [path]
-    return [] 
+    return []
 
 
 def _first_not_blank(*values: Any) -> Any:
@@ -1264,8 +1264,10 @@ def _vip_lineups_contract(
         if isinstance(payout_cents, int):
             is_cashing = payout_cents > 0
         else:
-            is_cashing = bool(row.get("is_cashing")) if isinstance(row.get("is_cashing"), bool) else bool(
-                standings_row.get("is_cashing")
+            is_cashing = (
+                bool(row.get("is_cashing"))
+                if isinstance(row.get("is_cashing"), bool)
+                else bool(standings_row.get("is_cashing"))
             )
 
         mapped = {

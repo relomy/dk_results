@@ -141,9 +141,7 @@ def _validate_train_cluster_references(sport: str, contest: dict[str, Any]) -> l
         if not isinstance(cluster, dict):
             continue
         cluster_entry_keys = {
-            str(entry_key)
-            for entry_key in list(cluster.get("entry_keys") or [])
-            if entry_key not in (None, "")
+            str(entry_key) for entry_key in list(cluster.get("entry_keys") or []) if entry_key not in (None, "")
         }
         sample_entries = cluster.get("sample_entries")
         if not isinstance(sample_entries, list):
@@ -216,9 +214,7 @@ def validate_v3_envelope(payload: dict[str, Any]) -> list[str]:
             violations.append(f"sports.{sport_name}.primary_contest is required")
         else:
             if str(primary_contest.get("contest_key") or "") != str(contest.get("contest_key") or ""):
-                violations.append(
-                    f"sports.{sport_name}.primary_contest.contest_key must match contests[0].contest_key"
-                )
+                violations.append(f"sports.{sport_name}.primary_contest.contest_key must match contests[0].contest_key")
 
         metrics = contest.get("metrics")
         if isinstance(metrics, dict):
