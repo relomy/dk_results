@@ -3,13 +3,13 @@ import pathlib
 from datetime import datetime, timedelta
 from typing import Any
 
-from dk_results.services.snapshot_exporter import (
+from dk_results.services.json_stable import to_stable_json
+from dk_results.services.snapshot_v3.pipeline import build_snapshot_v3_envelope
+from dk_results.services.snapshot_v3.pipeline import (
     DEFAULT_STANDINGS_LIMIT,
     configure_runtime,
     normalize_sport_name,
-    to_stable_json,
 )
-from dk_results.services.snapshot_v3.pipeline import build_snapshot_v3_envelope
 from dk_results.services.snapshot_v3.serialize import serialize_payload
 
 logger = logging.getLogger(__name__)

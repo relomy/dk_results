@@ -3,7 +3,7 @@ import sys
 from typing import Sequence
 
 from dk_results.commands.export_fixture import run_export_bundle, run_export_fixture, run_publish_snapshot
-from dk_results.services.snapshot_exporter import DEFAULT_STANDINGS_LIMIT
+from dk_results.services.snapshot_v3.pipeline import DEFAULT_STANDINGS_LIMIT
 
 
 def build_parser() -> argparse.ArgumentParser:
