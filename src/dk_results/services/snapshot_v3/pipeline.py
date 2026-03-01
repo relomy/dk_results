@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import datetime
+import os
 from typing import Any
 
-from dk_results.services.snapshot_exporter import DEFAULT_STANDINGS_LIMIT, to_utc_iso
+from dk_results.classes.sport import Sport
+from dk_results.config import load_settings
 from dk_results.services.snapshot_v3.builder import build_sport_payload
 from dk_results.services.snapshot_v3.collector import collect_raw_bundle
 from dk_results.services.snapshot_v3.contracts import SCHEMA_VERSION
@@ -14,8 +16,36 @@ from dk_results.services.snapshot_v3.derive import (
     derive_distance_to_cash,
     derive_threat,
 )
+from dk_results.services.snapshot_v3.normalize import to_utc_iso
 from dk_results.services.snapshot_v3.serialize import normalize_rfc3339_utc_seconds
 from dk_results.services.snapshot_v3.validate import validate_v3_envelope
+
+try:
+    from dotenv import load_dotenv
+except ImportError:  # pragma: no cover
+
+    def load_dotenv(*_args, **_kwargs):
+        return False
+
+
+DEFAULT_STANDINGS_LIMIT = 500
+
+
+def configure_runtime() -> None:
+    load_dotenv()
+    settings = load_settings()
+    if settings.dfs_state_dir and not os.getenv("DFS_STATE_DIR"):
+        os.environ["DFS_STATE_DIR"] = settings.dfs_state_dir
+    if settings.spreadsheet_id and not os.getenv("SPREADSHEET_ID"):
+        os.environ["SPREADSHEET_ID"] = settings.spreadsheet_id
+
+
+def normalize_sport_name(raw: str) -> str:
+    value = (raw or "").strip().upper()
+    choices = {sport.name.upper(): sport for sport in Sport.__subclasses__()}
+    if value not in choices:
+        raise ValueError(f"Unsupported sport: {raw}")
+    return choices[value].name
 
 
 def _resolved_generated_at(generated_at: str | None) -> str:
