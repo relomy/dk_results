@@ -26,11 +26,9 @@ from dk_results.logging import configure_logging
 from dk_results.paths import repo_file
 from dk_results.services.snapshot_exporter import (
     DEFAULT_STANDINGS_LIMIT,
-    build_snapshot,
-    normalize_snapshot_for_output,
     to_stable_json,
-    to_utc_iso,
 )
+from dk_results.services.snapshot_v3.pipeline import build_snapshot_v3_envelope
 
 logger = logging.getLogger(__name__)
 
@@ -338,23 +336,11 @@ def build_snapshot_payload(
     selected_contests: dict[str, int],
     standings_limit: int = DEFAULT_STANDINGS_LIMIT,
 ) -> dict[str, Any]:
-    generated_at = to_utc_iso(datetime.datetime.now(datetime.timezone.utc))
-    sports: dict[str, Any] = {}
-    for sport_name in sorted(selected_contests):
-        contest_id = selected_contests[sport_name]
-        snapshot = build_snapshot(
-            sport=sport_name,
-            contest_id=contest_id,
-            standings_limit=standings_limit,
-        )
-        sports[sport_name.lower()] = normalize_snapshot_for_output(snapshot)
-
-    return {
-        "schema_version": 2,
-        "snapshot_at": generated_at,
-        "generated_at": generated_at,
-        "sports": sports,
-    }
+    selected: dict[str, int | None] = {sport_name: contest_id for sport_name, contest_id in selected_contests.items()}
+    return build_snapshot_v3_envelope(
+        selected,
+        standings_limit=standings_limit,
+    )
 
 
 def write_snapshot_payload(path: pathlib.Path, payload: dict[str, Any]) -> None:

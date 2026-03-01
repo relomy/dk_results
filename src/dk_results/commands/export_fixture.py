@@ -5,14 +5,12 @@ from typing import Any
 
 from dk_results.services.snapshot_exporter import (
     DEFAULT_STANDINGS_LIMIT,
-    build_dashboard_envelope,
-    build_snapshot,
     configure_runtime,
-    normalize_snapshot_for_output,
     normalize_sport_name,
     to_stable_json,
-    validate_canonical_snapshot,
 )
+from dk_results.services.snapshot_v3.pipeline import build_snapshot_v3_envelope
+from dk_results.services.snapshot_v3.serialize import serialize_payload
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +19,7 @@ _VALID_SPORT_STATUS = {"ok", "stale", "error"}
 
 
 def _default_output_path(snapshot: dict[str, Any], sport: str) -> pathlib.Path:
-    selected_id = str(snapshot.get("selection", {}).get("selected_contest_id") or "unknown")
+    selected_id = str(snapshot.get("selected_contest_id") or "unknown")
     return pathlib.Path("fixtures") / f"{sport.lower()}-{selected_id}-fixture.json"
 
 
@@ -33,25 +31,28 @@ def run_export_fixture(args: Any) -> int:
     contest_id = int(args.contest_id) if args.contest_id is not None else None
     standings_limit = int(args.standings_limit) if args.standings_limit else DEFAULT_STANDINGS_LIMIT
 
-    snapshot = build_snapshot(
-        sport=sport,
-        contest_id=contest_id,
+    envelope = build_snapshot_v3_envelope(
+        {sport: contest_id},
         standings_limit=standings_limit,
+        generated_at=getattr(args, "generated_at", None),
     )
-    envelope = build_dashboard_envelope({sport: snapshot})
-    violations = validate_canonical_snapshot(envelope)
-    if violations:
-        logger.error("canonical contract violations=%s", ",".join(violations))
-        raise ValueError("Canonical snapshot validation failed")
-    json_text = to_stable_json(envelope)
-    out_path = pathlib.Path(args.out) if getattr(args, "out", None) else _default_output_path(snapshot, sport)
+    json_text = serialize_payload(envelope)
+
+    sport_payload = envelope.get("sports", {}).get(sport.lower()) if isinstance(envelope.get("sports"), dict) else {}
+    primary_contest = sport_payload.get("primary_contest") if isinstance(sport_payload, dict) else {}
+    selected_id = str((primary_contest or {}).get("contest_id") or contest_id or "unknown")
+
+    out_path = (
+        pathlib.Path(args.out)
+        if getattr(args, "out", None)
+        else _default_output_path({"selected_contest_id": selected_id}, sport)
+    )
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(json_text, encoding="utf-8")
 
-    selected_id = snapshot.get("selection", {}).get("selected_contest_id")
-    candidates = snapshot.get("candidates", [])
-    missing = snapshot.get("metadata", {}).get("missing_fields", [])
-    warning_count = len(normalize_snapshot_for_output(snapshot)["metadata"]["warnings"])
+    candidates: list[Any] = []
+    missing: list[str] = []
+    warning_count = 0
 
     logger.info("selected contest id=%s", selected_id)
     logger.info("candidate count=%d", len(candidates))
@@ -85,22 +86,15 @@ def run_export_bundle(args: Any) -> int:
         raise ValueError("At least one --item SPORT:CONTEST_ID is required for bundle export.")
 
     parsed_items = [_parse_bundle_item(item) for item in items]
-    sports: dict[str, Any] = {}
-    for sport, contest_id in parsed_items:
-        snapshot = build_snapshot(
-            sport=sport,
-            contest_id=contest_id,
-            standings_limit=standings_limit,
-        )
-        sports[sport] = snapshot
-    payload = build_dashboard_envelope(sports)
-    violations = validate_canonical_snapshot(payload)
-    if violations:
-        logger.error("canonical contract violations=%s", ",".join(violations))
-        raise ValueError("Canonical snapshot validation failed")
+    selected_contests: dict[str, int | None] = {sport: contest_id for sport, contest_id in parsed_items}
+    payload = build_snapshot_v3_envelope(
+        selected_contests,
+        standings_limit=standings_limit,
+        generated_at=getattr(args, "generated_at", None),
+    )
     out_path = pathlib.Path(args.out)
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text(to_stable_json(payload), encoding="utf-8")
+    out_path.write_text(serialize_payload(payload), encoding="utf-8")
 
     logger.info("bundle candidate count=%d", len(parsed_items))
     logger.info("bundle output path=%s", out_path)

@@ -1,7 +1,6 @@
 import copy
 import datetime
 import hashlib
-import json
 import logging
 import os
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
@@ -18,6 +17,7 @@ from dk_results.classes.sport import Sport
 from dk_results.classes.trainfinder import TrainFinder
 from dk_results.config import load_settings
 from dk_results.paths import repo_file
+from dk_results.services.json_stable import to_stable_json as _to_stable_json
 
 logger = logging.getLogger(__name__)
 
@@ -836,16 +836,7 @@ def snapshot_to_json(snapshot: dict[str, Any]) -> str:
 
 
 def to_stable_json(payload: Any) -> str:
-    return (
-        json.dumps(
-            payload,
-            sort_keys=True,
-            indent=2,
-            separators=(",", ":"),
-            ensure_ascii=True,
-        )
-        + "\n"
-    )
+    return _to_stable_json(payload)
 
 
 def _cash_line_contract(cash_line: dict[str, Any]) -> dict[str, Any]:
