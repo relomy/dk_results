@@ -241,7 +241,7 @@ def run_publish_snapshot(args: Any) -> int:
         snapshots = []
 
     entry = _build_manifest_entry(payload, snapshot_rel_path, snapshot_path)
-    snapshots = [item for item in snapshots if str(item.get("snapshot_at")) != entry["snapshot_at"]]
+    snapshots = [item for item in snapshots if str(item.get("path")) != entry["path"]]
     snapshots.append(entry)
     snapshots.sort(key=lambda item: str(item.get("snapshot_at") or ""), reverse=True)
 

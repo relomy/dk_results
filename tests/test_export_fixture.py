@@ -492,6 +492,65 @@ def test_run_publish_snapshot_writes_latest_and_manifest(tmp_path):
     assert len(manifest_second["snapshots"]) == 1
 
 
+def test_run_publish_snapshot_deduplicates_manifest_by_path(tmp_path):
+    root = tmp_path / "public"
+    snapshot_file = root / "snapshots" / "live-1.json"
+    snapshot_file.parent.mkdir(parents=True, exist_ok=True)
+    snapshot_file.write_text(
+        to_stable_json(
+            {
+                "schema_version": 3,
+                "snapshot_at": "2026-02-15T01:30:00Z",
+                "generated_at": "2026-02-15T01:30:05Z",
+                "sports": {
+                    "nba": {
+                        "status": "ok",
+                        "updated_at": "2026-02-15T01:30:00Z",
+                        "contests": [{"state": "live"}],
+                    }
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    args = Namespace(
+        snapshot=str(snapshot_file),
+        root=str(root),
+        snapshot_path=None,
+        latest_out=None,
+        manifest_dir=None,
+    )
+    assert export_command.run_publish_snapshot(args) == 0
+
+    snapshot_file.write_text(
+        to_stable_json(
+            {
+                "schema_version": 3,
+                "snapshot_at": "2026-02-15T01:35:00Z",
+                "generated_at": "2026-02-15T01:35:05Z",
+                "sports": {
+                    "nba": {
+                        "status": "ok",
+                        "updated_at": "2026-02-15T01:35:00Z",
+                        "contests": [{"state": "completed"}],
+                    }
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    assert export_command.run_publish_snapshot(args) == 0
+
+    manifest = json.loads((root / "manifest" / "2026-02-15.json").read_text(encoding="utf-8"))
+    assert len(manifest["snapshots"]) == 1
+    entry = manifest["snapshots"][0]
+    assert entry["path"] == "snapshots/live-1.json"
+    assert entry["snapshot_at"] == "2026-02-15T01:35:00Z"
+    assert entry["state_counts"] == {"completed": 1}
+
+
 def _fixture_export_v3_envelope(*, vip_lineups=None, standings=None):
     return {
         "schema_version": 3,
