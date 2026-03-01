@@ -8,7 +8,6 @@ from collections import OrderedDict
 from typing import Any
 from zoneinfo import ZoneInfo
 
-import yaml
 from dfs_common import state
 from dfs_common.discord import WebhookSender
 
@@ -25,8 +24,8 @@ from dk_results.config import load_and_apply_settings
 from dk_results.logging import configure_logging
 from dk_results.paths import repo_file
 from dk_results.services.json_stable import to_stable_json
-from dk_results.services.snapshot_v3.pipeline import build_snapshot_v3_envelope
-from dk_results.services.snapshot_v3.pipeline import DEFAULT_STANDINGS_LIMIT
+from dk_results.services.snapshot_v3.pipeline import DEFAULT_STANDINGS_LIMIT, build_snapshot_v3_envelope
+from dk_results.services.vips import load_vips
 
 logger = logging.getLogger(__name__)
 
@@ -60,28 +59,6 @@ def _build_bonus_sender() -> WebhookSender | None:
     if not webhook:
         return None
     return WebhookSender(webhook)
-
-
-def load_vips() -> list[str]:
-    """
-    Load VIP usernames from vips.yaml located next to this file.
-    Returns an empty list if the file is missing or malformed.
-    """
-    vip_path = repo_file("vips.yaml")
-    try:
-        with open(vip_path, "r") as f:
-            vips = yaml.safe_load(f) or []
-        if not isinstance(vips, list):
-            logger.warning("vips.yaml did not contain a list; treating as empty.")
-            return []
-        # Normalize to strings and strip whitespace
-        return [str(x).strip() for x in vips if str(x).strip()]
-    except FileNotFoundError:
-        logger.warning("vips.yaml not found at %s; proceeding with empty VIP list.", vip_path)
-        return []
-    except Exception as e:
-        logger.warning("Failed to load vips.yaml: %s; proceeding with empty VIP list.", e)
-        return []
 
 
 def write_players_to_sheet(

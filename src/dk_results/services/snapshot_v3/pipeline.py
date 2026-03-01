@@ -10,6 +10,7 @@ from dk_results.classes.sport import Sport
 from dk_results.config import load_settings
 from dk_results.services.snapshot_v3.builder import build_sport_payload
 from dk_results.services.snapshot_v3.collector import collect_raw_bundle
+from dk_results.services.snapshot_v3.constants import DEFAULT_STANDINGS_LIMIT
 from dk_results.services.snapshot_v3.contracts import SCHEMA_VERSION
 from dk_results.services.snapshot_v3.derive import (
     derive_avg_salary_per_player_remaining,
@@ -26,9 +27,6 @@ except ImportError:  # pragma: no cover
 
     def load_dotenv(*_args, **_kwargs):
         return False
-
-
-DEFAULT_STANDINGS_LIMIT = 500
 
 
 def configure_runtime() -> None:

@@ -18,12 +18,12 @@ from dk_results.classes.results import Results
 from dk_results.classes.sport import Sport
 from dk_results.classes.trainfinder import TrainFinder
 from dk_results.paths import repo_file
+from dk_results.services.snapshot_v3.constants import DEFAULT_STANDINGS_LIMIT
 from dk_results.services.snapshot_v3.normalize import (
     is_live_from_slot,
     normalize_name,
     slug,
     to_float,
-    to_int,
     to_utc_iso,
 )
 from dk_results.services.vips import load_vips
@@ -35,7 +35,6 @@ SALARY_DIR = str(repo_file("salary"))
 SALARY_LIMIT = 40000
 COOKIES_FILE = str(repo_file("pickled_cookies_works.txt"))
 CANDIDATE_LIMIT = 5
-DEFAULT_STANDINGS_LIMIT = 500
 
 
 def _sport_choices() -> dict[str, type[Sport]]:
