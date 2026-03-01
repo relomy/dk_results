@@ -4,7 +4,7 @@ from dk_results.services.snapshot_v3.derive import derive_threat
 
 def test_collect_raw_bundle_returns_expected_raw_shape(monkeypatch) -> None:
     monkeypatch.setattr(
-        "dk_results.services.snapshot_v3.collector.collect_snapshot_data",
+        "dk_results.services.snapshot_v3.collector._collect_source_snapshot",
         lambda **_kwargs: {
             "sport": "NBA",
             "contest": {"contest_id": "123", "name": "Contest"},
@@ -33,7 +33,7 @@ def test_collect_raw_bundle_returns_expected_raw_shape(monkeypatch) -> None:
 
 def test_collect_raw_bundle_keeps_vips_without_entry_key_and_does_not_truncate_trains(monkeypatch) -> None:
     monkeypatch.setattr(
-        "dk_results.services.snapshot_v3.collector.collect_snapshot_data",
+        "dk_results.services.snapshot_v3.collector._collect_source_snapshot",
         lambda **_kwargs: {
             "sport": "NBA",
             "contest": {"contest_id": "123", "name": "Contest"},
@@ -73,7 +73,7 @@ def test_collect_raw_bundle_keeps_vips_without_entry_key_and_does_not_truncate_t
 
 def test_collect_raw_bundle_does_not_backfill_entry_key_from_ambiguous_display_name(monkeypatch) -> None:
     monkeypatch.setattr(
-        "dk_results.services.snapshot_v3.collector.collect_snapshot_data",
+        "dk_results.services.snapshot_v3.collector._collect_source_snapshot",
         lambda **_kwargs: {
             "sport": "NBA",
             "contest": {"contest_id": "123", "name": "Contest"},
@@ -107,7 +107,7 @@ def test_collect_raw_bundle_does_not_backfill_entry_key_from_ambiguous_display_n
 
 def test_collect_raw_bundle_marks_textual_live_status_as_live(monkeypatch) -> None:
     monkeypatch.setattr(
-        "dk_results.services.snapshot_v3.collector.collect_snapshot_data",
+        "dk_results.services.snapshot_v3.collector._collect_source_snapshot",
         lambda **_kwargs: {
             "sport": "NBA",
             "contest": {"contest_id": "123", "name": "Contest"},
@@ -143,7 +143,7 @@ def test_collect_raw_bundle_marks_textual_live_status_as_live(monkeypatch) -> No
 
 def test_collect_raw_bundle_maps_top_remaining_players_from_vip_slots_when_players_missing(monkeypatch) -> None:
     monkeypatch.setattr(
-        "dk_results.services.snapshot_v3.collector.collect_snapshot_data",
+        "dk_results.services.snapshot_v3.collector._collect_source_snapshot",
         lambda **_kwargs: {
             "sport": "NBA",
             "contest": {"contest_id": "123", "name": "Contest"},
