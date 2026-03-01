@@ -80,7 +80,7 @@ Contract rules:
 Before promoting a new snapshot build:
 1. `uv run pytest -q`
 2. `uv run ruff check .`
-3. `uv run ty check src/dk_results/services/snapshot_v3 src/dk_results/services/snapshot_exporter.py src/dk_results/commands/export_fixture.py src/dk_results/cli/db_main.py`
+3. `uv run ty check src/dk_results/services/snapshot_v3 src/dk_results/services/vips.py src/dk_results/commands/export_fixture.py src/dk_results/cli/db_main.py`
 4. generate snapshot artifact
 5. publish `latest.json` and manifest entry
 6. validate the published JSON locally:
