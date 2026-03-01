@@ -4,9 +4,9 @@ from datetime import datetime, timedelta
 from typing import Any
 
 from dk_results.services.json_stable import to_stable_json
-from dk_results.services.snapshot_v3.pipeline import build_snapshot_v3_envelope
 from dk_results.services.snapshot_v3.pipeline import (
     DEFAULT_STANDINGS_LIMIT,
+    build_snapshot_v3_envelope,
     configure_runtime,
     normalize_sport_name,
 )
