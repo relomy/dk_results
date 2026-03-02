@@ -4,39 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Iterable
 
-
-def _to_float(value: Any) -> float | None:
-    if isinstance(value, (int, float)):
-        return float(value)
-    if isinstance(value, str):
-        text = value.strip().replace("$", "").replace(",", "")
-        if not text:
-            return None
-        try:
-            return float(text)
-        except ValueError:
-            return None
-    return None
-
-
-def _to_int(value: Any) -> int | None:
-    if isinstance(value, bool):
-        return None
-    if isinstance(value, int):
-        return value
-    if isinstance(value, float):
-        if value.is_integer():
-            return int(value)
-        return None
-    if isinstance(value, str):
-        text = value.strip()
-        if not text:
-            return None
-        try:
-            return int(text)
-        except ValueError:
-            return None
-    return None
+from dk_results.services.snapshot_v3.normalize import is_live_from_slot, to_float, to_int
 
 
 def _sorted_vip_rows(vip_lineups: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -54,12 +22,12 @@ def derive_distance_to_cash(raw_bundle: dict[str, Any]) -> dict[str, Any] | None
     cash_line = dict(raw_bundle.get("cash_line") or {})
     vip_lineups = [row for row in list(raw_bundle.get("vip_lineups") or []) if isinstance(row, dict)]
 
-    cutoff_points = _to_float(cash_line.get("points"))
-    rank_cutoff = _to_int(cash_line.get("rank"))
+    cutoff_points = to_float(cash_line.get("points"))
+    rank_cutoff = to_int(cash_line.get("rank"))
 
     per_vip: list[dict[str, Any]] = []
     for row in _sorted_vip_rows(vip_lineups):
-        current_points = _to_float(row.get("pts"))
+        current_points = to_float(row.get("pts"))
         if current_points is None or cutoff_points is None:
             continue
 
@@ -70,7 +38,7 @@ def derive_distance_to_cash(raw_bundle: dict[str, Any]) -> dict[str, Any] | None
             "points_delta": round(current_points - cutoff_points, 2),
         }
 
-        current_rank = _to_int(row.get("rank"))
+        current_rank = to_int(row.get("rank"))
         if rank_cutoff is not None and current_rank is not None:
             entry["rank_delta"] = rank_cutoff - current_rank
 
@@ -135,7 +103,7 @@ def derive_threat(raw_bundle: dict[str, Any]) -> dict[str, Any] | None:
         if player_key in (None, ""):
             continue
 
-        ownership_remaining_pct = _to_float(row.get("ownership_remaining_pct"))
+        ownership_remaining_pct = to_float(row.get("ownership_remaining_pct"))
 
         normalized_key = str(player_key)
         if normalized_key in seen_player_keys:
@@ -180,42 +148,9 @@ def derive_avg_salary_per_player_remaining(raw_bundle: dict[str, Any]) -> float 
         for slot in slots:
             if not isinstance(slot, dict):
                 continue
-            is_live = slot.get("is_live")
-            if not isinstance(is_live, bool):
-                time_remaining = _to_float(
-                    slot.get("time_remaining_minutes")
-                    if slot.get("time_remaining_minutes") is not None
-                    else slot.get("timeStatus")
-                )
-                if time_remaining is not None:
-                    is_live = time_remaining > 0
-                else:
-                    text_candidates = [
-                        slot.get("timeStatus"),
-                        slot.get("time_remaining_display"),
-                        slot.get("timeRemaining"),
-                        slot.get("game_status"),
-                        slot.get("status"),
-                    ]
-                    live_markers = ("in progress", "live", "q1", "q2", "q3", "q4", "ot", "thru", "hole")
-                    final_markers = ("final", "complete", "completed", "locked", "postponed", "canceled", "cancelled")
-                    is_live = False
-                    for raw_text in text_candidates:
-                        status_text = str(raw_text or "").strip().lower()
-                        if not status_text or status_text in {"-", "--"}:
-                            continue
-                        if any(marker in status_text for marker in final_markers):
-                            is_live = False
-                            break
-                        if any(marker in status_text for marker in live_markers):
-                            is_live = True
-                            break
-                        if ":" in status_text:
-                            is_live = True
-                            break
-            if is_live is not True:
+            if not is_live_from_slot(slot):
                 continue
-            salary = _to_float(slot.get("salary"))
+            salary = to_float(slot.get("salary"))
             if salary is None:
                 continue
             live_slot_salaries.append(salary)
