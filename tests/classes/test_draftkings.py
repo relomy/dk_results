@@ -191,6 +191,14 @@ def test_normalize_and_lookup_salary():
     assert dk._lookup_salary("", {"Jose": 100}) is None
 
 
+def test_redact_url_for_log_strips_querystring():
+    dk = Draftkings(session=_Session(_Response()))
+    redacted = dk._redact_url_for_log(
+        "https://example.test/path/to/file.csv?token=abc123&sig=xyz#frag"
+    )
+    assert redacted == "https://example.test/path/to/file.csv"
+
+
 def test_fetch_user_lineup_worker_missing_entry_key():
     dk = Draftkings(session=_Session(_Response()))
     assert dk._fetch_user_lineup_worker({"userName": "vip"}, 1) is None

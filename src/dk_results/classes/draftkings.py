@@ -6,6 +6,7 @@ import io
 import logging
 import os
 import pickle
+import time
 import unicodedata
 import zipfile
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -36,7 +37,15 @@ class Draftkings:
         self.timeout_sec = timeout_sec
         self.cookies_dump_file = cookies_dump_file
         self.contest_dir = contest_dir
-        self.logger = logging.getLogger(self.__class__.__name__)
+        self.logger = logging.getLogger(__name__)
+
+    @staticmethod
+    def _redact_url_for_log(url: str) -> str:
+        """Drop querystring/fragment from URLs before logging."""
+        if not url:
+            return ""
+        parsed = urlsplit(url)
+        return urlunsplit((parsed.scheme, parsed.netloc, parsed.path, "", ""))
 
     # -----------------------
     # Utilities
@@ -110,13 +119,6 @@ class Draftkings:
         if not isinstance(name, str):
             return ""
         return "".join(c for c in unicodedata.normalize("NFD", name) if unicodedata.category(c) != "Mn")
-
-    @staticmethod
-    def _redact_url_for_logs(url: str) -> str:
-        parts = urlsplit(str(url))
-        if not parts.scheme or not parts.netloc:
-            return str(url)
-        return urlunsplit((parts.scheme, parts.netloc, parts.path, "", ""))
 
     def _lookup_salary(self, player_name: str, player_salary_map: dict[str, int] | None) -> int | None:
         if not player_salary_map or not player_name:
@@ -255,6 +257,8 @@ class Draftkings:
 
         max_workers = min(max_workers, len(users_to_fetch)) or 1
         vip_lineups: list[dict[str, Any]] = []
+        missing_roster = 0
+        failures = 0
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             futures = {
                 executor.submit(self._fetch_user_lineup_worker, u, dg, player_salary_map): u for u in users_to_fetch
@@ -266,11 +270,13 @@ class Draftkings:
 
                     if not result:
                         self.logger.debug("VIP %s had no roster data", user)
+                        missing_roster += 1
                         continue
 
                     self.logger.debug("Found VIP lineup for user %s", result.get("user", user))
                     vip_lineups.append(result)
                 except Exception as e:
+                    failures += 1
                     # Best-effort logging at client level
                     try:
                         self.logger.error(
@@ -280,6 +286,15 @@ class Draftkings:
                         )
                     except Exception:
                         pass
+        self.logger.info(
+            "vip_lineups_fetch contest_id=%s draft_group=%s requested=%d found=%d missing_roster=%d failures=%d",
+            dk_id,
+            dg,
+            len(users_to_fetch),
+            len(vip_lineups),
+            missing_roster,
+            failures,
+        )
         return vip_lineups
 
     def get_entry(
@@ -332,15 +347,19 @@ class Draftkings:
         cdir = contest_dir if contest_dir is not None else self.contest_dir
 
         url = f"https://www.draftkings.com/contest/exportfullstandingscsv/{contest_id}"
+        started_at = time.monotonic()
         r = self.session.get(url, timeout=timeout)
 
         ctype = r.headers.get("Content-Type", "")
-        safe_url = self._redact_url_for_logs(r.url)
+        safe_url = self._redact_url_for_log(r.url)
+        elapsed_ms = int((time.monotonic() - started_at) * 1000)
         self.logger.debug(
-            "download_contest_rows status=%s url=%s ctype=%s",
+            "download_contest_rows contest_id=%s status=%s ctype=%s url=%s elapsed_ms=%d",
+            contest_id,
             r.status_code,
-            safe_url,
             ctype,
+            safe_url,
+            elapsed_ms,
         )
 
         if "text/html" in ctype:
