@@ -33,6 +33,8 @@ def test_configure_logging_applies_levels_and_idempotent_handler(monkeypatch):
     monkeypatch.setenv("LOG_LEVEL", "WARNING")
     logging.getLogger("googleapiclient.discovery").setLevel(logging.DEBUG)
     logging.getLogger("urllib3").setLevel(logging.DEBUG)
+    logging.getLogger("charset_normalizer").setLevel(logging.DEBUG)
+    logging.getLogger("google_auth_httplib2").setLevel(logging.DEBUG)
 
     logger = app_logging.configure_logging()
     assert logger is root
@@ -40,10 +42,28 @@ def test_configure_logging_applies_levels_and_idempotent_handler(monkeypatch):
     assert len(root.handlers) == 1
     assert logging.getLogger("googleapiclient.discovery").level == logging.INFO
     assert logging.getLogger("urllib3").level == logging.INFO
+    assert logging.getLogger("charset_normalizer").level == logging.INFO
+    assert logging.getLogger("google_auth_httplib2").level == logging.INFO
+
+
+def test_configure_logging_defaults_to_debug_on_pi(monkeypatch):
+    root = logging.getLogger()
+    root.handlers.clear()
+    monkeypatch.delenv("LOG_LEVEL", raising=False)
+    monkeypatch.setenv("DK_PLATFORM", "pi")
+
+    logger = app_logging.configure_logging()
+
+    assert logger is root
+    assert root.level == logging.DEBUG
 
     logger = app_logging.configure_logging()
     assert logger is root
     assert len(root.handlers) == 1
+    assert logging.getLogger("googleapiclient.discovery").level == logging.INFO
+    assert logging.getLogger("urllib3").level == logging.INFO
+    assert logging.getLogger("charset_normalizer").level == logging.INFO
+    assert logging.getLogger("google_auth_httplib2").level == logging.INFO
 
 
 def test_configure_logging_honors_level_override_without_env_mutation(monkeypatch):
@@ -56,17 +76,6 @@ def test_configure_logging_honors_level_override_without_env_mutation(monkeypatc
 
     assert root.level == logging.WARNING
     assert "LOG_LEVEL" not in os.environ
-
-
-def test_configure_logging_defaults_to_debug_on_pi(monkeypatch):
-    root = logging.getLogger()
-    root.handlers.clear()
-    monkeypatch.delenv("LOG_LEVEL", raising=False)
-    monkeypatch.setenv("DK_PLATFORM", "pi")
-
-    app_logging.configure_logging()
-
-    assert root.level == logging.DEBUG
 
 
 def test_importing_non_entrypoint_modules_does_not_call_configure_logging(monkeypatch):
