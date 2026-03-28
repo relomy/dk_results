@@ -136,6 +136,37 @@ def test_write_vip_lineups_writes_range():
     assert service.updated[0][0] == "NBA!J3:W999"
 
 
+def test_add_train_info_expands_range_for_wide_rows():
+    values_by_range = {
+        "MLB!A1:H1": [["Name"]],
+        "MLB!A2:H": [["Alice"]],
+    }
+    sheet, service = _make_service("MLB", values_by_range=values_by_range)
+
+    sheet.add_train_info(
+        [
+            [
+                "Rank",
+                "Users",
+                "Score",
+                "PMR",
+                "P1",
+                "P2",
+                "P3",
+                "P4",
+                "P5",
+                "P6",
+                "P7",
+                "P8",
+                "P9",
+                "P10",
+            ]
+        ]
+    )
+
+    assert service.updated[0][0] == "MLB!AA4:AN11"
+
+
 def test_build_dfs_sheet_service_uses_injected_service():
     service = FakeService()
     sheet = build_dfs_sheet_service("NBA", service=service, spreadsheet_id="sheet-id")

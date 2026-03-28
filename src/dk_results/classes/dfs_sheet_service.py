@@ -73,8 +73,29 @@ class DfsSheetService:
         cell_range = f"{self.sport}!X3:Y16"
         self.repo.write_range(non_cashing_info, cell_range)
 
+    @staticmethod
+    def _column_letters_to_index(column: str) -> int:
+        index = 0
+        for char in column:
+            index = index * 26 + (ord(char) - ord("A") + 1)
+        return index
+
+    @staticmethod
+    def _column_index_to_letters(index: int) -> str:
+        letters = ""
+        while index > 0:
+            index, remainder = divmod(index - 1, 26)
+            letters = chr(ord("A") + remainder) + letters
+        return letters
+
     def add_train_info(self, train_info: list[list[Any]]) -> None:
-        cell_range = f"{self.sport}!AA4:AM11"
+        start_col = "AA"
+        min_columns = 13
+        max_columns = max((len(row) for row in train_info), default=min_columns)
+        total_columns = max(min_columns, max_columns)
+        start_index = self._column_letters_to_index(start_col)
+        end_col = self._column_index_to_letters(start_index + total_columns - 1)
+        cell_range = f"{self.sport}!{start_col}4:{end_col}11"
         self.repo.write_range(train_info, cell_range)
 
     def add_optimal_lineup(self, optimal_lineup_info: list[list[Any]]) -> None:
