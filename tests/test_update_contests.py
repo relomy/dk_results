@@ -7,6 +7,40 @@ import yaml
 
 import dk_results.cli.update_contests as update_contests
 
+CONTESTS_TABLE_SQL = """
+CREATE TABLE contests (
+    dk_id INTEGER PRIMARY KEY,
+    sport varchar(10) NOT NULL,
+    name varchar(50) NOT NULL,
+    start_date datetime NOT NULL,
+    draft_group INTEGER NOT NULL,
+    total_prizes INTEGER NOT NULL,
+    entries INTEGER NOT NULL,
+    positions_paid INTEGER,
+    entry_fee INTEGER NOT NULL,
+    entry_count INTEGER NOT NULL,
+    max_entry_count INTEGER NOT NULL,
+    completed INTEGER NOT NULL DEFAULT 0,
+    status TEXT
+);
+"""
+
+
+def _create_contests_table(conn: sqlite3.Connection) -> None:
+    conn.execute(CONTESTS_TABLE_SQL)
+    conn.commit()
+
+
+def _make_sender():
+    class FakeSender:
+        def __init__(self):
+            self.messages = []
+
+        def send_message(self, message: str) -> None:
+            self.messages.append(message)
+
+    return FakeSender()
+
 
 def test_parse_start_date_handles_str_and_datetime():
     dt = datetime.datetime(2026, 1, 1, 0, 0, 0)
@@ -1446,3 +1480,310 @@ def test_soft_finish_runs_despite_skip_draft_groups_short_circuit(monkeypatch, t
     update_contests.check_contests_for_completion(conn)
 
     assert len(sender.messages) == 1
+
+
+def test_vip_presence_resolver_uses_draftkings_entrant_page_fetch():
+    conn = sqlite3.connect(":memory:")
+    update_contests.create_vip_presence_table(conn)
+    calls: list[tuple[int, int]] = []
+
+    class FakeDK:
+        def get_contest_entrants_page(self, contest_id: int, page_no: int, timeout=None, session=None):
+            calls.append((contest_id, page_no))
+            if page_no == 1:
+                return "<tr><td data-un='vipone'></td></tr>"
+            return ""
+
+    status = update_contests._resolve_vip_presence(
+        conn,
+        dk=FakeDK(),
+        dk_id=123,
+        start_date="2026-03-29 13:35:00",
+        vip_names=["VipOne"],
+    )
+
+    assert status == update_contests.VIP_PRESENT
+    assert calls == [(123, 1)]
+    assert update_contests.db_get_vip_presence(conn, 123)[0] == update_contests.VIP_PRESENT
+
+
+def test_resolve_vip_presence_marks_absent_when_all_pages_scanned():
+    conn = sqlite3.connect(":memory:")
+    update_contests.create_vip_presence_table(conn)
+
+    class FakeDK:
+        def get_contest_entrants_page(self, contest_id: int, page_no: int, timeout=None, session=None):
+            if page_no == 1:
+                return "<tr><td data-un='user1'></td><td data-un='user2'></td></tr>"
+            return ""
+
+    status = update_contests._resolve_vip_presence(
+        conn,
+        dk=FakeDK(),
+        dk_id=202,
+        start_date="2026-03-29 13:35:00",
+        vip_names=["vip_alpha", "vip_beta"],
+    )
+
+    assert status == update_contests.VIP_ABSENT
+    assert update_contests.db_get_vip_presence(conn, 202)[0] == update_contests.VIP_ABSENT
+
+
+def test_resolve_vip_presence_returns_unknown_on_fetch_error():
+    conn = sqlite3.connect(":memory:")
+    update_contests.create_vip_presence_table(conn)
+
+    class FakeDK:
+        def get_contest_entrants_page(self, contest_id: int, page_no: int, timeout=None, session=None):
+            raise RuntimeError("network down")
+
+    status = update_contests._resolve_vip_presence(
+        conn,
+        dk=FakeDK(),
+        dk_id=303,
+        start_date="2026-03-29 13:35:00",
+        vip_names=["vip_alpha"],
+    )
+
+    assert status == update_contests.VIP_UNKNOWN
+    assert update_contests.db_get_vip_presence(conn, 303) is None
+
+
+def test_resolve_vip_presence_returns_unknown_when_page_cap_hit(monkeypatch):
+    conn = sqlite3.connect(":memory:")
+    update_contests.create_vip_presence_table(conn)
+    monkeypatch.setattr(update_contests, "VIP_ENTRANT_PAGE_LIMIT", 2)
+    calls: list[int] = []
+
+    class FakeDK:
+        def get_contest_entrants_page(self, contest_id: int, page_no: int, timeout=None, session=None):
+            calls.append(page_no)
+            return "<tr><td data-un='user1'></td></tr>"
+
+    status = update_contests._resolve_vip_presence(
+        conn,
+        dk=FakeDK(),
+        dk_id=404,
+        start_date="2026-03-29 13:35:00",
+        vip_names=["vip_alpha"],
+    )
+
+    assert status == update_contests.VIP_UNKNOWN
+    assert calls == [1, 2]
+    assert update_contests.db_get_vip_presence(conn, 404) is None
+
+
+def test_parse_entrant_usernames_accepts_single_or_double_quotes():
+    html = "<td data-un='vip_alpha'></td><td data-un=\"vip_beta\"></td>"
+    names = update_contests._parse_entrant_usernames(html)
+    assert names == ["vip_alpha", "vip_beta"]
+
+
+def test_should_refresh_absent_normalizes_timezone_before_subtraction():
+    now_local = datetime.datetime.now().astimezone().replace(microsecond=0)
+    checked_at = (now_local - datetime.timedelta(minutes=11)).replace(tzinfo=None).isoformat(sep=" ")
+    start_date = (now_local + datetime.timedelta(minutes=30)).astimezone(datetime.timezone.utc).isoformat()
+
+    assert update_contests._should_refresh_absent(checked_at, start_date) is True
+
+
+def test_should_refresh_absent_is_sticky_after_start():
+    now_local = datetime.datetime.now().replace(microsecond=0)
+    checked_at = (now_local - datetime.timedelta(minutes=30)).isoformat(sep=" ")
+    start_date = (now_local - datetime.timedelta(minutes=1)).isoformat(sep=" ")
+
+    assert update_contests._should_refresh_absent(checked_at, start_date) is False
+
+
+def test_warning_notification_suppressed_when_vip_presence_absent(monkeypatch):
+    conn = sqlite3.connect(":memory:")
+    _create_contests_table(conn)
+    update_contests.create_notifications_table(conn)
+    update_contests.create_vip_presence_table(conn)
+    start_date = (datetime.datetime.now() + datetime.timedelta(minutes=10)).strftime("%Y-%m-%d %H:%M:%S")
+    conn.execute(
+        """
+        INSERT INTO contests (
+            dk_id, sport, name, start_date, draft_group, total_prizes, entries,
+            positions_paid, entry_fee, entry_count, max_entry_count, completed, status
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (123, "NBA", "Test Contest", start_date, 1, 0, 0, None, 25, 0, 0, 0, None),
+    )
+    conn.commit()
+
+    class DummySport:
+        name = "NBA"
+        sheet_min_entry_fee = 25
+        keyword = "%"
+
+    resolver_calls: list[int] = []
+
+    def fake_resolver(conn, *, dk, dk_id, start_date, vip_names):
+        resolver_calls.append(dk_id)
+        return update_contests.VIP_ABSENT
+
+    sender = _make_sender()
+    monkeypatch.setattr(update_contests, "_build_discord_sender", lambda: sender)
+    monkeypatch.setattr(update_contests, "_sport_choices", lambda: {"nba": DummySport})
+    monkeypatch.setattr(update_contests, "_warning_schedule_for", lambda _sport: [25])
+    monkeypatch.setattr(update_contests, "_resolve_vip_presence", fake_resolver)
+    monkeypatch.setattr(update_contests, "_maybe_send_soft_finish_announcement", lambda *args, **kwargs: None)
+
+    update_contests.check_contests_for_completion(conn)
+
+    assert resolver_calls == [123]
+    assert sender.messages == []
+    assert update_contests.db_has_notification(conn, 123, "warning:25") is False
+
+
+def test_warning_notification_sent_when_vip_presence_unknown(monkeypatch):
+    conn = sqlite3.connect(":memory:")
+    _create_contests_table(conn)
+    update_contests.create_notifications_table(conn)
+    update_contests.create_vip_presence_table(conn)
+    start_date = (datetime.datetime.now() + datetime.timedelta(minutes=10)).strftime("%Y-%m-%d %H:%M:%S")
+    conn.execute(
+        """
+        INSERT INTO contests (
+            dk_id, sport, name, start_date, draft_group, total_prizes, entries,
+            positions_paid, entry_fee, entry_count, max_entry_count, completed, status
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (124, "NBA", "Test Contest", start_date, 1, 0, 0, None, 25, 0, 0, 0, None),
+    )
+    conn.commit()
+
+    class DummySport:
+        name = "NBA"
+        sheet_min_entry_fee = 25
+        keyword = "%"
+
+    resolver_calls: list[int] = []
+
+    def fake_resolver(conn, *, dk, dk_id, start_date, vip_names):
+        resolver_calls.append(dk_id)
+        return update_contests.VIP_UNKNOWN
+
+    sender = _make_sender()
+    monkeypatch.setattr(update_contests, "_build_discord_sender", lambda: sender)
+    monkeypatch.setattr(update_contests, "_sport_choices", lambda: {"nba": DummySport})
+    monkeypatch.setattr(update_contests, "_warning_schedule_for", lambda _sport: [25])
+    monkeypatch.setattr(update_contests, "_resolve_vip_presence", fake_resolver)
+    monkeypatch.setattr(update_contests, "_maybe_send_soft_finish_announcement", lambda *args, **kwargs: None)
+
+    update_contests.check_contests_for_completion(conn)
+
+    assert resolver_calls == [124]
+    assert len(sender.messages) == 1
+    assert "Contest starting soon (25m)" in sender.messages[0]
+    assert update_contests.db_has_notification(conn, 124, "warning:25") is True
+
+
+def test_live_notification_suppressed_when_vip_presence_absent(monkeypatch):
+    conn = sqlite3.connect(":memory:")
+    _create_contests_table(conn)
+    update_contests.create_notifications_table(conn)
+    update_contests.create_vip_presence_table(conn)
+    start_date = "2026-03-29 12:00:00"
+    conn.execute(
+        """
+        INSERT INTO contests (
+            dk_id, sport, name, start_date, draft_group, total_prizes, entries,
+            positions_paid, entry_fee, entry_count, max_entry_count, completed, status
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (222, "NBA", "Live Contest", start_date, 55, 0, 0, None, 25, 0, 0, 0, "SCHEDULED"),
+    )
+    conn.commit()
+
+    class DummySport:
+        name = "NBA"
+        sheet_min_entry_fee = 25
+        keyword = "%"
+
+    sender = _make_sender()
+    monkeypatch.setattr(update_contests, "_build_discord_sender", lambda: sender)
+    monkeypatch.setattr(update_contests, "_sport_choices", lambda: {"nba": DummySport})
+    monkeypatch.setattr(update_contests, "_warning_schedule_for", lambda _sport: [])
+    monkeypatch.setattr(
+        update_contests,
+        "_resolve_vip_presence",
+        lambda *_args, **_kwargs: update_contests.VIP_ABSENT,
+    )
+    monkeypatch.setattr(
+        update_contests,
+        "db_get_incomplete_contests",
+        lambda _c: [(222, 55, 0, None, "SCHEDULED", 0, "Live Contest", start_date, "NBA")],
+    )
+    monkeypatch.setattr(
+        update_contests,
+        "get_contest_data",
+        lambda _id: {"positions_paid": 100, "status": "LIVE", "completed": 0, "entries": 400},
+    )
+    monkeypatch.setattr(
+        update_contests,
+        "db_get_live_contest",
+        lambda *_a, **_k: (222, "Live Contest", 55, 100, start_date),
+    )
+    monkeypatch.setattr(update_contests, "_maybe_send_soft_finish_announcement", lambda *args, **kwargs: None)
+
+    update_contests.check_contests_for_completion(conn)
+
+    assert sender.messages == []
+    assert update_contests.db_has_notification(conn, 222, "live") is False
+
+
+def test_completed_notification_suppressed_when_vip_presence_absent(monkeypatch):
+    conn = sqlite3.connect(":memory:")
+    _create_contests_table(conn)
+    update_contests.create_notifications_table(conn)
+    update_contests.create_vip_presence_table(conn)
+    start_date = "2026-03-29 12:00:00"
+    conn.execute(
+        """
+        INSERT INTO contests (
+            dk_id, sport, name, start_date, draft_group, total_prizes, entries,
+            positions_paid, entry_fee, entry_count, max_entry_count, completed, status
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (333, "NBA", "Completed Contest", start_date, 65, 0, 0, None, 25, 0, 0, 0, "SCHEDULED"),
+    )
+    update_contests.db_insert_notification(conn, 333, "live")
+    conn.commit()
+
+    class DummySport:
+        name = "NBA"
+        sheet_min_entry_fee = 25
+        keyword = "%"
+
+    sender = _make_sender()
+    monkeypatch.setattr(update_contests, "_build_discord_sender", lambda: sender)
+    monkeypatch.setattr(update_contests, "_sport_choices", lambda: {"nba": DummySport})
+    monkeypatch.setattr(update_contests, "_warning_schedule_for", lambda _sport: [])
+    monkeypatch.setattr(
+        update_contests,
+        "_resolve_vip_presence",
+        lambda *_args, **_kwargs: update_contests.VIP_ABSENT,
+    )
+    monkeypatch.setattr(
+        update_contests,
+        "db_get_incomplete_contests",
+        lambda _c: [(333, 65, 0, None, "SCHEDULED", 0, "Completed Contest", start_date, "NBA")],
+    )
+    monkeypatch.setattr(
+        update_contests,
+        "get_contest_data",
+        lambda _id: {"positions_paid": 100, "status": "COMPLETED", "completed": 1, "entries": 400},
+    )
+    monkeypatch.setattr(
+        update_contests,
+        "db_get_live_contest",
+        lambda *_a, **_k: (333, "Completed Contest", 65, 100, start_date),
+    )
+    monkeypatch.setattr(update_contests, "_maybe_send_soft_finish_announcement", lambda *args, **kwargs: None)
+
+    update_contests.check_contests_for_completion(conn)
+
+    assert sender.messages == []
+    assert update_contests.db_has_notification(conn, 333, "completed") is False

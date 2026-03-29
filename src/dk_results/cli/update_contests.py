@@ -4,6 +4,7 @@ import hashlib
 import json
 import logging
 import os
+import re
 import sqlite3
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from pathlib import Path
@@ -42,6 +43,11 @@ CONTEST_WARNING_MINUTES = int(os.getenv("CONTEST_WARNING_MINUTES", "25"))
 WARNING_SCHEDULE_FILE_ENV = "CONTEST_WARNING_SCHEDULE_FILE"
 DEFAULT_WARNING_SCHEDULE_FILE = str(repo_file("contest_warning_schedules.yaml"))
 _DEFAULT_WARNING_SCHEDULE = [CONTEST_WARNING_MINUTES]
+VIP_PRESENT = "present"
+VIP_ABSENT = "absent"
+VIP_UNKNOWN = "unknown"
+VIP_ABSENT_REFRESH_MINUTES = 10
+VIP_ENTRANT_PAGE_LIMIT = 50
 
 SPORT_EMOJI = {
     "CFB": "🏈",
@@ -246,6 +252,42 @@ def create_notifications_table(conn) -> None:
     conn.commit()
 
 
+def create_vip_presence_table(conn) -> None:
+    sql = """
+    CREATE TABLE IF NOT EXISTS contest_vip_presence (
+        dk_id INTEGER PRIMARY KEY,
+        status TEXT NOT NULL,
+        checked_at datetime NOT NULL DEFAULT (datetime('now', 'localtime'))
+    );
+    """
+    conn.execute(sql)
+    conn.commit()
+
+
+def db_get_vip_presence(conn, dk_id: int) -> tuple[str, str] | None:
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT status, checked_at FROM contest_vip_presence WHERE dk_id=? LIMIT 1",
+        (dk_id,),
+    )
+    return cur.fetchone()
+
+
+def db_upsert_vip_presence(conn, dk_id: int, status: str) -> None:
+    create_vip_presence_table(conn)
+    conn.execute(
+        """
+        INSERT INTO contest_vip_presence (dk_id, status)
+        VALUES (?, ?)
+        ON CONFLICT(dk_id) DO UPDATE SET
+            status=excluded.status,
+            checked_at=datetime('now', 'localtime')
+        """,
+        (dk_id, status),
+    )
+    conn.commit()
+
+
 def db_has_notification(conn, dk_id: int, event: str) -> bool:
     cur = conn.cursor()
     cur.execute(
@@ -313,6 +355,87 @@ def _vip_key(name: Any) -> str:
     if not isinstance(name, str):
         return ""
     return name.strip().lower()
+
+
+_ENTRANT_USERNAME_RE = re.compile(r"""data-un\s*=\s*['"]([^'"]+)['"]""", re.IGNORECASE)
+
+
+def _parse_entrant_usernames(html: str) -> list[str]:
+    if not html:
+        return []
+    return [match.strip().lower() for match in _ENTRANT_USERNAME_RE.findall(html) if match.strip()]
+
+
+def _entrant_payload_is_ambiguous(html: str, entrants: list[str]) -> bool:
+    if entrants:
+        return False
+    lowered = html.lower()
+    return "data-un" in lowered
+
+
+def _should_refresh_absent(checked_at: str, start_date: str) -> bool:
+    def _normalize_local(dt: datetime.datetime) -> datetime.datetime:
+        local_tz = datetime.datetime.now().astimezone().tzinfo
+        if dt.tzinfo is None:
+            return dt.replace(tzinfo=local_tz)
+        return dt.astimezone(local_tz)
+
+    checked_dt = _parse_start_date(checked_at)
+    start_dt = _parse_start_date(start_date)
+    if not checked_dt or not start_dt:
+        return True
+
+    checked_local = _normalize_local(checked_dt)
+    start_local = _normalize_local(start_dt)
+    now_local = datetime.datetime.now(start_local.tzinfo)
+    if now_local < start_local:
+        return (now_local - checked_local) >= datetime.timedelta(minutes=VIP_ABSENT_REFRESH_MINUTES)
+    return False
+
+
+def _resolve_vip_presence(
+    conn,
+    *,
+    dk: Draftkings,
+    dk_id: int,
+    start_date: str,
+    vip_names: list[str],
+) -> str:
+    create_vip_presence_table(conn)
+    if not vip_names:
+        return VIP_UNKNOWN
+
+    vip_keys = {_vip_key(name) for name in vip_names if _vip_key(name)}
+    if not vip_keys:
+        return VIP_UNKNOWN
+
+    cached = db_get_vip_presence(conn, dk_id)
+    if cached:
+        cached_status, checked_at = cached
+        if cached_status == VIP_PRESENT:
+            return VIP_PRESENT
+        if cached_status == VIP_ABSENT and not _should_refresh_absent(checked_at, start_date):
+            return VIP_ABSENT
+
+    try:
+        for page_no in range(1, VIP_ENTRANT_PAGE_LIMIT + 1):
+            html = dk.get_contest_entrants_page(dk_id, page_no)
+            entrants = _parse_entrant_usernames(html)
+            if _entrant_payload_is_ambiguous(html, entrants):
+                logger.warning("entrant payload parse ambiguity for dk_id=%s page=%s", dk_id, page_no)
+                return VIP_UNKNOWN
+            if not entrants:
+                db_upsert_vip_presence(conn, dk_id, VIP_ABSENT)
+                return VIP_ABSENT
+            if any(name in vip_keys for name in entrants):
+                db_upsert_vip_presence(conn, dk_id, VIP_PRESENT)
+                return VIP_PRESENT
+    except Exception:
+        logger.warning("VIP presence check failed for dk_id=%s", dk_id, exc_info=True)
+        return VIP_UNKNOWN
+
+    logger.info("vip presence page cap hit for dk_id=%s; returning unknown", dk_id)
+    return VIP_UNKNOWN
 
 
 def _load_vips() -> list[str]:
@@ -501,7 +624,11 @@ def _maybe_send_soft_finish_announcement(
 def check_contests_for_completion(conn) -> None:
     """Check each contest for completion/positions_paid data."""
     create_notifications_table(conn)
+    create_vip_presence_table(conn)
     sender = _build_discord_sender()
+    if sender:
+        dk_client = Draftkings()
+        vip_names = _load_vips()
 
     if sender:
         logged_schedules: set[str] = set()
@@ -541,6 +668,21 @@ def check_contests_for_completion(conn) -> None:
                 if db_has_notification(conn, dk_id, warning_key):
                     logger.debug(
                         "warning already sent for %s dk_id=%s (%sm)",
+                        sport_cls.name,
+                        dk_id,
+                        warning_minutes,
+                    )
+                    continue
+                vip_presence = _resolve_vip_presence(
+                    conn,
+                    dk=dk_client,
+                    dk_id=dk_id,
+                    start_date=str(start_date),
+                    vip_names=vip_names,
+                )
+                if vip_presence == VIP_ABSENT:
+                    logger.info(
+                        "skipping warning notification for %s dk_id=%s (%sm); vip_presence=absent",
                         sport_cls.name,
                         dk_id,
                         warning_minutes,
@@ -664,6 +806,20 @@ def check_contests_for_completion(conn) -> None:
                         dk_id,
                     )
                 if is_new_live and is_primary_live and not db_has_notification(conn, dk_id, "live"):
+                    vip_presence = _resolve_vip_presence(
+                        conn,
+                        dk=dk_client,
+                        dk_id=dk_id,
+                        start_date=str(start_date),
+                        vip_names=vip_names,
+                    )
+                    if vip_presence == VIP_ABSENT:
+                        logger.info(
+                            "skipping live notification for %s dk_id=%s; vip_presence=absent",
+                            sport_name,
+                            dk_id,
+                        )
+                        continue
                     message = _format_contest_announcement(
                         "Contest started",
                         sport_name,
@@ -692,6 +848,20 @@ def check_contests_for_completion(conn) -> None:
 
                 if is_new_completed:
                     if db_has_notification(conn, dk_id, "live") and not db_has_notification(conn, dk_id, "completed"):
+                        vip_presence = _resolve_vip_presence(
+                            conn,
+                            dk=dk_client,
+                            dk_id=dk_id,
+                            start_date=str(start_date),
+                            vip_names=vip_names,
+                        )
+                        if vip_presence == VIP_ABSENT:
+                            logger.info(
+                                "skipping completed notification for %s dk_id=%s; vip_presence=absent",
+                                sport_name,
+                                dk_id,
+                            )
+                            continue
                         message = _format_contest_announcement(
                             "Contest ended",
                             sport_name,
