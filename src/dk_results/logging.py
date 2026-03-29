@@ -5,7 +5,13 @@ from __future__ import annotations
 import logging
 import os
 
-NOISY_LIBRARY_LOGGERS = ("googleapiclient.discovery", "urllib3", "rookie.browser")
+NOISY_LIBRARY_LOGGERS = (
+    "googleapiclient.discovery",
+    "urllib3",
+    "rookie.browser",
+    "charset_normalizer",
+    "google_auth_httplib2",
+)
 _HANDLER_MARKER = "_dk_results_configured_handler"
 
 
