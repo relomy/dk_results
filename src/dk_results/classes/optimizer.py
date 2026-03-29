@@ -3,12 +3,8 @@ from typing import Type
 
 import pulp as pl
 
-from dk_results.logging import configure_logging
-
 from .player import Player
 from .sport import Sport
-
-configure_logging()
 
 
 class Optimizer:

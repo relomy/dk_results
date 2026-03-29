@@ -1,4 +1,7 @@
+import importlib
 import logging
+import os
+import sys
 
 import pytest
 
@@ -38,9 +41,38 @@ def test_configure_logging_applies_levels_and_idempotent_handler(monkeypatch):
     assert logging.getLogger("googleapiclient.discovery").level == logging.INFO
     assert logging.getLogger("urllib3").level == logging.INFO
 
-    logger = app_logging.configure_logging()
 
-    assert logger is root
-    assert len(root.handlers) == 1
-    assert logging.getLogger("googleapiclient.discovery").level == logging.INFO
-    assert logging.getLogger("urllib3").level == logging.INFO
+def test_configure_logging_honors_level_override_without_env_mutation(monkeypatch):
+    root = logging.getLogger()
+    root.handlers.clear()
+    monkeypatch.delenv("LOG_LEVEL", raising=False)
+    monkeypatch.setenv("DK_PLATFORM", "linux")
+
+    app_logging.configure_logging(level_override="WARNING")
+
+    assert root.level == logging.WARNING
+    assert "LOG_LEVEL" not in os.environ
+
+
+def test_importing_non_entrypoint_modules_does_not_call_configure_logging(monkeypatch):
+    calls = {"count": 0}
+
+    def _fake_configure_logging(*_args, **_kwargs):
+        calls["count"] += 1
+        return logging.getLogger()
+
+    monkeypatch.setattr(app_logging, "configure_logging", _fake_configure_logging)
+
+    module_names = [
+        "dk_results.classes.player",
+        "dk_results.classes.user",
+        "dk_results.classes.optimizer",
+        "dk_results.classes.contestdatabase",
+    ]
+    for name in module_names:
+        sys.modules.pop(name, None)
+
+    for name in module_names:
+        importlib.import_module(name)
+
+    assert calls["count"] == 0

@@ -1,5 +1,6 @@
 import datetime
 import json
+import logging
 from argparse import Namespace
 from collections import OrderedDict
 from pathlib import Path
@@ -184,6 +185,37 @@ def test_main_snapshot_out_writes_opt_in_envelope(monkeypatch, tmp_path):
     assert payload["sports"]["golf"]["truncation"]["limit"] == 123
     assert payload["generated_at"].endswith("Z")
     assert payload["snapshot_at"].endswith("Z")
+
+
+def test_main_verbose_enables_debug_without_mutating_log_level_env(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("LOG_LEVEL", "INFO")
+    monkeypatch.setattr(db_main, "load_dotenv", lambda: None)
+    monkeypatch.setattr(db_main, "load_and_apply_settings", lambda: None)
+    monkeypatch.setattr(db_main.state, "contests_db_path", lambda: tmp_path / "contests.db")
+    monkeypatch.setattr(db_main, "ContestDatabase", lambda _path: object())
+    monkeypatch.setattr(db_main, "load_vips", lambda: [])
+    monkeypatch.setattr(db_main, "process_sport", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        db_main.argparse.ArgumentParser,
+        "parse_args",
+        lambda _self: Namespace(
+            sport=["NFL"],
+            nolineups=False,
+            verbose=True,
+            snapshot_out=None,
+            standings_limit=123,
+        ),
+    )
+
+    root = logging.getLogger()
+    root.setLevel(logging.WARNING)
+    root.handlers.clear()
+
+    db_main.main()
+
+    assert root.level == logging.DEBUG
+    assert db_main.os.environ["LOG_LEVEL"] == "INFO"
 
 
 def test_write_snapshot_payload_is_byte_stable(tmp_path):

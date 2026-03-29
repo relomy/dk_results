@@ -4,11 +4,6 @@ import logging
 from dataclasses import InitVar, dataclass, field
 from typing import Any
 
-from dk_results.logging import configure_logging
-
-# load the logging configuration
-configure_logging()
-
 
 @dataclass
 class Player:

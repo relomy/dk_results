@@ -368,7 +368,6 @@ def main() -> None:
     """
     load_dotenv()
     load_and_apply_settings()
-    configure_logging()
 
     parser = argparse.ArgumentParser()
     sportz: list[SportType] = Sport.__subclasses__()
@@ -387,7 +386,7 @@ def main() -> None:
         action="store_false",
         help="If true, will not print VIP lineups",
     )
-    parser.add_argument("-v", "--verbose", help="Increase verbosity")
+    parser.add_argument("-v", "--verbose", action="store_true", help="Increase verbosity")
     parser.add_argument(
         "--snapshot-out",
         help="Optional path to write a multi-sport snapshot envelope for selected contests.",
@@ -399,6 +398,7 @@ def main() -> None:
         help="Standings row limit used for snapshot export output.",
     )
     args = parser.parse_args()
+    configure_logging(level_override="DEBUG" if args.verbose else None)
     contest_database = ContestDatabase(str(state.contests_db_path()))
     vips = load_vips()
     now = datetime.datetime.now(ZoneInfo("America/New_York"))

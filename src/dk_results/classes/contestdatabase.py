@@ -3,9 +3,6 @@ import logging
 import sqlite3
 
 from dk_results.classes.contest import Contest
-from dk_results.logging import configure_logging
-
-configure_logging()
 
 
 class ContestDatabase:
