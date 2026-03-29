@@ -62,6 +62,11 @@ class _FakeContestDb:
         )
 
 
+class _FakeContestDbNoLive:
+    def get_live_contest(self, *_args, **_kwargs):
+        return None
+
+
 class _FakeDraftkings:
     def download_salary_csv(self, _sport: str, _draft_group: int, filename: str) -> None:
         path = Path(filename)
@@ -166,6 +171,26 @@ def test_process_sport_parses_player_stats_only_rows_and_skips_blank_users(monke
     assert contest_id == 123
 
 
+def test_process_sport_handles_no_live_contest(monkeypatch, caplog):
+    with caplog.at_level(logging.INFO):
+        contest_id = db_main.process_sport(
+            "NFL",
+            {"NFL": NFLSport},
+            _FakeContestDbNoLive(),
+            datetime.datetime(2026, 2, 14, 12, 0, 0),
+            Namespace(nolineups=False),
+            ["UserA"],
+        )
+
+    assert contest_id is None
+    detection = _event_messages(caplog, "vip_detection")
+    fetch = _event_messages(caplog, "vip_fetch")
+    sheet_write = _event_messages(caplog, "vip_sheet_write")
+    assert len(detection) == 1
+    assert len(fetch) == 1
+    assert len(sheet_write) == 1
+
+
 def test_process_sport_emits_deterministic_vip_events_for_standings_skip(monkeypatch, tmp_path, caplog):
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(db_main, "Draftkings", _FakeDraftkingsNoStandings)
@@ -192,6 +217,25 @@ def test_process_sport_emits_deterministic_vip_events_for_standings_skip(monkeyp
     assert _parse_event_fields(detection[0])["reason"] == "standings_unavailable"
     assert _parse_event_fields(fetch[0])["attempted"] == "false"
     assert _parse_event_fields(sheet_write[0])["written"] == "false"
+
+
+def test_process_sport_logs_optimizer_skip(monkeypatch, tmp_path, caplog):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(db_main, "Draftkings", _FakeDraftkings)
+    monkeypatch.setattr(db_main, "build_dfs_sheet_service", lambda _sport: _FakeSheet())
+
+    args = Namespace(nolineups=False)
+    with caplog.at_level(logging.INFO):
+        db_main.process_sport(
+            "NFL",
+            {"NFL": NFLSport},
+            _FakeContestDb(),
+            datetime.datetime(2026, 2, 14, 12, 0, 0),
+            args,
+            ["UserA"],
+        )
+
+    assert "Skipping optimal lineup for NFL" in caplog.text
 
 
 def test_process_sport_emits_deterministic_vip_events_on_happy_path(monkeypatch, tmp_path, caplog):

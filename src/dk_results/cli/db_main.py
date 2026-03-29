@@ -455,6 +455,79 @@ def write_train_info(sheet: DfsSheetService, results: Results) -> None:
         sheet.add_train_info(info)
 
 
+def _build_results(
+    *,
+    sport_obj: SportType,
+    contest_id: int,
+    salary_csv: str,
+    positions_paid: int | None,
+    standings_rows: list[list[str]],
+    vips: list[str],
+    contest_name: str,
+) -> Results:
+    logger.debug("Creating Results object Results(%s, %s, %s)", sport_obj.name, contest_id, salary_csv)
+    results = Results(
+        sport_obj,
+        contest_id,
+        salary_csv,
+        positions_paid,
+        standings_rows=standings_rows,
+        vips=vips,
+    )
+    results.name = contest_name
+    results.positions_paid = positions_paid
+    return results
+
+
+def _maybe_write_optimal_lineup(
+    *,
+    sheet: DfsSheetService,
+    results: Results,
+    sport_obj: SportType,
+    args: argparse.Namespace,
+    sport_name: str,
+) -> None:
+    try:
+        if (sport_obj.allow_optimizer is False) or (not args.nolineups):
+            logger.info("Skipping optimal lineup for %s", sport_name)
+            return
+
+        optimizer = Optimizer(sport_obj, results.get_players())
+        optimized_players = optimizer.get_optimal_lineup()
+        if optimized_players:
+            optimized_players.sort(key=lambda x: (sport_obj.positions.index(x.pos), x.name))
+        if not optimized_players:
+            return
+
+        optimized_info = [
+            ["Pos", "Name", "Salary", "Pts", "Value", "Own%"],
+        ]
+        for player in optimized_players:
+            row = [
+                player.pos,
+                player.name,
+                player.salary,
+                player.fpts,
+                player.value,
+                player.ownership,
+            ]
+            logger.info(
+                "Player [%s]: %s Score: %s Salary: %s Value %s Own: %s",
+                player.pos,
+                player.name,
+                player.fpts,
+                player.salary,
+                player.value,
+                player.ownership,
+            )
+            optimized_info.append(row)
+        sheet.add_optimal_lineup(optimized_info)
+        logger.debug(optimized_players)
+    except Exception as error:
+        logger.error(error)
+        logger.error("Error in optimal lineup")
+
+
 def process_sport(
     sport_name: str,
     choices: dict[str, SportType],
@@ -503,17 +576,15 @@ def process_sport(
         return None
 
     sheet = build_dfs_sheet_service(sport_name)
-    logger.debug("Creating Results object Results(%s, %s, %s)", sport_name, dk_id, fn)
-    results: Results = Results(
-        sport_obj,
-        dk_id,
-        fn,
-        positions_paid,
+    results = _build_results(
+        sport_obj=sport_obj,
+        contest_id=int(dk_id),
+        salary_csv=fn,
+        positions_paid=positions_paid,
         standings_rows=contest_list,
         vips=vips,
+        contest_name=name,
     )
-    results.name = name
-    results.positions_paid = positions_paid
     _log_vip_detection(
         sport=sport_name,
         contest_id=int(dk_id),
@@ -523,38 +594,13 @@ def process_sport(
         reason="empty_vip_set" if not vips else "not_applicable",
     )
 
-    try:
-        if (sport_obj.allow_optimizer is False) or (not args.nolineups):
-            logger.info("Skipping optimal lineup for %s", sport_name)
-        else:
-            p = results.get_players()
-            optimizer = Optimizer(sport_obj, p)
-            optimized_players = optimizer.get_optimal_lineup()
-            if optimized_players:
-                optimized_players.sort(key=lambda x: (sport_obj.positions.index(x.pos), x.name))
-            if optimized_players:
-                optimized_info = [
-                    ["Pos", "Name", "Salary", "Pts", "Value", "Own%"],
-                ]
-                for player in optimized_players:
-                    row = [
-                        player.pos,
-                        player.name,
-                        player.salary,
-                        player.fpts,
-                        player.value,
-                        player.ownership,
-                    ]
-                    logger.info(
-                        f"Player [{player.pos}]: {player.name} Score: {player.fpts} Salary: "
-                        f"{player.salary} Value {player.value} Own: {player.ownership}"
-                    )
-                    optimized_info.append(row)
-                sheet.add_optimal_lineup(optimized_info)
-                logger.debug(optimized_players)
-    except Exception as error:
-        logger.error(error)
-        logger.error("Error in optimal lineup")
+    _maybe_write_optimal_lineup(
+        sheet=sheet,
+        results=results,
+        sport_obj=sport_obj,
+        args=args,
+        sport_name=sport_name,
+    )
 
     write_players_to_sheet(sheet, results, sport_name, now, dk, vips, draft_group)
     write_non_cashing_info(sheet, results)
