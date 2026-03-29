@@ -75,6 +75,16 @@ class _FakeDraftkings:
         return []
 
 
+class _FakeDraftkingsNoStandings(_FakeDraftkings):
+    def download_contest_rows(self, *_args, **_kwargs):
+        return None
+
+
+class _FakeDraftkingsWithVipLineups(_FakeDraftkings):
+    def get_vip_lineups(self, *_args, **_kwargs):
+        return [{"user": "UserA", "players": []}]
+
+
 class _FakeSheet:
     def __init__(self):
         self.players = []
@@ -110,6 +120,21 @@ class _FakeSheet:
         return None
 
 
+def _event_messages(caplog, event_name: str) -> list[str]:
+    return [record.message for record in caplog.records if record.message.startswith(f"{event_name} ")]
+
+
+def _parse_event_fields(message: str) -> dict[str, str]:
+    parts = message.split()[1:]
+    out: dict[str, str] = {}
+    for part in parts:
+        if "=" not in part:
+            continue
+        key, value = part.split("=", 1)
+        out[key] = value
+    return out
+
+
 def test_process_sport_parses_player_stats_only_rows_and_skips_blank_users(monkeypatch, tmp_path):
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(db_main, "Draftkings", _FakeDraftkings)
@@ -139,6 +164,94 @@ def test_process_sport_parses_player_stats_only_rows_and_skips_blank_users(monke
     # Blank core row should not create phantom users in db_main path.
     assert observed["users"] == 1
     assert contest_id == 123
+
+
+def test_process_sport_emits_deterministic_vip_events_for_standings_skip(monkeypatch, tmp_path, caplog):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(db_main, "Draftkings", _FakeDraftkingsNoStandings)
+    monkeypatch.setattr(db_main, "build_dfs_sheet_service", lambda _sport: _FakeSheet())
+
+    args = Namespace(nolineups=False)
+    with caplog.at_level(logging.INFO):
+        contest_id = db_main.process_sport(
+            "NFL",
+            {"NFL": NFLSport},
+            _FakeContestDb(),
+            datetime.datetime(2026, 2, 14, 12, 0, 0),
+            args,
+            ["UserA"],
+        )
+
+    assert contest_id is None
+    detection = _event_messages(caplog, "vip_detection")
+    fetch = _event_messages(caplog, "vip_fetch")
+    sheet_write = _event_messages(caplog, "vip_sheet_write")
+    assert len(detection) == 1
+    assert len(fetch) == 1
+    assert len(sheet_write) == 1
+    assert _parse_event_fields(detection[0])["reason"] == "standings_unavailable"
+    assert _parse_event_fields(fetch[0])["attempted"] == "false"
+    assert _parse_event_fields(sheet_write[0])["written"] == "false"
+
+
+def test_process_sport_emits_deterministic_vip_events_on_happy_path(monkeypatch, tmp_path, caplog):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(db_main, "Draftkings", _FakeDraftkingsWithVipLineups)
+    monkeypatch.setattr(db_main, "build_dfs_sheet_service", lambda _sport: _FakeSheet())
+
+    args = Namespace(nolineups=False)
+    with caplog.at_level(logging.INFO):
+        contest_id = db_main.process_sport(
+            "NFL",
+            {"NFL": NFLSport},
+            _FakeContestDb(),
+            datetime.datetime(2026, 2, 14, 12, 0, 0),
+            args,
+            ["UserA"],
+        )
+
+    assert contest_id == 123
+    detection = _event_messages(caplog, "vip_detection")
+    fetch = _event_messages(caplog, "vip_fetch")
+    sheet_write = _event_messages(caplog, "vip_sheet_write")
+    assert len(detection) == 1
+    assert len(fetch) == 1
+    assert len(sheet_write) == 1
+
+    detection_fields = _parse_event_fields(detection[0])
+    fetch_fields = _parse_event_fields(fetch[0])
+    sheet_fields = _parse_event_fields(sheet_write[0])
+    assert detection_fields["requested"] == "1"
+    assert detection_fields["found"] == "1"
+    assert detection_fields["attempted"] == "true"
+    assert fetch_fields["requested"] == "1"
+    assert fetch_fields["fetched"] == "1"
+    assert fetch_fields["attempted"] == "true"
+    assert sheet_fields["written"] == "true"
+    assert sheet_fields["lineups"] == "1"
+
+
+def test_vip_event_compatibility_mode(monkeypatch, tmp_path, caplog):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("DK_VIP_EVENT_COMPAT", "1")
+    monkeypatch.setattr(db_main, "Draftkings", _FakeDraftkingsWithVipLineups)
+    monkeypatch.setattr(db_main, "build_dfs_sheet_service", lambda _sport: _FakeSheet())
+
+    args = Namespace(nolineups=False)
+    with caplog.at_level(logging.INFO):
+        db_main.process_sport(
+            "NFL",
+            {"NFL": NFLSport},
+            _FakeContestDb(),
+            datetime.datetime(2026, 2, 14, 12, 0, 0),
+            args,
+            ["UserA"],
+        )
+
+    assert len(_event_messages(caplog, "vip_detection_summary")) == 1
+    assert len(_event_messages(caplog, "vip_lineups_fetch")) == 1
+    assert len(_event_messages(caplog, "vip_lineups_summary")) == 1
+    assert "remove_after=2026-04-30" in caplog.text
 
 
 def test_main_snapshot_out_writes_opt_in_envelope(monkeypatch, tmp_path):
@@ -279,6 +392,45 @@ def test_main_verbose_uses_explicit_logging_override(monkeypatch, tmp_path):
     db_main.main()
 
     assert observed == ["DEBUG"]
+
+
+def test_main_loads_vips_once_per_invocation(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(db_main, "load_dotenv", lambda: None)
+    monkeypatch.setattr(db_main, "load_and_apply_settings", lambda: None)
+    monkeypatch.setattr(db_main.state, "contests_db_path", lambda: tmp_path / "contests.db")
+    monkeypatch.setattr(db_main, "ContestDatabase", lambda _path: object())
+
+    calls = {"load_vips": 0}
+
+    def _load_vips_once():
+        calls["load_vips"] += 1
+        return ["UserA"]
+
+    process_vip_args: list[list[str]] = []
+
+    def _fake_process_sport(_sport_name, _choices, _db, _now, _args, vips):
+        process_vip_args.append(list(vips))
+        return None
+
+    monkeypatch.setattr(db_main, "load_vips", _load_vips_once)
+    monkeypatch.setattr(db_main, "process_sport", _fake_process_sport)
+    monkeypatch.setattr(
+        db_main.argparse.ArgumentParser,
+        "parse_args",
+        lambda _self: Namespace(
+            sport=["NFL", "GOLF"],
+            nolineups=False,
+            verbose=False,
+            snapshot_out=None,
+            standings_limit=123,
+        ),
+    )
+
+    db_main.main()
+
+    assert calls["load_vips"] == 1
+    assert process_vip_args == [["UserA"], ["UserA"]]
 
 
 def test_write_snapshot_payload_is_byte_stable(tmp_path):

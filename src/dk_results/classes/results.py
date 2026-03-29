@@ -188,7 +188,7 @@ class Results:
             # find lineup for friends
             if name in self.vips:
                 # if we found a VIP, add them to the VIP list
-                self.logger.info("found VIP %s", name)
+                self.logger.debug("found VIP %s", name)
                 self.vip_list.append(user)
 
             # keep track of minimum pts to cash
@@ -249,7 +249,7 @@ class Results:
 
             top_ten_cpts = list(sorted_captains)[:10]
 
-            self.logger.info("Top 10 captains:")
+            self.logger.debug("Top 10 captains:")
             for cpt in top_ten_cpts:
                 self.get_showdown_captain_percent(cpt, showdown_captains)
 
@@ -266,7 +266,7 @@ class Results:
         percent = 0.0
         num_users = len(self.users)
         percent = float(showdown_captains[player] / num_users) * 100
-        print("{}: {:0.2f}% [{}/{}]".format(player, percent, showdown_captains[player], num_users))
+        self.logger.debug("%s: %.2f%% [%d/%d]", player, percent, showdown_captains[player], num_users)
 
     def load_standings(self, filename: str) -> list[list[str]]:
         """Load standings CSV and return list."""
