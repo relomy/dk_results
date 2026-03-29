@@ -291,7 +291,7 @@ def test_download_contest_rows_redacts_signed_url_in_logs(caplog):
     session = _Session(response)
     dk = Draftkings(session=session)
 
-    with caplog.at_level(logging.DEBUG, logger="Draftkings"):
+    with caplog.at_level(logging.DEBUG, logger=dk.logger.name):
         assert dk.download_contest_rows(1) is None
 
     assert "X-Amz-Security-Token" not in caplog.text
