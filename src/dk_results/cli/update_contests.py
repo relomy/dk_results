@@ -626,9 +626,17 @@ def check_contests_for_completion(conn) -> None:
     create_notifications_table(conn)
     create_vip_presence_table(conn)
     sender = _build_discord_sender()
+    dk_client: Draftkings | None = None
+    vip_names: list[str] = []
     if sender:
-        dk_client = Draftkings()
         vip_names = _load_vips()
+        try:
+            dk_client = Draftkings()
+        except Exception:
+            logger.warning(
+                "VIP presence checks disabled; Draftkings client initialization failed",
+                exc_info=True,
+            )
 
     if sender:
         logged_schedules: set[str] = set()
@@ -673,13 +681,15 @@ def check_contests_for_completion(conn) -> None:
                         warning_minutes,
                     )
                     continue
-                vip_presence = _resolve_vip_presence(
-                    conn,
-                    dk=dk_client,
-                    dk_id=dk_id,
-                    start_date=str(start_date),
-                    vip_names=vip_names,
-                )
+                vip_presence = VIP_UNKNOWN
+                if dk_client is not None:
+                    vip_presence = _resolve_vip_presence(
+                        conn,
+                        dk=dk_client,
+                        dk_id=dk_id,
+                        start_date=str(start_date),
+                        vip_names=vip_names,
+                    )
                 if vip_presence == VIP_ABSENT:
                     logger.info(
                         "skipping warning notification for %s dk_id=%s (%sm); vip_presence=absent",
@@ -806,13 +816,15 @@ def check_contests_for_completion(conn) -> None:
                         dk_id,
                     )
                 if is_new_live and is_primary_live and not db_has_notification(conn, dk_id, "live"):
-                    vip_presence = _resolve_vip_presence(
-                        conn,
-                        dk=dk_client,
-                        dk_id=dk_id,
-                        start_date=str(start_date),
-                        vip_names=vip_names,
-                    )
+                    vip_presence = VIP_UNKNOWN
+                    if dk_client is not None:
+                        vip_presence = _resolve_vip_presence(
+                            conn,
+                            dk=dk_client,
+                            dk_id=dk_id,
+                            start_date=str(start_date),
+                            vip_names=vip_names,
+                        )
                     if vip_presence == VIP_ABSENT:
                         logger.info(
                             "skipping live notification for %s dk_id=%s; vip_presence=absent",
@@ -848,13 +860,15 @@ def check_contests_for_completion(conn) -> None:
 
                 if is_new_completed:
                     if db_has_notification(conn, dk_id, "live") and not db_has_notification(conn, dk_id, "completed"):
-                        vip_presence = _resolve_vip_presence(
-                            conn,
-                            dk=dk_client,
-                            dk_id=dk_id,
-                            start_date=str(start_date),
-                            vip_names=vip_names,
-                        )
+                        vip_presence = VIP_UNKNOWN
+                        if dk_client is not None:
+                            vip_presence = _resolve_vip_presence(
+                                conn,
+                                dk=dk_client,
+                                dk_id=dk_id,
+                                start_date=str(start_date),
+                                vip_names=vip_names,
+                            )
                         if vip_presence == VIP_ABSENT:
                             logger.info(
                                 "skipping completed notification for %s dk_id=%s; vip_presence=absent",

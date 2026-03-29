@@ -1680,6 +1680,46 @@ def test_warning_notification_sent_when_vip_presence_unknown(monkeypatch):
     assert update_contests.db_has_notification(conn, 124, "warning:25") is True
 
 
+def test_warning_notification_sent_when_draftkings_client_init_fails(monkeypatch):
+    conn = sqlite3.connect(":memory:")
+    _create_contests_table(conn)
+    update_contests.create_notifications_table(conn)
+    update_contests.create_vip_presence_table(conn)
+    start_date = (datetime.datetime.now() + datetime.timedelta(minutes=10)).strftime("%Y-%m-%d %H:%M:%S")
+    conn.execute(
+        """
+        INSERT INTO contests (
+            dk_id, sport, name, start_date, draft_group, total_prizes, entries,
+            positions_paid, entry_fee, entry_count, max_entry_count, completed, status
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (125, "NBA", "Init Failure Contest", start_date, 1, 0, 0, None, 25, 0, 0, 0, None),
+    )
+    conn.commit()
+
+    class DummySport:
+        name = "NBA"
+        sheet_min_entry_fee = 25
+        keyword = "%"
+
+    class FailingDraftkings:
+        def __init__(self):
+            raise RuntimeError("can't find cookies file")
+
+    sender = _make_sender()
+    monkeypatch.setattr(update_contests, "_build_discord_sender", lambda: sender)
+    monkeypatch.setattr(update_contests, "_sport_choices", lambda: {"nba": DummySport})
+    monkeypatch.setattr(update_contests, "_warning_schedule_for", lambda _sport: [25])
+    monkeypatch.setattr(update_contests, "Draftkings", FailingDraftkings)
+    monkeypatch.setattr(update_contests, "_maybe_send_soft_finish_announcement", lambda *args, **kwargs: None)
+
+    update_contests.check_contests_for_completion(conn)
+
+    assert len(sender.messages) == 1
+    assert "Contest starting soon (25m)" in sender.messages[0]
+    assert update_contests.db_has_notification(conn, 125, "warning:25") is True
+
+
 def test_live_notification_suppressed_when_vip_presence_absent(monkeypatch):
     conn = sqlite3.connect(":memory:")
     _create_contests_table(conn)
