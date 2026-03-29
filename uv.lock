@@ -219,10 +219,10 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
-    { name = "cryptography", specifier = ">=46.0.5" },
+    { name = "cryptography", specifier = ">=46.0.6" },
     { name = "google-api-python-client" },
     { name = "google-auth" },
-    { name = "requests" },
+    { name = "requests", specifier = ">=2.33.0" },
 ]
 
 [package.metadata.requires-dev]
@@ -283,14 +283,14 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "cryptography", specifier = ">=46.0.5" },
+    { name = "cryptography", specifier = ">=46.0.6" },
     { name = "dfs-common", editable = "../dfs_common" },
     { name = "discord" },
     { name = "dotenv" },
     { name = "google-api-python-client" },
     { name = "pulp" },
     { name = "pyyaml" },
-    { name = "requests" },
+    { name = "requests", specifier = ">=2.33.0" },
     { name = "rookiepy" },
 ]
 
