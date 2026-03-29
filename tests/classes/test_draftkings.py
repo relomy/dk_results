@@ -270,10 +270,7 @@ def test_get_vip_lineups_handles_worker_exception(monkeypatch):
 
 def test_download_contest_rows_html_returns_none():
     response = _Response(headers={"Content-Type": "text/html"})
-    response.url = (
-        "https://example.test/contest/export?"
-        "X-Amz-Security-Token=secret-token&X-Amz-Signature=abcdef123456"
-    )
+    response.url = "https://example.test/contest/export?X-Amz-Security-Token=secret-token&X-Amz-Signature=abcdef123456"
     session = _Session(response)
     dk = Draftkings(session=session)
 
@@ -282,10 +279,7 @@ def test_download_contest_rows_html_returns_none():
 
 def test_download_contest_rows_redacts_signed_url_in_logs(caplog):
     response = _Response(headers={"Content-Type": "text/html"})
-    response.url = (
-        "https://example.test/contest/export?"
-        "X-Amz-Security-Token=secret-token&X-Amz-Signature=abcdef123456"
-    )
+    response.url = "https://example.test/contest/export?X-Amz-Security-Token=secret-token&X-Amz-Signature=abcdef123456"
     session = _Session(response)
     dk = Draftkings(session=session)
 

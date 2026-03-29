@@ -266,7 +266,9 @@ class Results:
         percent = 0.0
         num_users = len(self.users)
         percent = float(showdown_captains[player] / num_users) * 100
-        self.logger.debug("%s: %.2f%% [%d/%d]", player, percent, showdown_captains[player], num_users)
+        message = "{}: {:0.2f}% [{}/{}]".format(player, percent, showdown_captains[player], num_users)
+        self.logger.debug(message)
+        print(message)
 
     def load_standings(self, filename: str) -> list[list[str]]:
         """Load standings CSV and return list."""
