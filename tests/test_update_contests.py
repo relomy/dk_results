@@ -1,6 +1,7 @@
 import datetime
 import runpy
 import sqlite3
+import sys
 
 import pytest
 import yaml
@@ -852,7 +853,12 @@ def test_module_main_executes(monkeypatch):
         raise sqlite3.Error("boom")
 
     monkeypatch.setattr("sqlite3.connect", boom)
-    runpy.run_module("dk_results.cli.update_contests", run_name="__main__")
+    existing = sys.modules.pop("dk_results.cli.update_contests", None)
+    try:
+        runpy.run_module("dk_results.cli.update_contests", run_name="__main__")
+    finally:
+        if existing is not None:
+            sys.modules["dk_results.cli.update_contests"] = existing
 
 
 def test_build_discord_sender_success_path(monkeypatch):
