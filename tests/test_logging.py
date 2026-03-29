@@ -41,6 +41,10 @@ def test_configure_logging_applies_levels_and_idempotent_handler(monkeypatch):
     assert logging.getLogger("googleapiclient.discovery").level == logging.INFO
     assert logging.getLogger("urllib3").level == logging.INFO
 
+    logger = app_logging.configure_logging()
+    assert logger is root
+    assert len(root.handlers) == 1
+
 
 def test_configure_logging_honors_level_override_without_env_mutation(monkeypatch):
     root = logging.getLogger()
@@ -52,6 +56,17 @@ def test_configure_logging_honors_level_override_without_env_mutation(monkeypatc
 
     assert root.level == logging.WARNING
     assert "LOG_LEVEL" not in os.environ
+
+
+def test_configure_logging_defaults_to_debug_on_pi(monkeypatch):
+    root = logging.getLogger()
+    root.handlers.clear()
+    monkeypatch.delenv("LOG_LEVEL", raising=False)
+    monkeypatch.setenv("DK_PLATFORM", "pi")
+
+    app_logging.configure_logging()
+
+    assert root.level == logging.DEBUG
 
 
 def test_importing_non_entrypoint_modules_does_not_call_configure_logging(monkeypatch):
