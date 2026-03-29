@@ -299,6 +299,23 @@ class Draftkings:
         r.raise_for_status()
         return r.json()
 
+    def get_contest_entrants_page(
+        self,
+        contest_id: int,
+        page_no: int,
+        timeout: Optional[int] = None,
+        session: Optional[requests.Session] = None,
+    ) -> str:
+        """
+        Fetch a single entrants page HTML fragment for a contest.
+        """
+        to = timeout or self.timeout_sec
+        sess = session or self.session
+        url = f"https://www.draftkings.com/contest/getentrantsmorewithhep?contestId={contest_id}&pageNo={page_no}"
+        r = sess.get(url, timeout=to)
+        r.raise_for_status()
+        return r.text
+
     def download_contest_rows(
         self,
         contest_id: int,
