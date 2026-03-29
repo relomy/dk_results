@@ -166,6 +166,12 @@ def test_warning_notification_sent_for_upcoming_contest(monkeypatch):
 
     sender = FakeSender()
     monkeypatch.setattr(update_contests, "_build_discord_sender", lambda: sender)
+    monkeypatch.setattr(update_contests, "Draftkings", _StubDraftkings)
+    monkeypatch.setattr(
+        update_contests,
+        "_resolve_vip_presence",
+        lambda *_args, **_kwargs: update_contests.VIP_UNKNOWN,
+    )
 
     update_contests.check_contests_for_completion(conn)
 
@@ -229,6 +235,12 @@ def test_warning_notifications_sent_for_multiple_thresholds(monkeypatch):
 
     sender = FakeSender()
     monkeypatch.setattr(update_contests, "_build_discord_sender", lambda: sender)
+    monkeypatch.setattr(update_contests, "Draftkings", _StubDraftkings)
+    monkeypatch.setattr(
+        update_contests,
+        "_resolve_vip_presence",
+        lambda *_args, **_kwargs: update_contests.VIP_UNKNOWN,
+    )
 
     update_contests.check_contests_for_completion(conn)
 
@@ -453,6 +465,13 @@ def test_check_contests_for_completion_live_and_completed(monkeypatch):
     monkeypatch.setattr(update_contests, "_build_discord_sender", lambda: sender)
     monkeypatch.setattr(update_contests, "_warning_schedule_for", lambda _sport: [])
     monkeypatch.setattr(update_contests, "_sport_choices", lambda: {"NBA": DummySport})
+    monkeypatch.setattr(update_contests, "Draftkings", _StubDraftkings)
+    monkeypatch.setattr(
+        update_contests,
+        "_resolve_vip_presence",
+        lambda *_args, **_kwargs: update_contests.VIP_UNKNOWN,
+    )
+    monkeypatch.setattr(update_contests, "_maybe_send_soft_finish_announcement", lambda *args, **kwargs: None)
 
     monkeypatch.setattr(
         update_contests,
@@ -655,6 +674,12 @@ def test_check_contests_for_completion_sends_warning(monkeypatch):
     monkeypatch.setattr(update_contests, "_build_discord_sender", lambda: sender)
     monkeypatch.setattr(update_contests, "_sport_choices", lambda: {"NBA": DummySport})
     monkeypatch.setattr(update_contests, "_warning_schedule_for", lambda _sport: [10])
+    monkeypatch.setattr(update_contests, "Draftkings", _StubDraftkings)
+    monkeypatch.setattr(
+        update_contests,
+        "_resolve_vip_presence",
+        lambda *_args, **_kwargs: update_contests.VIP_UNKNOWN,
+    )
     monkeypatch.setattr(update_contests, "db_has_notification", lambda *_a, **_k: False)
     monkeypatch.setattr(update_contests, "db_get_incomplete_contests", lambda _conn: [])
 
@@ -947,6 +972,12 @@ def test_check_contests_for_completion_warning_path(monkeypatch):
     monkeypatch.setattr(update_contests, "_build_discord_sender", lambda: sender)
     monkeypatch.setattr(update_contests, "_sport_choices", lambda: {"NBA": DummySport})
     monkeypatch.setattr(update_contests, "_warning_schedule_for", lambda _sport: [10])
+    monkeypatch.setattr(update_contests, "Draftkings", _StubDraftkings)
+    monkeypatch.setattr(
+        update_contests,
+        "_resolve_vip_presence",
+        lambda *_args, **_kwargs: update_contests.VIP_UNKNOWN,
+    )
     monkeypatch.setattr(update_contests, "db_has_notification", lambda *_a, **_k: False)
     monkeypatch.setattr(update_contests, "db_get_incomplete_contests", lambda _c: [])
     monkeypatch.setattr(
