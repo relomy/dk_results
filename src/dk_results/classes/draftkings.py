@@ -11,6 +11,7 @@ import zipfile
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any, Optional
+from urllib.parse import urlsplit, urlunsplit
 
 import requests
 
@@ -109,6 +110,13 @@ class Draftkings:
         if not isinstance(name, str):
             return ""
         return "".join(c for c in unicodedata.normalize("NFD", name) if unicodedata.category(c) != "Mn")
+
+    @staticmethod
+    def _redact_url_for_logs(url: str) -> str:
+        parts = urlsplit(str(url))
+        if not parts.scheme or not parts.netloc:
+            return str(url)
+        return urlunsplit((parts.scheme, parts.netloc, parts.path, "", ""))
 
     def _lookup_salary(self, player_name: str, player_salary_map: dict[str, int] | None) -> int | None:
         if not player_salary_map or not player_name:
@@ -260,7 +268,7 @@ class Draftkings:
                         self.logger.debug("VIP %s had no roster data", user)
                         continue
 
-                    self.logger.info("Found VIP lineup for user %s", result.get("user", user))
+                    self.logger.debug("Found VIP lineup for user %s", result.get("user", user))
                     vip_lineups.append(result)
                 except Exception as e:
                     # Best-effort logging at client level
@@ -310,10 +318,11 @@ class Draftkings:
         r = self.session.get(url, timeout=timeout)
 
         ctype = r.headers.get("Content-Type", "")
+        safe_url = self._redact_url_for_logs(r.url)
         self.logger.debug(
             "download_contest_rows status=%s url=%s ctype=%s",
             r.status_code,
-            r.url,
+            safe_url,
             ctype,
         )
 

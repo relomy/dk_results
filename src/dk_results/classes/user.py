@@ -2,12 +2,7 @@
 
 from dataclasses import dataclass, field
 
-from dk_results.logging import configure_logging
-
 from .lineup import Lineup
-
-# load the logging configuration
-configure_logging()
 
 
 @dataclass

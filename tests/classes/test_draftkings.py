@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from types import SimpleNamespace
 from typing import cast
@@ -269,10 +270,25 @@ def test_get_vip_lineups_handles_worker_exception(monkeypatch):
 
 def test_download_contest_rows_html_returns_none():
     response = _Response(headers={"Content-Type": "text/html"})
+    response.url = "https://example.test/contest/export?X-Amz-Security-Token=secret-token&X-Amz-Signature=abcdef123456"
     session = _Session(response)
     dk = Draftkings(session=session)
 
     assert dk.download_contest_rows(1) is None
+
+
+def test_download_contest_rows_redacts_signed_url_in_logs(caplog):
+    response = _Response(headers={"Content-Type": "text/html"})
+    response.url = "https://example.test/contest/export?X-Amz-Security-Token=secret-token&X-Amz-Signature=abcdef123456"
+    session = _Session(response)
+    dk = Draftkings(session=session)
+
+    with caplog.at_level(logging.DEBUG, logger="Draftkings"):
+        assert dk.download_contest_rows(1) is None
+
+    assert "X-Amz-Security-Token" not in caplog.text
+    assert "X-Amz-Signature" not in caplog.text
+    assert "url=https://example.test/contest/export" in caplog.text
 
 
 def test_download_contest_rows_bad_zip_returns_none():

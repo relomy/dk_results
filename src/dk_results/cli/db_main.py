@@ -4,6 +4,7 @@ import logging
 import os
 import pathlib
 import sqlite3
+import time
 from collections import OrderedDict
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -50,6 +51,138 @@ CONTEST_DIR = str(repo_file("contests"))
 SALARY_DIR = str(repo_file("salary"))
 SALARY_LIMIT = 40000
 COOKIES_FILE = str(repo_file("pickled_cookies_works.txt"))
+LEGACY_VIP_EVENT_COMPAT_ENV = "DK_VIP_EVENT_COMPAT"
+LEGACY_VIP_EVENT_REMOVE_AFTER = "2026-04-30"
+LEGACY_VIP_EVENT_MAP = {
+    "vip_detection": "vip_detection_summary",
+    "vip_fetch": "vip_lineups_fetch",
+    "vip_sheet_write": "vip_lineups_summary",
+}
+
+
+def _format_log_value(value: Any) -> str:
+    if isinstance(value, bool):
+        return str(value).lower()
+    if value is None:
+        return "none"
+    return str(value)
+
+
+def _format_event_fields(fields: dict[str, Any]) -> str:
+    return " ".join(f"{key}={_format_log_value(value)}" for key, value in fields.items())
+
+
+def _compat_events_enabled() -> bool:
+    value = os.getenv(LEGACY_VIP_EVENT_COMPAT_ENV, "1").strip().lower()
+    return value not in {"0", "false", "no"}
+
+
+def _log_structured_info(event: str, **fields: Any) -> None:
+    body = _format_event_fields(fields)
+    logger.info("%s %s", event, body)
+
+    legacy_event = LEGACY_VIP_EVENT_MAP.get(event)
+    if legacy_event and _compat_events_enabled():
+        logger.info(
+            "%s %s deprecated=true remove_after=%s canonical=%s",
+            legacy_event,
+            body,
+            LEGACY_VIP_EVENT_REMOVE_AFTER,
+            event,
+        )
+
+
+def _log_vip_detection(
+    *,
+    sport: str,
+    contest_id: int | None,
+    requested: int,
+    found: int,
+    attempted: bool,
+    reason: str,
+) -> None:
+    _log_structured_info(
+        "vip_detection",
+        sport=sport,
+        contest_id=contest_id,
+        requested=requested,
+        found=found,
+        attempted=attempted,
+        reason=reason,
+    )
+
+
+def _log_vip_fetch(
+    *,
+    sport: str,
+    contest_id: int | None,
+    requested: int,
+    fetched: int,
+    missing_roster: int,
+    failures: int,
+    attempted: bool,
+    reason: str,
+) -> None:
+    _log_structured_info(
+        "vip_fetch",
+        sport=sport,
+        contest_id=contest_id,
+        requested=requested,
+        fetched=fetched,
+        missing_roster=missing_roster,
+        failures=failures,
+        attempted=attempted,
+        reason=reason,
+    )
+
+
+def _log_vip_sheet_write(
+    *,
+    sport: str,
+    contest_id: int | None,
+    lineups: int,
+    written: bool,
+    elapsed_ms: int,
+    reason: str,
+) -> None:
+    _log_structured_info(
+        "vip_sheet_write",
+        sport=sport,
+        contest_id=contest_id,
+        lineups=lineups,
+        written=written,
+        elapsed_ms=elapsed_ms,
+        reason=reason,
+    )
+
+
+def _log_vip_skip_events(sport_name: str, contest_id: int | None, requested: int, reason: str) -> None:
+    _log_vip_detection(
+        sport=sport_name,
+        contest_id=contest_id,
+        requested=requested,
+        found=0,
+        attempted=False,
+        reason=reason,
+    )
+    _log_vip_fetch(
+        sport=sport_name,
+        contest_id=contest_id,
+        requested=requested,
+        fetched=0,
+        missing_roster=0,
+        failures=0,
+        attempted=False,
+        reason=reason,
+    )
+    _log_vip_sheet_write(
+        sport=sport_name,
+        contest_id=contest_id,
+        lineups=0,
+        written=False,
+        elapsed_ms=0,
+        reason=reason,
+    )
 
 
 def _build_bonus_sender() -> WebhookSender | None:
@@ -94,6 +227,7 @@ def write_players_to_sheet(
     sport_name: str,
     now: datetime.datetime,
     dk: Draftkings,
+    vips: list[str],
     draft_group: int | None = None,
 ) -> None:
     """
@@ -105,6 +239,7 @@ def write_players_to_sheet(
         sport_name (str): Sport name.
         now (datetime.datetime): Current datetime.
         dk (Draftkings): Authenticated DraftKings API client.
+        vips (list[str]): VIP usernames loaded once at run start.
         draft_group (int, optional): Draft group id.
     """
     players_to_values = results.players_to_values(sport_name)
@@ -117,11 +252,51 @@ def write_players_to_sheet(
         logger.info("Writing min_cash_pts: %d", results.min_cash_pts)
         sheet.add_min_cash(results.min_cash_pts)
 
-    vips = load_vips()
     dk_id = results.contest_id
     dg = draft_group
+    requested_vips = len(results.vip_list)
+
+    if not vips:
+        _log_vip_fetch(
+            sport=sport_name,
+            contest_id=dk_id,
+            requested=0,
+            fetched=0,
+            missing_roster=0,
+            failures=0,
+            attempted=False,
+            reason="empty_vip_set",
+        )
+        _log_vip_sheet_write(
+            sport=sport_name,
+            contest_id=dk_id,
+            lineups=0,
+            written=False,
+            elapsed_ms=0,
+            reason="empty_vip_lineups",
+        )
+        return
+
     if dg is None:
         logger.warning("No draft group found for sport, cannot pull VIP lineups from API.")
+        _log_vip_fetch(
+            sport=sport_name,
+            contest_id=dk_id,
+            requested=requested_vips,
+            fetched=0,
+            missing_roster=requested_vips,
+            failures=0,
+            attempted=False,
+            reason="no_draft_group",
+        )
+        _log_vip_sheet_write(
+            sport=sport_name,
+            contest_id=dk_id,
+            lineups=0,
+            written=False,
+            elapsed_ms=0,
+            reason="no_draft_group",
+        )
         return
 
     vip_entries: dict[str, dict[str, Any] | str] = {}
@@ -134,18 +309,52 @@ def write_players_to_sheet(
             "rank": vip.rank,
             "pts": vip.pts,
         }
+    fetch_requested = len(vip_entries) if vip_entries else requested_vips
+
     player_salary_map: dict[str, int] = {name: player.salary for name, player in results.players.items()}
-    vip_lineups: list[dict] = dk.get_vip_lineups(
-        dk_id,
-        dg,
-        vips,
-        vip_entries=vip_entries,
-        player_salary_map=player_salary_map,
+    fetch_failures = 0
+    fetch_reason = "not_applicable"
+    try:
+        vip_lineups: list[dict] = dk.get_vip_lineups(
+            dk_id,
+            dg,
+            vips,
+            vip_entries=vip_entries,
+            player_salary_map=player_salary_map,
+        )
+        if not vip_lineups:
+            fetch_reason = "empty_vip_lineups"
+    except Exception:
+        fetch_failures = 1
+        fetch_reason = "fetch_error"
+        vip_lineups = []
+        logger.exception("Failed VIP lineup fetch: sport=%s contest_id=%s", sport_name, dk_id)
+
+    fetched_count = len(vip_lineups)
+    _log_vip_fetch(
+        sport=sport_name,
+        contest_id=dk_id,
+        requested=fetch_requested,
+        fetched=fetched_count,
+        missing_roster=max(fetch_requested - fetched_count, 0),
+        failures=fetch_failures,
+        attempted=True,
+        reason=fetch_reason,
     )
+
     if vip_lineups:
-        logger.info("Writing API vip_lineups to sheet")
+        started = time.perf_counter()
         sheet.clear_lineups()
         sheet.write_vip_lineups(vip_lineups)
+        elapsed_ms = int((time.perf_counter() - started) * 1000)
+        _log_vip_sheet_write(
+            sport=sport_name,
+            contest_id=dk_id,
+            lineups=len(vip_lineups),
+            written=True,
+            elapsed_ms=elapsed_ms,
+            reason="not_applicable",
+        )
         bonus_sender = _build_bonus_sender()
         if bonus_sender:
             try:
@@ -165,6 +374,15 @@ def write_players_to_sheet(
                     dk_id,
                     err,
                 )
+    else:
+        _log_vip_sheet_write(
+            sport=sport_name,
+            contest_id=dk_id,
+            lineups=0,
+            written=False,
+            elapsed_ms=0,
+            reason=fetch_reason,
+        )
 
 
 def write_non_cashing_info(sheet: DfsSheetService, results: Results) -> None:
@@ -210,12 +428,14 @@ def write_train_info(sheet: DfsSheetService, results: Results) -> None:
     """
     if results and results.users:
         trainfinder = TrainFinder(results.users)
-        logger.info("total users: %d", trainfinder.get_total_users())
+        total_users = trainfinder.get_total_users()
+        users_above_salary = trainfinder.get_total_users_above_salary(SALARY_LIMIT)
         logger.info(
-            f"total users above salary ${SALARY_LIMIT}: %d",
-            trainfinder.get_total_users_above_salary(SALARY_LIMIT),
+            "train_summary total_users=%d salary_limit=%d users_above_salary=%d",
+            total_users,
+            SALARY_LIMIT,
+            users_above_salary,
         )
-        logger.info(f"total scores above salary ${SALARY_LIMIT}")
 
         trains: dict[str, dict[str, Any]] = trainfinder.get_users_above_salary_spent(SALARY_LIMIT)
         delete_keys = [key for key in trains if trains[key]["count"] == 1]
@@ -227,14 +447,87 @@ def write_train_info(sheet: DfsSheetService, results: Results) -> None:
         info: list[list[Any]] = [
             ["Rank", "Users", "Score", "PMR"],
         ]
-        for k, v in sorted_trains.items():
+        for v in sorted_trains.values():
             row = [v["rank"], v["count"], v["pts"], v["pmr"]]
-            logger.info(f"Users: {v['count']} Score: {v['pts']} PMR: {v['pmr']} Lineup: {v['lineup']}")
+            logger.debug("train users=%s score=%s pmr=%s lineup=%s", v["count"], v["pts"], v["pmr"], v["lineup"])
             lineupobj = v["lineup"]
             if lineupobj:
                 row.extend([player.name for player in lineupobj.lineup])
             info.append(row)
         sheet.add_train_info(info)
+
+
+def _build_results(
+    *,
+    sport_obj: SportType,
+    contest_id: int,
+    salary_csv: str,
+    positions_paid: int | None,
+    standings_rows: list[list[str]],
+    vips: list[str],
+    contest_name: str,
+) -> Results:
+    logger.debug("Creating Results object Results(%s, %s, %s)", sport_obj.name, contest_id, salary_csv)
+    results = Results(
+        sport_obj,
+        contest_id,
+        salary_csv,
+        positions_paid,
+        standings_rows=standings_rows,
+        vips=vips,
+    )
+    results.name = contest_name
+    results.positions_paid = positions_paid
+    return results
+
+
+def _maybe_write_optimal_lineup(
+    *,
+    sheet: DfsSheetService,
+    results: Results,
+    sport_obj: SportType,
+    args: argparse.Namespace,
+    sport_name: str,
+) -> None:
+    try:
+        if (sport_obj.allow_optimizer is False) or (not args.nolineups):
+            logger.info("Skipping optimal lineup for %s", sport_name)
+            return
+
+        optimizer = Optimizer(sport_obj, results.get_players())
+        optimized_players = optimizer.get_optimal_lineup()
+        if optimized_players:
+            optimized_players.sort(key=lambda x: (sport_obj.positions.index(x.pos), x.name))
+        if not optimized_players:
+            return
+
+        optimized_info = [
+            ["Pos", "Name", "Salary", "Pts", "Value", "Own%"],
+        ]
+        for player in optimized_players:
+            row = [
+                player.pos,
+                player.name,
+                player.salary,
+                player.fpts,
+                player.value,
+                player.ownership,
+            ]
+            logger.info(
+                "Player [%s]: %s Score: %s Salary: %s Value %s Own: %s",
+                player.pos,
+                player.name,
+                player.fpts,
+                player.salary,
+                player.value,
+                player.ownership,
+            )
+            optimized_info.append(row)
+        sheet.add_optimal_lineup(optimized_info)
+        logger.debug(optimized_players)
+    except Exception as error:
+        logger.error(error)
+        logger.error("Error in optimal lineup")
 
 
 def process_sport(
@@ -262,9 +555,10 @@ def process_sport(
     result = contest_database.get_live_contest(sport_obj.name, sport_obj.sheet_min_entry_fee, sport_obj.keyword)
     if not result:
         logger.warning("There are no live contests for %s! Moving on.", sport_name)
+        _log_vip_skip_events(sport_name, None, len(vips), "not_applicable")
         return None
 
-    dk_id, name, draft_group, positions_paid, start_date = result
+    dk_id, name, draft_group, positions_paid, _start_date = result
     fn = os.path.join(SALARY_DIR, f"DKSalaries_{sport_name}_{now:%A}.csv")
     logger.debug(args)
     dk = Draftkings()
@@ -280,55 +574,42 @@ def process_sport(
             "Contest standings download failed or was empty for dk_id=%s; skipping.",
             dk_id,
         )
+        _log_vip_skip_events(sport_name, int(dk_id), len(vips), "standings_unavailable")
         return None
 
     sheet = build_dfs_sheet_service(sport_name)
-    logger.debug("Creating Results object Results(%s, %s, %s)", sport_name, dk_id, fn)
-    results: Results = Results(
-        sport_obj,
-        dk_id,
-        fn,
-        positions_paid,
-        standings_rows=contest_list,
-        vips=vips,
-    )
-    results.name = name
-    results.positions_paid = positions_paid
-
     try:
-        if (sport_obj.allow_optimizer is False) or (not args.nolineups):
-            logger.info("Skipping optimal lineup for %s", sport_name)
-        else:
-            p = results.get_players()
-            optimizer = Optimizer(sport_obj, p)
-            optimized_players = optimizer.get_optimal_lineup()
-            if optimized_players:
-                optimized_players.sort(key=lambda x: (sport_obj.positions.index(x.pos), x.name))
-            if optimized_players:
-                optimized_info = [
-                    ["Pos", "Name", "Salary", "Pts", "Value", "Own%"],
-                ]
-                for player in optimized_players:
-                    row = [
-                        player.pos,
-                        player.name,
-                        player.salary,
-                        player.fpts,
-                        player.value,
-                        player.ownership,
-                    ]
-                    logger.info(
-                        f"Player [{player.pos}]: {player.name} Score: {player.fpts} Salary: "
-                        f"{player.salary} Value {player.value} Own: {player.ownership}"
-                    )
-                    optimized_info.append(row)
-                sheet.add_optimal_lineup(optimized_info)
-                logger.debug(optimized_players)
-    except Exception as error:
-        logger.error(error)
-        logger.error("Error in optimal lineup")
+        results = _build_results(
+            sport_obj=sport_obj,
+            contest_id=int(dk_id),
+            salary_csv=fn,
+            positions_paid=positions_paid,
+            standings_rows=contest_list,
+            vips=vips,
+            contest_name=name,
+        )
+    except Exception:
+        logger.exception("Failed to construct Results: sport=%s contest_id=%s", sport_name, dk_id)
+        _log_vip_skip_events(sport_name, int(dk_id), len(vips), "results_unavailable")
+        return None
+    _log_vip_detection(
+        sport=sport_name,
+        contest_id=int(dk_id),
+        requested=len(vips),
+        found=len(results.vip_list),
+        attempted=True,
+        reason="empty_vip_set" if not vips else "not_applicable",
+    )
 
-    write_players_to_sheet(sheet, results, sport_name, now, dk, draft_group)
+    _maybe_write_optimal_lineup(
+        sheet=sheet,
+        results=results,
+        sport_obj=sport_obj,
+        args=args,
+        sport_name=sport_name,
+    )
+
+    write_players_to_sheet(sheet, results, sport_name, now, dk, vips, draft_group)
     write_non_cashing_info(sheet, results)
     write_train_info(sheet, results)
     return int(dk_id)
@@ -368,7 +649,6 @@ def main() -> None:
     """
     load_dotenv()
     load_and_apply_settings()
-    configure_logging()
 
     parser = argparse.ArgumentParser()
     sportz: list[SportType] = Sport.__subclasses__()
@@ -387,7 +667,7 @@ def main() -> None:
         action="store_false",
         help="If true, will not print VIP lineups",
     )
-    parser.add_argument("-v", "--verbose", help="Increase verbosity")
+    parser.add_argument("-v", "--verbose", action="store_true", help="Increase verbosity")
     parser.add_argument(
         "--snapshot-out",
         help="Optional path to write a multi-sport snapshot envelope for selected contests.",
@@ -399,6 +679,7 @@ def main() -> None:
         help="Standings row limit used for snapshot export output.",
     )
     args = parser.parse_args()
+    configure_logging(level_override="DEBUG" if args.verbose else None)
     contest_database = ContestDatabase(str(state.contests_db_path()))
     vips = load_vips()
     now = datetime.datetime.now(ZoneInfo("America/New_York"))
