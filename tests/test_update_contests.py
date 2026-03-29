@@ -43,6 +43,11 @@ def _make_sender():
     return FakeSender()
 
 
+class _StubDraftkings:
+    def __init__(self):
+        pass
+
+
 def test_parse_start_date_handles_str_and_datetime():
     dt = datetime.datetime(2026, 1, 1, 0, 0, 0)
     assert update_contests._parse_start_date(dt) == dt
@@ -1633,6 +1638,7 @@ def test_warning_notification_suppressed_when_vip_presence_absent(monkeypatch):
     monkeypatch.setattr(update_contests, "_build_discord_sender", lambda: sender)
     monkeypatch.setattr(update_contests, "_sport_choices", lambda: {"nba": DummySport})
     monkeypatch.setattr(update_contests, "_warning_schedule_for", lambda _sport: [25])
+    monkeypatch.setattr(update_contests, "Draftkings", _StubDraftkings)
     monkeypatch.setattr(update_contests, "_resolve_vip_presence", fake_resolver)
     monkeypatch.setattr(update_contests, "_maybe_send_soft_finish_announcement", lambda *args, **kwargs: None)
 
@@ -1675,6 +1681,7 @@ def test_warning_notification_sent_when_vip_presence_unknown(monkeypatch):
     monkeypatch.setattr(update_contests, "_build_discord_sender", lambda: sender)
     monkeypatch.setattr(update_contests, "_sport_choices", lambda: {"nba": DummySport})
     monkeypatch.setattr(update_contests, "_warning_schedule_for", lambda _sport: [25])
+    monkeypatch.setattr(update_contests, "Draftkings", _StubDraftkings)
     monkeypatch.setattr(update_contests, "_resolve_vip_presence", fake_resolver)
     monkeypatch.setattr(update_contests, "_maybe_send_soft_finish_announcement", lambda *args, **kwargs: None)
 
@@ -1752,6 +1759,7 @@ def test_live_notification_suppressed_when_vip_presence_absent(monkeypatch):
     monkeypatch.setattr(update_contests, "_build_discord_sender", lambda: sender)
     monkeypatch.setattr(update_contests, "_sport_choices", lambda: {"nba": DummySport})
     monkeypatch.setattr(update_contests, "_warning_schedule_for", lambda _sport: [])
+    monkeypatch.setattr(update_contests, "Draftkings", _StubDraftkings)
     monkeypatch.setattr(
         update_contests,
         "_resolve_vip_presence",
@@ -1807,6 +1815,7 @@ def test_completed_notification_suppressed_when_vip_presence_absent(monkeypatch)
     monkeypatch.setattr(update_contests, "_build_discord_sender", lambda: sender)
     monkeypatch.setattr(update_contests, "_sport_choices", lambda: {"nba": DummySport})
     monkeypatch.setattr(update_contests, "_warning_schedule_for", lambda _sport: [])
+    monkeypatch.setattr(update_contests, "Draftkings", _StubDraftkings)
     monkeypatch.setattr(
         update_contests,
         "_resolve_vip_presence",
