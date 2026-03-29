@@ -254,7 +254,7 @@ def write_players_to_sheet(
 
     dk_id = results.contest_id
     dg = draft_group
-    fetch_requested = len(results.vip_list)
+    requested_vips = len(results.vip_list)
 
     if not vips:
         _log_vip_fetch(
@@ -282,9 +282,9 @@ def write_players_to_sheet(
         _log_vip_fetch(
             sport=sport_name,
             contest_id=dk_id,
-            requested=fetch_requested,
+            requested=requested_vips,
             fetched=0,
-            missing_roster=fetch_requested,
+            missing_roster=requested_vips,
             failures=0,
             attempted=False,
             reason="no_draft_group",
@@ -309,6 +309,8 @@ def write_players_to_sheet(
             "rank": vip.rank,
             "pts": vip.pts,
         }
+    fetch_requested = len(vip_entries) if vip_entries else requested_vips
+
     player_salary_map: dict[str, int] = {name: player.salary for name, player in results.players.items()}
     fetch_failures = 0
     fetch_reason = "not_applicable"
@@ -379,7 +381,7 @@ def write_players_to_sheet(
             lineups=0,
             written=False,
             elapsed_ms=0,
-            reason="empty_vip_lineups",
+            reason=fetch_reason,
         )
 
 
@@ -576,15 +578,20 @@ def process_sport(
         return None
 
     sheet = build_dfs_sheet_service(sport_name)
-    results = _build_results(
-        sport_obj=sport_obj,
-        contest_id=int(dk_id),
-        salary_csv=fn,
-        positions_paid=positions_paid,
-        standings_rows=contest_list,
-        vips=vips,
-        contest_name=name,
-    )
+    try:
+        results = _build_results(
+            sport_obj=sport_obj,
+            contest_id=int(dk_id),
+            salary_csv=fn,
+            positions_paid=positions_paid,
+            standings_rows=contest_list,
+            vips=vips,
+            contest_name=name,
+        )
+    except Exception:
+        logger.exception("Failed to construct Results: sport=%s contest_id=%s", sport_name, dk_id)
+        _log_vip_skip_events(sport_name, int(dk_id), len(vips), "results_unavailable")
+        return None
     _log_vip_detection(
         sport=sport_name,
         contest_id=int(dk_id),

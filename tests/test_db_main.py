@@ -51,6 +51,51 @@ def _standings_rows() -> list[list[str]]:
     ]
 
 
+def _standings_rows_with_missing_vip_entry() -> list[list[str]]:
+    return [
+        [
+            "Rank",
+            "EntryId",
+            "EntryName",
+            "TimeRemaining",
+            "Points",
+            "Lineup",
+            "",
+            "Player",
+            "Roster Position",
+            "%Drafted",
+            "FPTS",
+        ],
+        [
+            "1",
+            "111",
+            "UserA",
+            "0",
+            "120",
+            "QB Tom Brady RB Derrick Henry",
+            "",
+            "",
+            "",
+            "",
+            "",
+        ],
+        [
+            "2",
+            "",
+            "UserB",
+            "0",
+            "110",
+            "QB Tom Brady RB Derrick Henry",
+            "",
+            "",
+            "",
+            "",
+            "",
+        ],
+        ["", "", "", "", "", "", "", "Tom Brady", "QB", "50.00%", "20"],
+    ]
+
+
 class _FakeContestDb:
     def get_live_contest(self, *_args, **_kwargs):
         return (
@@ -88,6 +133,22 @@ class _FakeDraftkingsNoStandings(_FakeDraftkings):
 class _FakeDraftkingsWithVipLineups(_FakeDraftkings):
     def get_vip_lineups(self, *_args, **_kwargs):
         return [{"user": "UserA", "players": []}]
+
+
+class _FakeDraftkingsFetchError(_FakeDraftkings):
+    def get_vip_lineups(self, *_args, **_kwargs):
+        raise RuntimeError("fetch failed")
+
+
+class _FakeDraftkingsTrackVipEntries(_FakeDraftkings):
+    captured_vip_entries: dict[str, dict[str, object] | str] = {}
+
+    def download_contest_rows(self, *_args, **_kwargs):
+        return _standings_rows_with_missing_vip_entry()
+
+    def get_vip_lineups(self, *_args, **kwargs):
+        type(self).captured_vip_entries = kwargs.get("vip_entries", {})
+        return []
 
 
 class _FakeSheet:
@@ -217,6 +278,86 @@ def test_process_sport_emits_deterministic_vip_events_for_standings_skip(monkeyp
     assert _parse_event_fields(detection[0])["reason"] == "standings_unavailable"
     assert _parse_event_fields(fetch[0])["attempted"] == "false"
     assert _parse_event_fields(sheet_write[0])["written"] == "false"
+
+
+def test_process_sport_emits_fetch_error_reason_to_fetch_and_sheet_events(monkeypatch, tmp_path, caplog):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(db_main, "Draftkings", _FakeDraftkingsFetchError)
+    monkeypatch.setattr(db_main, "build_dfs_sheet_service", lambda _sport: _FakeSheet())
+
+    args = Namespace(nolineups=False)
+    with caplog.at_level(logging.INFO):
+        contest_id = db_main.process_sport(
+            "NFL",
+            {"NFL": NFLSport},
+            _FakeContestDb(),
+            datetime.datetime(2026, 2, 14, 12, 0, 0),
+            args,
+            ["UserA"],
+        )
+
+    assert contest_id == 123
+    fetch = _event_messages(caplog, "vip_fetch")
+    sheet_write = _event_messages(caplog, "vip_sheet_write")
+    assert len(fetch) == 1
+    assert len(sheet_write) == 1
+    assert _parse_event_fields(fetch[0])["reason"] == "fetch_error"
+    assert _parse_event_fields(sheet_write[0])["reason"] == "fetch_error"
+    assert _parse_event_fields(fetch[0])["attempted"] == "true"
+    assert _parse_event_fields(sheet_write[0])["written"] == "false"
+
+
+def test_vip_fetch_requested_uses_filtered_entry_keys(monkeypatch, tmp_path, caplog):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(db_main, "Draftkings", _FakeDraftkingsTrackVipEntries)
+    monkeypatch.setattr(db_main, "build_dfs_sheet_service", lambda _sport: _FakeSheet())
+    _FakeDraftkingsTrackVipEntries.captured_vip_entries = {}
+
+    args = Namespace(nolineups=False)
+    with caplog.at_level(logging.INFO):
+        contest_id = db_main.process_sport(
+            "NFL",
+            {"NFL": NFLSport},
+            _FakeContestDb(),
+            datetime.datetime(2026, 2, 14, 12, 0, 0),
+            args,
+            ["UserA", "UserB"],
+        )
+
+    assert contest_id == 123
+    assert len(_FakeDraftkingsTrackVipEntries.captured_vip_entries) == 1
+    fetch = _event_messages(caplog, "vip_fetch")
+    assert len(fetch) == 1
+    assert _parse_event_fields(fetch[0])["requested"] == "1"
+
+
+def test_process_sport_emits_vip_events_when_results_build_fails(monkeypatch, tmp_path, caplog):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(db_main, "Draftkings", _FakeDraftkings)
+    monkeypatch.setattr(db_main, "build_dfs_sheet_service", lambda _sport: _FakeSheet())
+    monkeypatch.setattr(db_main, "_build_results", lambda **_kwargs: (_ for _ in ()).throw(RuntimeError("boom")))
+
+    args = Namespace(nolineups=False)
+    with caplog.at_level(logging.INFO):
+        contest_id = db_main.process_sport(
+            "NFL",
+            {"NFL": NFLSport},
+            _FakeContestDb(),
+            datetime.datetime(2026, 2, 14, 12, 0, 0),
+            args,
+            ["UserA"],
+        )
+
+    assert contest_id is None
+    detection = _event_messages(caplog, "vip_detection")
+    fetch = _event_messages(caplog, "vip_fetch")
+    sheet_write = _event_messages(caplog, "vip_sheet_write")
+    assert len(detection) == 1
+    assert len(fetch) == 1
+    assert len(sheet_write) == 1
+    assert _parse_event_fields(detection[0])["reason"] == "results_unavailable"
+    assert _parse_event_fields(fetch[0])["reason"] == "results_unavailable"
+    assert _parse_event_fields(sheet_write[0])["reason"] == "results_unavailable"
 
 
 def test_process_sport_logs_optimizer_skip(monkeypatch, tmp_path, caplog):
