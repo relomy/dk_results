@@ -102,9 +102,14 @@ uv run python db_main.py --sport NBA GOLF --snapshot-out /tmp/live-snapshot.json
   `dfs_common/discord.py:WebhookSender`).
 - `update_contests.py` updates contest status and `positions_paid` for entries already
   in the database and sends Discord bot notifications for warning/live/completed events,
-  with de-duplication tracked in a notifications table
+  with de-duplication tracked in a notifications table. Those lifecycle notifications
+  are VIP-gated using the DraftKings entrants page before-start lookup: presence
+  `present` and `unknown` still send, while `absent` suppresses the warning/live/
+  completed notification for that contest.
   (`update_contests.py:check_contests_for_completion`,
   `update_contests.py:db_update_contest`, `update_contests.py:create_notifications_table`,
+  `update_contests.py:create_vip_presence_table`,
+  `update_contests.py:_resolve_vip_presence`,
   `update_contests.py:_format_contest_announcement`).
 - `bot/discord_bot.py` runs a long-lived Discord bot that exposes contest lookup and
   health commands (see command handlers in `bot/discord_bot.py:contests`,
@@ -170,6 +175,9 @@ so place the credential file at the repo root before running `db_main.py` or the
 - `contest_warning_schedules.yaml` defines per-sport warning schedules; keys are
   normalized to lowercase and fall back to `default` (`update_contests.py:_load_warning_schedule_map`,
   `update_contests.py:_warning_schedule_for`, `contest_warning_schedules.yaml`).
+- `contest_vip_presence` caches VIP presence decisions for contest notification
+  gating. `present` is sticky, `absent` is refreshed every 10 minutes before start,
+  and `absent` becomes sticky after start once the contest is locked in.
 - `sheet_gids.yaml` is a YAML mapping of sheet title to numeric gid; used for building
   sheet links (`update_contests.py:_load_sheet_gid_map`, `bot/discord_bot.py:_load_sheet_gid_map`).
   It can be generated via `generate_sheet_gids.py` (`generate_sheet_gids.py:main`,
