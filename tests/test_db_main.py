@@ -218,6 +218,69 @@ def test_main_verbose_enables_debug_without_mutating_log_level_env(monkeypatch, 
     assert db_main.os.environ["LOG_LEVEL"] == "INFO"
 
 
+def test_main_verbose_flag_is_boolean(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(db_main, "load_dotenv", lambda: None)
+    monkeypatch.setattr(db_main, "load_and_apply_settings", lambda: None)
+    monkeypatch.setattr(db_main.state, "contests_db_path", lambda: tmp_path / "contests.db")
+    monkeypatch.setattr(db_main, "ContestDatabase", lambda _path: object())
+    monkeypatch.setattr(db_main, "load_vips", lambda: [])
+    monkeypatch.setattr(db_main, "process_sport", lambda *_args, **_kwargs: None)
+
+    observed: dict[str, str | None] = {"action": None}
+    original_add_argument = db_main.argparse.ArgumentParser.add_argument
+
+    def _capture_add_argument(parser, *names, **kwargs):
+        if "--verbose" in names:
+            observed["action"] = kwargs.get("action")
+        return original_add_argument(parser, *names, **kwargs)
+
+    monkeypatch.setattr(db_main.argparse.ArgumentParser, "add_argument", _capture_add_argument)
+    monkeypatch.setattr(
+        db_main.argparse.ArgumentParser,
+        "parse_args",
+        lambda _self: Namespace(
+            sport=["NFL"],
+            nolineups=False,
+            verbose=False,
+            snapshot_out=None,
+            standings_limit=123,
+        ),
+    )
+
+    db_main.main()
+
+    assert observed["action"] == "store_true"
+
+
+def test_main_verbose_uses_explicit_logging_override(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(db_main, "load_dotenv", lambda: None)
+    monkeypatch.setattr(db_main, "load_and_apply_settings", lambda: None)
+    monkeypatch.setattr(db_main.state, "contests_db_path", lambda: tmp_path / "contests.db")
+    monkeypatch.setattr(db_main, "ContestDatabase", lambda _path: object())
+    monkeypatch.setattr(db_main, "load_vips", lambda: [])
+    monkeypatch.setattr(db_main, "process_sport", lambda *_args, **_kwargs: None)
+
+    observed: list[str | int | None] = []
+    monkeypatch.setattr(db_main, "configure_logging", lambda level_override=None: observed.append(level_override))
+    monkeypatch.setattr(
+        db_main.argparse.ArgumentParser,
+        "parse_args",
+        lambda _self: Namespace(
+            sport=["NFL"],
+            nolineups=False,
+            verbose=True,
+            snapshot_out=None,
+            standings_limit=123,
+        ),
+    )
+
+    db_main.main()
+
+    assert observed == ["DEBUG"]
+
+
 def test_write_snapshot_payload_is_byte_stable(tmp_path):
     out = tmp_path / "stable.json"
     payload = OrderedDict(
