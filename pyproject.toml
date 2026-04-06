@@ -12,6 +12,7 @@ dependencies = [
     "pyyaml",
     "dotenv",
     "discord",
+    "aiohttp>=3.13.5",
     "dfs-common",
     "cryptography>=46.0.6",
 ]
