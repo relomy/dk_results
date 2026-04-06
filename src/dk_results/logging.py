@@ -22,8 +22,11 @@ def _default_level_name() -> str:
     return "INFO"
 
 
-def _resolve_level(default: str | None = None) -> int:
-    level_name = os.getenv("LOG_LEVEL", default or _default_level_name()).upper()
+def _resolve_level(level_override: str | None = None, default: str | None = None) -> int:
+    if level_override:
+        level_name = level_override.upper()
+    else:
+        level_name = os.getenv("LOG_LEVEL", default or _default_level_name()).upper()
     return getattr(logging, level_name, logging.DEBUG)
 
 
@@ -32,11 +35,11 @@ def _configure_library_log_levels() -> None:
         logging.getLogger(logger_name).setLevel(logging.INFO)
 
 
-def configure_logging() -> logging.Logger:
+def configure_logging(level_override: str | None = None) -> logging.Logger:
     logger = logging.getLogger()
     for handler in logger.handlers:
         if getattr(handler, _HANDLER_MARKER, False):
-            logger.setLevel(_resolve_level())
+            logger.setLevel(_resolve_level(level_override=level_override))
             _configure_library_log_levels()
             return logger
 
@@ -45,6 +48,6 @@ def configure_logging() -> logging.Logger:
         handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s [%(name)s] %(message)s"))
         setattr(handler, _HANDLER_MARKER, True)
         logger.addHandler(handler)
-    logger.setLevel(_resolve_level())
+    logger.setLevel(_resolve_level(level_override=level_override))
     _configure_library_log_levels()
     return logger
