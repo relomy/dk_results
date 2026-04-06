@@ -31,16 +31,16 @@ Apply them for all work under `dk_results/`.
 Before claiming completion:
 
 1. Run relevant tests for touched functionality.
+2. Mandatory pre-merge gate: run `uv run ruff format --check --exclude .ci .` with the same priority as tests.
 
-- uv run pytest
+- `uv run pytest`
 
-2. Run lint and type checks:
+3. Run lint and type checks:
 
-- uv run ruff format --check --exclude .ci .
-- uv run ruff check .
-- uv run ty check
+- `uv run ruff check .`
+- `uv run ty check`
 
-3. Report any failing checks with exact commands and failure summaries.
+4. Report any failing checks with exact commands and failure summaries.
 
 ## Commit Message Style
 
