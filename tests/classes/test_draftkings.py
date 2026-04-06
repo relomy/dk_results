@@ -193,9 +193,7 @@ def test_normalize_and_lookup_salary():
 
 def test_redact_url_for_log_strips_querystring():
     dk = Draftkings(session=_Session(_Response()))
-    redacted = dk._redact_url_for_log(
-        "https://example.test/path/to/file.csv?token=abc123&sig=xyz#frag"
-    )
+    redacted = dk._redact_url_for_log("https://example.test/path/to/file.csv?token=abc123&sig=xyz#frag")
     assert redacted == "https://example.test/path/to/file.csv"
 
 
