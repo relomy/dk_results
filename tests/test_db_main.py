@@ -121,8 +121,8 @@ class _FakeDraftkings:
     def download_contest_rows(self, *_args, **_kwargs):
         return _standings_rows()
 
-    def get_vip_lineups(self, *_args, **_kwargs):
-        return []
+    def clone_auth_to(self, _session) -> None:
+        pass
 
 
 class _FakeDraftkingsNoStandings(_FakeDraftkings):
@@ -130,25 +130,11 @@ class _FakeDraftkingsNoStandings(_FakeDraftkings):
         return None
 
 
-class _FakeDraftkingsWithVipLineups(_FakeDraftkings):
-    def get_vip_lineups(self, *_args, **_kwargs):
-        return [{"user": "UserA", "players": []}]
-
-
-class _FakeDraftkingsFetchError(_FakeDraftkings):
-    def get_vip_lineups(self, *_args, **_kwargs):
-        raise RuntimeError("fetch failed")
-
-
 class _FakeDraftkingsTrackVipEntries(_FakeDraftkings):
-    captured_vip_entries: dict[str, dict[str, object] | str] = {}
+    captured_vip_entries: dict = {}
 
     def download_contest_rows(self, *_args, **_kwargs):
         return _standings_rows_with_missing_vip_entry()
-
-    def get_vip_lineups(self, *_args, **kwargs):
-        type(self).captured_vip_entries = kwargs.get("vip_entries", {})
-        return []
 
 
 class _FakeSheet:
@@ -282,7 +268,10 @@ def test_process_sport_emits_deterministic_vip_events_for_standings_skip(monkeyp
 
 def test_process_sport_emits_fetch_error_reason_to_fetch_and_sheet_events(monkeypatch, tmp_path, caplog):
     monkeypatch.chdir(tmp_path)
-    monkeypatch.setattr(db_main, "Draftkings", _FakeDraftkingsFetchError)
+    monkeypatch.setattr(db_main, "Draftkings", _FakeDraftkings)
+    monkeypatch.setattr(
+        db_main, "fetch_vip_lineups", lambda *_a, **_kw: (_ for _ in ()).throw(RuntimeError("fetch failed"))
+    )
     monkeypatch.setattr(db_main, "build_dfs_sheet_service", lambda _sport: _FakeSheet())
 
     args = Namespace(nolineups=False)
@@ -311,7 +300,14 @@ def test_vip_fetch_requested_uses_filtered_entry_keys(monkeypatch, tmp_path, cap
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(db_main, "Draftkings", _FakeDraftkingsTrackVipEntries)
     monkeypatch.setattr(db_main, "build_dfs_sheet_service", lambda _sport: _FakeSheet())
-    _FakeDraftkingsTrackVipEntries.captured_vip_entries = {}
+
+    captured: dict = {}
+
+    def _capture_fetch(*_args, vip_entries=None, **_kw):
+        captured["vip_entries"] = vip_entries or {}
+        return []
+
+    monkeypatch.setattr(db_main, "fetch_vip_lineups", _capture_fetch)
 
     args = Namespace(nolineups=False)
     with caplog.at_level(logging.INFO):
@@ -325,7 +321,7 @@ def test_vip_fetch_requested_uses_filtered_entry_keys(monkeypatch, tmp_path, cap
         )
 
     assert contest_id == 123
-    assert len(_FakeDraftkingsTrackVipEntries.captured_vip_entries) == 1
+    assert len(captured["vip_entries"]) == 1
     fetch = _event_messages(caplog, "vip_fetch")
     assert len(fetch) == 1
     assert _parse_event_fields(fetch[0])["requested"] == "1"

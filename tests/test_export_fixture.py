@@ -94,10 +94,12 @@ def test_snapshot_includes_all_major_sections_even_when_null(monkeypatch):
 
 
 def test_load_vips_reads_repo_root_vips_yaml(monkeypatch, tmp_path):
+    import dk_results.vip_lineups as vip_mod
+
     repo_root = tmp_path / "repo"
     repo_root.mkdir(parents=True)
     (repo_root / "vips.yaml").write_text("- vip_one\n- vip_two\n", encoding="utf-8")
-    monkeypatch.setattr(snapshot_exporter, "repo_file", lambda *parts: repo_root.joinpath(*parts))
+    monkeypatch.setattr(vip_mod, "repo_file", lambda *parts: repo_root.joinpath(*parts))
 
     assert snapshot_exporter.load_vips() == ["vip_one", "vip_two"]
 
@@ -1882,8 +1884,8 @@ def test_collect_snapshot_data_emits_avg_salary_per_player_remaining(monkeypatch
                 ["2", "ek2", "vip2", "0", "320.0", "PG A"],
             ]
 
-        def get_vip_lineups(self, *_args, **_kwargs):
-            return []
+        def clone_auth_to(self, _session) -> None:
+            pass
 
         def get_leaderboard(self, *_args, **_kwargs):
             return {"leaderBoard": []}
@@ -1934,6 +1936,7 @@ def test_collect_snapshot_data_emits_avg_salary_per_player_remaining(monkeypatch
     monkeypatch.setattr(snapshot_exporter, "load_vips", lambda: ["vip1", "vip2"])
     monkeypatch.setattr(snapshot_exporter.state, "contests_db_path", lambda: tmp_path / "contests.db")
     monkeypatch.setattr(snapshot_exporter, "SALARY_DIR", str(tmp_path))
+    monkeypatch.setattr(snapshot_exporter, "fetch_vip_lineups", lambda *_a, **_kw: [])
 
     snapshot = snapshot_exporter.build_snapshot(sport="NBA", contest_id=123)
     envelope = snapshot_exporter.build_dashboard_envelope({"NBA": snapshot})
@@ -2348,8 +2351,8 @@ def test_collect_snapshot_data_sources_prize_pool_from_db_metadata(monkeypatch, 
         def download_contest_rows(self, *_args, **_kwargs):
             return [["Rank", "EntryId"], ["1", "123"]]
 
-        def get_vip_lineups(self, *_args, **_kwargs):
-            return []
+        def clone_auth_to(self, _session) -> None:
+            pass
 
     class _FakeResults:
         def __init__(self, *_args, **_kwargs):
@@ -2377,6 +2380,7 @@ def test_collect_snapshot_data_sources_prize_pool_from_db_metadata(monkeypatch, 
     monkeypatch.setattr(snapshot_exporter, "load_vips", lambda: [])
     monkeypatch.setattr(snapshot_exporter.state, "contests_db_path", lambda: tmp_path / "contests.db")
     monkeypatch.setattr(snapshot_exporter, "SALARY_DIR", str(tmp_path))
+    monkeypatch.setattr(snapshot_exporter, "fetch_vip_lineups", lambda *_a, **_kw: [])
 
     snapshot = snapshot_exporter.collect_snapshot_data(sport="NBA", standings_limit=10)
     contest = snapshot["contest"]
@@ -2452,8 +2456,8 @@ def test_collect_snapshot_data_ownership_totals_and_watchlist_are_pre_truncation
                 ["2", "ek2", "vip2", "0", "320.0", "PG A"],
             ]
 
-        def get_vip_lineups(self, *_args, **_kwargs):
-            return []
+        def clone_auth_to(self, _session) -> None:
+            pass
 
         def get_leaderboard(self, *_args, **_kwargs):
             return {"leaderBoard": []}
@@ -2486,6 +2490,7 @@ def test_collect_snapshot_data_ownership_totals_and_watchlist_are_pre_truncation
     monkeypatch.setattr(snapshot_exporter, "load_vips", lambda: ["vip1", "vip2"])
     monkeypatch.setattr(snapshot_exporter.state, "contests_db_path", lambda: tmp_path / "contests.db")
     monkeypatch.setattr(snapshot_exporter, "SALARY_DIR", str(tmp_path))
+    monkeypatch.setattr(snapshot_exporter, "fetch_vip_lineups", lambda *_a, **_kw: [])
 
     snapshot = snapshot_exporter.collect_snapshot_data(sport="NBA", contest_id=123, standings_limit=1)
 
@@ -2555,8 +2560,8 @@ def test_collect_snapshot_data_uses_leaderboard_payout_for_cashing(monkeypatch, 
                 ["6", "ek1", "vip1", "0", "336.25", "PG A"],
             ]
 
-        def get_vip_lineups(self, *_args, **_kwargs):
-            return [{"user": "vip1", "entry_key": "ek1", "players": [{"slot": "PG", "name": "A"}]}]
+        def clone_auth_to(self, _session) -> None:
+            pass
 
     class _FakeResults:
         def __init__(self, *_args, **_kwargs):
@@ -2584,6 +2589,27 @@ def test_collect_snapshot_data_uses_leaderboard_payout_for_cashing(monkeypatch, 
     monkeypatch.setattr(snapshot_exporter, "load_vips", lambda: ["vip1"])
     monkeypatch.setattr(snapshot_exporter.state, "contests_db_path", lambda: tmp_path / "contests.db")
     monkeypatch.setattr(snapshot_exporter, "SALARY_DIR", str(tmp_path))
+    monkeypatch.setattr(
+        snapshot_exporter,
+        "fetch_vip_lineups",
+        lambda *_a, **_kw: [
+            type(
+                "_VL",
+                (),
+                {
+                    "to_dict": lambda self: {
+                        "entry_key": "ek1",
+                        "user": "vip1",
+                        "rank": "6",
+                        "pts": "336.25",
+                        "pmr": "0",
+                        "total_salary": 0,
+                        "players": [],
+                    }
+                },
+            )()
+        ],
+    )
 
     snapshot = snapshot_exporter.collect_snapshot_data(sport="NBA", contest_id=123, standings_limit=10)
     assert snapshot["standings"][0]["payout_cents"] == 2000
@@ -2651,8 +2677,8 @@ def test_collect_snapshot_data_uses_points_cutoff_when_payout_unavailable(monkey
                 ["6", "ek1", "vip1", "0", "336.25", "PG A"],
             ]
 
-        def get_vip_lineups(self, *_args, **_kwargs):
-            return [{"user": "vip1", "entry_key": "ek1", "players": [{"slot": "PG", "name": "A"}]}]
+        def clone_auth_to(self, _session) -> None:
+            pass
 
     class _FakeResults:
         def __init__(self, *_args, **_kwargs):
@@ -2680,6 +2706,27 @@ def test_collect_snapshot_data_uses_points_cutoff_when_payout_unavailable(monkey
     monkeypatch.setattr(snapshot_exporter, "load_vips", lambda: ["vip1"])
     monkeypatch.setattr(snapshot_exporter.state, "contests_db_path", lambda: tmp_path / "contests.db")
     monkeypatch.setattr(snapshot_exporter, "SALARY_DIR", str(tmp_path))
+    monkeypatch.setattr(
+        snapshot_exporter,
+        "fetch_vip_lineups",
+        lambda *_a, **_kw: [
+            type(
+                "_VL",
+                (),
+                {
+                    "to_dict": lambda self: {
+                        "entry_key": "ek1",
+                        "user": "vip1",
+                        "rank": "6",
+                        "pts": "336.25",
+                        "pmr": "0",
+                        "total_salary": 0,
+                        "players": [],
+                    }
+                },
+            )()
+        ],
+    )
 
     snapshot = snapshot_exporter.collect_snapshot_data(sport="NBA", contest_id=123, standings_limit=10)
     assert snapshot["standings"][0].get("payout_cents") is None
@@ -2758,8 +2805,8 @@ def test_collect_snapshot_data_uses_winnings_cash_fallback_when_winning_value_mi
                 ["6", "ek1", "vip1", "0", "336.25", "PG A"],
             ]
 
-        def get_vip_lineups(self, *_args, **_kwargs):
-            return [{"user": "vip1", "entry_key": "ek1", "players": [{"slot": "PG", "name": "A"}]}]
+        def clone_auth_to(self, _session) -> None:
+            pass
 
     class _FakeResults:
         def __init__(self, *_args, **_kwargs):
@@ -2787,6 +2834,27 @@ def test_collect_snapshot_data_uses_winnings_cash_fallback_when_winning_value_mi
     monkeypatch.setattr(snapshot_exporter, "load_vips", lambda: ["vip1"])
     monkeypatch.setattr(snapshot_exporter.state, "contests_db_path", lambda: tmp_path / "contests.db")
     monkeypatch.setattr(snapshot_exporter, "SALARY_DIR", str(tmp_path))
+    monkeypatch.setattr(
+        snapshot_exporter,
+        "fetch_vip_lineups",
+        lambda *_a, **_kw: [
+            type(
+                "_VL",
+                (),
+                {
+                    "to_dict": lambda self: {
+                        "entry_key": "ek1",
+                        "user": "vip1",
+                        "rank": "6",
+                        "pts": "336.25",
+                        "pmr": "0",
+                        "total_salary": 0,
+                        "players": [],
+                    }
+                },
+            )()
+        ],
+    )
 
     snapshot = snapshot_exporter.collect_snapshot_data(sport="NBA", contest_id=123, standings_limit=10)
     assert snapshot["standings"][0]["payout_cents"] == 2013
@@ -2862,8 +2930,8 @@ def test_collect_snapshot_data_winning_value_precedence_over_winnings(monkeypatc
                 ["6", "ek1", "vip1", "0", "336.25", "PG A"],
             ]
 
-        def get_vip_lineups(self, *_args, **_kwargs):
-            return [{"user": "vip1", "entry_key": "ek1", "players": [{"slot": "PG", "name": "A"}]}]
+        def clone_auth_to(self, _session) -> None:
+            pass
 
     class _FakeResults:
         def __init__(self, *_args, **_kwargs):
@@ -2891,6 +2959,7 @@ def test_collect_snapshot_data_winning_value_precedence_over_winnings(monkeypatc
     monkeypatch.setattr(snapshot_exporter, "load_vips", lambda: ["vip1"])
     monkeypatch.setattr(snapshot_exporter.state, "contests_db_path", lambda: tmp_path / "contests.db")
     monkeypatch.setattr(snapshot_exporter, "SALARY_DIR", str(tmp_path))
+    monkeypatch.setattr(snapshot_exporter, "fetch_vip_lineups", lambda *_a, **_kw: [])
 
     snapshot = snapshot_exporter.collect_snapshot_data(sport="NBA", contest_id=123, standings_limit=10)
     assert snapshot["standings"][0]["payout_cents"] == 2000
@@ -2984,8 +3053,8 @@ def test_collect_snapshot_data_marks_not_cashing_when_payout_and_cutoff_unavaila
                 ["60", "ek1", "vip1", "0", "200.0", "PG A"],
             ]
 
-        def get_vip_lineups(self, *_args, **_kwargs):
-            return [{"user": "vip1", "entry_key": "ek1", "players": [{"slot": "PG", "name": "A"}]}]
+        def clone_auth_to(self, _session) -> None:
+            pass
 
     class _FakeResults:
         def __init__(self, *_args, **_kwargs):
@@ -3013,6 +3082,27 @@ def test_collect_snapshot_data_marks_not_cashing_when_payout_and_cutoff_unavaila
     monkeypatch.setattr(snapshot_exporter, "load_vips", lambda: ["vip1"])
     monkeypatch.setattr(snapshot_exporter.state, "contests_db_path", lambda: tmp_path / "contests.db")
     monkeypatch.setattr(snapshot_exporter, "SALARY_DIR", str(tmp_path))
+    monkeypatch.setattr(
+        snapshot_exporter,
+        "fetch_vip_lineups",
+        lambda *_a, **_kw: [
+            type(
+                "_VL",
+                (),
+                {
+                    "to_dict": lambda self: {
+                        "entry_key": "ek1",
+                        "user": "vip1",
+                        "rank": "6",
+                        "pts": "200.0",
+                        "pmr": "0",
+                        "total_salary": 0,
+                        "players": [],
+                    }
+                },
+            )()
+        ],
+    )
 
     snapshot = snapshot_exporter.collect_snapshot_data(sport="NBA", contest_id=123, standings_limit=10)
     assert snapshot["standings"][0].get("payout_cents") is None
