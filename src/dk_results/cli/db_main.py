@@ -23,6 +23,7 @@ from dk_results.classes.sport import Sport
 from dk_results.classes.trainfinder import TrainFinder
 from dk_results.config import load_and_apply_settings
 from dk_results.logging import configure_logging
+from dk_results.paths import repo_file
 from dk_results.services.snapshot_exporter import (
     DEFAULT_STANDINGS_LIMIT,
     build_snapshot,

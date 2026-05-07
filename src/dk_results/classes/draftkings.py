@@ -70,16 +70,16 @@ class Draftkings:
 
     def get_leaderboard(
         self,
-        dk_id: int,
+        contest_id: int,
         timeout: Optional[int] = None,
-        session: Optional[requests.Session] = None,  # <-- NEW
+        session: Optional[requests.Session] = None,
     ) -> dict[str, Any]:
         """
-        Fetch the leaderboard JSON for a contest id (dk_id).
+        Fetch the leaderboard JSON for a contest id.
         """
         to = timeout or self.timeout_sec
-        sess = session or self.session  # <-- NEW
-        url = f"https://api.draftkings.com/scores/v1/leaderboards/{dk_id}?format=json&embed=leaderboard"
+        sess = session or self.session
+        url = f"https://api.draftkings.com/scores/v1/leaderboards/{contest_id}?format=json&embed=leaderboard"
         r = sess.get(url, timeout=to)
         r.raise_for_status()
         return r.json()
