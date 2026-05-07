@@ -17,7 +17,6 @@ from dk_results.vip_lineups import (
     load_vips,
 )
 
-
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 
 

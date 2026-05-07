@@ -23,7 +23,6 @@ from dk_results.classes.sport import Sport
 from dk_results.classes.trainfinder import TrainFinder
 from dk_results.config import load_and_apply_settings
 from dk_results.logging import configure_logging
-from dk_results.vip_lineups import build_vip_entries, fetch_vip_lineups, load_vips
 from dk_results.services.snapshot_exporter import (
     DEFAULT_STANDINGS_LIMIT,
     build_snapshot,
@@ -31,6 +30,7 @@ from dk_results.services.snapshot_exporter import (
     to_stable_json,
     to_utc_iso,
 )
+from dk_results.vip_lineups import build_vip_entries, fetch_vip_lineups, load_vips
 
 logger = logging.getLogger(__name__)
 
