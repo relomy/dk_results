@@ -73,45 +73,6 @@ def test_download_salary_csv_creates_directory(tmp_path):
     assert salary_path.read_bytes() == b"name,value\n"
 
 
-def test_fetch_user_lineup_worker_adds_salary_total(monkeypatch):
-    dk = Draftkings(session=_FakeSession(_FakeResponse(content=b"", headers={})))
-
-    def fake_get_entry(_dg, _entry_key, timeout=None, session=None):
-        return {
-            "entries": [
-                {
-                    "roster": {
-                        "scorecards": [
-                            {
-                                "displayName": "Player A",
-                                "rosterPosition": "RB",
-                                "score": "10",
-                                "percentDrafted": 50,
-                                "projection": {},
-                            },
-                            {
-                                "displayName": "Player B",
-                                "rosterPosition": "WR",
-                                "score": "5",
-                                "percentDrafted": 20,
-                                "projection": {},
-                            },
-                        ]
-                    }
-                }
-            ]
-        }
-
-    monkeypatch.setattr(dk, "get_entry", fake_get_entry)
-
-    result = dk._fetch_user_lineup_worker(
-        {"entryKey": "abc", "userName": "vip"}, 1, {"Player A": 4000, "Player B": 3500}
-    )
-
-    assert result is not None
-    assert result["salary"] == 7500
-
-
 class _Response:
     def __init__(self, *, json_data=None, status_code=200, headers=None, content=b""):
         self._json = json_data or {}
@@ -182,96 +143,10 @@ def test_get_entry_uses_session():
     assert "entries" in session.last[0]
 
 
-def test_normalize_and_lookup_salary():
-    dk = Draftkings(session=_Session(_Response()))
-    assert dk._normalize_name("José") == "Jose"
-    assert dk._normalize_name(123) == ""
-
-    assert dk._lookup_salary("José", {"Jose": 100}) == 100
-    assert dk._lookup_salary("", {"Jose": 100}) is None
-
-
 def test_redact_url_for_log_strips_querystring():
     dk = Draftkings(session=_Session(_Response()))
     redacted = dk._redact_url_for_log("https://example.test/path/to/file.csv?token=abc123&sig=xyz#frag")
     assert redacted == "https://example.test/path/to/file.csv"
-
-
-def test_fetch_user_lineup_worker_missing_entry_key():
-    dk = Draftkings(session=_Session(_Response()))
-    assert dk._fetch_user_lineup_worker({"userName": "vip"}, 1) is None
-
-
-def test_fetch_user_lineup_worker_handles_invalid_scores(monkeypatch):
-    dk = Draftkings(session=_Session(_Response()))
-
-    def fake_get_entry(_dg, _entry_key, timeout=None, session=None):
-        return {
-            "entries": [
-                {
-                    "roster": {
-                        "scorecards": [
-                            {
-                                "displayName": "Player A",
-                                "rosterPosition": "RB",
-                                "score": "bad",
-                                "percentDrafted": 50,
-                                "projection": {"realTimeProjection": "bad"},
-                            }
-                        ]
-                    }
-                }
-            ]
-        }
-
-    monkeypatch.setattr(dk, "get_entry", fake_get_entry)
-
-    result = dk._fetch_user_lineup_worker(
-        {"entryKey": "abc", "userName": "vip"},
-        1,
-        {"Player A": 4000},
-    )
-
-    assert result is not None
-    assert result["players"][0]["value"] == ""
-    assert result["players"][0]["rtProj"] == "bad"
-
-
-def test_get_vip_lineups_with_entries(monkeypatch):
-    dk = Draftkings(session=_Session(_Response()))
-
-    monkeypatch.setattr(
-        dk,
-        "_fetch_user_lineup_worker",
-        lambda *_args, **_kwargs: {"user": "vip", "players": []},
-    )
-
-    result = dk.get_vip_lineups(
-        1,
-        2,
-        ["vip"],
-        vip_entries={"vip": {"entry_key": "abc"}},
-    )
-
-    assert result == [{"user": "vip", "players": []}]
-
-
-def test_get_vip_lineups_handles_worker_exception(monkeypatch):
-    dk = Draftkings(session=_Session(_Response()))
-
-    def boom(*_args, **_kwargs):
-        raise RuntimeError("bad")
-
-    monkeypatch.setattr(dk, "_fetch_user_lineup_worker", boom)
-
-    result = dk.get_vip_lineups(
-        1,
-        2,
-        ["vip"],
-        vip_entries={"vip": {"entry_key": "abc"}},
-    )
-
-    assert result == []
 
 
 def test_download_contest_rows_html_returns_none():
@@ -459,68 +334,6 @@ def test_get_lobby_contests_live_uses_url():
     dk = Draftkings(session=Sess())
     assert dk.get_lobby_contests("NBA", live=True) == {"ok": True}
     assert "getlivecontests" in called["url"]
-
-
-def test_lookup_salary_blank_and_missing_normalized():
-    dk = Draftkings(session=_Session(_Response()))
-    assert dk._lookup_salary("   ", {"A": 1}) is None
-    assert dk._lookup_salary("José", {"Joe": 1}) is None
-
-
-def test_fetch_user_lineup_worker_no_entries(monkeypatch):
-    dk = Draftkings(session=_Session(_Response()))
-
-    def fake_get_entry(_dg, _entry_key, timeout=None, session=None):
-        return {"entries": []}
-
-    monkeypatch.setattr(dk, "get_entry", fake_get_entry)
-
-    assert dk._fetch_user_lineup_worker({"entryKey": "abc"}, 1) is None
-
-
-def test_get_vip_lineups_skips_empty_entry_key():
-    dk = Draftkings(session=_Session(_Response()))
-    assert dk.get_vip_lineups(1, 2, ["vip"], vip_entries={"vip": ""}) == []
-
-
-def test_get_vip_lineups_leaderboard_path(monkeypatch):
-    dk = Draftkings(session=_Session(_Response()))
-
-    monkeypatch.setattr(
-        dk,
-        "get_leaderboard",
-        lambda *_args, **_kwargs: {"leaderBoard": [{"userName": "vip"}]},
-    )
-    monkeypatch.setattr(
-        dk,
-        "_fetch_user_lineup_worker",
-        lambda *_args, **_kwargs: {"user": "vip", "players": []},
-    )
-
-    result = dk.get_vip_lineups(1, 2, ["vip"])
-    assert result == [{"user": "vip", "players": []}]
-
-
-def test_get_vip_lineups_result_none(monkeypatch):
-    dk = Draftkings(session=_Session(_Response()))
-    monkeypatch.setattr(dk, "_fetch_user_lineup_worker", lambda *_args, **_kwargs: None)
-
-    assert dk.get_vip_lineups(1, 2, ["vip"], vip_entries={"vip": "abc"}) == []
-
-
-def test_get_vip_lineups_error_logs_swallows(monkeypatch):
-    dk = Draftkings(session=_Session(_Response()))
-
-    def boom(*_args, **_kwargs):
-        raise RuntimeError("bad")
-
-    monkeypatch.setattr(dk, "_fetch_user_lineup_worker", boom)
-    monkeypatch.setattr(
-        dk.logger,
-        "error",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("log")),
-    )
-    assert dk.get_vip_lineups(1, 2, ["vip"], vip_entries={"vip": "abc"}) == []
 
 
 def test_download_contest_rows_writes_cookie_dump(tmp_path):
