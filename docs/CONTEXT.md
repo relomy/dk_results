@@ -15,9 +15,9 @@
 
 ## Deepening Candidates
 
-Identified 2026-05-06. Starting with candidate #1.
+Identified 2026-05-06. #1 and #6 done. Skipping #2.
 
-### 1. VIP Lineup Module ← **in progress**
+### 1. VIP Lineup Module ← **done**
 
 **Files:** `classes/draftkings.py`, `classes/dklineup.py`, `classes/results.py`,
 `cli/db_main.py`, `services/snapshot_exporter.py`
