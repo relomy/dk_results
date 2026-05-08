@@ -11,10 +11,10 @@ from lobby.common import get_salary_date, is_time_between, valid_date
 from lobby.double_ups import contest_meets_criteria, get_double_ups, get_stats
 from lobby.fetch import get_dk_lobby
 from lobby.formatting import format_discord_messages
+from lobby.draft_group_filter import filter_draft_groups
 from lobby.parsing import (
     build_draft_group_start_map,
     get_contests_from_response,
-    get_draft_groups_from_response,
     log_draft_group_event,
 )
 from requests.cookies import RequestsCookieJar
@@ -217,7 +217,7 @@ def test_log_draft_group_event_includes_reason(monkeypatch):
     assert any("reason" in msg for msg in captured)
 
 
-def test_get_draft_groups_from_response_filters():
+def test_filter_draft_groups_filters():
     class DummySport(Sport):
         name = "TEST"
         suffixes = [r"\(Main\)"]
@@ -278,11 +278,11 @@ def test_get_draft_groups_from_response_filters():
         ]
     }
 
-    result = get_draft_groups_from_response(response, DummySport)
+    result = filter_draft_groups(response["DraftGroups"],DummySport)
     assert result == [6]
 
 
-def test_get_draft_groups_from_response_nfl_showdown():
+def test_filter_draft_groups_nfl_showdown():
     response = {
         "DraftGroups": [
             {
@@ -312,11 +312,11 @@ def test_get_draft_groups_from_response_nfl_showdown():
         ]
     }
 
-    result = get_draft_groups_from_response(response, NFLShowdownSport)
+    result = filter_draft_groups(response["DraftGroups"],NFLShowdownSport)
     assert result == [12]
 
 
-def test_get_draft_groups_from_response_nfl_showdown_super_bowl_suffix():
+def test_filter_draft_groups_nfl_showdown_super_bowl_suffix():
     response = {
         "DraftGroups": [
             {
@@ -338,11 +338,11 @@ def test_get_draft_groups_from_response_nfl_showdown_super_bowl_suffix():
         ]
     }
 
-    result = get_draft_groups_from_response(response, NFLShowdownSport)
+    result = filter_draft_groups(response["DraftGroups"],NFLShowdownSport)
     assert result == [21]
 
 
-def test_get_draft_groups_from_response_pga_weekend_strict():
+def test_filter_draft_groups_pga_weekend_strict():
     response = {
         "DraftGroups": [
             {
@@ -364,11 +364,11 @@ def test_get_draft_groups_from_response_pga_weekend_strict():
         ]
     }
 
-    result = get_draft_groups_from_response(response, PGAWeekendSport)
+    result = filter_draft_groups(response["DraftGroups"],PGAWeekendSport)
     assert result == [31]
 
 
-def test_get_draft_groups_from_response_pga_showdown_standard_only():
+def test_filter_draft_groups_pga_showdown_standard_only():
     response = {
         "DraftGroups": [
             {
@@ -398,7 +398,7 @@ def test_get_draft_groups_from_response_pga_showdown_standard_only():
         ]
     }
 
-    result = get_draft_groups_from_response(response, PGAShowdownSport)
+    result = filter_draft_groups(response["DraftGroups"],PGAShowdownSport)
     assert result == [41]
 
 
@@ -557,7 +557,7 @@ def test_get_draft_groups_allows_suffixless():
             }
         ]
     }
-    assert get_draft_groups_from_response(response, DummySport) == [1]
+    assert filter_draft_groups(response["DraftGroups"],DummySport) == [1]
 
 
 def test_get_stats_counts_duplicate_dubs():

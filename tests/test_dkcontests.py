@@ -233,8 +233,8 @@ def test_main_passes_sport_class_choices_to_response_filters(monkeypatch):
     )
     monkeypatch.setattr(
         dkcontests,
-        "get_draft_groups_from_response",
-        lambda _response, sport_obj: captured.update({"sport_obj": sport_obj}) or [],
+        "filter_draft_groups",
+        lambda _groups, sport_obj: captured.update({"sport_obj": sport_obj}) or [],
     )
     monkeypatch.setattr(dkcontests, "print_stats", lambda _contests: None)
     monkeypatch.setattr(

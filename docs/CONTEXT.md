@@ -9,6 +9,7 @@
 - **Adapter** — a concrete thing satisfying an interface at a seam.
 - **Leverage** — what callers get from depth (simpler call sites).
 - **Locality** — what maintainers get from depth (changes concentrated in one place).
+- **Draft Group Filter** — the module (`lobby/draft_group_filter.py`) that owns all sport-specific draft-group qualification logic: tag filtering, game-type constraint, suffix matching, time constraint, and NFLShowdown deduplication. Public interface: `filter_draft_groups(groups, sport) -> list[int]`.
 
 ---
 
@@ -107,18 +108,19 @@ client (leverage). The workflow is self-contained and readable without scrolling
 
 ---
 
-### 6. Draft Group Filter
+### 6. Draft Group Filter ← **done**
 
-**Files:** `lobby/parsing.py`, `lobby/fetch.py`
+**Files:** `lobby/draft_group_filter.py` (new), `lobby/parsing.py`, `lobby/fetch.py`,
+`cli/dkcontests.py`
 
-**Problem:** `get_draft_groups_from_response` is ~170 lines with 5+ nesting levels.
-It owns all "which draft groups qualify for this sport" logic — suffix matching,
+**Problem:** `get_draft_groups_from_response` was ~170 lines with 5+ nesting levels.
+It owned all "which draft groups qualify for this sport" logic — suffix matching,
 game-type filtering, time-window checks, NFLShowdown deduplication — in one function
 with no intermediate seams.
 
 **Solution:** A draft group filter module that owns all sport-specific qualification
-logic. NFLShowdown deduplication and suffix-matching patterns become named, testable
-policy methods.
+logic. NFLShowdown deduplication and suffix-matching patterns are named private
+functions. Public interface: `filter_draft_groups(groups, sport) -> list[int]`.
 
 **Benefits:** Each filtering rule is independently testable (leverage). Sport-specific
 edge cases are concentrated in one module (locality). Adding a new sport's rules requires
