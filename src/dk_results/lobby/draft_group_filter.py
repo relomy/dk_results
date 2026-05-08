@@ -48,7 +48,14 @@ def _deduplicate_showdown(
             result.append(draft_group_id)
         else:
             log_draft_group_event(
-                "Skip", sport, dt_start, draft_group_id, tag, suffix, contest_type_id, game_type_id,
+                "Skip",
+                sport,
+                dt_start,
+                draft_group_id,
+                tag,
+                suffix,
+                contest_type_id,
+                game_type_id,
                 level=logging.DEBUG,
                 reason="multiple NFLShowdown draft groups at same start time",
             )
@@ -82,7 +89,14 @@ def filter_draft_groups(groups: list[dict[str, Any]], sport: Type[Sport]) -> lis
 
         if not _passes_game_type(game_type_id, sport):
             log_draft_group_event(
-                "Skip", sport, dt_start, draft_group_id, tag, suffix, contest_type_id, game_type_id,
+                "Skip",
+                sport,
+                dt_start,
+                draft_group_id,
+                tag,
+                suffix,
+                contest_type_id,
+                game_type_id,
                 level=logging.DEBUG,
                 reason=f"game type constraint (!={sport.contest_restraint_game_type_id}, got {game_type_id})",
             )
@@ -91,7 +105,14 @@ def filter_draft_groups(groups: list[dict[str, Any]], sport: Type[Sport]) -> lis
         if not _passes_suffix(suffix, sport):
             skipped_suffixes.append(suffix if suffix is not None else "<<none>>")
             log_draft_group_event(
-                "Skip", sport, dt_start, draft_group_id, tag, suffix, contest_type_id, game_type_id,
+                "Skip",
+                sport,
+                dt_start,
+                draft_group_id,
+                tag,
+                suffix,
+                contest_type_id,
+                game_type_id,
                 level=logging.DEBUG,
                 reason="suffix required" if suffix is None else "suffix mismatch",
             )
@@ -99,7 +120,14 @@ def filter_draft_groups(groups: list[dict[str, Any]], sport: Type[Sport]) -> lis
 
         if not _passes_time(dt_start, sport):
             log_draft_group_event(
-                "Skip", sport, dt_start, draft_group_id, tag, suffix, contest_type_id, game_type_id,
+                "Skip",
+                sport,
+                dt_start,
+                draft_group_id,
+                tag,
+                suffix,
+                contest_type_id,
+                game_type_id,
                 level=logging.DEBUG,
                 reason=f"time constraint (<{sport.contest_restraint_time})",
             )

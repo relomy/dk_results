@@ -9,9 +9,9 @@ from classes.sport import NFLShowdownSport, NFLSport, PGAShowdownSport, PGAWeeke
 from dfs_common.discord import WebhookSender
 from lobby.common import get_salary_date, is_time_between, valid_date
 from lobby.double_ups import contest_meets_criteria, get_double_ups, get_stats
+from lobby.draft_group_filter import filter_draft_groups
 from lobby.fetch import get_dk_lobby
 from lobby.formatting import format_discord_messages
-from lobby.draft_group_filter import filter_draft_groups
 from lobby.parsing import (
     build_draft_group_start_map,
     get_contests_from_response,
@@ -278,7 +278,7 @@ def test_filter_draft_groups_filters():
         ]
     }
 
-    result = filter_draft_groups(response["DraftGroups"],DummySport)
+    result = filter_draft_groups(response["DraftGroups"], DummySport)
     assert result == [6]
 
 
@@ -312,7 +312,7 @@ def test_filter_draft_groups_nfl_showdown():
         ]
     }
 
-    result = filter_draft_groups(response["DraftGroups"],NFLShowdownSport)
+    result = filter_draft_groups(response["DraftGroups"], NFLShowdownSport)
     assert result == [12]
 
 
@@ -338,7 +338,7 @@ def test_filter_draft_groups_nfl_showdown_super_bowl_suffix():
         ]
     }
 
-    result = filter_draft_groups(response["DraftGroups"],NFLShowdownSport)
+    result = filter_draft_groups(response["DraftGroups"], NFLShowdownSport)
     assert result == [21]
 
 
@@ -364,7 +364,7 @@ def test_filter_draft_groups_pga_weekend_strict():
         ]
     }
 
-    result = filter_draft_groups(response["DraftGroups"],PGAWeekendSport)
+    result = filter_draft_groups(response["DraftGroups"], PGAWeekendSport)
     assert result == [31]
 
 
@@ -398,7 +398,7 @@ def test_filter_draft_groups_pga_showdown_standard_only():
         ]
     }
 
-    result = filter_draft_groups(response["DraftGroups"],PGAShowdownSport)
+    result = filter_draft_groups(response["DraftGroups"], PGAShowdownSport)
     assert result == [41]
 
 
@@ -557,7 +557,7 @@ def test_get_draft_groups_allows_suffixless():
             }
         ]
     }
-    assert filter_draft_groups(response["DraftGroups"],DummySport) == [1]
+    assert filter_draft_groups(response["DraftGroups"], DummySport) == [1]
 
 
 def test_get_stats_counts_duplicate_dubs():

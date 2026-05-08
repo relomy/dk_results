@@ -1,6 +1,6 @@
 import datetime
 import logging
-from typing import Any
+from typing import Any, Type
 
 from dk_results.classes.sport import Sport
 

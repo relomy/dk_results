@@ -44,8 +44,8 @@ from dk_results.classes.contest import Contest
 from dk_results.classes.sport import Sport
 from dk_results.lobby.common import valid_date
 from dk_results.lobby.double_ups import get_stats
-from dk_results.lobby.fetch import get_lobby_response
 from dk_results.lobby.draft_group_filter import filter_draft_groups
+from dk_results.lobby.fetch import get_lobby_response
 from dk_results.lobby.parsing import get_contests_from_response
 
 _PGA_CRON_CONFIG = {"sport_length": 8, "get_interval": "4-59/15"}
