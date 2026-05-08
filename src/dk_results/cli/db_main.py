@@ -9,7 +9,6 @@ from collections import OrderedDict
 from typing import Any
 from zoneinfo import ZoneInfo
 
-import yaml
 from dfs_common import state
 from dfs_common.discord import WebhookSender
 
@@ -32,6 +31,7 @@ from dk_results.services.snapshot_exporter import (
     to_stable_json,
     to_utc_iso,
 )
+from dk_results.vip_lineups import build_vip_entries, fetch_vip_lineups, load_vips
 
 logger = logging.getLogger(__name__)
 
@@ -199,28 +199,6 @@ def _build_bonus_sender() -> WebhookSender | None:
     return WebhookSender(webhook)
 
 
-def load_vips() -> list[str]:
-    """
-    Load VIP usernames from vips.yaml located next to this file.
-    Returns an empty list if the file is missing or malformed.
-    """
-    vip_path = repo_file("vips.yaml")
-    try:
-        with open(vip_path, "r") as f:
-            vips = yaml.safe_load(f) or []
-        if not isinstance(vips, list):
-            logger.warning("vips.yaml did not contain a list; treating as empty.")
-            return []
-        # Normalize to strings and strip whitespace
-        return [str(x).strip() for x in vips if str(x).strip()]
-    except FileNotFoundError:
-        logger.warning("vips.yaml not found at %s; proceeding with empty VIP list.", vip_path)
-        return []
-    except Exception as e:
-        logger.warning("Failed to load vips.yaml: %s; proceeding with empty VIP list.", e)
-        return []
-
-
 def write_players_to_sheet(
     sheet: DfsSheetService,
     results: Results,
@@ -299,29 +277,22 @@ def write_players_to_sheet(
         )
         return
 
-    vip_entries: dict[str, dict[str, Any] | str] = {}
-    for vip in results.vip_list:
-        if not vip.name or not vip.player_id:
-            continue
-        vip_entries[vip.name] = {
-            "entry_key": vip.player_id,
-            "pmr": vip.pmr,
-            "rank": vip.rank,
-            "pts": vip.pts,
-        }
+    vip_entries = build_vip_entries(results.vip_list)
     fetch_requested = len(vip_entries) if vip_entries else requested_vips
 
     player_salary_map: dict[str, int] = {name: player.salary for name, player in results.players.items()}
     fetch_failures = 0
     fetch_reason = "not_applicable"
     try:
-        vip_lineups: list[dict] = dk.get_vip_lineups(
+        raw_lineups = fetch_vip_lineups(
             dk_id,
             dg,
-            vips,
+            dk,
+            vips=vips,
             vip_entries=vip_entries,
             player_salary_map=player_salary_map,
         )
+        vip_lineups = [vl.to_dict() for vl in raw_lineups]
         if not vip_lineups:
             fetch_reason = "empty_vip_lineups"
     except Exception:

@@ -8,7 +8,6 @@ from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from typing import Any
 from zoneinfo import ZoneInfo
 
-import yaml
 from dfs_common import state
 
 from dk_results.classes.contestdatabase import ContestDatabase
@@ -18,6 +17,7 @@ from dk_results.classes.sport import Sport
 from dk_results.classes.trainfinder import TrainFinder
 from dk_results.config import load_settings
 from dk_results.paths import repo_file
+from dk_results.vip_lineups import build_vip_entries, fetch_vip_lineups, load_vips
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +44,7 @@ SOURCE_ENDPOINTS = [
     "contests_db.get_live_contest_candidates",
     "draftkings.download_salary_csv",
     "draftkings.download_contest_rows",
-    "draftkings.get_vip_lineups",
+    "vip_lineups.fetch_vip_lineups",
 ]
 
 try:
@@ -53,18 +53,6 @@ except ImportError:  # pragma: no cover
 
     def load_dotenv(*_args, **_kwargs):
         return False
-
-
-def load_vips() -> list[str]:
-    vip_path = repo_file("vips.yaml")
-    try:
-        with open(vip_path, "r") as f:
-            vips = yaml.safe_load(f) or []
-        if not isinstance(vips, list):
-            return []
-        return [str(x).strip() for x in vips if str(x).strip()]
-    except Exception:
-        return []
 
 
 def configure_runtime() -> None:
@@ -518,29 +506,21 @@ def collect_snapshot_data(
         results.name = contest_name
         results.positions_paid = positions_paid
 
-        vip_entries: dict[str, dict[str, Any] | str] = {}
-        for vip in results.vip_list:
-            if not vip.name or not vip.player_id:
-                continue
-            vip_entries[vip.name] = {
-                "entry_key": vip.player_id,
-                "pmr": vip.pmr,
-                "rank": vip.rank,
-                "pts": vip.pts,
-            }
-
+        vip_entries = build_vip_entries(results.vip_list)
         player_salary_map = {name: player.salary for name, player in results.players.items()}
-        vip_lineups = (
-            dk.get_vip_lineups(
+        raw_lineups = (
+            fetch_vip_lineups(
                 int(dk_id),
                 int(draft_group),
-                vips,
+                dk,
+                vips=vips,
                 vip_entries=vip_entries,
                 player_salary_map=player_salary_map,
             )
             if draft_group
             else []
         )
+        vip_lineups = [vl.to_dict() for vl in raw_lineups]
 
         vip_lookup = {vip.name for vip in results.vip_list}
         standings = []
