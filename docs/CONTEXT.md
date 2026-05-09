@@ -10,14 +10,15 @@
 - **Leverage** — what callers get from depth (simpler call sites).
 - **Locality** — what maintainers get from depth (changes concentrated in one place).
 - **Draft Group Filter** — the module (`lobby/draft_group_filter.py`) that owns all sport-specific draft-group qualification logic: tag filtering, game-type constraint, suffix matching, time constraint, and NFLShowdown deduplication. Public interface: `filter_draft_groups(groups, sport) -> list[int]`.
+- **ContestStandings** — the data structure produced by parsing a DraftKings contest's salary and standings CSVs. Owns players, users, VIP list, cash line, and non-cashing stats. Contest metadata (`contest_id`, `name`) stays with callers. Module: `classes/contest_standings.py`.
 
 ---
 
 ## Deepening Candidates
 
-Identified 2026-05-06. Starting with candidate #1.
+Identified 2026-05-06. #1 and #6 done. Skipping #2.
 
-### 1. VIP Lineup Module ← **in progress**
+### 1. VIP Lineup Module ← **done**
 
 **Files:** `classes/draftkings.py`, `classes/dklineup.py`, `classes/results.py`,
 `cli/db_main.py`, `services/snapshot_exporter.py`
@@ -71,7 +72,7 @@ criteria as pure functions with no DB or API dependency (leverage).
 
 ---
 
-### 4. Results as a Pure Standings Parser
+### 4. Results as a Pure Standings Parser ← **done**
 
 **Files:** `classes/results.py`, `cli/db_main.py`, `services/snapshot_exporter.py`
 

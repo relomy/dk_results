@@ -13,11 +13,11 @@ from dfs_common import state
 from dfs_common.discord import WebhookSender
 
 from dk_results.classes.bonus_announcements import announce_vip_bonuses
+from dk_results.classes.contest_standings import ContestStandings, parse_contest_standings, players_to_values
 from dk_results.classes.contestdatabase import ContestDatabase
 from dk_results.classes.dfs_sheet_service import DfsSheetService
 from dk_results.classes.draftkings import Draftkings
 from dk_results.classes.optimizer import Optimizer
-from dk_results.classes.results import Results
 from dk_results.classes.sheets_service import build_dfs_sheet_service
 from dk_results.classes.sport import Sport
 from dk_results.classes.trainfinder import TrainFinder
@@ -201,36 +201,27 @@ def _build_bonus_sender() -> WebhookSender | None:
 
 def write_players_to_sheet(
     sheet: DfsSheetService,
-    results: Results,
+    results: ContestStandings,
     sport_name: str,
     now: datetime.datetime,
     dk: Draftkings,
     vips: list[str],
     draft_group: int | None = None,
+    contest_id: int | None = None,
+    contest_name: str = "",
+    positions_paid: int | None = None,
 ) -> None:
-    """
-    Write player values and contest details to the sheet.
-
-    Args:
-        sheet (DfsSheetService): Sheet object.
-        results (Results): Results object.
-        sport_name (str): Sport name.
-        now (datetime.datetime): Current datetime.
-        dk (Draftkings): Authenticated DraftKings API client.
-        vips (list[str]): VIP usernames loaded once at run start.
-        draft_group (int, optional): Draft group id.
-    """
-    players_to_values = results.players_to_values(sport_name)
+    players_to_write = players_to_values(results.players, sport_name)
     sheet.clear_standings()
-    sheet.write_players(players_to_values)
-    sheet.add_contest_details(results.name, results.positions_paid)
+    sheet.write_players(players_to_write)
+    sheet.add_contest_details(contest_name, positions_paid)
     logger.info("Writing players to sheet")
     sheet.add_last_updated(now)
     if results.min_cash_pts > 0:
         logger.info("Writing min_cash_pts: %d", results.min_cash_pts)
         sheet.add_min_cash(results.min_cash_pts)
 
-    dk_id = results.contest_id
+    dk_id = contest_id
     dg = draft_group
     requested_vips = len(results.vip_list)
 
@@ -275,6 +266,9 @@ def write_players_to_sheet(
             elapsed_ms=0,
             reason="no_draft_group",
         )
+        return
+
+    if dk_id is None:
         return
 
     vip_entries = build_vip_entries(results.vip_list)
@@ -356,14 +350,7 @@ def write_players_to_sheet(
         )
 
 
-def write_non_cashing_info(sheet: DfsSheetService, results: Results) -> None:
-    """
-    Write non-cashing user info to the sheet.
-
-    Args:
-        sheet (DfsSheetService): Sheet object.
-        results (Results): Results object.
-    """
+def write_non_cashing_info(sheet: DfsSheetService, results: ContestStandings) -> None:
     if results.non_cashing_users > 0:
         logger.info("Writing non_cashing info")
         info: list[list[Any]] = [
@@ -389,14 +376,7 @@ def write_non_cashing_info(sheet: DfsSheetService, results: Results) -> None:
         sheet.add_non_cashing_info(info)
 
 
-def write_train_info(sheet: DfsSheetService, results: Results) -> None:
-    """
-    Write train info to the sheet.
-
-    Args:
-        sheet (DfsSheetService): Sheet object.
-        results (Results): Results object.
-    """
+def write_train_info(sheet: DfsSheetService, results: ContestStandings) -> None:
     if results and results.users:
         trainfinder = TrainFinder(results.users)
         total_users = trainfinder.get_total_users()
@@ -428,6 +408,13 @@ def write_train_info(sheet: DfsSheetService, results: Results) -> None:
         sheet.add_train_info(info)
 
 
+def _load_salary_rows(salary_csv: str) -> list[list[str]]:
+    import csv
+
+    with open(salary_csv, mode="r") as fp:
+        return list(csv.reader(fp, delimiter=","))
+
+
 def _build_results(
     *,
     sport_obj: SportType,
@@ -437,25 +424,22 @@ def _build_results(
     standings_rows: list[list[str]],
     vips: list[str],
     contest_name: str,
-) -> Results:
-    logger.debug("Creating Results object Results(%s, %s, %s)", sport_obj.name, contest_id, salary_csv)
-    results = Results(
+) -> ContestStandings:
+    logger.debug("Parsing contest standings: sport=%s contest_id=%s", sport_obj.name, contest_id)
+    salary_rows = _load_salary_rows(salary_csv)
+    return parse_contest_standings(
         sport_obj,
-        contest_id,
-        salary_csv,
-        positions_paid,
-        standings_rows=standings_rows,
+        salary_rows,
+        standings_rows,
+        positions_paid=positions_paid,
         vips=vips,
     )
-    results.name = contest_name
-    results.positions_paid = positions_paid
-    return results
 
 
 def _maybe_write_optimal_lineup(
     *,
     sheet: DfsSheetService,
-    results: Results,
+    results: ContestStandings,
     sport_obj: SportType,
     args: argparse.Namespace,
     sport_name: str,
@@ -465,14 +449,14 @@ def _maybe_write_optimal_lineup(
             logger.info("Skipping optimal lineup for %s", sport_name)
             return
 
-        optimizer = Optimizer(sport_obj, results.get_players())
+        optimizer = Optimizer(sport_obj, results.players)
         optimized_players = optimizer.get_optimal_lineup()
         if optimized_players:
             optimized_players.sort(key=lambda x: (sport_obj.positions.index(x.pos), x.name))
         if not optimized_players:
             return
 
-        optimized_info = [
+        optimized_info: list[list[Any]] = [
             ["Pos", "Name", "Salary", "Pts", "Value", "Own%"],
         ]
         for player in optimized_players:
@@ -560,7 +544,7 @@ def process_sport(
             contest_name=name,
         )
     except Exception:
-        logger.exception("Failed to construct Results: sport=%s contest_id=%s", sport_name, dk_id)
+        logger.exception("Failed to parse contest standings: sport=%s contest_id=%s", sport_name, dk_id)
         _log_vip_skip_events(sport_name, int(dk_id), len(vips), "results_unavailable")
         return None
     _log_vip_detection(
@@ -580,7 +564,18 @@ def process_sport(
         sport_name=sport_name,
     )
 
-    write_players_to_sheet(sheet, results, sport_name, now, dk, vips, draft_group)
+    write_players_to_sheet(
+        sheet,
+        results,
+        sport_name,
+        now,
+        dk,
+        vips,
+        draft_group,
+        contest_id=int(dk_id),
+        contest_name=name,
+        positions_paid=positions_paid,
+    )
     write_non_cashing_info(sheet, results)
     write_train_info(sheet, results)
     return int(dk_id)

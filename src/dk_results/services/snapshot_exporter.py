@@ -1,18 +1,19 @@
 import copy
+import csv
 import datetime
 import hashlib
 import json
 import logging
 import os
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
-from typing import Any
+from typing import Any, cast
 from zoneinfo import ZoneInfo
 
 from dfs_common import state
 
+from dk_results.classes.contest_standings import parse_contest_standings
 from dk_results.classes.contestdatabase import ContestDatabase
 from dk_results.classes.draftkings import Draftkings
-from dk_results.classes.results import Results
 from dk_results.classes.sport import Sport
 from dk_results.classes.trainfinder import TrainFinder
 from dk_results.config import load_settings
@@ -494,17 +495,19 @@ def collect_snapshot_data(
         except Exception:
             logger.warning("leaderboard payout lookup failed for contest_id=%s", dk_id, exc_info=True)
 
+        salary_rows: list[list[str]] = []
+        if os.path.exists(salary_path):
+            with open(salary_path, mode="r") as fp:
+                salary_rows = list(csv.reader(fp, delimiter=","))
+
         vips = load_vips()
-        results = Results(
+        results = parse_contest_standings(
             sport_cls,
-            int(dk_id),
-            salary_path,
-            positions_paid,
-            standings_rows=standings_rows,
+            salary_rows,
+            standings_rows,
+            positions_paid=positions_paid,
             vips=vips,
         )
-        results.name = contest_name
-        results.positions_paid = positions_paid
 
         vip_entries = build_vip_entries(results.vip_list)
         player_salary_map = {name: player.salary for name, player in results.players.items()}
@@ -1098,9 +1101,10 @@ def _vip_slots_from_lineup(lineup: Any, player_lookup: dict[str, str]) -> list[d
     slots: list[dict[str, Any]] = []
     for index, item in enumerate(lineup):
         if isinstance(item, dict):
-            player_name = item.get("player_name") or item.get("name")
-            slot = item.get("slot") or item.get("position") or item.get("pos") or f"SLOT_{index + 1}"
-            multiplier = item.get("multiplier")
+            item_d = cast(dict[str, Any], item)
+            player_name = item_d.get("player_name") or item_d.get("name")
+            slot = item_d.get("slot") or item_d.get("position") or item_d.get("pos") or f"SLOT_{index + 1}"
+            multiplier = item_d.get("multiplier")
         else:
             player_name = str(item)
             slot = f"SLOT_{index + 1}"
@@ -1139,29 +1143,30 @@ def _vip_players_live_from_lineup(
     rows: list[dict[str, Any]] = []
     for index, item in enumerate(lineup):
         if isinstance(item, dict):
-            raw_name = item.get("player_name") or item.get("name")
-            slot = item.get("slot") or item.get("position") or item.get("pos") or f"SLOT_{index + 1}"
+            item_d = cast(dict[str, Any], item)
+            raw_name = item_d.get("player_name") or item_d.get("name")
+            slot = item_d.get("slot") or item_d.get("position") or item_d.get("pos") or f"SLOT_{index + 1}"
             ownership_pct = _to_percent(
-                item.get("ownership_pct") if item.get("ownership_pct") is not None else item.get("ownership")
+                item_d.get("ownership_pct") if item_d.get("ownership_pct") is not None else item_d.get("ownership")
             )
-            salary = _to_int_flexible(item.get("salary"))
-            points = _to_float(item.get("points") if item.get("points") is not None else item.get("pts"))
-            value = _to_float(item.get("value"))
+            salary = _to_int_flexible(item_d.get("salary"))
+            points = _to_float(item_d.get("points") if item_d.get("points") is not None else item_d.get("pts"))
+            value = _to_float(item_d.get("value"))
             rt_projection = _to_float(
-                item.get("rt_projection") if item.get("rt_projection") is not None else item.get("rtProj")
+                item_d.get("rt_projection") if item_d.get("rt_projection") is not None else item_d.get("rtProj")
             )
             time_remaining_display_raw = (
-                item.get("time_remaining_display")
-                if item.get("time_remaining_display") is not None
-                else item.get("timeStatus")
+                item_d.get("time_remaining_display")
+                if item_d.get("time_remaining_display") is not None
+                else item_d.get("timeStatus")
             )
             time_remaining_minutes = _to_float(
-                item.get("time_remaining_minutes")
-                if item.get("time_remaining_minutes") is not None
+                item_d.get("time_remaining_minutes")
+                if item_d.get("time_remaining_minutes") is not None
                 else time_remaining_display_raw
             )
-            stats_text_raw = item.get("stats_text") if item.get("stats_text") is not None else item.get("stats")
-            game_status = item.get("game_status")
+            stats_text_raw = item_d.get("stats_text") if item_d.get("stats_text") is not None else item_d.get("stats")
+            game_status = item_d.get("game_status")
         else:
             raw_name = item
             slot = f"SLOT_{index + 1}"
