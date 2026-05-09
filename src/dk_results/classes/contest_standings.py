@@ -197,7 +197,7 @@ def _parse_standings_rows(
                 parsed_points = None
 
         lineupobj = Lineup(sport, players, lineup)
-        user = User(rank, player_id, name, pmr, points, lineup)
+        user = User(parsed_rank, player_id, name, pmr, parsed_points, lineup)
         user.set_lineup_obj(lineupobj)
         users.append(user)
 

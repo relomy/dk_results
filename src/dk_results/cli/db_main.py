@@ -268,6 +268,9 @@ def write_players_to_sheet(
         )
         return
 
+    if dk_id is None:
+        return
+
     vip_entries = build_vip_entries(results.vip_list)
     fetch_requested = len(vip_entries) if vip_entries else requested_vips
 
@@ -453,7 +456,7 @@ def _maybe_write_optimal_lineup(
         if not optimized_players:
             return
 
-        optimized_info = [
+        optimized_info: list[list[Any]] = [
             ["Pos", "Name", "Salary", "Pts", "Value", "Own%"],
         ]
         for player in optimized_players:
