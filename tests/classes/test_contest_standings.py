@@ -3,7 +3,6 @@ import logging
 import pytest
 
 from dk_results.classes.contest_standings import (
-    ContestStandings,
     parse_contest_standings,
     players_to_values,
 )
@@ -36,9 +35,7 @@ def test_parse_produces_players_and_users():
 
 
 def test_parse_accepts_iterables():
-    standings = parse_contest_standings(
-        NFLSport, iter(_salary_rows()), iter(_standings_rows()), positions_paid=1
-    )
+    standings = parse_contest_standings(NFLSport, iter(_salary_rows()), iter(_standings_rows()), positions_paid=1)
     assert "Tom Brady" in standings.players
     assert len(standings.users) == 2
 
