@@ -2,6 +2,7 @@ from collections.abc import Sequence
 from typing import Any
 
 from dk_results.classes.contest import Contest
+
 from .contest_filter import filter_double_ups
 
 
