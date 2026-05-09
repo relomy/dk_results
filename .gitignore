@@ -29,6 +29,7 @@ contest-standings-*.csv
 *.html
 *.txt
 *.db
+None
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
