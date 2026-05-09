@@ -1,4 +1,5 @@
 import copy
+import csv
 import datetime
 import hashlib
 import json
@@ -10,9 +11,9 @@ from zoneinfo import ZoneInfo
 
 from dfs_common import state
 
+from dk_results.classes.contest_standings import parse_contest_standings
 from dk_results.classes.contestdatabase import ContestDatabase
 from dk_results.classes.draftkings import Draftkings
-from dk_results.classes.results import Results
 from dk_results.classes.sport import Sport
 from dk_results.classes.trainfinder import TrainFinder
 from dk_results.config import load_settings
@@ -494,17 +495,19 @@ def collect_snapshot_data(
         except Exception:
             logger.warning("leaderboard payout lookup failed for contest_id=%s", dk_id, exc_info=True)
 
+        salary_rows: list[list[str]] = []
+        if os.path.exists(salary_path):
+            with open(salary_path, mode="r") as fp:
+                salary_rows = list(csv.reader(fp, delimiter=","))
+
         vips = load_vips()
-        results = Results(
+        results = parse_contest_standings(
             sport_cls,
-            int(dk_id),
-            salary_path,
-            positions_paid,
-            standings_rows=standings_rows,
+            salary_rows,
+            standings_rows,
+            positions_paid=positions_paid,
             vips=vips,
         )
-        results.name = contest_name
-        results.positions_paid = positions_paid
 
         vip_entries = build_vip_entries(results.vip_list)
         player_salary_map = {name: player.salary for name, player in results.players.items()}
