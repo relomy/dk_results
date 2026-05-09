@@ -72,7 +72,7 @@ criteria as pure functions with no DB or API dependency (leverage).
 
 ---
 
-### 4. Results as a Pure Standings Parser ← **in progress**
+### 4. Results as a Pure Standings Parser ← **done**
 
 **Files:** `classes/results.py`, `cli/db_main.py`, `services/snapshot_exporter.py`
 
