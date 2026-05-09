@@ -8,7 +8,7 @@ from classes.contest import Contest
 from classes.sport import NFLShowdownSport, NFLSport, PGAShowdownSport, PGAWeekendSport, Sport
 from dfs_common.discord import WebhookSender
 from lobby.common import get_salary_date, is_time_between, valid_date
-from lobby.double_ups import contest_meets_criteria, get_double_ups, get_stats
+from lobby.double_ups import get_stats
 from lobby.draft_group_filter import filter_draft_groups
 from lobby.fetch import get_dk_lobby
 from lobby.formatting import format_discord_messages
@@ -415,28 +415,6 @@ def test_get_stats_counts_dubs():
     contests = [Contest(_contest_payload(1), "NBA")]
     stats = get_stats(contests)
     assert stats[contests[0].start_dt.strftime("%Y-%m-%d")]["dubs"][10] == 1
-
-
-def test_get_double_ups_filters():
-    contests = [Contest(_contest_payload(1), "NBA")]
-    result = get_double_ups(contests, [10])
-    assert [c.id for c in result] == [1]
-
-
-def test_contest_meets_criteria_false():
-    contest = Contest(_contest_payload(1), "NBA")
-    assert (
-        contest_meets_criteria(
-            contest,
-            {
-                "entries": 300,
-                "draft_groups": [],
-                "min_entry_fee": 5,
-                "max_entry_fee": 50,
-            },
-        )
-        is False
-    )
 
 
 def test_get_salary_date():

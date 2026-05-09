@@ -43,6 +43,7 @@ from typing import Type
 from dk_results.classes.contest import Contest
 from dk_results.classes.sport import Sport
 from dk_results.lobby.common import valid_date
+from dk_results.lobby.contest_filter import filter_double_ups, largest_by_entries
 from dk_results.lobby.double_ups import get_stats
 from dk_results.lobby.draft_group_filter import filter_draft_groups
 from dk_results.lobby.fetch import get_lobby_response
@@ -131,103 +132,35 @@ def get_largest_contest(
     exclude=None,
     game_type_id: int | None = None,
 ):
-    """Return largest contest from a list of Contests.
+    """Return the largest (by entries) double-up contest matching criteria, or None.
 
     Parameters
     ----------
-    contests : list of Contests
-        list of DraftKings contests
+    contests : list of Contest
+        Lobby contests to search.
     dt : datetime.datetime
-        the datetime to filter
+        Only contests starting on this date are considered.
     entry_fee : int, optional
-        contest entry fee, by default 25
-    query : string, optional
-        include string in contest name, by default None
-    exclude : string, optional
-        exclude string in contest name, by default None
-
-    Returns
-    -------
-    Contest
-        returns largest (entries) contest or None
-
+        Exact entry fee to match, by default 25.
+    query : str, optional
+        Substring that must appear in the contest name.
+    exclude : str, optional
+        Substring that must not appear in the contest name.
+    game_type_id : int, optional
+        DraftKings game type ID constraint.
     """
     print("contests size: {}".format(len(contests)))
-    contest_list = []
-
-    # add contest to list if it matches criteria
-    contest_list = [
-        c
-        for c in contests
-        if match_contest_criteria(
-            c,
-            dt,
-            entry_fee,
-            query,
-            exclude,
-            game_type_id=game_type_id,
-        )
-    ]
-
-    print("number of contests meeting requirements: {}".format(len(contest_list)))
-
-    # sorted_list = sorted(contest_list, key=lambda x: x.entries, reverse=True)
-    if contest_list:
-        return max(contest_list, key=lambda x: x.entries)
-
-    return None
-
-
-def match_contest_criteria(
-    contest,
-    dt,
-    entry_fee=25,
-    query=None,
-    exclude=None,
-    game_type_id: int | None = None,
-):
-    """Use arguments to filter contest criteria.
-
-    Parameters
-    ----------
-    contest : Contest
-        DraftKings contest
-    dt : [datetime.datetime]
-        the datetime on which we wish to filter
-    entry_fee : int, optional
-        the entry fee for the contest (default: {25}), by default 25
-    query : string, optional
-        include string in contest name, by default None
-    exclude : string, optional
-        exclude string in contest name, by default None
-
-    Returns
-    -------
-    boolean
-        returns true if all criteria matched, otherwise false
-
-    """
-    if (
-        contest.start_dt.date() == dt.date()
-        and contest.max_entry_count == 1
-        and contest.entry_fee == entry_fee
-        and contest.is_double_up
-        and contest.is_guaranteed
-    ):
-        if game_type_id is not None and contest.game_type_id != game_type_id:
-            return False
-
-        # if exclude is in the name, return false
-        if exclude and exclude in contest.name:
-            return False
-
-        # if query is not in the name, return false
-        if query and query not in contest.name:
-            return False
-
-        return True
-
-    return False
+    matched = filter_double_ups(
+        contests,
+        min_entry_fee=entry_fee,
+        max_entry_fee=entry_fee,
+        start_date=dt.date(),
+        game_type_id=game_type_id,
+        name_contains=query,
+        name_excludes=exclude,
+    )
+    print("number of contests meeting requirements: {}".format(len(matched)))
+    return largest_by_entries(matched)
 
 
 def get_contests_by_entries(contests, entry_fee, limit):
