@@ -40,6 +40,7 @@ def _contest(dk_id: int, sport: str = "NFL", **kwargs) -> Contest:
 
 # ── base double-up predicate ──────────────────────────────────────────────────
 
+
 def test_passes_basic_double_up():
     c = _contest(1)
     result = filter_double_ups([c], min_entry_fee=25, max_entry_fee=25)
@@ -62,6 +63,7 @@ def test_rejects_multi_entry():
 
 
 # ── fee range ─────────────────────────────────────────────────────────────────
+
 
 def test_exact_fee_match():
     contests = [_contest(1, fee=25), _contest(2, fee=10), _contest(3, fee=50)]
@@ -87,6 +89,7 @@ def test_fee_above_max_rejected():
 
 # ── start_date ────────────────────────────────────────────────────────────────
 
+
 def test_start_date_match():
     # timestamp 1700000000000 ms → 2023-11-14 in UTC
     c = _contest(1, timestamp="1700000000000")
@@ -110,6 +113,7 @@ def test_no_start_date_constraint_passes_all_dates():
 
 # ── draft_groups ──────────────────────────────────────────────────────────────
 
+
 def test_draft_group_in_set_passes():
     c = _contest(1, draft_group=10)
     result = filter_double_ups([c], min_entry_fee=25, max_entry_fee=25, draft_groups=[10, 20])
@@ -128,6 +132,7 @@ def test_no_draft_group_constraint_passes_all():
 
 
 # ── min_entries ───────────────────────────────────────────────────────────────
+
 
 def test_min_entries_passes_at_threshold():
     c = _contest(1, entries=125)
@@ -148,6 +153,7 @@ def test_min_entries_zero_default_passes_all():
 
 # ── game_type_id ──────────────────────────────────────────────────────────────
 
+
 def test_game_type_id_match():
     c = _contest(1, game_type_id=87)
     result = filter_double_ups([c], min_entry_fee=25, max_entry_fee=25, game_type_id=87)
@@ -166,6 +172,7 @@ def test_no_game_type_id_constraint_passes_all():
 
 
 # ── name_contains / name_excludes ─────────────────────────────────────────────
+
 
 def test_name_contains_match():
     c = _contest(1, name="Main Slate Double Up")
@@ -203,11 +210,13 @@ def test_name_contains_and_excludes_combined():
 
 # ── empty input ───────────────────────────────────────────────────────────────
 
+
 def test_empty_contests_returns_empty():
     assert filter_double_ups([], min_entry_fee=25, max_entry_fee=25) == []
 
 
 # ── largest_by_entries ────────────────────────────────────────────────────────
+
 
 def test_largest_by_entries_returns_max():
     contests = [_contest(1, entries=150), _contest(2, entries=300), _contest(3, entries=200)]
@@ -224,6 +233,7 @@ def test_largest_by_entries_empty_returns_none():
 
 
 # ── caller 1 pattern: dkcontests (exact fee, date, optional filters) ──────────
+
 
 def test_dkcontests_caller_pattern():
     date = datetime.date(2023, 11, 14)
@@ -249,6 +259,7 @@ def test_dkcontests_caller_pattern():
 
 
 # ── caller 2 pattern: double_ups (fee range, draft groups, min entries) ───────
+
 
 def test_double_ups_caller_pattern():
     contests = [

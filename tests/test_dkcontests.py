@@ -121,7 +121,6 @@ def test_get_largest_contest_applies_game_type_id():
     assert largest.id == 12
 
 
-
 def test_get_contests_exits_on_invalid_shape(monkeypatch):
     monkeypatch.setattr(dkcontests, "get_lobby_response", lambda _sport, live=False: {"Other": []})
 

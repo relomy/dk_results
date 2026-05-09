@@ -417,7 +417,6 @@ def test_get_stats_counts_dubs():
     assert stats[contests[0].start_dt.strftime("%Y-%m-%d")]["dubs"][10] == 1
 
 
-
 def test_get_salary_date():
     date_val = get_salary_date({"StartDateEst": "2024-02-01T12:30:00.000-05:00"})
     assert date_val == datetime.date(2024, 2, 1)
