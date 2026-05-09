@@ -2,19 +2,7 @@ from collections.abc import Sequence
 from typing import Any
 
 from dk_results.classes.contest import Contest
-
-
-def contest_meets_criteria(contest: Contest, criteria: dict[str, Any]) -> bool:
-    """Check if contest matches base double-up criteria."""
-    return (
-        contest.entries >= criteria["entries"]
-        and contest.draft_group in criteria["draft_groups"]
-        and contest.entry_fee >= criteria["min_entry_fee"]
-        and contest.entry_fee <= criteria["max_entry_fee"]
-        and contest.max_entry_count == 1
-        and contest.is_guaranteed
-        and contest.is_double_up
-    )
+from dk_results.lobby.contest_filter import filter_double_ups
 
 
 def get_double_ups(
@@ -25,13 +13,13 @@ def get_double_ups(
     entries: int = 125,
 ) -> list[Contest]:
     """Filter contests to double-ups matching configured thresholds."""
-    criteria: dict[str, Any] = {
-        "draft_groups": draft_groups,
-        "min_entry_fee": min_entry_fee,
-        "max_entry_fee": max_entry_fee,
-        "entries": entries,
-    }
-    return [contest for contest in contests if contest_meets_criteria(contest, criteria)]
+    return filter_double_ups(
+        contests,
+        min_entry_fee=min_entry_fee,
+        max_entry_fee=max_entry_fee,
+        draft_groups=draft_groups,
+        min_entries=entries,
+    )
 
 
 def get_stats(contests: Sequence[Contest], *, include_largest: bool = False) -> dict[str, Any]:

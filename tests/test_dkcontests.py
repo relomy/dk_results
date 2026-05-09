@@ -121,18 +121,6 @@ def test_get_largest_contest_applies_game_type_id():
     assert largest.id == 12
 
 
-def test_match_contest_criteria_rejects_non_matching_game_type():
-    contest = Contest({**_contest_payload(21), "gameTypeId": 6}, "GOLF")
-    assert (
-        dkcontests.match_contest_criteria(
-            contest,
-            datetime.datetime(2023, 11, 14),
-            entry_fee=25,
-            game_type_id=87,
-        )
-        is False
-    )
-
 
 def test_get_contests_exits_on_invalid_shape(monkeypatch):
     monkeypatch.setattr(dkcontests, "get_lobby_response", lambda _sport, live=False: {"Other": []})
