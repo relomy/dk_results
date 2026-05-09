@@ -11,12 +11,13 @@
 - **Locality** — what maintainers get from depth (changes concentrated in one place).
 - **Draft Group Filter** — the module (`lobby/draft_group_filter.py`) that owns all sport-specific draft-group qualification logic: tag filtering, game-type constraint, suffix matching, time constraint, and NFLShowdown deduplication. Public interface: `filter_draft_groups(groups, sport) -> list[int]`.
 - **ContestStandings** — the data structure produced by parsing a DraftKings contest's salary and standings CSVs. Owns players, users, VIP list, cash line, and non-cashing stats. Contest metadata (`contest_id`, `name`) stays with callers. Module: `classes/contest_standings.py`.
+- **SportProcessor** — the module that owns the full "process one sport, write to sheet" workflow. Public interface: `SportProcessor.run(sport_name, sport_cls) -> int`. Three injected ports: `DkPort` (DraftKings HTTP), `SheetPort` (Google Sheets, via `sheet_factory: Callable[[str], SheetPort]`), `BonusSenderPort` (Discord). `ContestDatabase` is injected directly (local-substitutable). Raises `NoLiveContestError`, `StandingsUnavailableError`, or `StandsParseError` when a sport must be skipped. Module: `sport_processor.py`.
 
 ---
 
 ## Deepening Candidates
 
-Identified 2026-05-06. #1 and #6 done. Skipping #2.
+Identified 2026-05-06. #1, #5, and #6 done. Skipping #2.
 
 ### 1. VIP Lineup Module ← **done**
 
@@ -90,7 +91,7 @@ out. Sheet formatting becomes a separate downstream concern.
 
 ---
 
-### 5. Sport-Processing Module
+### 5. Sport-Processing Module ← **done**
 
 **Files:** `cli/db_main.py` (~705 lines)
 
