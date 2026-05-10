@@ -6,6 +6,7 @@ import pathlib
 from typing import Any
 from zoneinfo import ZoneInfo
 
+from dfs_common import state
 from dfs_common.discord import WebhookSender
 
 from dk_results.classes.contestdatabase import ContestDatabase
@@ -26,11 +27,10 @@ from dk_results.sport_processor import (
     NoLiveContestError,
     SportProcessor,
     SportProcessorConfig,
-    StandsParseError,
     StandingsUnavailableError,
+    StandsParseError,
 )
 from dk_results.vip_lineups import load_vips
-from dfs_common import state
 
 logger = logging.getLogger(__name__)
 

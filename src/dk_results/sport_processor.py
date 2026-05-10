@@ -254,7 +254,12 @@ class SportProcessor:
                 row = [player.pos, player.name, player.salary, player.fpts, player.value, player.ownership]
                 logger.info(
                     "Player [%s]: %s Score: %s Salary: %s Value %s Own: %s",
-                    player.pos, player.name, player.fpts, player.salary, player.value, player.ownership,
+                    player.pos,
+                    player.name,
+                    player.fpts,
+                    player.salary,
+                    player.value,
+                    player.ownership,
                 )
                 optimized_info.append(row)
             sheet.add_optimal_lineup(optimized_info)
@@ -286,24 +291,44 @@ class SportProcessor:
 
         if not self._vips:
             self._log_vip_fetch(
-                sport=sport_name, contest_id=dk_id, requested=0, fetched=0,
-                missing_roster=0, failures=0, attempted=False, reason="empty_vip_set",
+                sport=sport_name,
+                contest_id=dk_id,
+                requested=0,
+                fetched=0,
+                missing_roster=0,
+                failures=0,
+                attempted=False,
+                reason="empty_vip_set",
             )
             self._log_vip_sheet_write(
-                sport=sport_name, contest_id=dk_id, lineups=0, written=False,
-                elapsed_ms=0, reason="empty_vip_lineups",
+                sport=sport_name,
+                contest_id=dk_id,
+                lineups=0,
+                written=False,
+                elapsed_ms=0,
+                reason="empty_vip_lineups",
             )
             return
 
         if draft_group is None:
             logger.warning("No draft group found for sport, cannot pull VIP lineups from API.")
             self._log_vip_fetch(
-                sport=sport_name, contest_id=dk_id, requested=requested_vips, fetched=0,
-                missing_roster=requested_vips, failures=0, attempted=False, reason="no_draft_group",
+                sport=sport_name,
+                contest_id=dk_id,
+                requested=requested_vips,
+                fetched=0,
+                missing_roster=requested_vips,
+                failures=0,
+                attempted=False,
+                reason="no_draft_group",
             )
             self._log_vip_sheet_write(
-                sport=sport_name, contest_id=dk_id, lineups=0, written=False,
-                elapsed_ms=0, reason="no_draft_group",
+                sport=sport_name,
+                contest_id=dk_id,
+                lineups=0,
+                written=False,
+                elapsed_ms=0,
+                reason="no_draft_group",
             )
             return
 
@@ -314,8 +339,12 @@ class SportProcessor:
         fetch_reason = "not_applicable"
         try:
             raw_lineups = fetch_vip_lineups(
-                dk_id, draft_group, self._dk,
-                vips=self._vips, vip_entries=vip_entries, player_salary_map=player_salary_map,
+                dk_id,
+                draft_group,
+                self._dk,
+                vips=self._vips,
+                vip_entries=vip_entries,
+                player_salary_map=player_salary_map,
             )
             vip_lineups = [vl.to_dict() for vl in raw_lineups]
             if not vip_lineups:
@@ -328,9 +357,14 @@ class SportProcessor:
 
         fetched_count = len(vip_lineups)
         self._log_vip_fetch(
-            sport=sport_name, contest_id=dk_id, requested=fetch_requested, fetched=fetched_count,
-            missing_roster=max(fetch_requested - fetched_count, 0), failures=fetch_failures,
-            attempted=True, reason=fetch_reason,
+            sport=sport_name,
+            contest_id=dk_id,
+            requested=fetch_requested,
+            fetched=fetched_count,
+            missing_roster=max(fetch_requested - fetched_count, 0),
+            failures=fetch_failures,
+            attempted=True,
+            reason=fetch_reason,
         )
 
         if vip_lineups:
@@ -339,22 +373,34 @@ class SportProcessor:
             sheet.write_vip_lineups(vip_lineups)
             elapsed_ms = int((time.perf_counter() - started) * 1000)
             self._log_vip_sheet_write(
-                sport=sport_name, contest_id=dk_id, lineups=len(vip_lineups),
-                written=True, elapsed_ms=elapsed_ms, reason="not_applicable",
+                sport=sport_name,
+                contest_id=dk_id,
+                lineups=len(vip_lineups),
+                written=True,
+                elapsed_ms=elapsed_ms,
+                reason="not_applicable",
             )
             if self._bonus_sender:
                 try:
                     with sqlite3.connect(str(state.contests_db_path())) as conn:
                         announce_vip_bonuses(
-                            conn=conn, sport=sport_name, contest_id=dk_id,
-                            vip_lineups=vip_lineups, sender=self._bonus_sender, logger=logger,
+                            conn=conn,
+                            sport=sport_name,
+                            contest_id=dk_id,
+                            vip_lineups=vip_lineups,
+                            sender=self._bonus_sender,
+                            logger=logger,
                         )
                 except sqlite3.Error as err:
                     logger.error("Failed bonus announcement DB flow for %s (%s): %s", sport_name, dk_id, err)
         else:
             self._log_vip_sheet_write(
-                sport=sport_name, contest_id=dk_id, lineups=0,
-                written=False, elapsed_ms=0, reason=fetch_reason,
+                sport=sport_name,
+                contest_id=dk_id,
+                lineups=0,
+                written=False,
+                elapsed_ms=0,
+                reason=fetch_reason,
             )
 
     def _write_non_cashing_info(self, sheet: SheetPort, results: ContestStandings) -> None:
@@ -368,9 +414,7 @@ class SportProcessor:
             if results.non_cashing_players:
                 info.append(["Top 10 Own% Remaining", ""])
                 sorted_non_cashing: dict[str, int] = {
-                    k: v for k, v in sorted(
-                        results.non_cashing_players.items(), key=lambda item: item[1], reverse=True
-                    )
+                    k: v for k, v in sorted(results.non_cashing_players.items(), key=lambda item: item[1], reverse=True)
                 }
                 for p, count in list(sorted_non_cashing.items())[:10]:
                     info.append([p, float(count / results.non_cashing_users)])
@@ -384,7 +428,9 @@ class SportProcessor:
         users_above_salary = trainfinder.get_total_users_above_salary(self._config.salary_limit)
         logger.info(
             "train_summary total_users=%d salary_limit=%d users_above_salary=%d",
-            total_users, self._config.salary_limit, users_above_salary,
+            total_users,
+            self._config.salary_limit,
+            users_above_salary,
         )
         trains: dict[str, dict[str, Any]] = trainfinder.get_users_above_salary_spent(self._config.salary_limit)
         for key in [k for k in trains if trains[k]["count"] == 1]:
@@ -428,7 +474,10 @@ class SportProcessor:
         if legacy_event and cls._compat_events_enabled():
             logger.info(
                 "%s %s deprecated=true remove_after=%s canonical=%s",
-                legacy_event, body, _LEGACY_VIP_EVENT_REMOVE_AFTER, event,
+                legacy_event,
+                body,
+                _LEGACY_VIP_EVENT_REMOVE_AFTER,
+                event,
             )
 
     @classmethod
@@ -436,41 +485,86 @@ class SportProcessor:
         cls, *, sport: str, contest_id: int | None, requested: int, found: int, attempted: bool, reason: str
     ) -> None:
         cls._log_structured_info(
-            "vip_detection", sport=sport, contest_id=contest_id,
-            requested=requested, found=found, attempted=attempted, reason=reason,
+            "vip_detection",
+            sport=sport,
+            contest_id=contest_id,
+            requested=requested,
+            found=found,
+            attempted=attempted,
+            reason=reason,
         )
 
     @classmethod
     def _log_vip_fetch(
-        cls, *, sport: str, contest_id: int | None, requested: int, fetched: int,
-        missing_roster: int, failures: int, attempted: bool, reason: str,
+        cls,
+        *,
+        sport: str,
+        contest_id: int | None,
+        requested: int,
+        fetched: int,
+        missing_roster: int,
+        failures: int,
+        attempted: bool,
+        reason: str,
     ) -> None:
         cls._log_structured_info(
-            "vip_fetch", sport=sport, contest_id=contest_id, requested=requested,
-            fetched=fetched, missing_roster=missing_roster, failures=failures,
-            attempted=attempted, reason=reason,
+            "vip_fetch",
+            sport=sport,
+            contest_id=contest_id,
+            requested=requested,
+            fetched=fetched,
+            missing_roster=missing_roster,
+            failures=failures,
+            attempted=attempted,
+            reason=reason,
         )
 
     @classmethod
     def _log_vip_sheet_write(
-        cls, *, sport: str, contest_id: int | None, lineups: int, written: bool, elapsed_ms: int, reason: str,
+        cls,
+        *,
+        sport: str,
+        contest_id: int | None,
+        lineups: int,
+        written: bool,
+        elapsed_ms: int,
+        reason: str,
     ) -> None:
         cls._log_structured_info(
-            "vip_sheet_write", sport=sport, contest_id=contest_id,
-            lineups=lineups, written=written, elapsed_ms=elapsed_ms, reason=reason,
+            "vip_sheet_write",
+            sport=sport,
+            contest_id=contest_id,
+            lineups=lineups,
+            written=written,
+            elapsed_ms=elapsed_ms,
+            reason=reason,
         )
 
     @classmethod
     def _log_vip_skip_events(cls, sport_name: str, contest_id: int | None, requested: int, reason: str) -> None:
         cls._log_vip_detection(
-            sport=sport_name, contest_id=contest_id, requested=requested,
-            found=0, attempted=False, reason=reason,
+            sport=sport_name,
+            contest_id=contest_id,
+            requested=requested,
+            found=0,
+            attempted=False,
+            reason=reason,
         )
         cls._log_vip_fetch(
-            sport=sport_name, contest_id=contest_id, requested=requested,
-            fetched=0, missing_roster=0, failures=0, attempted=False, reason=reason,
+            sport=sport_name,
+            contest_id=contest_id,
+            requested=requested,
+            fetched=0,
+            missing_roster=0,
+            failures=0,
+            attempted=False,
+            reason=reason,
         )
         cls._log_vip_sheet_write(
-            sport=sport_name, contest_id=contest_id, lineups=0,
-            written=False, elapsed_ms=0, reason=reason,
+            sport=sport_name,
+            contest_id=contest_id,
+            lineups=0,
+            written=False,
+            elapsed_ms=0,
+            reason=reason,
         )
