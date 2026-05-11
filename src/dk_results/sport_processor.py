@@ -191,17 +191,9 @@ class SportProcessor:
             self._log_vip_skip_events(sport_name, int(dk_id), len(self._vips), "results_unavailable")
             raise StandsParseError(sport_name)
 
-        self._log_vip_detection(
-            sport=sport_name,
-            contest_id=int(dk_id),
-            requested=len(self._vips),
-            found=len(results.vip_list),
-            attempted=True,
-            reason="empty_vip_set" if not self._vips else "not_applicable",
-        )
-
         self._maybe_write_optimal_lineup(sheet=sheet, results=results, sport_cls=sport_cls, sport_name=sport_name)
-        self._write_players_to_sheet(sheet, results, sport_name, int(dk_id), draft_group, name, positions_paid)
+        self._write_standings(sheet, results, sport_name, int(dk_id), name, positions_paid)
+        self._write_vip_lineups(sheet, results, sport_name, int(dk_id), draft_group)
         self._write_non_cashing_info(sheet, results)
         self._write_train_info(sheet, results)
 
@@ -268,13 +260,12 @@ class SportProcessor:
             logger.error(error)
             logger.error("Error in optimal lineup")
 
-    def _write_players_to_sheet(
+    def _write_standings(
         self,
         sheet: SheetPort,
         results: ContestStandings,
         sport_name: str,
         dk_id: int,
-        draft_group: int | None,
         contest_name: str,
         positions_paid: int | None,
     ) -> None:
@@ -286,6 +277,23 @@ class SportProcessor:
         if results.min_cash_pts > 0:
             logger.info("Writing min_cash_pts: %d", results.min_cash_pts)
             sheet.add_min_cash(results.min_cash_pts)
+
+    def _write_vip_lineups(
+        self,
+        sheet: SheetPort,
+        results: ContestStandings,
+        sport_name: str,
+        dk_id: int,
+        draft_group: int | None,
+    ) -> None:
+        self._log_vip_detection(
+            sport=sport_name,
+            contest_id=dk_id,
+            requested=len(self._vips),
+            found=len(results.vip_list),
+            attempted=True,
+            reason="empty_vip_set" if not self._vips else "not_applicable",
+        )
 
         requested_vips = len(results.vip_list)
 
