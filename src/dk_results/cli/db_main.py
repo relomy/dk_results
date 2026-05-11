@@ -132,7 +132,7 @@ def main() -> None:
     processor = SportProcessor(
         contest_db=ContestDatabase(str(state.contests_db_path())),
         dk=Draftkings(),
-        sheet_factory=build_dfs_sheet_service,
+        sheet_factory=lambda sport: build_dfs_sheet_service(sport),
         bonus_sender=_build_bonus_sender(),
         config=SportProcessorConfig(
             salary_dir=SALARY_DIR,
