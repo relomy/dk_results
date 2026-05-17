@@ -207,7 +207,7 @@ class Draftkings:
         os.makedirs(cdir, exist_ok=True)
         for name in zip_obj.namelist():
             path = zip_obj.extract(name, cdir)
-            self.logger.debug("extracted: %s", path)
+            self.logger.debug("standings_extract path=%s", os.path.basename(path))
             with zip_obj.open(name) as csvfile:
                 lines = io.TextIOWrapper(csvfile, encoding="utf-8", newline="\n")
                 return list(csv.reader(lines, delimiter=","))
@@ -237,7 +237,7 @@ class Draftkings:
         }
 
         if sport in contest_types:
-            self.logger.debug("CONTEST_TYPES [%s]: %s", sport, contest_types[sport])
+            self.logger.debug("contest_types sport=%s type_id=%s", sport, contest_types[sport])
 
         csv_url = (
             "https://www.draftkings.com/lineup/getavailableplayerscsv?contestTypeId={0}&draftGroupId={1}"
@@ -253,5 +253,5 @@ class Draftkings:
         # dump html to file to avoid multiple requests
         Path(filename).parent.mkdir(parents=True, exist_ok=True)
         with open(filename, "w", encoding="utf-8") as outfile:
-            self.logger.debug("Writing r.text to %s", filename)
+            self.logger.debug("salary_write path=%s", os.path.basename(filename))
             outfile.write(response.text)
