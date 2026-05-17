@@ -250,3 +250,31 @@ def test_contest_standings_is_frozen():
     standings = parse_contest_standings(NFLSport, _salary_rows(), _standings_rows(), positions_paid=1)
     with pytest.raises(Exception):
         standings.min_rank = 99
+
+
+def test_vip_log_uses_vip_user_format(caplog):
+    import logging
+    # Need a sport that has players with position "G" for golf-like behavior,
+    # or just use NFLSport with the existing _salary_rows() / _standings_rows() helpers.
+    # Use NFLSport and mark "CashUser" as a VIP.
+    with caplog.at_level(logging.DEBUG):
+        parse_contest_standings(
+            NFLSport,
+            _salary_rows(),
+            _standings_rows(),
+            positions_paid=1,
+            vips=["CashUser"],
+        )
+    messages = [r.message for r in caplog.records]
+    assert any("vip_user" in m and "name=CashUser" in m and "salary_rem=" in m for m in messages)
+    assert not any(m.startswith("found VIP") for m in messages)
+    assert not any("VIP: [User]" in m for m in messages)
+
+
+def test_non_cashing_log_uses_key_value_format(caplog):
+    import logging
+    with caplog.at_level(logging.DEBUG):
+        parse_contest_standings(NFLSport, _salary_rows(), _standings_rows(), positions_paid=1)
+    messages = [r.message for r in caplog.records]
+    assert any(m.startswith("non_cashing") and "users=" in m and "total_pmr=" in m for m in messages)
+    assert not any("non_cashing:" in m for m in messages)

@@ -202,7 +202,6 @@ def _parse_standings_rows(
         users.append(user)
 
         if name in vips:
-            logger.debug("found VIP %s", name)
             vip_list.append(user)
 
         if positions_paid is not None and parsed_rank is not None and parsed_points is not None:
@@ -231,7 +230,7 @@ def _parse_standings_rows(
         non_cashing_avg_pmr = non_cashing_total_pmr / non_cashing_users
 
     logger.debug(
-        "non_cashing: users %d total_pmr: %.2f avg_pmr: %.2f",
+        "non_cashing users=%d total_pmr=%.2f avg_pmr=%.2f",
         non_cashing_users,
         non_cashing_total_pmr,
         non_cashing_avg_pmr,
@@ -285,8 +284,17 @@ def parse_contest_standings(
     ) = _parse_standings_rows(sport, players, standings_rows, coerced_positions_paid, vip_names, log)
 
     for vip in vip_list:
-        log.debug("VIP: %s", vip)
+        salary_rem = vip.salary
         vip.set_lineup(parse_lineup_string(sport, players, vip.lineup_str))
+        lineup_fmt = (
+            "/".join(f"{p.pos} {p.name.split()[-1]}" for p in vip.lineup)
+            if vip.lineup
+            else vip.lineup_str
+        )
+        log.debug(
+            "vip_user name=%s rank=%s pmr=%s pts=%s salary_rem=%d lineup=%r",
+            vip.name, vip.rank, vip.pmr, vip.pts, salary_rem, lineup_fmt,
+        )
 
     return ContestStandings(
         players=players,
