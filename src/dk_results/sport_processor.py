@@ -522,4 +522,3 @@ class SportProcessor:
             elapsed_ms=elapsed_ms,
             reason=reason,
         )
-

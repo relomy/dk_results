@@ -382,7 +382,6 @@ def test_process_sport_emits_deterministic_vip_events_on_happy_path(monkeypatch,
     assert sheet_fields["lineups"] == "1"
 
 
-
 def test_main_snapshot_out_writes_opt_in_envelope(monkeypatch, tmp_path):
     out = tmp_path / "snapshot.json"
     monkeypatch.setattr(db_main, "load_dotenv", lambda: None)
