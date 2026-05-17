@@ -186,12 +186,19 @@ class ContestDatabase:
             cur.execute(base_sql + "  AND entry_fee >= ?" + ordering, (sport, keyword, entry_fee))
             row = cur.fetchone()
             if row:
-                self.logger.debug("returning %s", row)
+                self.logger.debug(
+                    "contest_lookup contest_id=%s name=%r draft_group=%s positions_paid=%s start=%r",
+                    row[0], row[1], row[2], row[3], row[4],
+                )
                 return row
 
             cur.execute(base_sql + "  AND entry_fee < ?" + ordering, (sport, keyword, entry_fee))
             row = cur.fetchone()
-            self.logger.debug("returning %s", row)
+            if row:
+                self.logger.debug(
+                    "contest_lookup contest_id=%s name=%r draft_group=%s positions_paid=%s start=%r",
+                    row[0], row[1], row[2], row[3], row[4],
+                )
             return row
         except sqlite3.Error as err:
             self.logger.error(
