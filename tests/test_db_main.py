@@ -595,6 +595,19 @@ def test_main_loads_vips_once_per_invocation(monkeypatch, tmp_path):
     assert run_sports == ["NFL", "GOLF"]
 
 
+def test_process_sport_uses_structured_log_events(tmp_path, caplog):
+    processor = _make_processor(_FakeContestDb(), vips=[], salary_dir=str(tmp_path))
+    with caplog.at_level(logging.INFO, logger="dk_results.sport_processor"):
+        processor.run("NFL", NFLSport)
+    messages = [r.message for r in caplog.records]
+    assert any(m.startswith("salary_download") for m in messages)
+    assert any(m.startswith("sheet_write_players") for m in messages)
+    assert any(m.startswith("min_cash_pts") for m in messages)
+    assert not any("Downloading salary file" in m for m in messages)
+    assert not any(m == "Writing players to sheet" for m in messages)
+    assert not any("Writing min_cash_pts" in m for m in messages)
+
+
 def test_write_snapshot_payload_is_byte_stable(tmp_path):
     out = tmp_path / "stable.json"
     payload = OrderedDict(

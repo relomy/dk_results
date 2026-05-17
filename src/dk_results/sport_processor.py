@@ -153,7 +153,7 @@ class SportProcessor:
         fn = os.path.join(self._config.salary_dir, f"DKSalaries_{sport_name}_{self._now:%A}.csv")
 
         if draft_group:
-            logger.info("Downloading salary file (draft_group: %d)", draft_group)
+            logger.info("salary_download draft_group=%d", draft_group)
             self._dk.download_salary_csv(sport_name, draft_group, fn)
 
         contest_list = self._dk.download_contest_rows(
@@ -199,7 +199,7 @@ class SportProcessor:
         positions_paid: int | None,
         standings_rows: list[list[str]],
     ) -> ContestStandings:
-        logger.debug("Parsing contest standings: sport=%s contest_id=%s", sport_cls.name, contest_id)
+        logger.debug("standings_parse sport=%s contest_id=%s", sport_cls.name, contest_id)
         with open(salary_csv, mode="r") as fp:
             salary_rows = list(csv.reader(fp, delimiter=","))
         return parse_contest_standings(
@@ -234,17 +234,23 @@ class SportProcessor:
             for player in optimized_players:
                 row = [player.pos, player.name, player.salary, player.fpts, player.value, player.ownership]
                 logger.info(
-                    "Player [%s]: %s Score: %s Salary: %s Value %s Own: %s",
+                    "top_player sport=%s pos=%s name=%r score=%s salary=%s value=%.2f own=%s",
+                    sport_name,
                     player.pos,
                     player.name,
                     player.fpts,
                     player.salary,
-                    player.value,
+                    float(player.value) if player.value is not None else 0.0,
                     player.ownership,
+                )
+                logger.debug(
+                    "top_player_detail sport=%s name=%r event=%r",
+                    sport_name,
+                    player.name,
+                    player.game_info,
                 )
                 optimized_info.append(row)
             sheet.add_optimal_lineup(optimized_info)
-            logger.debug(optimized_players)
         except Exception as error:
             logger.error(error)
             logger.error("Error in optimal lineup")
@@ -261,10 +267,10 @@ class SportProcessor:
         sheet.clear_standings()
         sheet.write_players(players_to_values(results.players, sport_name))
         sheet.add_contest_details(contest_name, positions_paid)
-        logger.info("Writing players to sheet")
+        logger.info("sheet_write_players sport=%s", sport_name)
         sheet.add_last_updated(self._now)
         if results.min_cash_pts > 0:
-            logger.info("Writing min_cash_pts: %d", results.min_cash_pts)
+            logger.info("min_cash_pts sport=%s pts=%d", sport_name, results.min_cash_pts)
             sheet.add_min_cash(results.min_cash_pts)
 
     def _write_vip_lineups(
