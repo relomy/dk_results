@@ -313,7 +313,6 @@ def fetch_vip_lineups(
                     missing_roster += 1
                     logger.debug("VIP %s had no roster data", user)
                 else:
-                    logger.debug("Found VIP lineup for user %s", result.user)
                     lineups.append(result)
             except Exception as e:
                 failures += 1
