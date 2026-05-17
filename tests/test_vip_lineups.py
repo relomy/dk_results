@@ -325,6 +325,22 @@ def test_vip_lineup_to_dict_shape():
     assert p["timeStatus"] == "In Progress"
 
 
+def test_fetch_does_not_log_per_user_found(caplog):
+    import logging
+
+    sc = _scorecard_response(_scorecard_entry(score="15", percent_drafted=40))
+    http = _FakeHttp(scorecard=sc)
+    with caplog.at_level(logging.DEBUG, logger="dk_results.vip_lineups"):
+        fetch_vip_lineups(
+            1,
+            2,
+            http,
+            vip_entries={"Alice": {"entry_key": "ek1", "pmr": "5", "rank": "1", "pts": "300"}},
+        )
+    assert not any("Found VIP lineup for user" in r.message for r in caplog.records)
+    assert any("vip_lineups_fetch" in r.message for r in caplog.records)
+
+
 def test_vip_player_to_dict_none_salary_becomes_empty_string():
     player = VipPlayer(
         pos="QB",

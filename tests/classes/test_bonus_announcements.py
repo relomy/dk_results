@@ -259,3 +259,33 @@ def test_announce_vip_bonuses_cas_rowcount_zero_skips_update(monkeypatch):
         (999, "GOLF", "Rory McIlroy", "EAG"),
     ).fetchone()
     assert row == (1,)
+
+
+def test_announce_logs_structured_events(caplog):
+    import logging
+
+    conn = _build_conn()
+    sender = _Sender()
+    vip_lineups = [
+        {
+            "user": "zeta",
+            "players": [
+                {"name": "Rory McIlroy", "stats": "22 PAR, 1 EAG", "ownership": 0.347},
+            ],
+        }
+    ]
+    with caplog.at_level(logging.DEBUG):
+        announce_vip_bonuses(
+            conn=conn,
+            sport="GOLF",
+            contest_id=777,
+            vip_lineups=vip_lineups,
+            sender=sender,
+        )
+    messages = [r.message for r in caplog.records]
+    assert any(m.startswith("vip_bonus_start") for m in messages)
+    assert any(m.startswith("vip_bonus_complete") for m in messages)
+    assert not any("Starting VIP bonus" in m for m in messages)
+    assert not any("Completed VIP bonus" in m for m in messages)
+    candidates_msgs = [m for m in messages if "vip_bonus_candidates" in m]
+    assert not any("{'EAG" in m or "{'BIR" in m for m in candidates_msgs)

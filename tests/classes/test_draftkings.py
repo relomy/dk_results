@@ -371,3 +371,43 @@ def test_download_contest_rows_empty_zip_returns_none():
     dk = Draftkings(session=session)
 
     assert dk.download_contest_rows(1) is None
+
+
+def test_download_salary_csv_logs_structured_events(tmp_path, caplog):
+    response = _Response(status_code=200, content=b"name,salary\nPlayer A,7000\n")
+    session = _Session(response)
+    dk = Draftkings(session=session)
+
+    filename = str(tmp_path / "DKSalaries_GOLF_Sunday.csv")
+    with caplog.at_level(logging.DEBUG, logger=dk.logger.name):
+        dk.download_salary_csv("GOLF", 146727, filename)
+
+    messages = [r.message for r in caplog.records]
+    assert any("contest_types" in m and "type_id=9" in m for m in messages)
+    assert not any("CONTEST_TYPES" in m for m in messages)
+    assert any("salary_write" in m and "DKSalaries_GOLF_Sunday.csv" in m for m in messages)
+    assert not any("Writing r.text" in m for m in messages)
+
+
+def test_download_contest_rows_logs_standings_extract(tmp_path, caplog):
+    import io
+    import zipfile
+
+    csv_bytes = b"col1,col2\n1,2\n"
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as zf:
+        zf.writestr("standings.csv", csv_bytes)
+
+    response = _Response(
+        headers={"Content-Type": "application/zip"},
+        content=buf.getvalue(),
+    )
+    session = _Session(response)
+    dk = Draftkings(session=session)
+
+    with caplog.at_level(logging.DEBUG, logger=dk.logger.name):
+        dk.download_contest_rows(123, contest_dir=str(tmp_path))
+
+    messages = [r.message for r in caplog.records]
+    assert any("standings_extract" in m for m in messages)
+    assert not any(m.startswith("extracted:") for m in messages)

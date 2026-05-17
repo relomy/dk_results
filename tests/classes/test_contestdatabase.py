@@ -1,4 +1,5 @@
 import datetime
+import logging
 import sqlite3
 
 import pytest
@@ -325,6 +326,26 @@ def test_get_contest_by_id_returns_row(contest_db):
     row = contest_db.get_contest_by_id(55)
 
     assert row == (55, "Contest", 1, None, "2024-01-01 00:00:00", 25, 123)
+
+
+def test_get_live_contest_logs_key_value(contest_db, caplog):
+    _insert_contest(
+        contest_db,
+        dk_id=190402321,
+        sport="GOLF",
+        name="PGA Double Up",
+        entry_fee=25,
+        entries=600,
+        positions_paid=300,
+        draft_group=146727,
+        start_date="2026-05-14 06:45:00",
+    )
+
+    with caplog.at_level(logging.DEBUG, logger="classes.contestdatabase"):
+        contest_db.get_live_contest("GOLF", 25, "%")
+
+    assert any("contest_lookup" in r.getMessage() and "contest_id=" in r.getMessage() for r in caplog.records)
+    assert not any(r.getMessage().startswith("returning (") for r in caplog.records)
 
 
 def test_get_live_contest_candidates_returns_stable_order(contest_db):
