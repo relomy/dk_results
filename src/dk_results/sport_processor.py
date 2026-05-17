@@ -23,14 +23,6 @@ from dk_results.vip_lineups import build_vip_entries, fetch_vip_lineups
 
 logger = logging.getLogger(__name__)
 
-_LEGACY_VIP_EVENT_COMPAT_ENV = "DK_VIP_EVENT_COMPAT"
-_LEGACY_VIP_EVENT_REMOVE_AFTER = "2026-04-30"
-_LEGACY_VIP_EVENT_MAP = {
-    "vip_detection": "vip_detection_summary",
-    "vip_fetch": "vip_lineups_fetch",
-    "vip_sheet_write": "vip_lineups_summary",
-}
-
 
 # ── Ports ──────────────────────────────────────────────────────────────────────
 
@@ -155,7 +147,6 @@ class SportProcessor:
         result = self._db.get_live_contest(sport_cls.name, sport_cls.sheet_min_entry_fee, sport_cls.keyword)
         if not result:
             logger.warning("There are no live contests for %s! Moving on.", sport_name)
-            self._log_vip_skip_events(sport_name, None, len(self._vips), "not_applicable")
             raise NoLiveContestError(sport_name)
 
         dk_id, name, draft_group, positions_paid, _start_date = result
@@ -173,7 +164,6 @@ class SportProcessor:
         )
         if not contest_list:
             logger.warning("Contest standings download failed or was empty for dk_id=%s; skipping.", dk_id)
-            self._log_vip_skip_events(sport_name, int(dk_id), len(self._vips), "standings_unavailable")
             raise StandingsUnavailableError(sport_name)
 
         sheet = self._sheet_factory(sport_name)
@@ -188,7 +178,6 @@ class SportProcessor:
             )
         except Exception:
             logger.exception("Failed to parse contest standings: sport=%s contest_id=%s", sport_name, dk_id)
-            self._log_vip_skip_events(sport_name, int(dk_id), len(self._vips), "results_unavailable")
             raise StandsParseError(sport_name)
 
         self._maybe_write_optimal_lineup(sheet=sheet, results=results, sport_cls=sport_cls, sport_name=sport_name)
@@ -469,24 +458,10 @@ class SportProcessor:
     def _format_event_fields(cls, fields: dict[str, Any]) -> str:
         return " ".join(f"{k}={cls._format_log_value(v)}" for k, v in fields.items())
 
-    @staticmethod
-    def _compat_events_enabled() -> bool:
-        value = os.getenv(_LEGACY_VIP_EVENT_COMPAT_ENV, "1").strip().lower()
-        return value not in {"0", "false", "no"}
-
     @classmethod
     def _log_structured_info(cls, event: str, **fields: Any) -> None:
         body = cls._format_event_fields(fields)
         logger.info("%s %s", event, body)
-        legacy_event = _LEGACY_VIP_EVENT_MAP.get(event)
-        if legacy_event and cls._compat_events_enabled():
-            logger.info(
-                "%s %s deprecated=true remove_after=%s canonical=%s",
-                legacy_event,
-                body,
-                _LEGACY_VIP_EVENT_REMOVE_AFTER,
-                event,
-            )
 
     @classmethod
     def _log_vip_detection(
@@ -548,31 +523,3 @@ class SportProcessor:
             reason=reason,
         )
 
-    @classmethod
-    def _log_vip_skip_events(cls, sport_name: str, contest_id: int | None, requested: int, reason: str) -> None:
-        cls._log_vip_detection(
-            sport=sport_name,
-            contest_id=contest_id,
-            requested=requested,
-            found=0,
-            attempted=False,
-            reason=reason,
-        )
-        cls._log_vip_fetch(
-            sport=sport_name,
-            contest_id=contest_id,
-            requested=requested,
-            fetched=0,
-            missing_roster=0,
-            failures=0,
-            attempted=False,
-            reason=reason,
-        )
-        cls._log_vip_sheet_write(
-            sport=sport_name,
-            contest_id=contest_id,
-            lineups=0,
-            written=False,
-            elapsed_ms=0,
-            reason=reason,
-        )

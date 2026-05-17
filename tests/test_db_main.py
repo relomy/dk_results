@@ -261,15 +261,14 @@ def test_process_sport_handles_no_live_contest(caplog):
         with pytest.raises(NoLiveContestError):
             processor.run("NFL", NFLSport)
 
-    detection = _event_messages(caplog, "vip_detection")
-    fetch = _event_messages(caplog, "vip_fetch")
-    sheet_write = _event_messages(caplog, "vip_sheet_write")
-    assert len(detection) == 1
-    assert len(fetch) == 1
-    assert len(sheet_write) == 1
+    assert len(_event_messages(caplog, "vip_detection")) == 0
+    assert len(_event_messages(caplog, "vip_fetch")) == 0
+    assert len(_event_messages(caplog, "vip_sheet_write")) == 0
+    warning_msgs = [r.message for r in caplog.records if r.levelno == logging.WARNING]
+    assert any("no live contests" in m.lower() for m in warning_msgs)
 
 
-def test_process_sport_emits_deterministic_vip_events_for_standings_skip(tmp_path, caplog):
+def test_process_sport_emits_no_vip_events_for_standings_skip(tmp_path, caplog):
     processor = _make_processor(
         _FakeContestDb(),
         vips=["UserA"],
@@ -280,15 +279,9 @@ def test_process_sport_emits_deterministic_vip_events_for_standings_skip(tmp_pat
         with pytest.raises(StandingsUnavailableError):
             processor.run("NFL", NFLSport)
 
-    detection = _event_messages(caplog, "vip_detection")
-    fetch = _event_messages(caplog, "vip_fetch")
-    sheet_write = _event_messages(caplog, "vip_sheet_write")
-    assert len(detection) == 1
-    assert len(fetch) == 1
-    assert len(sheet_write) == 1
-    assert _parse_event_fields(detection[0])["reason"] == "standings_unavailable"
-    assert _parse_event_fields(fetch[0])["attempted"] == "false"
-    assert _parse_event_fields(sheet_write[0])["written"] == "false"
+    assert len(_event_messages(caplog, "vip_detection")) == 0
+    assert len(_event_messages(caplog, "vip_fetch")) == 0
+    assert len(_event_messages(caplog, "vip_sheet_write")) == 0
 
 
 def test_process_sport_emits_fetch_error_reason_to_fetch_and_sheet_events(monkeypatch, tmp_path, caplog):
@@ -335,7 +328,7 @@ def test_vip_fetch_requested_uses_filtered_entry_keys(monkeypatch, tmp_path, cap
     assert _parse_event_fields(fetch[0])["requested"] == "1"
 
 
-def test_process_sport_emits_vip_events_when_results_build_fails(monkeypatch, tmp_path, caplog):
+def test_process_sport_emits_no_vip_events_when_results_build_fails(monkeypatch, tmp_path, caplog):
     monkeypatch.setattr(
         SportProcessor,
         "_build_results",
@@ -346,15 +339,9 @@ def test_process_sport_emits_vip_events_when_results_build_fails(monkeypatch, tm
         with pytest.raises(StandsParseError):
             processor.run("NFL", NFLSport)
 
-    detection = _event_messages(caplog, "vip_detection")
-    fetch = _event_messages(caplog, "vip_fetch")
-    sheet_write = _event_messages(caplog, "vip_sheet_write")
-    assert len(detection) == 1
-    assert len(fetch) == 1
-    assert len(sheet_write) == 1
-    assert _parse_event_fields(detection[0])["reason"] == "results_unavailable"
-    assert _parse_event_fields(fetch[0])["reason"] == "results_unavailable"
-    assert _parse_event_fields(sheet_write[0])["reason"] == "results_unavailable"
+    assert len(_event_messages(caplog, "vip_detection")) == 0
+    assert len(_event_messages(caplog, "vip_fetch")) == 0
+    assert len(_event_messages(caplog, "vip_sheet_write")) == 0
 
 
 def test_process_sport_logs_optimizer_skip(tmp_path, caplog):
@@ -394,21 +381,6 @@ def test_process_sport_emits_deterministic_vip_events_on_happy_path(monkeypatch,
     assert sheet_fields["written"] == "true"
     assert sheet_fields["lineups"] == "1"
 
-
-def test_vip_event_compatibility_mode(monkeypatch, tmp_path, caplog):
-    monkeypatch.setenv("DK_VIP_EVENT_COMPAT", "1")
-    monkeypatch.setattr(
-        "dk_results.sport_processor.fetch_vip_lineups",
-        lambda *_a, **_kw: [_FakeVipLineup()],
-    )
-    processor = _make_processor(_FakeContestDb(), vips=["UserA"], salary_dir=str(tmp_path))
-    with caplog.at_level(logging.INFO):
-        processor.run("NFL", NFLSport)
-
-    assert len(_event_messages(caplog, "vip_detection_summary")) == 1
-    assert len(_event_messages(caplog, "vip_lineups_fetch")) == 1
-    assert len(_event_messages(caplog, "vip_lineups_summary")) == 1
-    assert "remove_after=2026-04-30" in caplog.text
 
 
 def test_main_snapshot_out_writes_opt_in_envelope(monkeypatch, tmp_path):
