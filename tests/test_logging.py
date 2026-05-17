@@ -32,6 +32,7 @@ def test_configure_logging_applies_levels_and_idempotent_handler(monkeypatch):
     logging.getLogger("urllib3").setLevel(logging.DEBUG)
     logging.getLogger("charset_normalizer").setLevel(logging.DEBUG)
     logging.getLogger("google_auth_httplib2").setLevel(logging.DEBUG)
+    logging.getLogger("dfs_common.sheets").setLevel(logging.DEBUG)
 
     logger = app_logging.configure_logging()
     assert logger is root
@@ -41,6 +42,7 @@ def test_configure_logging_applies_levels_and_idempotent_handler(monkeypatch):
     assert logging.getLogger("urllib3").level == logging.INFO
     assert logging.getLogger("charset_normalizer").level == logging.INFO
     assert logging.getLogger("google_auth_httplib2").level == logging.INFO
+    assert logging.getLogger("dfs_common.sheets").level == logging.WARNING
 
 
 def test_configure_logging_defaults_to_debug_on_pi(monkeypatch):
@@ -62,3 +64,4 @@ def test_configure_logging_defaults_to_debug_on_pi(monkeypatch):
     assert logging.getLogger("urllib3").level == logging.INFO
     assert logging.getLogger("charset_normalizer").level == logging.INFO
     assert logging.getLogger("google_auth_httplib2").level == logging.INFO
+    assert logging.getLogger("dfs_common.sheets").level == logging.WARNING

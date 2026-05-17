@@ -11,6 +11,7 @@ NOISY_LIBRARY_LOGGERS = (
     "rookie.browser",
     "charset_normalizer",
     "google_auth_httplib2",
+    "dfs_common.sheets",
 )
 _HANDLER_MARKER = "_dk_results_configured_handler"
 
@@ -32,7 +33,8 @@ def _resolve_level(level_override: str | None = None, default: str | None = None
 
 def _configure_library_log_levels() -> None:
     for logger_name in NOISY_LIBRARY_LOGGERS:
-        logging.getLogger(logger_name).setLevel(logging.INFO)
+        level = logging.WARNING if logger_name == "dfs_common.sheets" else logging.INFO
+        logging.getLogger(logger_name).setLevel(level)
 
 
 def configure_logging(level_override: str | None = None) -> logging.Logger:
