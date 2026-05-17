@@ -344,10 +344,7 @@ def test_get_live_contest_logs_key_value(contest_db, caplog):
     with caplog.at_level(logging.DEBUG, logger="classes.contestdatabase"):
         contest_db.get_live_contest("GOLF", 25, "%")
 
-    assert any(
-        "contest_lookup" in r.getMessage() and "contest_id=" in r.getMessage()
-        for r in caplog.records
-    )
+    assert any("contest_lookup" in r.getMessage() and "contest_id=" in r.getMessage() for r in caplog.records)
     assert not any(r.getMessage().startswith("returning (") for r in caplog.records)
 
 

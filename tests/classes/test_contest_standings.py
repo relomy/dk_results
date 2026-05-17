@@ -254,6 +254,7 @@ def test_contest_standings_is_frozen():
 
 def test_vip_log_uses_vip_user_format(caplog):
     import logging
+
     # Need a sport that has players with position "G" for golf-like behavior,
     # or just use NFLSport with the existing _salary_rows() / _standings_rows() helpers.
     # Use NFLSport and mark "CashUser" as a VIP.
@@ -273,6 +274,7 @@ def test_vip_log_uses_vip_user_format(caplog):
 
 def test_non_cashing_log_uses_key_value_format(caplog):
     import logging
+
     with caplog.at_level(logging.DEBUG):
         parse_contest_standings(NFLSport, _salary_rows(), _standings_rows(), positions_paid=1)
     messages = [r.message for r in caplog.records]

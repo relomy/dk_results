@@ -286,14 +286,15 @@ def parse_contest_standings(
     for vip in vip_list:
         salary_rem = vip.salary
         vip.set_lineup(parse_lineup_string(sport, players, vip.lineup_str))
-        lineup_fmt = (
-            "/".join(f"{p.pos} {p.name.split()[-1]}" for p in vip.lineup)
-            if vip.lineup
-            else vip.lineup_str
-        )
+        lineup_fmt = "/".join(f"{p.pos} {p.name.split()[-1]}" for p in vip.lineup) if vip.lineup else vip.lineup_str
         log.debug(
             "vip_user name=%s rank=%s pmr=%s pts=%s salary_rem=%d lineup=%r",
-            vip.name, vip.rank, vip.pmr, vip.pts, salary_rem, lineup_fmt,
+            vip.name,
+            vip.rank,
+            vip.pmr,
+            vip.pts,
+            salary_rem,
+            lineup_fmt,
         )
 
     return ContestStandings(

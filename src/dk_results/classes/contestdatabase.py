@@ -188,7 +188,11 @@ class ContestDatabase:
             if row:
                 self.logger.debug(
                     "contest_lookup contest_id=%s name=%r draft_group=%s positions_paid=%s start=%r",
-                    row[0], row[1], row[2], row[3], row[4],
+                    row[0],
+                    row[1],
+                    row[2],
+                    row[3],
+                    row[4],
                 )
                 return row
 
@@ -197,7 +201,11 @@ class ContestDatabase:
             if row:
                 self.logger.debug(
                     "contest_lookup contest_id=%s name=%r draft_group=%s positions_paid=%s start=%r",
-                    row[0], row[1], row[2], row[3], row[4],
+                    row[0],
+                    row[1],
+                    row[2],
+                    row[3],
+                    row[4],
                 )
             return row
         except sqlite3.Error as err:

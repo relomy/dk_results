@@ -263,6 +263,7 @@ def test_announce_vip_bonuses_cas_rowcount_zero_skips_update(monkeypatch):
 
 def test_announce_logs_structured_events(caplog):
     import logging
+
     conn = _build_conn()
     sender = _Sender()
     vip_lineups = [
