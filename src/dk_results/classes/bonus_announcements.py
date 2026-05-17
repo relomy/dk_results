@@ -257,7 +257,7 @@ def announce_vip_bonuses(
 
     started_at = time.monotonic()
     log.info(
-        "Starting VIP bonus announcements: sport=%s contest_id=%s vip_lineups=%d",
+        "vip_bonus_start sport=%s contest_id=%s vip_lineups=%d",
         sport,
         contest_id,
         len(vip_lineups),
@@ -268,7 +268,7 @@ def announce_vip_bonuses(
     if not candidates:
         elapsed_ms = int((time.monotonic() - started_at) * 1000)
         log.info(
-            "Completed VIP bonus announcements: sport=%s contest_id=%s "
+            "vip_bonus_complete sport=%s contest_id=%s "
             "candidates=0 persisted=0 webhook_messages=0 send_failures=0 "
             "db_failures=0 cas_skips=0 elapsed_ms=%d",
             sport,
@@ -280,12 +280,13 @@ def announce_vip_bonuses(
     by_bonus: dict[str, int] = {}
     for candidate in candidates:
         by_bonus[candidate.bonus_code] = by_bonus.get(candidate.bonus_code, 0) + 1
+    by_bonus_fmt = ",".join(f"{k}:{v}" for k, v in sorted(by_bonus.items()))
     log.debug(
-        "VIP bonus candidate aggregate: sport=%s contest_id=%s candidates=%d by_bonus=%s",
+        "vip_bonus_candidates sport=%s contest_id=%s candidates=%d by_bonus=%s",
         sport,
         contest_id,
         len(candidates),
-        dict(sorted(by_bonus.items())),
+        by_bonus_fmt,
     )
 
     persisted_announcements = 0
@@ -377,7 +378,7 @@ def announce_vip_bonuses(
 
     elapsed_ms = int((time.monotonic() - started_at) * 1000)
     log.info(
-        "Completed VIP bonus announcements: sport=%s contest_id=%s candidates=%d "
+        "vip_bonus_complete sport=%s contest_id=%s candidates=%d "
         "persisted=%d webhook_messages=%d send_failures=%d db_failures=%d "
         "cas_skips=%d elapsed_ms=%d",
         sport,
