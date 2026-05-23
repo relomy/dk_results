@@ -1873,3 +1873,60 @@ def test_completed_notification_suppressed_when_vip_presence_absent(monkeypatch)
 
     assert sender.messages == []
     assert update_contests.db_has_notification(conn, 333, "completed") is False
+
+
+class TestVipKey:
+    def test_strips_and_lowercases(self):
+        assert update_contests._vip_key("  VipUser  ") == "vipuser"
+
+    def test_non_string_returns_empty(self):
+        assert update_contests._vip_key(None) == ""
+        assert update_contests._vip_key(123) == ""
+
+
+class TestParseEntrantUsernames:
+    def test_extracts_single_quotes(self):
+        html = "<td data-un='PlayerOne'></td>"
+        assert update_contests._parse_entrant_usernames(html) == ["playerone"]
+
+    def test_extracts_double_quotes(self):
+        html = '<td data-un="PlayerTwo"></td>'
+        assert update_contests._parse_entrant_usernames(html) == ["playertwo"]
+
+    def test_extracts_multiple(self):
+        html = "<td data-un='Alice'></td><td data-un='Bob'></td>"
+        assert update_contests._parse_entrant_usernames(html) == ["alice", "bob"]
+
+    def test_empty_html_returns_empty(self):
+        assert update_contests._parse_entrant_usernames("") == []
+
+    def test_no_matches_returns_empty(self):
+        assert update_contests._parse_entrant_usernames("<td>no usernames</td>") == []
+
+
+class TestEntrantPayloadIsAmbiguous:
+    def test_not_ambiguous_when_entrants_found(self):
+        assert update_contests._entrant_payload_is_ambiguous("<td data-un='x'>", ["x"]) is False
+
+    def test_ambiguous_when_no_entrants_but_data_un_present(self):
+        assert update_contests._entrant_payload_is_ambiguous("<td data-un=''>", []) is True
+
+    def test_not_ambiguous_when_no_data_un(self):
+        assert update_contests._entrant_payload_is_ambiguous("<td>no attrs</td>", []) is False
+
+
+class TestCheckVipPresence:
+    def test_returns_unknown_when_no_client(self):
+        assert update_contests._check_vip_presence(None, None, 1, "2026-01-01", ["vip"]) == update_contests.VIP_UNKNOWN
+
+    def test_delegates_to_resolve_when_client_provided(self, monkeypatch):
+        calls = []
+
+        def fake_resolve(conn, *, dk, dk_id, start_date, vip_names):
+            calls.append((dk_id, start_date))
+            return update_contests.VIP_PRESENT
+
+        monkeypatch.setattr(update_contests, "_resolve_vip_presence", fake_resolve)
+        result = update_contests._check_vip_presence(object(), object(), 99, "2026-06-01", ["vip"])
+        assert result == update_contests.VIP_PRESENT
+        assert calls == [(99, "2026-06-01")]

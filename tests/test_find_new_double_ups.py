@@ -1,6 +1,5 @@
 import argparse
 import datetime
-import runpy
 import sys
 
 import pytest
@@ -593,7 +592,7 @@ def test_main_executes_with_fakes(monkeypatch, tmp_path):
     monkeypatch.setattr("dk_results.cli.find_new_double_ups._upsert_contests", lambda *_a, **_k: None)
     monkeypatch.setattr(sys, "argv", ["prog", "-s", "NFL"])
 
-    runpy.run_module("dk_results.cli.find_new_double_ups", run_name="__main__")
+    find_mod.main()
 
 
 def test_get_stats_counts_multiple_entry_fees():
@@ -645,7 +644,7 @@ def test_main_with_webhook_and_quiet(monkeypatch):
     monkeypatch.setattr("dk_results.cli.find_new_double_ups._upsert_contests", lambda *_a, **_k: None)
     monkeypatch.setattr(sys, "argv", ["prog", "-s", "NFL", "-q"])
 
-    runpy.run_module("dk_results.cli.find_new_double_ups", run_name="__main__")
+    find_mod.main()
 
 
 def test_main_resolves_db_path_once(monkeypatch):
@@ -691,6 +690,6 @@ def test_main_resolves_db_path_once(monkeypatch):
     monkeypatch.setenv("DISCORD_WEBHOOK", "")
     monkeypatch.setattr(sys, "argv", ["prog", "-s", "NFL"])
 
-    runpy.run_module("dk_results.cli.find_new_double_ups", run_name="__main__")
+    find_mod.main()
 
     assert calls == {"contests_db_path": 1, "init_schema": 1}

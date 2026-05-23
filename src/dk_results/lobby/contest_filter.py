@@ -4,6 +4,10 @@ from collections.abc import Sequence
 from dk_results.classes.contest import Contest
 
 
+def is_double_up_contest(contest: Contest) -> bool:
+    return contest.is_double_up and contest.is_guaranteed and contest.max_entry_count == 1
+
+
 def filter_double_ups(
     contests: Sequence[Contest],
     *,
@@ -55,7 +59,7 @@ def _matches(
     name_contains: str | None,
     name_excludes: str | None,
 ) -> bool:
-    if not (contest.is_double_up and contest.is_guaranteed and contest.max_entry_count == 1):
+    if not is_double_up_contest(contest):
         return False
     if not (min_entry_fee <= contest.entry_fee <= max_entry_fee):
         return False

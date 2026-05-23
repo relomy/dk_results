@@ -3,7 +3,7 @@ from typing import Any
 
 from dk_results.classes.contest import Contest
 
-from .contest_filter import filter_double_ups
+from .contest_filter import filter_double_ups, is_double_up_contest
 
 
 def get_double_ups(
@@ -32,7 +32,7 @@ def get_stats(contests: Sequence[Contest], *, include_largest: bool = False) -> 
             stats[start_date] = {"count": 0}
         stats[start_date]["count"] += 1
 
-        if contest.max_entry_count == 1 and contest.is_guaranteed and contest.is_double_up:
+        if is_double_up_contest(contest):
             if "dubs" not in stats[start_date]:
                 stats[start_date]["dubs"] = {}
 

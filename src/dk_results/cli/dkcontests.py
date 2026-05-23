@@ -358,7 +358,6 @@ def main():
         ]
     else:
         selected_sport = args.sport
-        # get contests via authenticated client
         response = get_lobby_response(args.sport, live=is_live)
         response_contests = get_contests_from_response(response)
 
