@@ -1,6 +1,5 @@
 import datetime
 import os
-import runpy
 import types
 from typing import cast
 
@@ -84,13 +83,14 @@ def test_module_main_executes(monkeypatch, tmp_path):
     captured = {}
     monkeypatch.setenv("DISCORD_BOT_TOKEN", "tok")
     monkeypatch.setenv("DISCORD_LOG_FILE", str(tmp_path / "discord.log"))
+    monkeypatch.setattr(discord_bot, "BOT_TOKEN", "tok")
 
     def fake_run(self, token):
         captured["token"] = token
 
     monkeypatch.setattr("discord.ext.commands.Bot.run", fake_run)
 
-    runpy.run_module("bot.discord_bot", run_name="__main__")
+    discord_bot.main()
 
     assert captured["token"] == "tok"
 
