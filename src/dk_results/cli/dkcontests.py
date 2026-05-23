@@ -348,10 +348,18 @@ def main():
 
     if args.sport_class:
         selected_sport = args.sport_class
-        response_contests = get_contests_for_sport_class(args.sport_class, sport_class_choices)
+        sport_obj = sport_class_choices[args.sport_class]
+        response = get_lobby_response(sport_obj.get_primary_sport(), live=False)
+        if not isinstance(response, dict):
+            raise SystemExit("Sport-class mode requires getcontests response with DraftGroups.")
+        draft_groups = set(filter_draft_groups(response["DraftGroups"], sport_obj))
+        response_contests = [
+            contest for contest in get_contests_from_response(response) if contest.get("dg") in draft_groups
+        ]
     else:
         selected_sport = args.sport
-        response_contests = get_contests(args.sport, live=is_live)
+        response = get_lobby_response(args.sport, live=is_live)
+        response_contests = get_contests_from_response(response)
 
     # create list of Contest objects
     contests = [Contest(c, selected_sport) for c in response_contests]
