@@ -46,6 +46,14 @@ BONUS_META: dict[str, dict[str, dict[str, Any]]] = {
             "count_mode": "binary",
         },
     },
+    "MLB": {
+        "HR": {
+            "label": "home run",
+            "action": "hit a home run",
+            "points": 10,
+            "count_mode": "incremental",
+        },
+    },
 }
 
 

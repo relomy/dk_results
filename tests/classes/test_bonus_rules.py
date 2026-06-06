@@ -29,3 +29,27 @@ def test_parse_bonus_counts_nba_absent_tokens():
     stats = "10 REB, 12 AST, 28 PTS"
     counts = parse_bonus_counts("NBA", stats)
     assert counts == {}
+
+
+def test_parse_bonus_counts_mlb_detects_home_run():
+    stats = "3 AB, 2 H, 1 HR, 2 RBI, 1 R"
+    counts = parse_bonus_counts("MLB", stats)
+    assert counts == {"HR": 1}
+
+
+def test_parse_bonus_counts_mlb_detects_multi_hr():
+    stats = "4 AB, 2 HR, 5 RBI, 2 R"
+    counts = parse_bonus_counts("MLB", stats)
+    assert counts == {"HR": 2}
+
+
+def test_parse_bonus_counts_mlb_no_hr():
+    stats = "3 AB, 2 H, 2 RBI, 1 R"
+    counts = parse_bonus_counts("MLB", stats)
+    assert counts == {}
+
+
+def test_parse_bonus_counts_mlb_zero_hr_ignored():
+    stats = "3 AB, 0 HR, 1 H"
+    counts = parse_bonus_counts("MLB", stats)
+    assert counts == {}
