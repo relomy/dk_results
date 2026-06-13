@@ -292,3 +292,12 @@ class USFLSport(Sport):
     lineup_range = "J3:W999"
 
     positions = ["QB", "RB", "WR/TE", "WR/TE", "FLEX", "FLEX", "DST"]
+
+
+class SOCSport(Sport):
+    name = "SOC"
+    lineup_range = "J3:W999"
+
+    dub_min_entries = 50
+
+    positions = ["F", "F", "M", "M", "D", "D", "GK", "UTIL"]
