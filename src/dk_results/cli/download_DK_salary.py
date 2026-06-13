@@ -58,7 +58,7 @@ def main():
 
     # parse arguments
     arg_parser = argparse.ArgumentParser()
-    choices = ["NBA", "NFL", "CFB", "PGA", "NHL", "MLB", "TEN", "XFL"]
+    choices = ["NBA", "NFL", "CFB", "PGA", "NHL", "MLB", "SOC", "TEN", "XFL"]
     arg_parser.add_argument(
         "-s",
         "--sport",
