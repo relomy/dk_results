@@ -299,5 +299,17 @@ class SOCSport(Sport):
     lineup_range = "J3:W999"
 
     dub_min_entries = 50
+    contest_restraint_game_type_id = 122
 
     positions = ["F", "F", "M", "M", "D", "D", "GK", "UTIL"]
+
+
+class SOCShowdownSport(Sport):
+    name = "SOCShowdown"
+    sport_name = "SOC"
+    lineup_range = "J3:W999"
+
+    contest_restraint_game_type_id = 123
+
+    positions = ["CPT", "FLEX"]
+    allow_optimizer = False
