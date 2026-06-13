@@ -299,5 +299,6 @@ class SOCSport(Sport):
     lineup_range = "J3:W999"
 
     dub_min_entries = 50
+    contest_restraint_game_type_id = 122
 
     positions = ["F", "F", "M", "M", "D", "D", "GK", "UTIL"]
