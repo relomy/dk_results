@@ -54,6 +54,14 @@ BONUS_META: dict[str, dict[str, dict[str, Any]]] = {
             "count_mode": "incremental",
         },
     },
+    "SOC": {
+        "G": {
+            "label": "goal",
+            "action": "scored a goal",
+            "points": 8,
+            "count_mode": "incremental",
+        },
+    },
 }
 
 

@@ -53,3 +53,39 @@ def test_parse_bonus_counts_mlb_zero_hr_ignored():
     stats = "3 AB, 0 HR, 1 H"
     counts = parse_bonus_counts("MLB", stats)
     assert counts == {}
+
+
+def test_parse_bonus_counts_soc_detects_goal():
+    stats = "1 G, 2 A, 3 SOG"
+    counts = parse_bonus_counts("SOC", stats)
+    assert counts == {"G": 1}
+
+
+def test_parse_bonus_counts_soc_detects_multi_goal():
+    stats = "2 G, 1 A"
+    counts = parse_bonus_counts("SOC", stats)
+    assert counts == {"G": 2}
+
+
+def test_parse_bonus_counts_soc_zero_goals_ignored():
+    stats = "0 G, 1 A, 2 SOG"
+    counts = parse_bonus_counts("SOC", stats)
+    assert counts == {}
+
+
+def test_parse_bonus_counts_soc_no_goals():
+    stats = "0 A, 3 SOG"
+    counts = parse_bonus_counts("SOC", stats)
+    assert counts == {}
+
+
+def test_parse_bonus_counts_soc_sog_not_matched_as_goal():
+    stats = "0 G, 0 A, 4 SOG"
+    counts = parse_bonus_counts("SOC", stats)
+    assert counts == {}
+
+
+def test_parse_bonus_counts_soc_gk_not_matched_as_goal():
+    stats = "1 GK, 3 SOG, 0 G"
+    counts = parse_bonus_counts("SOC", stats)
+    assert counts == {}
