@@ -261,6 +261,63 @@ def test_announce_vip_bonuses_cas_rowcount_zero_skips_update(monkeypatch):
     assert row == (1,)
 
 
+def test_announce_vip_bonuses_soc_goal_message():
+    conn = _build_conn()
+    sender = _Sender()
+    vip_lineups = [
+        {
+            "user": "amy",
+            "players": [
+                {
+                    "name": "Erling Haaland",
+                    "stats": "1 G, 0 A, 2 SOG",
+                    "ownership": 0.285,
+                }
+            ],
+        }
+    ]
+    sent = announce_vip_bonuses(
+        conn=conn,
+        sport="SOC",
+        contest_id=2001,
+        vip_lineups=vip_lineups,
+        sender=sender,
+    )
+
+    assert sent == 1
+    assert sender.messages == ["SOC: Erling Haaland (28.5%) scored a goal (+8 pts) (VIPs: amy)"]
+
+
+def test_announce_vip_bonuses_soc_two_goals_sends_two_messages():
+    conn = _build_conn()
+    sender = _Sender()
+    vip_lineups = [
+        {
+            "user": "amy",
+            "players": [
+                {
+                    "name": "Erling Haaland",
+                    "stats": "2 G, 1 A, 3 SOG",
+                    "ownership": 0.285,
+                }
+            ],
+        }
+    ]
+    sent = announce_vip_bonuses(
+        conn=conn,
+        sport="SOC",
+        contest_id=2002,
+        vip_lineups=vip_lineups,
+        sender=sender,
+    )
+
+    assert sent == 2
+    assert sender.messages == [
+        "SOC: Erling Haaland (28.5%) scored a goal (+8 pts) (VIPs: amy)",
+        "SOC: Erling Haaland (28.5%) scored a goal (+8 pts, 16 total bonus pts) (VIPs: amy)",
+    ]
+
+
 def test_announce_logs_structured_events(caplog):
     import logging
 
