@@ -1300,6 +1300,8 @@ def test_soft_finish_resends_when_summary_changes(monkeypatch, tmp_path):
     update_contests.check_contests_for_completion(conn)
 
     assert len(sender.messages) == 2
+    assert "Contest soft-finished (updated)" in sender.messages[1]
+    assert "Contest soft-finished (updated)" not in sender.messages[0]
 
 
 def test_soft_finish_vip_matching_is_case_insensitive_visible_rows_only(monkeypatch, tmp_path):
