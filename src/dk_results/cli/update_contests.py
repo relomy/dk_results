@@ -297,6 +297,15 @@ def db_has_notification(conn, dk_id: int, event: str) -> bool:
     return cur.fetchone() is not None
 
 
+def db_has_any_soft_finish_notification(conn, dk_id: int) -> bool:
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT 1 FROM contest_notifications WHERE dk_id=? AND event LIKE 'soft_finish:%' LIMIT 1",
+        (dk_id,),
+    )
+    return cur.fetchone() is not None
+
+
 def db_insert_notification(conn, dk_id: int, event: str) -> None:
     try:
         create_notifications_table(conn)
@@ -553,10 +562,12 @@ def _format_soft_finish_announcement(
     top_score: str,
     cashing_score: str,
     vips_cashed: list[str],
+    is_update: bool = False,
 ) -> str:
     vip_text = ", ".join(vips_cashed) if vips_cashed else "none"
+    prefix = "Contest soft-finished (updated)" if is_update else "Contest soft-finished"
     base = _format_contest_announcement(
-        "Contest soft-finished",
+        prefix,
         sport_name,
         contest_name,
         start_date,
@@ -620,6 +631,7 @@ def _maybe_send_soft_finish_announcement(
     if db_has_notification(conn, dk_id, event_key):
         return
 
+    is_update = db_has_any_soft_finish_notification(conn, dk_id)
     message = _format_soft_finish_announcement(
         sport_name=sport_name,
         contest_name=contest_name,
@@ -628,6 +640,7 @@ def _maybe_send_soft_finish_announcement(
         top_score=top_score,
         cashing_score=cashing_score,
         vips_cashed=vips_cashed,
+        is_update=is_update,
     )
     sender.send_message(message)
     db_insert_notification(conn, dk_id, event_key)
