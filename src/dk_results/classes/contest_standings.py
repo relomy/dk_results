@@ -51,11 +51,57 @@ def _coerce_positions_paid(positions_paid: Any) -> int | None:
 def _parse_salary_rows(rows: Iterable[list[str]]) -> dict[str, Player]:
     players: dict[str, Player] = {}
     rows_iter = iter(rows)
-    next(rows_iter, None)
-    for row in rows_iter:
-        if len(row) < 2:
+    header = next(rows_iter, None)
+    if not header:
+        return players
+
+    header_indexes = {str(column).strip().lower(): index for index, column in enumerate(header)}
+    required_columns = {
+        "position": ("position",),
+        "name": ("name",),
+        "roster position": ("roster position", "roster pos"),
+        "salary": ("salary",),
+        "game info": ("game info",),
+        "team": ("teamabbrev", "team"),
+    }
+    missing_columns = [
+        label for label, aliases in required_columns.items() if not any(alias in header_indexes for alias in aliases)
+    ]
+    if missing_columns:
+        raise ValueError(f"Salary CSV is missing required columns: {', '.join(missing_columns)}")
+
+    def index_for(*aliases: str) -> int:
+        return next(header_indexes[alias] for alias in aliases if alias in header_indexes)
+
+    position_index = index_for("position")
+    name_index = index_for("name")
+    roster_position_index = index_for("roster position", "roster pos")
+    salary_index = index_for("salary")
+    game_info_index = index_for("game info")
+    team_index = index_for("teamabbrev", "team")
+    max_required_index = max(
+        position_index,
+        name_index,
+        roster_position_index,
+        salary_index,
+        game_info_index,
+        team_index,
+    )
+
+    for row_number, row in enumerate(rows_iter, start=2):
+        if not row or all(not str(value).strip() for value in row):
             continue
-        pos, _, name, _, roster_pos, salary, game_info, team_abbv, _ = row
+        if len(row) <= max_required_index:
+            raise ValueError(
+                f"Salary CSV row {row_number} has {len(row)} columns; expected at least {max_required_index + 1}"
+            )
+
+        pos = row[position_index]
+        name = row[name_index]
+        roster_pos = row[roster_position_index]
+        salary = row[salary_index]
+        game_info = row[game_info_index]
+        team_abbv = row[team_index]
         name = normalize_name(name)
         players[name] = Player(name, pos, roster_pos, salary, game_info, team_abbv)
     return players
