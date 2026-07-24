@@ -34,6 +34,55 @@ def test_parse_produces_players_and_users():
     assert len(standings.users) == 2
 
 
+def test_parse_accepts_salary_rows_with_additional_columns():
+    salary_rows = [
+        [
+            "Position",
+            "Name + ID",
+            "Name",
+            "ID",
+            "Roster Position",
+            "Salary",
+            "Game Info",
+            "TeamAbbrev",
+            "AvgPointsPerGame",
+            "Status",
+            "Starting",
+        ],
+        [
+            "QB",
+            "Tom Brady (123)",
+            "Tom Brady",
+            "123",
+            "QB",
+            "7000",
+            "NE@NYJ",
+            "NE",
+            "10",
+            "",
+            "YES",
+        ],
+    ]
+
+    standings = parse_contest_standings(NFLSport, salary_rows, _standings_rows(), positions_paid=1)
+
+    assert standings.players["Tom Brady"].salary == 7000
+
+
+def test_parse_reports_all_missing_salary_columns():
+    salary_rows = [["Position"], ["QB"]]
+
+    with pytest.raises(ValueError, match="missing required columns") as exc_info:
+        parse_contest_standings(NFLSport, salary_rows, _standings_rows(), positions_paid=1)
+
+    message = str(exc_info.value)
+    assert "name" in message
+    assert "roster position" in message
+    assert "salary" in message
+    assert "game info" in message
+    assert "team" in message
+
+
 def test_parse_accepts_iterables():
     standings = parse_contest_standings(NFLSport, iter(_salary_rows()), iter(_standings_rows()), positions_paid=1)
     assert "Tom Brady" in standings.players
