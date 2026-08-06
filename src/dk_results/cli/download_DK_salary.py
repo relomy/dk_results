@@ -30,7 +30,7 @@ def pull_salary_csv(filename, csv_url):
     with requests.Session() as s:
         download = s.get(csv_url)
 
-        decoded_content = download.content.decode("utf-8")
+        decoded_content = download.content.decode("utf-8-sig")
 
         cr = csv.reader(decoded_content.splitlines(), delimiter=",")
         my_list = list(cr)

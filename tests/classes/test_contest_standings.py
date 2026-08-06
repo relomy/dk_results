@@ -69,6 +69,15 @@ def test_parse_accepts_salary_rows_with_additional_columns():
     assert standings.players["Tom Brady"].salary == 7000
 
 
+def test_parse_accepts_salary_csv_with_utf8_bom():
+    salary_rows = _salary_rows()
+    salary_rows[0][0] = "\ufeffPosition"
+
+    standings = parse_contest_standings(NFLSport, salary_rows, _standings_rows(), positions_paid=1)
+
+    assert "Tom Brady" in standings.players
+
+
 def test_parse_reports_all_missing_salary_columns():
     salary_rows = [["Position"], ["QB"]]
 
