@@ -55,7 +55,7 @@ def _parse_salary_rows(rows: Iterable[list[str]]) -> dict[str, Player]:
     if not header:
         return players
 
-    header_indexes = {str(column).strip().lower(): index for index, column in enumerate(header)}
+    header_indexes = {str(column).removeprefix("\ufeff").strip().lower(): index for index, column in enumerate(header)}
     required_columns = {
         "position": ("position",),
         "name": ("name",),

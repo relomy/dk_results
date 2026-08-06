@@ -187,7 +187,7 @@ def test_download_contest_rows_zip_reads_csv(tmp_path):
     import io
     import zipfile
 
-    csv_bytes = b"col1,col2\n1,2\n"
+    csv_bytes = b"\xef\xbb\xbfcol1,col2\n1,2\n"
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w") as zf:
         zf.writestr("file.csv", csv_bytes)

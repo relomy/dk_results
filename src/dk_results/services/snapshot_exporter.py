@@ -497,7 +497,7 @@ def collect_snapshot_data(
 
         salary_rows: list[list[str]] = []
         if os.path.exists(salary_path):
-            with open(salary_path, mode="r") as fp:
+            with open(salary_path, mode="r", encoding="utf-8-sig", newline="") as fp:
                 salary_rows = list(csv.reader(fp, delimiter=","))
 
         vips = load_vips()

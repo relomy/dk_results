@@ -209,7 +209,7 @@ class Draftkings:
             path = zip_obj.extract(name, cdir)
             self.logger.debug("standings_extract path=%s", os.path.basename(path))
             with zip_obj.open(name) as csvfile:
-                lines = io.TextIOWrapper(csvfile, encoding="utf-8", newline="\n")
+                lines = io.TextIOWrapper(csvfile, encoding="utf-8-sig", newline="")
                 return list(csv.reader(lines, delimiter=","))
 
         return None

@@ -200,7 +200,7 @@ class SportProcessor:
         standings_rows: list[list[str]],
     ) -> ContestStandings:
         logger.debug("standings_parse sport=%s contest_id=%s", sport_cls.name, contest_id)
-        with open(salary_csv, mode="r") as fp:
+        with open(salary_csv, mode="r", encoding="utf-8-sig", newline="") as fp:
             salary_rows = list(csv.reader(fp, delimiter=","))
         return parse_contest_standings(
             sport_cls,
