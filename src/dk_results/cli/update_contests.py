@@ -933,6 +933,13 @@ def check_contests_for_completion(conn) -> None:
                 continue
 
             try:
+                if _check_vip_presence(conn, dk_client, live_dk_id, str(live_start_date), vip_names) == VIP_ABSENT:
+                    logger.info(
+                        "skipping soft-finish notification for %s dk_id=%s; vip_presence=absent",
+                        sport_cls.name,
+                        live_dk_id,
+                    )
+                    continue
                 _maybe_send_soft_finish_announcement(
                     conn,
                     sender,
