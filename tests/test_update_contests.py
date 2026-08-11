@@ -1526,6 +1526,46 @@ def test_soft_finish_runs_despite_skip_draft_groups_short_circuit(monkeypatch, t
     assert len(sender.messages) == 1
 
 
+def test_soft_finish_suppressed_when_vip_presence_absent(monkeypatch, tmp_path):
+    conn = _soft_finish_conn()
+    _insert_live_contest_row(conn)
+    sender = _configure_soft_finish_test_env(
+        monkeypatch,
+        tmp_path,
+        payloads=[_make_leaderboard_payload()],
+    )
+    monkeypatch.setattr(
+        update_contests,
+        "_resolve_vip_presence",
+        lambda *_args, **_kwargs: update_contests.VIP_ABSENT,
+    )
+
+    update_contests.check_contests_for_completion(conn)
+
+    assert sender.messages == []
+    assert update_contests.db_has_any_soft_finish_notification(conn, 1001) is False
+
+
+def test_soft_finish_sends_when_vip_presence_present(monkeypatch, tmp_path):
+    conn = _soft_finish_conn()
+    _insert_live_contest_row(conn)
+    sender = _configure_soft_finish_test_env(
+        monkeypatch,
+        tmp_path,
+        payloads=[_make_leaderboard_payload()],
+    )
+    monkeypatch.setattr(
+        update_contests,
+        "_resolve_vip_presence",
+        lambda *_args, **_kwargs: update_contests.VIP_PRESENT,
+    )
+
+    update_contests.check_contests_for_completion(conn)
+
+    assert len(sender.messages) == 1
+    assert update_contests.db_has_any_soft_finish_notification(conn, 1001) is True
+
+
 def test_vip_presence_resolver_uses_draftkings_entrant_page_fetch():
     conn = sqlite3.connect(":memory:")
     update_contests.create_vip_presence_table(conn)
