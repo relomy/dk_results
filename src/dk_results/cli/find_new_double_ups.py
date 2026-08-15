@@ -2,6 +2,7 @@
 
 import argparse
 import logging
+from collections.abc import Mapping
 from os import getenv
 from typing import Type
 
@@ -61,7 +62,7 @@ def set_quiet_verbosity() -> None:
     logger.setLevel(logging.INFO)
 
 
-def parse_args(choices: dict[str, Type[Sport]]) -> argparse.Namespace:
+def parse_args(choices: Mapping[str, Type[Sport]]) -> argparse.Namespace:
     """Parse command-line arguments."""
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -78,7 +79,7 @@ def parse_args(choices: dict[str, Type[Sport]]) -> argparse.Namespace:
 
 def process_sport(
     sport_name: str,
-    choices: dict[str, Type[Sport]],
+    choices: Mapping[str, Type[Sport]],
     db: ContestDatabase,
     bot: WebhookSender | None,
     *,
@@ -146,7 +147,7 @@ def main() -> None:
     """Main function to find new double ups and send notifications."""
     _init_runtime()
 
-    choices: dict[str, Type[Sport]] = dict(get_sport_choices())
+    choices: Mapping[str, Type[Sport]] = get_sport_choices()
 
     webhook = getenv("DISCORD_WEBHOOK")
     if not webhook:

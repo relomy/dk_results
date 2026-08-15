@@ -6,6 +6,7 @@ import logging
 import os
 import re
 import sqlite3
+from collections.abc import Mapping
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any
@@ -75,8 +76,8 @@ def _is_notifications_enabled() -> bool:
     return DISCORD_NOTIFICATIONS_ENABLED.strip().lower() not in {"0", "false", "no"}
 
 
-def _sport_choices() -> dict[str, type[Sport]]:
-    return dict(get_sport_choices())
+def _sport_choices() -> Mapping[str, type[Sport]]:
+    return get_sport_choices()
 
 
 def _build_discord_sender() -> DiscordRest | None:

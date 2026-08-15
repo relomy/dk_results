@@ -3,6 +3,7 @@ import datetime
 import logging
 import os
 import pathlib
+from collections.abc import Mapping
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -99,7 +100,7 @@ def main() -> None:
     load_and_apply_settings()
 
     parser = argparse.ArgumentParser()
-    choices: dict[str, SportType] = dict(get_sport_choices())
+    choices: Mapping[str, SportType] = get_sport_choices()
     parser.add_argument(
         "-s",
         "--sport",

@@ -37,6 +37,7 @@ Response format: {
 
 import argparse
 import datetime
+from collections.abc import Mapping
 from pprint import pformat
 from typing import Type
 
@@ -72,12 +73,12 @@ def get_contests(sport: str, live: bool = False):
     return get_contests_from_response(response)
 
 
-def get_sport_class_choices() -> dict[str, Type[Sport]]:
-    return dict(get_sport_choices())
+def get_sport_class_choices() -> Mapping[str, Type[Sport]]:
+    return get_sport_choices()
 
 
 def format_sport_class_game_type_help(
-    choices: dict[str, Type[Sport]],
+    choices: Mapping[str, Type[Sport]],
 ) -> str:
     lines = ["Sport-class gameTypeId constraints:"]
     constrained = [
@@ -95,7 +96,7 @@ def format_sport_class_game_type_help(
 
 def get_contests_for_sport_class(
     sport_class: str,
-    choices: dict[str, Type[Sport]] | None = None,
+    choices: Mapping[str, Type[Sport]] | None = None,
 ) -> list[dict]:
     choices = choices or get_sport_class_choices()
     if sport_class not in choices:
