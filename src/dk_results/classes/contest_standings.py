@@ -5,7 +5,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Any, Type
 
-from .lineup import Lineup, normalize_name, parse_lineup_string
+from .lineup import Lineup, LockedSlot, normalize_name, parse_lineup_string
 from .player import Player
 from .sport import Sport
 from .user import User
@@ -260,6 +260,8 @@ def _parse_standings_rows(
                 if sport.name in ["NFL", "NFLShowdown", "CFB", "NBA"]:
                     lineup_players = parse_lineup_string(sport, players, lineup)
                     for player in lineup_players:
+                        if isinstance(player, LockedSlot):
+                            continue
                         if player.pos == "CPT":
                             showdown_captains = _add_to_dict(player, showdown_captains)
                         if player.game_info == "Final":

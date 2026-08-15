@@ -1,10 +1,32 @@
 import copy
 import unicodedata
+from dataclasses import dataclass
 from typing import Type
 
 from dk_results.classes.sport import Sport
 
 from .player import Player
+
+
+class LineupParseError(ValueError):
+    """Raised when a lineup references a player absent from the contest roster."""
+
+
+@dataclass(frozen=True)
+class LockedSlot:
+    """A valid lineup slot whose player identity is not available yet."""
+
+    pos: str
+    name: str = "LOCKED 🔒"
+    salary: int = 0
+    game_info: str = ""
+    team_abbv: str = ""
+    ownership: float = 0.0
+    fpts: float = 0.0
+    value: float = 0.0
+
+
+LineupSlot = Player | LockedSlot
 
 
 def normalize_name(name: str) -> str:
@@ -16,9 +38,9 @@ def parse_lineup_string(
     sport_obj: Sport | Type[Sport],
     players: dict[str, Player],
     lineup_str: str,
-) -> list[Player]:
-    """Parse lineup_str and return list of Players."""
-    player_list: list[Player] = []
+) -> list[LineupSlot]:
+    """Parse lineup_str and return resolved players and explicit locked slots."""
+    player_list: list[LineupSlot] = []
 
     splt = lineup_str.split(" ")
 
@@ -38,8 +60,7 @@ def parse_lineup_string(
         position = splt[pos_slice][0]
 
         if "LOCKED" in name:
-            name = "LOCKED 🔒"
-            player_list.append(Player(name, position, None, 0, "", ""))
+            player_list.append(LockedSlot(position))
         else:
             # self.logger.debug(name)
             name = " ".join(name)
@@ -56,6 +77,8 @@ def parse_lineup_string(
                     player_list.append(player_copy)
                 else:
                     player_list.append(players[name])
+            else:
+                raise LineupParseError(f"Unresolved lineup slot {position}: {name}")
 
     # sort by DraftKings roster order (RB, RB, WR, WR, etc.), then name
     sorted_list = sorted(
@@ -73,7 +96,7 @@ class Lineup:
         self.sport_obj = sport_obj
         self.players = players
 
-        self.lineup = parse_lineup_string(self.sport_obj, self.players, lineup_str)
+        self.lineup: list[LineupSlot] = parse_lineup_string(self.sport_obj, self.players, lineup_str)
 
     def __str__(self) -> str:
         str = ""

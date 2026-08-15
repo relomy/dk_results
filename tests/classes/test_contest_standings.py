@@ -64,7 +64,12 @@ def test_parse_accepts_salary_rows_with_additional_columns():
         ],
     ]
 
-    standings = parse_contest_standings(NFLSport, salary_rows, _standings_rows(), positions_paid=1)
+    standings_rows = [
+        ["rank", "player_id", "name", "pmr", "pts", "lineup_str"],
+        ["1", "111", "CashUser", "0", "150", "QB Tom Brady"],
+    ]
+
+    standings = parse_contest_standings(NFLSport, salary_rows, standings_rows, positions_paid=1)
 
     assert standings.players["Tom Brady"].salary == 7000
 
@@ -147,6 +152,18 @@ def test_non_cashing_stats():
     standings = parse_contest_standings(NFLSport, _salary_rows(), _standings_rows(), positions_paid=1)
     assert standings.non_cashing_users == 1
     assert standings.non_cashing_avg_pmr > 0
+
+
+def test_locked_slots_are_not_added_to_non_cashing_player_stats():
+    rows = [
+        ["rank", "player_id", "name", "pmr", "pts", "lineup_str"],
+        ["1", "111", "CashUser", "0", "150", "QB LOCKED RB Derrick Henry"],
+        ["2", "222", "NonCashUser", "15", "120", "QB LOCKED RB Derrick Henry"],
+    ]
+
+    standings = parse_contest_standings(NFLSport, _salary_rows(), rows, positions_paid=1)
+
+    assert standings.non_cashing_players == {"Derrick Henry": 1}
 
 
 def test_blank_core_rows_skipped():
