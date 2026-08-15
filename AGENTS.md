@@ -1,9 +1,8 @@
-# AGENTS.md
+# Repository Instructions
 
 ## Scope
 
-These instructions are self-contained for this repository.
-Apply them for all work under `dk_results/`.
+Apply these instructions to all work under `dk_results/`.
 
 ## Repository Context
 
@@ -14,46 +13,53 @@ Apply them for all work under `dk_results/`.
 - Tests: `tests/`
 - Local dependency: `dfs-common` from `../dfs_common` (editable source)
 
-## Working Style
+## Working style
 
 - Make the smallest safe change that solves the request.
-- Prefer editing existing code over adding new abstractions.
-- Avoid unrelated refactors.
-- Ask before changing behavior that affects public outputs or integrations.
+- Prefer existing code and seams before adding abstractions.
+- Keep unrelated refactors out of the change.
+- Ask before changing public outputs or integrations.
 
-## Change Boundaries
+## Change boundaries
 
-- Keep edits in this repository unless the user explicitly asks for cross-repo changes.
-- If a fix appears to require changes in `../dfs_common`, stop and ask first.
+- Keep edits in this repository.
+- Ask before changing `../dfs_common` or any other repository.
 
-## Verification Before Completion
+## Completion
 
-Before claiming completion:
+Before reporting a change complete:
 
-1. Run relevant tests for touched functionality.
-2. Mandatory pre-merge gate: run `uv run ruff format --check --exclude .ci .` with the same priority as tests.
+- Run the relevant tests for the touched functionality; use the full suite when the scope is broad.
+- Run `uv run ruff format --check --exclude .ci .`.
+- Run `uv run ruff check .`.
+- Run `uv run ty check`.
+- Report every command run and every failure with its exact command and a concise summary.
 
-- `uv run pytest`
+The repository-wide test command is `uv run pytest`.
 
-3. Run lint and type checks:
+## Commit messages
 
-- `uv run ruff check .`
-- `uv run ty check`
+- Use this format for commits: `type(scope): short summary`.
+- Keep `type` lowercase (`feat`, `fix`, `test`, `docs`, `chore`, etc.); make the summary imperative and concise.
 
-4. Report any failing checks with exact commands and failure summaries.
+## Handoff
 
-## Commit Message Style
+In the final response, state:
 
-- Required format: `type(scope): short summary`
-- Use lowercase `type` (`feat`, `fix`, `test`, `docs`, `chore`, etc.)
-- Keep summary imperative and concise.
-- Non-conforming commit messages are not allowed.
+- what changed, including files and behavior;
+- what commands were run and whether they passed;
+- any remaining risk or follow-up.
 
-## Output Expectations
+## Agent skills
 
-In the final response, include:
+### Issue tracker
 
-1. What changed (files and behavior).
-2. What commands were run.
-3. What passed or failed.
-4. Any follow-up risk or next step, if applicable.
+When creating, reading, updating, labeling, commenting on, or closing an issue, use GitHub Issues for `relomy/dk_results`. Read `docs/agents/issue-tracker.md` first for the command conventions.
+
+### Triage labels
+
+When triaging an issue or changing its triage label, read `docs/agents/triage-labels.md` and use its mapping.
+
+### Domain docs
+
+Before exploring an unfamiliar area or making a design/refactor decision, read `docs/agents/domain.md`; it directs you to `docs/CONTEXT.md` and relevant ADRs for this single-context repo.
