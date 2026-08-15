@@ -9,6 +9,9 @@
 - **Adapter** — a concrete thing satisfying an interface at a seam.
 - **Leverage** — what callers get from depth (simpler call sites).
 - **Locality** — what maintainers get from depth (changes concentrated in one place).
+- **Player** — an athlete available for selection in a contest slate, with a sport position, salary, and contest performance data.
+- **User** — a named contest participant represented in standings, associated with one submitted lineup.
+- **Lineup** — a user's roster of player assignments for a sport variant. Each slot is either associated with a known `Player` or is explicitly locked before that player's identity is available; an ordinary unresolved player reference makes the lineup invalid.
 - **Draft Group Filter** — the module (`lobby/draft_group_filter.py`) that owns all sport-specific draft-group qualification logic: tag filtering, game-type constraint, suffix matching, time constraint, and NFLShowdown deduplication. Public interface: `filter_draft_groups(groups, sport) -> list[int]`.
 - **ContestStandings** — the data structure produced by parsing a DraftKings contest's salary and standings CSVs. Owns players, users, VIP list, cash line, and non-cashing stats. Contest metadata (`contest_id`, `name`) stays with callers. Module: `classes/contest_standings.py`.
 - **SportProcessor** — the module that owns the full "process one sport, write to sheet" workflow. Public interface: `SportProcessor.run(sport_name, sport_cls) -> int`. Three injected ports: `DkPort` (DraftKings HTTP), `SheetPort` (Google Sheets, via `sheet_factory: Callable[[str], SheetPort]`), `BonusSenderPort` (Discord). `ContestDatabase` is injected directly (local-substitutable). Raises `NoLiveContestError`, `StandingsUnavailableError`, or `StandsParseError` when a sport must be skipped. Module: `sport_processor.py`.
@@ -30,4 +33,3 @@
 - **Presence verdict** — a VipPresence result: `present`, `absent`, or `unknown`. `absent` suppresses announcements; `unknown` allows them.
 - **ContestResultsPort** — the seam through which the completion workflow reads one contest's live DraftKings readouts — state, entrants, leaderboard — by `dk_id`.
   _Avoid_: lobby feed (source of new contests); stored contest state (`ContestDatabase.get_contest_state`).
-
