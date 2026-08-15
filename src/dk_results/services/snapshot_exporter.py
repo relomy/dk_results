@@ -14,7 +14,7 @@ from dfs_common import state
 from dk_results.classes.contest_standings import parse_contest_standings
 from dk_results.classes.contestdatabase import ContestDatabase
 from dk_results.classes.draftkings import Draftkings
-from dk_results.classes.sport import Sport
+from dk_results.classes.sport import Sport, get_sport_choices
 from dk_results.classes.trainfinder import TrainFinder
 from dk_results.config import load_settings
 from dk_results.paths import repo_file
@@ -66,7 +66,7 @@ def configure_runtime() -> None:
 
 
 def _sport_choices() -> dict[str, type[Sport]]:
-    return {sport.name.upper(): sport for sport in Sport.__subclasses__()}
+    return dict((name.upper(), sport_cls) for name, sport_cls in get_sport_choices().items())
 
 
 def normalize_sport_name(raw: str) -> str:

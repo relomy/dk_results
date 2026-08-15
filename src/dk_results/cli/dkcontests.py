@@ -37,11 +37,12 @@ Response format: {
 
 import argparse
 import datetime
+from collections.abc import Mapping
 from pprint import pformat
 from typing import Type
 
 from dk_results.classes.contest import Contest
-from dk_results.classes.sport import Sport
+from dk_results.classes.sport import Sport, get_sport_choices
 from dk_results.lobby.common import valid_date
 from dk_results.lobby.contest_filter import filter_double_ups, largest_by_entries
 from dk_results.lobby.double_ups import get_stats
@@ -72,12 +73,12 @@ def get_contests(sport: str, live: bool = False):
     return get_contests_from_response(response)
 
 
-def get_sport_class_choices() -> dict[str, Type[Sport]]:
-    return {sport.name: sport for sport in Sport.__subclasses__() if sport.name}
+def get_sport_class_choices() -> Mapping[str, Type[Sport]]:
+    return get_sport_choices()
 
 
 def format_sport_class_game_type_help(
-    choices: dict[str, Type[Sport]],
+    choices: Mapping[str, Type[Sport]],
 ) -> str:
     lines = ["Sport-class gameTypeId constraints:"]
     constrained = [
@@ -95,7 +96,7 @@ def format_sport_class_game_type_help(
 
 def get_contests_for_sport_class(
     sport_class: str,
-    choices: dict[str, Type[Sport]] | None = None,
+    choices: Mapping[str, Type[Sport]] | None = None,
 ) -> list[dict]:
     choices = choices or get_sport_class_choices()
     if sport_class not in choices:

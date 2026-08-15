@@ -2,6 +2,7 @@
 
 import argparse
 import logging
+from collections.abc import Mapping
 from os import getenv
 from typing import Type
 
@@ -11,7 +12,7 @@ from dotenv import load_dotenv
 
 from dk_results.classes.contest import Contest
 from dk_results.classes.contestdatabase import ContestDatabase
-from dk_results.classes.sport import Sport
+from dk_results.classes.sport import Sport, get_sport_choices
 from dk_results.config import load_and_apply_settings
 from dk_results.discord_roles import DISCORD_ROLE_MAP
 from dk_results.lobby.double_ups import get_double_ups
@@ -61,7 +62,7 @@ def set_quiet_verbosity() -> None:
     logger.setLevel(logging.INFO)
 
 
-def parse_args(choices: dict[str, Type[Sport]]) -> argparse.Namespace:
+def parse_args(choices: Mapping[str, Type[Sport]]) -> argparse.Namespace:
     """Parse command-line arguments."""
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -78,7 +79,7 @@ def parse_args(choices: dict[str, Type[Sport]]) -> argparse.Namespace:
 
 def process_sport(
     sport_name: str,
-    choices: dict[str, Type[Sport]],
+    choices: Mapping[str, Type[Sport]],
     db: ContestDatabase,
     bot: WebhookSender | None,
     *,
@@ -146,8 +147,7 @@ def main() -> None:
     """Main function to find new double ups and send notifications."""
     _init_runtime()
 
-    sportz: list[Type[Sport]] = Sport.__subclasses__()
-    choices: dict[str, Type[Sport]] = {sport.name: sport for sport in sportz}
+    choices: Mapping[str, Type[Sport]] = get_sport_choices()
 
     webhook = getenv("DISCORD_WEBHOOK")
     if not webhook:

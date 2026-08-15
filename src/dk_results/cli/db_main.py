@@ -3,6 +3,7 @@ import datetime
 import logging
 import os
 import pathlib
+from collections.abc import Mapping
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -12,7 +13,7 @@ from dfs_common.discord import WebhookSender
 from dk_results.classes.contestdatabase import ContestDatabase
 from dk_results.classes.draftkings import Draftkings
 from dk_results.classes.sheets_service import build_dfs_sheet_service
-from dk_results.classes.sport import Sport
+from dk_results.classes.sport import Sport, get_sport_choices
 from dk_results.config import load_and_apply_settings
 from dk_results.logging import configure_logging
 from dk_results.paths import repo_file
@@ -99,8 +100,7 @@ def main() -> None:
     load_and_apply_settings()
 
     parser = argparse.ArgumentParser()
-    sportz: list[SportType] = Sport.__subclasses__()
-    choices: dict[str, SportType] = {sport.name: sport for sport in sportz}
+    choices: Mapping[str, SportType] = get_sport_choices()
     parser.add_argument(
         "-s",
         "--sport",

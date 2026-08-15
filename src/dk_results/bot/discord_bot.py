@@ -10,7 +10,7 @@ from dfs_common import state
 from discord.ext import commands
 
 from dk_results.classes.contestdatabase import ContestDatabase
-from dk_results.classes.sport import Sport
+from dk_results.classes.sport import Sport, get_sport_choices
 from dk_results.logging import configure_logging
 from dk_results.paths import repo_file
 
@@ -143,13 +143,7 @@ bot = commands.Bot(command_prefix=COMMAND_PREFIX, intents=intents, help_command=
 
 def _sport_choices() -> dict[str, SportType]:
     """Return a mapping of lowercased sport names to Sport subclasses."""
-    choices: dict[str, SportType] = {}
-    for sport in Sport.__subclasses__():
-        name = getattr(sport, "name", None)
-        if not isinstance(name, str) or not name:
-            continue
-        choices[name.lower()] = sport
-    return choices
+    return {name.lower(): sport_cls for name, sport_cls in get_sport_choices().items()}
 
 
 def _allowed_sports_label(choices: dict[str, SportType]) -> str:
@@ -273,7 +267,7 @@ async def contests(ctx: commands.Context, sport: str | None = None) -> None:
         await ctx.send(f"Pick a sport: {_allowed_sports_label(choices)}")
         return
 
-    sport_key = sport.lower()
+    sport_key = sport.strip().lower()
     if sport_key not in choices:
         await ctx.send(f"Unknown sport '{sport}'. Allowed options: {_allowed_sports_label(choices)}")
         return

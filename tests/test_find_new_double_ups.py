@@ -219,7 +219,7 @@ def test_log_draft_group_event_includes_reason(monkeypatch):
 def test_filter_draft_groups_filters():
     class DummySport(Sport):
         name = "TEST"
-        suffixes = [r"\(Main\)"]
+        suffixes = (r"\(Main\)",)
         allow_suffixless_draft_groups = False
         contest_restraint_time = datetime.time(18, 0)
         contest_restraint_game_type_id = 99
