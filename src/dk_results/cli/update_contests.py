@@ -15,7 +15,7 @@ from dfs_common import contests, state
 
 from dk_results.bot.discord_rest import DiscordRest
 from dk_results.classes.draftkings import Draftkings
-from dk_results.classes.sport import Sport
+from dk_results.classes.sport import Sport, get_sport_choices
 from dk_results.config import load_and_apply_settings
 from dk_results.logging import configure_logging
 from dk_results.paths import repo_file
@@ -76,13 +76,7 @@ def _is_notifications_enabled() -> bool:
 
 
 def _sport_choices() -> dict[str, type[Sport]]:
-    choices: dict[str, type[Sport]] = {}
-    for sport in Sport.__subclasses__():
-        name = getattr(sport, "name", None)
-        if not isinstance(name, str) or not name:
-            continue
-        choices[name] = sport
-    return choices
+    return dict(get_sport_choices())
 
 
 def _build_discord_sender() -> DiscordRest | None:

@@ -407,12 +407,13 @@ def test_configure_discord_log_file_handles_exception(monkeypatch):
     discord_bot._configure_discord_log_file()
 
 
-def test_sport_choices_includes_named():
+def test_sport_choices_uses_the_built_in_registry():
     class DummySport(discord_bot.Sport):
         name = "DummySport"
 
     choices = discord_bot._sport_choices()
-    assert "dummysport" in choices
+    assert "nflshowdown" in choices
+    assert "dummysport" not in choices
 
 
 def test_fetch_live_contest_closes_db(monkeypatch):

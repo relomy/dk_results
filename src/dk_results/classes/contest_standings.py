@@ -236,7 +236,7 @@ def _parse_standings_rows(
         non_cashing_avg_pmr,
     )
 
-    if sport.sport_name == "NFLShowdown":
+    if sport.name == "NFLShowdown":
         sorted_captains = dict(sorted(showdown_captains.items(), key=lambda item: item[1], reverse=True))
         top_ten_cpts = list(sorted_captains)[:10]
         logger.debug("Top 10 captains:")

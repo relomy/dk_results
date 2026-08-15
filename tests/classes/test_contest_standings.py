@@ -213,8 +213,7 @@ def test_players_to_values_sorted_by_ownership():
 
 class DummyShowdownSport:
     name = "NFLShowdown"
-    sport_name = "NFLShowdown"
-    positions = ["CPT", "FLEX"]
+    positions = ("CPT", "FLEX")
 
 
 def _showdown_salary():
@@ -234,7 +233,7 @@ def _showdown_standings():
 
 def test_showdown_non_cashing_and_vip():
     standings = parse_contest_standings(
-        DummyShowdownSport(),
+        DummyShowdownSport,
         _showdown_salary(),
         _showdown_standings(),
         positions_paid=1,

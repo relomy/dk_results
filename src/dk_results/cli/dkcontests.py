@@ -41,7 +41,7 @@ from pprint import pformat
 from typing import Type
 
 from dk_results.classes.contest import Contest
-from dk_results.classes.sport import Sport
+from dk_results.classes.sport import Sport, get_sport_choices
 from dk_results.lobby.common import valid_date
 from dk_results.lobby.contest_filter import filter_double_ups, largest_by_entries
 from dk_results.lobby.double_ups import get_stats
@@ -73,7 +73,7 @@ def get_contests(sport: str, live: bool = False):
 
 
 def get_sport_class_choices() -> dict[str, Type[Sport]]:
-    return {sport.name: sport for sport in Sport.__subclasses__() if sport.name}
+    return dict(get_sport_choices())
 
 
 def format_sport_class_game_type_help(

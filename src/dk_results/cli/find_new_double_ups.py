@@ -11,7 +11,7 @@ from dotenv import load_dotenv
 
 from dk_results.classes.contest import Contest
 from dk_results.classes.contestdatabase import ContestDatabase
-from dk_results.classes.sport import Sport
+from dk_results.classes.sport import Sport, get_sport_choices
 from dk_results.config import load_and_apply_settings
 from dk_results.discord_roles import DISCORD_ROLE_MAP
 from dk_results.lobby.double_ups import get_double_ups
@@ -146,8 +146,7 @@ def main() -> None:
     """Main function to find new double ups and send notifications."""
     _init_runtime()
 
-    sportz: list[Type[Sport]] = Sport.__subclasses__()
-    choices: dict[str, Type[Sport]] = {sport.name: sport for sport in sportz}
+    choices: dict[str, Type[Sport]] = dict(get_sport_choices())
 
     webhook = getenv("DISCORD_WEBHOOK")
     if not webhook:
