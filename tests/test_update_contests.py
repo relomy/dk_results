@@ -474,8 +474,8 @@ def test_check_contests_for_completion_live_and_completed(monkeypatch):
     monkeypatch.setattr(update_contests, "_maybe_send_soft_finish_announcement", lambda *args, **kwargs: None)
 
     monkeypatch.setattr(
-        update_contests,
-        "db_get_live_contest",
+        update_contests.ContestDatabase,
+        "get_live_contest",
         lambda *_a, **_k: (1, "Contest1", None, None, now),
     )
 
@@ -516,41 +516,6 @@ def test_get_contest_data_returns_none_on_bad_status(monkeypatch):
     monkeypatch.setattr(update_contests, "Draftkings", FakeDK)
 
     assert update_contests.get_contest_data(1) is None
-
-
-def test_db_update_contest_success():
-    conn = sqlite3.connect(":memory:")
-    conn.execute(
-        "CREATE TABLE contests (dk_id INTEGER PRIMARY KEY, positions_paid INTEGER, status TEXT, completed INTEGER)"
-    )
-    conn.execute("INSERT INTO contests (dk_id, positions_paid, status, completed) VALUES (1, NULL, 'LIVE', 0)")
-    conn.commit()
-
-    update_contests.db_update_contest(conn, [10, "COMPLETED", 1, 1])
-
-
-def test_db_get_incomplete_contests_error(monkeypatch):
-    class BoomConn:
-        def cursor(self):
-            raise sqlite3.Error("boom")
-
-    assert update_contests.db_get_incomplete_contests(BoomConn()) is None
-
-
-def test_db_get_next_upcoming_contest_error(monkeypatch):
-    class BoomConn:
-        def cursor(self):
-            raise sqlite3.Error("boom")
-
-    assert update_contests.db_get_next_upcoming_contest(BoomConn(), "NBA") is None
-
-
-def test_db_get_next_upcoming_contest_any_error(monkeypatch):
-    class BoomConn:
-        def cursor(self):
-            raise sqlite3.Error("boom")
-
-    assert update_contests.db_get_next_upcoming_contest_any(BoomConn(), "NBA") is None
 
 
 def test_main_handles_sqlite_error_without_state_dir(monkeypatch):
@@ -681,7 +646,7 @@ def test_check_contests_for_completion_sends_warning(monkeypatch):
         lambda *_args, **_kwargs: update_contests.VIP_UNKNOWN,
     )
     monkeypatch.setattr(update_contests, "db_has_notification", lambda *_a, **_k: False)
-    monkeypatch.setattr(update_contests, "db_get_incomplete_contests", lambda _conn: [])
+    monkeypatch.setattr(update_contests.ContestDatabase, "get_incomplete_contests", lambda _conn: [])
 
     class FixedDateTime(datetime.datetime):
         @classmethod
@@ -692,13 +657,13 @@ def test_check_contests_for_completion_sends_warning(monkeypatch):
 
     start_date = "2024-01-01 00:05:00"
     monkeypatch.setattr(
-        update_contests,
-        "db_get_next_upcoming_contest",
+        update_contests.ContestDatabase,
+        "get_next_upcoming_contest",
         lambda *_a, **_k: (1, "Contest", None, None, start_date),
     )
     monkeypatch.setattr(
-        update_contests,
-        "db_get_next_upcoming_contest_any",
+        update_contests.ContestDatabase,
+        "get_next_upcoming_contest_any",
         lambda *_a, **_k: None,
     )
 
@@ -710,7 +675,7 @@ def test_check_contests_for_completion_sends_warning(monkeypatch):
 def test_check_contests_for_completion_skip_branches(monkeypatch):
     conn = sqlite3.connect(":memory:")
 
-    monkeypatch.setattr(update_contests, "db_get_live_contest", lambda *_a, **_k: None)
+    monkeypatch.setattr(update_contests.ContestDatabase, "get_live_contest", lambda *_a, **_k: None)
     monkeypatch.setattr(update_contests, "_build_discord_sender", lambda: None)
     monkeypatch.setattr(update_contests, "_sport_choices", lambda: {})
 
@@ -719,7 +684,7 @@ def test_check_contests_for_completion_skip_branches(monkeypatch):
         (2, 10, 0, 5, "LIVE", 0, "Contest2", "2024-01-01 00:00:00", "NBA"),
         (3, 20, 0, None, "LIVE", 0, "Contest3", "2024-01-01 00:00:00", "NBA"),
     ]
-    monkeypatch.setattr(update_contests, "db_get_incomplete_contests", lambda _c: rows)
+    monkeypatch.setattr(update_contests.ContestDatabase, "get_incomplete_contests", lambda _c: rows)
 
     def fake_get_contest_data(dk_id):
         if dk_id == 1:
@@ -754,21 +719,21 @@ def test_check_contests_for_completion_notification_branches(monkeypatch):
     sender = FakeSender()
 
     monkeypatch.setattr(
-        update_contests,
-        "db_get_live_contest",
+        update_contests.ContestDatabase,
+        "get_live_contest",
         lambda *_a, **_k: (1, "Contest", None, None, "2024-01-01 00:00:00"),
     )
     monkeypatch.setattr(update_contests, "_build_discord_sender", lambda: sender)
     monkeypatch.setattr(update_contests, "_sport_choices", lambda: {"NBA": DummySport})
-    monkeypatch.setattr(update_contests, "db_get_next_upcoming_contest", lambda *_a, **_k: None)
-    monkeypatch.setattr(update_contests, "db_get_next_upcoming_contest_any", lambda *_a, **_k: None)
+    monkeypatch.setattr(update_contests.ContestDatabase, "get_next_upcoming_contest", lambda *_a, **_k: None)
+    monkeypatch.setattr(update_contests.ContestDatabase, "get_next_upcoming_contest_any", lambda *_a, **_k: None)
 
     rows = [
         (1, 10, 0, None, "UPCOMING", 0, "Contest1", "2024-01-01 00:00:00", "NBA"),
         (2, 11, 0, None, "LIVE", 0, "Contest2", "2024-01-01 00:00:00", "NBA"),
         (3, 12, 0, None, "LIVE", 0, "Contest3", "2024-01-01 00:00:00", "NBA"),
     ]
-    monkeypatch.setattr(update_contests, "db_get_incomplete_contests", lambda _c: rows)
+    monkeypatch.setattr(update_contests.ContestDatabase, "get_incomplete_contests", lambda _c: rows)
 
     def fake_get_contest_data(dk_id):
         if dk_id == 1:
@@ -845,21 +810,6 @@ def test_get_contest_data_key_error(monkeypatch):
     monkeypatch.setattr(update_contests, "Draftkings", FakeDK)
 
     assert update_contests.get_contest_data(1) is None
-
-
-def test_db_update_contest_handles_error():
-    class BoomCursor:
-        def execute(self, *_a, **_k):
-            raise sqlite3.Error("boom")
-
-    class BoomConn:
-        def cursor(self):
-            return BoomCursor()
-
-        def commit(self):
-            return None
-
-    update_contests.db_update_contest(BoomConn(), [1, "LIVE", 0, 1])
 
 
 def test_main_handles_sqlite_error(monkeypatch):
@@ -979,15 +929,15 @@ def test_check_contests_for_completion_warning_path(monkeypatch):
         lambda *_args, **_kwargs: update_contests.VIP_UNKNOWN,
     )
     monkeypatch.setattr(update_contests, "db_has_notification", lambda *_a, **_k: False)
-    monkeypatch.setattr(update_contests, "db_get_incomplete_contests", lambda _c: [])
+    monkeypatch.setattr(update_contests.ContestDatabase, "get_incomplete_contests", lambda _c: [])
     monkeypatch.setattr(
-        update_contests,
-        "db_get_next_upcoming_contest",
+        update_contests.ContestDatabase,
+        "get_next_upcoming_contest",
         lambda *_a, **_k: (1, "Contest", None, None, start_date),
     )
     monkeypatch.setattr(
-        update_contests,
-        "db_get_next_upcoming_contest_any",
+        update_contests.ContestDatabase,
+        "get_next_upcoming_contest_any",
         lambda *_a, **_k: None,
     )
 
@@ -1015,13 +965,13 @@ def test_check_contests_for_completion_skips_missing_start_dt(monkeypatch):
 
     monkeypatch.setattr(update_contests, "_build_discord_sender", lambda: sender)
     monkeypatch.setattr(update_contests, "_sport_choices", lambda: {"NBA": DummySport})
-    monkeypatch.setattr(update_contests, "db_get_incomplete_contests", lambda _c: [])
+    monkeypatch.setattr(update_contests.ContestDatabase, "get_incomplete_contests", lambda _c: [])
     monkeypatch.setattr(
-        update_contests,
-        "db_get_next_upcoming_contest",
+        update_contests.ContestDatabase,
+        "get_next_upcoming_contest",
         lambda *_a, **_k: (1, "Contest", None, None, None),
     )
-    monkeypatch.setattr(update_contests, "db_get_next_upcoming_contest_any", lambda *_a, **_k: None)
+    monkeypatch.setattr(update_contests.ContestDatabase, "get_next_upcoming_contest_any", lambda *_a, **_k: None)
 
     update_contests.check_contests_for_completion(conn)
 
@@ -1051,13 +1001,13 @@ def test_check_contests_for_completion_warning_outside_window(monkeypatch):
     monkeypatch.setattr(update_contests, "_sport_choices", lambda: {"NBA": DummySport})
     monkeypatch.setattr(update_contests, "_warning_schedule_for", lambda _sport: [5])
     monkeypatch.setattr(update_contests, "db_has_notification", lambda *_a, **_k: False)
-    monkeypatch.setattr(update_contests, "db_get_incomplete_contests", lambda _c: [])
+    monkeypatch.setattr(update_contests.ContestDatabase, "get_incomplete_contests", lambda _c: [])
     monkeypatch.setattr(
-        update_contests,
-        "db_get_next_upcoming_contest",
+        update_contests.ContestDatabase,
+        "get_next_upcoming_contest",
         lambda *_a, **_k: (1, "Contest", None, None, start_date),
     )
-    monkeypatch.setattr(update_contests, "db_get_next_upcoming_contest_any", lambda *_a, **_k: None)
+    monkeypatch.setattr(update_contests.ContestDatabase, "get_next_upcoming_contest_any", lambda *_a, **_k: None)
 
     update_contests.check_contests_for_completion(conn)
 
@@ -1067,12 +1017,12 @@ def test_check_contests_for_completion_warning_outside_window(monkeypatch):
 def test_check_contests_for_completion_logs_exception(monkeypatch):
     conn = sqlite3.connect(":memory:")
 
-    monkeypatch.setattr(update_contests, "db_get_live_contest", lambda *_a, **_k: None)
+    monkeypatch.setattr(update_contests.ContestDatabase, "get_live_contest", lambda *_a, **_k: None)
     monkeypatch.setattr(update_contests, "_build_discord_sender", lambda: None)
     monkeypatch.setattr(update_contests, "_sport_choices", lambda: {})
     monkeypatch.setattr(
-        update_contests,
-        "db_get_incomplete_contests",
+        update_contests.ContestDatabase,
+        "get_incomplete_contests",
         lambda _c: [(1, 10, 0, None, "LIVE", 0, "Contest", "2024-01-01 00:00:00", "NBA")],
     )
 
@@ -1225,11 +1175,11 @@ def _configure_soft_finish_test_env(
     monkeypatch.setattr(update_contests, "_build_discord_sender", lambda: sender)
     monkeypatch.setattr(update_contests, "_sport_choices", lambda: {"NBA": DummySport})
     monkeypatch.setattr(update_contests, "_warning_schedule_for", lambda _sport: [])
-    monkeypatch.setattr(update_contests, "db_get_next_upcoming_contest", lambda *_a, **_k: None)
-    monkeypatch.setattr(update_contests, "db_get_next_upcoming_contest_any", lambda *_a, **_k: None)
+    monkeypatch.setattr(update_contests.ContestDatabase, "get_next_upcoming_contest", lambda *_a, **_k: None)
+    monkeypatch.setattr(update_contests.ContestDatabase, "get_next_upcoming_contest_any", lambda *_a, **_k: None)
     monkeypatch.setattr(
-        update_contests,
-        "db_get_live_contest",
+        update_contests.ContestDatabase,
+        "get_live_contest",
         lambda *_a, **_k: (live_dk_id, "Primary Live Contest", 77, 100, "2024-01-01 00:00:00"),
     )
     if get_contest_data_fn is None:
@@ -1839,8 +1789,8 @@ def test_live_notification_suppressed_when_vip_presence_absent(monkeypatch):
         lambda *_args, **_kwargs: update_contests.VIP_ABSENT,
     )
     monkeypatch.setattr(
-        update_contests,
-        "db_get_incomplete_contests",
+        update_contests.ContestDatabase,
+        "get_incomplete_contests",
         lambda _c: [(222, 55, 0, None, "SCHEDULED", 0, "Live Contest", start_date, "NBA")],
     )
     monkeypatch.setattr(
@@ -1849,8 +1799,8 @@ def test_live_notification_suppressed_when_vip_presence_absent(monkeypatch):
         lambda _id: {"positions_paid": 100, "status": "LIVE", "completed": 0, "entries": 400},
     )
     monkeypatch.setattr(
-        update_contests,
-        "db_get_live_contest",
+        update_contests.ContestDatabase,
+        "get_live_contest",
         lambda *_a, **_k: (222, "Live Contest", 55, 100, start_date),
     )
     monkeypatch.setattr(update_contests, "_maybe_send_soft_finish_announcement", lambda *args, **kwargs: None)
@@ -1895,8 +1845,8 @@ def test_completed_notification_suppressed_when_vip_presence_absent(monkeypatch)
         lambda *_args, **_kwargs: update_contests.VIP_ABSENT,
     )
     monkeypatch.setattr(
-        update_contests,
-        "db_get_incomplete_contests",
+        update_contests.ContestDatabase,
+        "get_incomplete_contests",
         lambda _c: [(333, 65, 0, None, "SCHEDULED", 0, "Completed Contest", start_date, "NBA")],
     )
     monkeypatch.setattr(
@@ -1905,8 +1855,8 @@ def test_completed_notification_suppressed_when_vip_presence_absent(monkeypatch)
         lambda _id: {"positions_paid": 100, "status": "COMPLETED", "completed": 1, "entries": 400},
     )
     monkeypatch.setattr(
-        update_contests,
-        "db_get_live_contest",
+        update_contests.ContestDatabase,
+        "get_live_contest",
         lambda *_a, **_k: (333, "Completed Contest", 65, 100, start_date),
     )
     monkeypatch.setattr(update_contests, "_maybe_send_soft_finish_announcement", lambda *args, **kwargs: None)

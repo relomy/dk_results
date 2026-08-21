@@ -19,6 +19,27 @@ class ContestDatabase:
         self.logger.info("Connecting to contests DB %s", self.sqlite_path)
         self.conn: sqlite3.Connection = sqlite3.connect(sqlite3_database)
 
+    @classmethod
+    def from_connection(cls, conn: sqlite3.Connection, logger: logging.Logger | None = None) -> "ContestDatabase":
+        """
+        Wrap an existing SQLite connection instead of opening a new one.
+
+        The caller retains ownership of the connection; ``close()`` will close
+        the shared connection, so only call it when you own the connection.
+
+        Args:
+            conn (sqlite3.Connection): An already-open SQLite connection.
+            logger (logging.Logger, optional): Logger instance.
+
+        Returns:
+            ContestDatabase: Instance backed by the given connection.
+        """
+        instance = cls.__new__(cls)
+        instance.logger = logger or logging.getLogger(__name__)
+        instance.sqlite_path = "<connection>"
+        instance.conn = conn
+        return instance
+
     def create_table(self) -> None:
         """
         Create the contests table if it does not exist.
@@ -322,6 +343,58 @@ class ContestDatabase:
         except sqlite3.Error as err:
             self.logger.error("sqlite error in get_next_upcoming_contest_any(): %s", err.args[0])
             return None
+
+    def get_incomplete_contests(self) -> list[tuple] | None:
+        """
+        Get contests that have started but are not yet complete.
+
+        A contest counts as incomplete when its start time has passed and either
+        positions_paid is still NULL or completed is 0.
+
+        Returns:
+            list[tuple] | None: Each tuple is
+                (dk_id, draft_group, entries, positions_paid, status, completed,
+                name, start_date, sport). None on SQLite error.
+        """
+        try:
+            cur = self.conn.cursor()
+            sql = (
+                "SELECT dk_id, draft_group, entries, positions_paid, status, completed, name, start_date, sport "
+                "FROM contests "
+                "WHERE start_date <= datetime('now', 'localtime') "
+                "  AND (positions_paid IS NULL OR completed = 0)"
+            )
+            cur.execute(sql)
+            return cur.fetchall()
+        except sqlite3.Error as err:
+            self.logger.error("sqlite error in get_incomplete_contests(): %s", err.args[0])
+            return None
+
+    def update_contest(self, dk_id: int, *, positions_paid: int | None, status: str | None, completed: int) -> None:
+        """
+        Update the mutable state fields for a single contest.
+
+        Args:
+            dk_id (int): Contest to update.
+            positions_paid (int | None): Number of paid positions.
+            status (str | None): Contest status string.
+            completed (int): Completion flag (0 or 1).
+        """
+        cur = self.conn.cursor()
+        sql = "UPDATE contests SET positions_paid=?, status=?, completed=? WHERE dk_id=?"
+        try:
+            cur.execute(sql, (positions_paid, status, completed, dk_id))
+            self.conn.commit()
+            self.logger.info(
+                "contest_update contest_id=%s positions_paid=%s status=%r completed=%s rows=%d",
+                dk_id,
+                positions_paid,
+                status,
+                completed,
+                cur.rowcount,
+            )
+        except sqlite3.Error as err:
+            self.logger.error("sqlite error in update_contest(): %s", err.args[0])
 
     def get_contest_by_id(self, dk_id: int) -> tuple | None:
         """

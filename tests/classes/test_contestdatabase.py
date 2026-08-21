@@ -380,3 +380,85 @@ def test_get_live_contest_candidates_returns_stable_order(contest_db):
         (102, "Contest", 30, "2024-01-01 01:00:00", 100, 0),
         (101, "Contest", 10, "2024-01-01 01:00:00", 200, 1),
     ]
+
+
+def test_from_connection_reuses_existing_connection():
+    conn = sqlite3.connect(":memory:")
+    try:
+        db = ContestDatabase.from_connection(conn)
+        assert db.conn is conn
+    finally:
+        conn.close()
+
+
+def test_get_incomplete_contests_filters_completed_and_null(contest_db):
+    past = "2024-01-01 00:00:00"
+    future = (datetime.datetime.now() + datetime.timedelta(days=1)).strftime("%Y-%m-%d %H:%M:%S")
+    # incomplete: positions_paid NULL
+    _insert_contest(contest_db, dk_id=1, start_date=past, positions_paid=None, completed=0)
+    # incomplete: completed=0 with positions_paid set
+    _insert_contest(contest_db, dk_id=2, start_date=past, positions_paid=50, completed=0)
+    # complete: positions_paid set AND completed=1 -> excluded
+    _insert_contest(contest_db, dk_id=3, start_date=past, positions_paid=50, completed=1)
+    # future start -> excluded
+    _insert_contest(contest_db, dk_id=4, start_date=future, positions_paid=None, completed=0)
+
+    rows = contest_db.get_incomplete_contests()
+
+    dk_ids = sorted(row[0] for row in rows)
+    assert dk_ids == [1, 2]
+    # row shape: dk_id, draft_group, entries, positions_paid, status, completed, name, start_date, sport
+    assert len(rows[0]) == 9
+
+
+def test_get_incomplete_contests_sqlite_error():
+    db = ContestDatabase(":memory:")
+
+    class BoomCursor:
+        def execute(self, *_args, **_kwargs):
+            raise sqlite3.Error("boom")
+
+    class BoomConn:
+        def cursor(self):
+            return BoomCursor()
+
+    db.conn = BoomConn()
+    assert db.get_incomplete_contests() is None
+
+
+def test_update_contest_writes_named_fields(contest_db):
+    _insert_contest(contest_db, dk_id=7, positions_paid=None, status="LIVE", completed=0)
+
+    contest_db.update_contest(7, positions_paid=100, status="COMPLETED", completed=1)
+
+    row = contest_db.conn.execute("SELECT positions_paid, status, completed FROM contests WHERE dk_id=7").fetchone()
+    assert row == (100, "COMPLETED", 1)
+
+
+def test_update_contest_only_touches_target_row(contest_db):
+    _insert_contest(contest_db, dk_id=7, positions_paid=None, status="LIVE", completed=0)
+    _insert_contest(contest_db, dk_id=8, positions_paid=None, status="LIVE", completed=0)
+
+    contest_db.update_contest(7, positions_paid=100, status="COMPLETED", completed=1)
+
+    other = contest_db.conn.execute("SELECT positions_paid, status, completed FROM contests WHERE dk_id=8").fetchone()
+    assert other == (None, "LIVE", 0)
+
+
+def test_update_contest_sqlite_error():
+    db = ContestDatabase(":memory:")
+
+    class BoomCursor:
+        def execute(self, *_args, **_kwargs):
+            raise sqlite3.Error("boom")
+
+    class BoomConn:
+        def cursor(self):
+            return BoomCursor()
+
+        def commit(self):
+            pass
+
+    db.conn = BoomConn()
+    # should swallow the error, not raise
+    db.update_contest(1, positions_paid=1, status="LIVE", completed=0)
