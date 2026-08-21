@@ -1,15 +1,12 @@
 import argparse
-import datetime
-import hashlib
-import json
 import logging
 import os
 import sqlite3
 from collections.abc import Mapping
-from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any
 
+import requests
 import yaml
 from dfs_common import contests, state
 
@@ -18,8 +15,8 @@ from dk_results.classes.contestdatabase import ContestDatabase
 from dk_results.classes.draftkings import Draftkings
 from dk_results.classes.notification_store import NotificationStore
 from dk_results.classes.sport import Sport, get_sport_choices
-from dk_results.classes.vip_presence import VIP_ABSENT, VIP_UNKNOWN, VipPresence
-from dk_results.classes.vip_presence import vip_key as _vip_key
+from dk_results.classes.vip_presence import VipPresence
+from dk_results.completion_processor import CompletionProcessor, CompletionProcessorConfig
 from dk_results.config import load_and_apply_settings
 from dk_results.logging import configure_logging
 from dk_results.paths import repo_file
@@ -39,7 +36,6 @@ load_dotenv()
 load_and_apply_settings()
 
 # constants
-COMPLETED_STATUSES = ["COMPLETED", "CANCELLED"]
 DISCORD_NOTIFICATIONS_ENABLED = os.getenv("DISCORD_NOTIFICATIONS_ENABLED", "true")
 SPREADSHEET_ID = os.getenv("SPREADSHEET_ID")
 SHEET_GIDS_FILE = os.getenv("SHEET_GIDS_FILE", str(repo_file("sheet_gids.yaml")))
@@ -169,149 +165,6 @@ def _load_warning_schedule_map() -> dict[str, list[int]]:
 WARNING_SCHEDULES = _load_warning_schedule_map()
 
 
-def _warning_schedule_for(sport_name: str) -> list[int]:
-    """Return warning schedule for a sport, falling back to default."""
-    key = sport_name.lower()
-    return WARNING_SCHEDULES.get(key) or WARNING_SCHEDULES.get("default", _DEFAULT_WARNING_SCHEDULE)
-
-
-def _sheet_link(sheet_title: str) -> str | None:
-    if not SPREADSHEET_ID:
-        return None
-    gid = SHEET_GID_MAP.get(sheet_title)
-    if gid is None:
-        return None
-    return f"<https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}/edit#gid={gid}>"
-
-
-def _sport_emoji(sport_name: str) -> str:
-    return SPORT_EMOJI.get(sport_name, "🏟️")
-
-
-def _format_contest_announcement(
-    prefix: str,
-    sport_name: str,
-    contest_name: str,
-    start_date: str,
-    dk_id: int,
-) -> str:
-    url = _contest_url(dk_id)
-    sheet_link = _sheet_link(sport_name)
-    sheet_part = f"📊 Sheet: [{sport_name}]({sheet_link})" if sheet_link else "📊 Sheet: n/a"
-    relative = None
-    start_dt = _parse_start_date(start_date)
-    if start_dt:
-        delta = start_dt - datetime.datetime.now(start_dt.tzinfo)
-        if delta.total_seconds() > 0:
-            seconds = int(delta.total_seconds())
-            minutes, sec = divmod(seconds, 60)
-            hours, minutes = divmod(minutes, 60)
-            days, hours = divmod(hours, 24)
-            parts = []
-            if days:
-                parts.append(f"{days}d")
-            if hours:
-                parts.append(f"{hours}h")
-            if minutes:
-                parts.append(f"{minutes}m")
-            if not parts:
-                parts.append(f"{sec}s")
-            relative = "".join(parts)
-    relative_part = f" (⏳ {relative})" if relative else ""
-    return "\n".join(
-        [
-            f"{prefix}: {_sport_emoji(sport_name)} {sport_name} — {contest_name}",
-            f"• 🕒 {start_date}{relative_part}",
-            f"• 🔗 DK: [{dk_id}]({url})",
-            f"• {sheet_part}",
-        ]
-    )
-
-
-def _contests_db_path() -> str:
-    return str(state.contests_db_path())
-
-
-# These thin wrappers delegate to NotificationStore, the single writer of the
-# contest_notifications and contest_vip_presence tables. Constructing the store
-# creates its tables (idempotent), matching the old defensive table creation.
-def create_notifications_table(conn) -> None:
-    NotificationStore(conn)
-
-
-def create_vip_presence_table(conn) -> None:
-    NotificationStore(conn)
-
-
-def db_has_notification(conn, dk_id: int, event: str) -> bool:
-    return NotificationStore(conn).has_notification(dk_id, event)
-
-
-def db_has_any_soft_finish_notification(conn, dk_id: int) -> bool:
-    return NotificationStore(conn).has_any_soft_finish_notification(dk_id)
-
-
-def db_insert_notification(conn, dk_id: int, event: str) -> None:
-    try:
-        NotificationStore(conn).record_notification(dk_id, event)
-    except (sqlite3.Error, AttributeError) as err:
-        logger.error("sqlite error inserting notification: %s", err)
-
-
-def _contest_url(dk_id: int) -> str:
-    return f"<https://www.draftkings.com/contest/gamecenter/{dk_id}#/>"
-
-
-def _parse_start_date(start_date: Any) -> datetime.datetime | None:
-    if not start_date:
-        return None
-    if isinstance(start_date, datetime.datetime):
-        return start_date
-    try:
-        return datetime.datetime.fromisoformat(str(start_date))
-    except (TypeError, ValueError):
-        return None
-
-
-def _to_decimal(value: Any) -> Decimal | None:
-    if value is None or isinstance(value, bool):
-        return None
-    if isinstance(value, str):
-        value = value.strip()
-        if not value:
-            return None
-    try:
-        return Decimal(str(value))
-    except (InvalidOperation, ValueError, TypeError):
-        return None
-
-
-def _is_zero_time_remaining(value: Any) -> bool:
-    parsed = _to_decimal(value)
-    return parsed is not None and parsed == 0
-
-
-def _canonical_score_text(value: Any) -> str | None:
-    parsed = _to_decimal(value)
-    if parsed is None:
-        return None
-    normalized = parsed.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
-    return f"{normalized:.2f}"
-
-
-def _check_vip_presence(
-    conn,
-    dk_client: "Draftkings | None",
-    dk_id: int,
-    start_date: str,
-    vip_names: list[str],
-) -> str:
-    """Resolve the presence verdict for ``dk_id``, or ``unknown`` with no client."""
-    if dk_client is None:
-        return VIP_UNKNOWN
-    return VipPresence(dk_client, NotificationStore(conn)).verdict(dk_id, start_date, vip_names)
-
-
 def _load_vips() -> list[str]:
     path = repo_file("vips.yaml")
     if not path.is_file():
@@ -331,510 +184,78 @@ def _load_vips() -> list[str]:
     return vips
 
 
-def _leaderboard_cash_value(row: dict[str, Any]) -> Decimal:
-    winning_value = _to_decimal(row.get("winningValue"))
-    if winning_value is not None:
-        return winning_value
-
-    winnings = row.get("winnings")
-    if not isinstance(winnings, list):
-        return Decimal("0")
-
-    total = Decimal("0")
-    for item in winnings:
-        if not isinstance(item, dict):
-            continue
-        description = str(item.get("description", "")).lower()
-        if "cash" not in description:
-            continue
-        cash = _to_decimal(item.get("value"))
-        if cash is None:
-            continue
-        total += cash
-    return total
+def _contests_db_path() -> str:
+    return str(state.contests_db_path())
 
 
-def _soft_finish_eligible(payload: dict[str, Any]) -> bool:
-    leader = payload.get("leader")
-    last_winning = payload.get("lastWinningEntry")
-    leaderboard_rows = payload.get("leaderBoard")
-    if not isinstance(leader, dict) or not isinstance(last_winning, dict):
-        return False
-    if not isinstance(leaderboard_rows, list) or not leaderboard_rows:
-        return False
-    if not _is_zero_time_remaining(leader.get("timeRemaining")):
-        return False
-    if not _is_zero_time_remaining(last_winning.get("timeRemaining")):
-        return False
-    for row in leaderboard_rows:
-        if not isinstance(row, dict):
-            return False
-        if not _is_zero_time_remaining(row.get("timeRemaining")):
-            return False
-    return True
+class _UnavailableContestResults:
+    """A `ContestResultsPort` used when the DraftKings client cannot be built.
+
+    Every read raises, so `CompletionProcessor` degrades exactly as the original
+    per-call ``Draftkings()`` construction did: contest-state reads return
+    ``None`` and soft-finish evaluation is skipped, while presence stays absent.
+    """
+
+    def get_contest_detail(self, dk_id: int, timeout: int | None = None) -> dict[str, Any]:
+        raise RuntimeError("DraftKings client unavailable")
+
+    def get_contest_entrants_page(
+        self,
+        contest_id: int,
+        page_no: int,
+        timeout: int | None = None,
+        session: "requests.Session | None" = None,
+    ) -> str:
+        raise RuntimeError("DraftKings client unavailable")
+
+    def get_leaderboard(
+        self,
+        contest_id: int,
+        timeout: int | None = None,
+        session: "requests.Session | None" = None,
+    ) -> dict[str, Any]:
+        raise RuntimeError("DraftKings client unavailable")
 
 
-def _canonical_vips(vips_cashed: list[str]) -> list[str]:
-    unique: dict[str, str] = {}
-    for name in vips_cashed:
-        cleaned = str(name).strip()
-        key = _vip_key(cleaned)
-        if not key or key in unique:
-            continue
-        unique[key] = cleaned
-    return sorted(unique.values(), key=lambda vip: vip.lower())
+def _build_completion_processor(conn) -> CompletionProcessor:
+    """Wire the completion workflow's collaborators for one run."""
+    sender = _build_discord_sender()
+    vips = _load_vips() if sender else []
 
+    try:
+        dk_client: Draftkings | None = Draftkings()
+    except Exception:
+        logger.warning(
+            "VIP presence checks disabled; Draftkings client initialization failed",
+            exc_info=True,
+        )
+        dk_client = None
 
-def _soft_finish_event_key(
-    *,
-    sport_name: str,
-    dk_id: int,
-    top_score: Any,
-    cashing_score: Any,
-    vips_cashed: list[str],
-) -> str:
-    vip_key_payload = sorted({_vip_key(name) for name in vips_cashed if _vip_key(name)})
-    payload = {
-        "sport": sport_name.upper(),
-        "dk_id": int(dk_id),
-        "top_score": _canonical_score_text(top_score),
-        "cashing_score": _canonical_score_text(cashing_score),
-        "vips_cashed": vip_key_payload,
-    }
-    serialized = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
-    digest = hashlib.sha256(serialized.encode("utf-8")).hexdigest()
-    return f"soft_finish:{digest}"
+    results = dk_client if dk_client is not None else _UnavailableContestResults()
+    presence = VipPresence(dk_client, NotificationStore(conn)) if (sender and dk_client is not None) else None
 
-
-def _format_soft_finish_announcement(
-    *,
-    sport_name: str,
-    contest_name: str,
-    start_date: str,
-    dk_id: int,
-    top_score: str,
-    cashing_score: str,
-    vips_cashed: list[str],
-    is_update: bool = False,
-) -> str:
-    vip_text = ", ".join(vips_cashed) if vips_cashed else "none"
-    prefix = "Contest soft-finished (updated)" if is_update else "Contest soft-finished"
-    base = _format_contest_announcement(
-        prefix,
-        sport_name,
-        contest_name,
-        start_date,
-        dk_id,
-    )
-    return "\n".join(
-        [
-            base,
-            f"• 🏆 Top score: {top_score}",
-            f"• 💵 Cashing score: {cashing_score}",
-            f"• ⭐ VIPs cashed (visible rows): {vip_text}",
-        ]
+    config = CompletionProcessorConfig(
+        sport_choices=_sport_choices(),
+        warning_schedules=WARNING_SCHEDULES,
+        default_warning_schedule=_DEFAULT_WARNING_SCHEDULE,
+        sport_emoji=SPORT_EMOJI,
+        spreadsheet_id=SPREADSHEET_ID,
+        sheet_gid_map=SHEET_GID_MAP,
+        vips=vips,
     )
 
-
-def _maybe_send_soft_finish_announcement(
-    conn,
-    sender: DiscordRest,
-    *,
-    sport_name: str,
-    contest_name: str,
-    start_date: str,
-    dk_id: int,
-) -> None:
-    leaderboard_payload = Draftkings().get_leaderboard(dk_id)
-    if not _soft_finish_eligible(leaderboard_payload):
-        return
-
-    leader = leaderboard_payload.get("leader", {})
-    last_winning = leaderboard_payload.get("lastWinningEntry", {})
-    top_score_raw = leader.get("fantasyPoints")
-    cashing_score_raw = last_winning.get("fantasyPoints")
-    top_score = _canonical_score_text(top_score_raw)
-    cashing_score = _canonical_score_text(cashing_score_raw)
-    if top_score is None or cashing_score is None:
-        return
-
-    vip_keys = {_vip_key(name) for name in _load_vips() if _vip_key(name)}
-    cashed_lookup: dict[str, str] = {}
-    for row in leaderboard_payload.get("leaderBoard", []):
-        if not isinstance(row, dict):
-            continue
-        username_raw = row.get("userName")
-        username = str(username_raw).strip() if username_raw is not None else ""
-        key = _vip_key(username)
-        if not key or key not in vip_keys:
-            continue
-        if _leaderboard_cash_value(row) <= 0:
-            continue
-        if key not in cashed_lookup:
-            cashed_lookup[key] = username
-    vips_cashed = _canonical_vips(list(cashed_lookup.values()))
-
-    event_key = _soft_finish_event_key(
-        sport_name=sport_name,
-        dk_id=dk_id,
-        top_score=top_score,
-        cashing_score=cashing_score,
-        vips_cashed=vips_cashed,
+    return CompletionProcessor(
+        contest_db=ContestDatabase.from_connection(conn),
+        results=results,
+        presence=presence,
+        bonus_sender=sender,
+        config=config,
     )
-    if db_has_notification(conn, dk_id, event_key):
-        return
-
-    is_update = db_has_any_soft_finish_notification(conn, dk_id)
-    message = _format_soft_finish_announcement(
-        sport_name=sport_name,
-        contest_name=contest_name,
-        start_date=start_date,
-        dk_id=dk_id,
-        top_score=top_score,
-        cashing_score=cashing_score,
-        vips_cashed=vips_cashed,
-        is_update=is_update,
-    )
-    sender.send_message(message)
-    db_insert_notification(conn, dk_id, event_key)
 
 
 def check_contests_for_completion(conn) -> None:
-    """Check each contest for completion/positions_paid data."""
-    contest_db = ContestDatabase.from_connection(conn, logger=logger)
-    create_notifications_table(conn)
-    create_vip_presence_table(conn)
-    sender = _build_discord_sender()
-    dk_client: Draftkings | None = None
-    vip_names: list[str] = []
-    if sender:
-        vip_names = _load_vips()
-        try:
-            dk_client = Draftkings()
-        except Exception:
-            logger.warning(
-                "VIP presence checks disabled; Draftkings client initialization failed",
-                exc_info=True,
-            )
-
-    if sender:
-        logged_schedules: set[str] = set()
-        for sport_cls in _sport_choices().values():
-            upcoming_match = contest_db.get_next_upcoming_contest(
-                sport_cls.name,
-                sport_cls.sheet_min_entry_fee,
-                sport_cls.keyword,
-            )
-            upcoming_any = contest_db.get_next_upcoming_contest_any(sport_cls.name)
-            row = upcoming_match or upcoming_any
-            if not row:
-                continue
-            dk_id, name, _draft_group, _positions_paid, start_date = row
-            start_dt = _parse_start_date(start_date)
-            if not start_dt:
-                continue
-            now = datetime.datetime.now(start_dt.tzinfo)
-            # This script runs every 10 minutes via cron, so warnings use windows
-            # rather than requiring an exact timestamp match.
-            schedule = _warning_schedule_for(sport_cls.name)
-            schedule_key = sport_cls.name.lower()
-            if schedule_key not in logged_schedules:
-                source = "sport" if schedule_key in WARNING_SCHEDULES else "default"
-                logger.debug(
-                    "warning schedule for %s: %s (source=%s)",
-                    sport_cls.name,
-                    schedule,
-                    source,
-                )
-                logged_schedules.add(schedule_key)
-            for warning_minutes in schedule:
-                if not (now < start_dt <= now + datetime.timedelta(minutes=warning_minutes)):
-                    continue
-                warning_key = f"warning:{warning_minutes}"
-                if db_has_notification(conn, dk_id, warning_key):
-                    logger.debug(
-                        "warning already sent for %s dk_id=%s (%sm)",
-                        sport_cls.name,
-                        dk_id,
-                        warning_minutes,
-                    )
-                    continue
-                if _check_vip_presence(conn, dk_client, dk_id, str(start_date), vip_names) == VIP_ABSENT:
-                    logger.info(
-                        "skipping warning notification for %s dk_id=%s (%sm); vip_presence=absent",
-                        sport_cls.name,
-                        dk_id,
-                        warning_minutes,
-                    )
-                    continue
-                message = _format_contest_announcement(
-                    f"Contest starting soon ({warning_minutes}m)",
-                    sport_cls.name,
-                    name,
-                    str(start_date),
-                    dk_id,
-                )
-                logger.info(
-                    "sending warning notification for %s dk_id=%s (%sm)",
-                    sport_cls.name,
-                    dk_id,
-                    warning_minutes,
-                )
-                sender.send_message(message)
-                db_insert_notification(conn, dk_id, warning_key)
-                logger.info(
-                    "warning notification stored for %s dk_id=%s (%sm)",
-                    sport_cls.name,
-                    dk_id,
-                    warning_minutes,
-                )
-
-    incomplete_contests = contest_db.get_incomplete_contests()
-
-    # if there are no incomplete contests, return
-    if not incomplete_contests:
-        return
-
-    logger.debug("found %i incomplete contests", len(incomplete_contests))
-
-    skip_draft_groups = []
-    sport_choices = _sport_choices()
-
-    for (
-        dk_id,
-        draft_group,
-        entries,
-        positions_paid,
-        status,
-        completed,
-        name,
-        start_date,
-        sport_name,
-    ) in incomplete_contests:
-        if positions_paid is not None and draft_group in skip_draft_groups:
-            logger.debug("dk_id: {} positions_paid: {}".format(dk_id, positions_paid))
-            logger.debug(
-                "skipping %s because we've already updated %d [skipped draft groups %s]",
-                name,
-                draft_group,
-                " ".join(str(dg) for dg in skip_draft_groups),
-            )
-            continue
-
-        # navigate to the gamecenter URL
-        logger.debug(
-            "getting contest data for %s [id: %i start: %s dg: %d]",
-            name,
-            dk_id,
-            start_date,
-            draft_group,
-        )
-
-        try:
-            contest_data = get_contest_data(dk_id)
-
-            if contest_data is None:
-                continue
-
-            logger.debug(
-                "existing: status: %s entries: %s positions_paid: %s",
-                status,
-                entries,
-                positions_paid,
-            )
-            logger.debug(contest_data)
-
-            new_status = contest_data["status"]
-            new_completed = contest_data["completed"]
-
-            # if contest data is different, update it
-            if positions_paid != contest_data["positions_paid"] or status != new_status or completed != new_completed:
-                contest_db.update_contest(
-                    dk_id,
-                    positions_paid=contest_data["positions_paid"],
-                    status=new_status,
-                    completed=new_completed,
-                )
-            else:
-                # if contest data is the same, don't update other contests in the same draft group
-                skip_draft_groups.append(draft_group)
-                logger.debug("contest data is the same, not updating")
-
-            if sender and sport_name in sport_choices:
-                sport_cls = sport_choices[sport_name]
-                live_row = contest_db.get_live_contest(
-                    sport_cls.name,
-                    sport_cls.sheet_min_entry_fee,
-                    sport_cls.keyword,
-                )
-                is_primary_live = bool(live_row and live_row[0] == dk_id)
-
-                is_new_live = status != "LIVE" and new_status == "LIVE"
-                is_new_completed = (status not in COMPLETED_STATUSES and new_status in COMPLETED_STATUSES) or (
-                    completed == 0 and new_completed == 1
-                )
-
-                if is_new_live and is_primary_live:
-                    logger.info(
-                        "live transition detected for %s dk_id=%s",
-                        sport_name,
-                        dk_id,
-                    )
-                if is_new_live and is_primary_live and not db_has_notification(conn, dk_id, "live"):
-                    if _check_vip_presence(conn, dk_client, dk_id, str(start_date), vip_names) == VIP_ABSENT:
-                        logger.info(
-                            "skipping live notification for %s dk_id=%s; vip_presence=absent",
-                            sport_name,
-                            dk_id,
-                        )
-                        continue
-                    message = _format_contest_announcement(
-                        "Contest started",
-                        sport_name,
-                        name,
-                        str(start_date),
-                        dk_id,
-                    )
-                    logger.info(
-                        "sending live notification for %s dk_id=%s",
-                        sport_name,
-                        dk_id,
-                    )
-                    sender.send_message(message)
-                    db_insert_notification(conn, dk_id, "live")
-                    logger.info(
-                        "live notification stored for %s dk_id=%s",
-                        sport_name,
-                        dk_id,
-                    )
-                elif is_new_live and is_primary_live:
-                    logger.info(
-                        "live notification already sent for %s dk_id=%s",
-                        sport_name,
-                        dk_id,
-                    )
-
-                if is_new_completed:
-                    if db_has_notification(conn, dk_id, "live") and not db_has_notification(conn, dk_id, "completed"):
-                        if _check_vip_presence(conn, dk_client, dk_id, str(start_date), vip_names) == VIP_ABSENT:
-                            logger.info(
-                                "skipping completed notification for %s dk_id=%s; vip_presence=absent",
-                                sport_name,
-                                dk_id,
-                            )
-                            continue
-                        message = _format_contest_announcement(
-                            "Contest ended",
-                            sport_name,
-                            name,
-                            str(start_date),
-                            dk_id,
-                        )
-                        logger.info(
-                            "sending completed notification for %s dk_id=%s",
-                            sport_name,
-                            dk_id,
-                        )
-                        sender.send_message(message)
-                        db_insert_notification(conn, dk_id, "completed")
-                        logger.info(
-                            "completed notification stored for %s dk_id=%s",
-                            sport_name,
-                            dk_id,
-                        )
-                    elif db_has_notification(conn, dk_id, "completed"):
-                        logger.info(
-                            "completed notification already sent for %s dk_id=%s",
-                            sport_name,
-                            dk_id,
-                        )
-                    elif not db_has_notification(conn, dk_id, "live"):
-                        logger.info(
-                            "skipping completed notification for %s dk_id=%s; live notification missing",
-                            sport_name,
-                            dk_id,
-                        )
-        except Exception as error:
-            logger.error(error)
-
-    if sender:
-        for sport_cls in sport_choices.values():
-            live_row = contest_db.get_live_contest(
-                sport_cls.name,
-                sport_cls.sheet_min_entry_fee,
-                sport_cls.keyword,
-            )
-            if not live_row:
-                continue
-            live_dk_id, live_contest_name, _live_draft_group, _live_positions_paid, live_start_date = live_row
-            contest_state = get_contest_data(live_dk_id)
-            if not isinstance(contest_state, dict):
-                continue
-
-            state_status = contest_state.get("status")
-            state_completed = contest_state.get("completed")
-            if not isinstance(state_status, str):
-                continue
-            if type(state_completed) is not int:
-                continue
-            if state_status != "LIVE" or state_completed != 0:
-                continue
-
-            try:
-                if _check_vip_presence(conn, dk_client, live_dk_id, str(live_start_date), vip_names) == VIP_ABSENT:
-                    logger.info(
-                        "skipping soft-finish notification for %s dk_id=%s; vip_presence=absent",
-                        sport_cls.name,
-                        live_dk_id,
-                    )
-                    continue
-                _maybe_send_soft_finish_announcement(
-                    conn,
-                    sender,
-                    sport_name=sport_cls.name,
-                    contest_name=str(live_contest_name),
-                    start_date=str(live_start_date),
-                    dk_id=int(live_dk_id),
-                )
-            except Exception:
-                logger.warning(
-                    "soft-finish evaluation failed for %s dk_id=%s",
-                    sport_cls.name,
-                    live_dk_id,
-                    exc_info=True,
-                )
-
-
-def get_contest_data(dk_id) -> dict | None:
-    try:
-        dk = Draftkings()
-        response_json = dk.get_contest_detail(dk_id)
-        cd = response_json["contestDetail"]
-        payout_summary = cd["payoutSummary"]
-
-        positions_paid = payout_summary[0]["maxPosition"]
-        status = cd["contestStateDetail"]
-        entries = cd["maximumEntries"]
-
-        status = status.upper()
-
-        if status in ["COMPLETED", "LIVE", "CANCELLED"]:
-            # set completed status
-            completed = 1 if status in COMPLETED_STATUSES else 0
-            return {
-                "completed": completed,
-                "status": status,
-                "entries": entries,
-                "positions_paid": positions_paid,
-            }
-    except ValueError as val_err:
-        logger.error(f"JSON decoding error: {val_err}")
-    except KeyError as key_err:
-        logger.error(f"Key error: {key_err}")
-    except Exception as req_ex:
-        logger.error(f"Request error: {req_ex}")
-
-    return None
+    """Advance each contest's completion state and announce its milestones."""
+    _build_completion_processor(conn).run(conn)
 
 
 def _build_parser() -> argparse.ArgumentParser:
