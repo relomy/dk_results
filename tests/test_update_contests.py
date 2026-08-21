@@ -7,6 +7,7 @@ import pytest
 import yaml
 
 import dk_results.cli.update_contests as update_contests
+from dk_results.classes import vip_presence
 
 CONTESTS_TABLE_SQL = """
 CREATE TABLE contests (
@@ -169,7 +170,7 @@ def test_warning_notification_sent_for_upcoming_contest(monkeypatch):
     monkeypatch.setattr(update_contests, "Draftkings", _StubDraftkings)
     monkeypatch.setattr(
         update_contests,
-        "_resolve_vip_presence",
+        "_check_vip_presence",
         lambda *_args, **_kwargs: update_contests.VIP_UNKNOWN,
     )
 
@@ -238,7 +239,7 @@ def test_warning_notifications_sent_for_multiple_thresholds(monkeypatch):
     monkeypatch.setattr(update_contests, "Draftkings", _StubDraftkings)
     monkeypatch.setattr(
         update_contests,
-        "_resolve_vip_presence",
+        "_check_vip_presence",
         lambda *_args, **_kwargs: update_contests.VIP_UNKNOWN,
     )
 
@@ -468,7 +469,7 @@ def test_check_contests_for_completion_live_and_completed(monkeypatch):
     monkeypatch.setattr(update_contests, "Draftkings", _StubDraftkings)
     monkeypatch.setattr(
         update_contests,
-        "_resolve_vip_presence",
+        "_check_vip_presence",
         lambda *_args, **_kwargs: update_contests.VIP_UNKNOWN,
     )
     monkeypatch.setattr(update_contests, "_maybe_send_soft_finish_announcement", lambda *args, **kwargs: None)
@@ -642,7 +643,7 @@ def test_check_contests_for_completion_sends_warning(monkeypatch):
     monkeypatch.setattr(update_contests, "Draftkings", _StubDraftkings)
     monkeypatch.setattr(
         update_contests,
-        "_resolve_vip_presence",
+        "_check_vip_presence",
         lambda *_args, **_kwargs: update_contests.VIP_UNKNOWN,
     )
     monkeypatch.setattr(update_contests, "db_has_notification", lambda *_a, **_k: False)
@@ -925,7 +926,7 @@ def test_check_contests_for_completion_warning_path(monkeypatch):
     monkeypatch.setattr(update_contests, "Draftkings", _StubDraftkings)
     monkeypatch.setattr(
         update_contests,
-        "_resolve_vip_presence",
+        "_check_vip_presence",
         lambda *_args, **_kwargs: update_contests.VIP_UNKNOWN,
     )
     monkeypatch.setattr(update_contests, "db_has_notification", lambda *_a, **_k: False)
@@ -1486,7 +1487,7 @@ def test_soft_finish_suppressed_when_vip_presence_absent(monkeypatch, tmp_path):
     )
     monkeypatch.setattr(
         update_contests,
-        "_resolve_vip_presence",
+        "_check_vip_presence",
         lambda *_args, **_kwargs: update_contests.VIP_ABSENT,
     )
 
@@ -1506,127 +1507,14 @@ def test_soft_finish_sends_when_vip_presence_present(monkeypatch, tmp_path):
     )
     monkeypatch.setattr(
         update_contests,
-        "_resolve_vip_presence",
-        lambda *_args, **_kwargs: update_contests.VIP_PRESENT,
+        "_check_vip_presence",
+        lambda *_args, **_kwargs: vip_presence.VIP_PRESENT,
     )
 
     update_contests.check_contests_for_completion(conn)
 
     assert len(sender.messages) == 1
     assert update_contests.db_has_any_soft_finish_notification(conn, 1001) is True
-
-
-def test_vip_presence_resolver_uses_draftkings_entrant_page_fetch():
-    conn = sqlite3.connect(":memory:")
-    update_contests.create_vip_presence_table(conn)
-    calls: list[tuple[int, int]] = []
-
-    class FakeDK:
-        def get_contest_entrants_page(self, contest_id: int, page_no: int, timeout=None, session=None):
-            calls.append((contest_id, page_no))
-            if page_no == 1:
-                return "<tr><td data-un='vipone'></td></tr>"
-            return ""
-
-    status = update_contests._resolve_vip_presence(
-        conn,
-        dk=FakeDK(),
-        dk_id=123,
-        start_date="2026-03-29 13:35:00",
-        vip_names=["VipOne"],
-    )
-
-    assert status == update_contests.VIP_PRESENT
-    assert calls == [(123, 1)]
-    assert update_contests.db_get_vip_presence(conn, 123)[0] == update_contests.VIP_PRESENT
-
-
-def test_resolve_vip_presence_marks_absent_when_all_pages_scanned():
-    conn = sqlite3.connect(":memory:")
-    update_contests.create_vip_presence_table(conn)
-
-    class FakeDK:
-        def get_contest_entrants_page(self, contest_id: int, page_no: int, timeout=None, session=None):
-            if page_no == 1:
-                return "<tr><td data-un='user1'></td><td data-un='user2'></td></tr>"
-            return ""
-
-    status = update_contests._resolve_vip_presence(
-        conn,
-        dk=FakeDK(),
-        dk_id=202,
-        start_date="2026-03-29 13:35:00",
-        vip_names=["vip_alpha", "vip_beta"],
-    )
-
-    assert status == update_contests.VIP_ABSENT
-    assert update_contests.db_get_vip_presence(conn, 202)[0] == update_contests.VIP_ABSENT
-
-
-def test_resolve_vip_presence_returns_unknown_on_fetch_error():
-    conn = sqlite3.connect(":memory:")
-    update_contests.create_vip_presence_table(conn)
-
-    class FakeDK:
-        def get_contest_entrants_page(self, contest_id: int, page_no: int, timeout=None, session=None):
-            raise RuntimeError("network down")
-
-    status = update_contests._resolve_vip_presence(
-        conn,
-        dk=FakeDK(),
-        dk_id=303,
-        start_date="2026-03-29 13:35:00",
-        vip_names=["vip_alpha"],
-    )
-
-    assert status == update_contests.VIP_UNKNOWN
-    assert update_contests.db_get_vip_presence(conn, 303) is None
-
-
-def test_resolve_vip_presence_returns_unknown_when_page_cap_hit(monkeypatch):
-    conn = sqlite3.connect(":memory:")
-    update_contests.create_vip_presence_table(conn)
-    monkeypatch.setattr(update_contests, "VIP_ENTRANT_PAGE_LIMIT", 2)
-    calls: list[int] = []
-
-    class FakeDK:
-        def get_contest_entrants_page(self, contest_id: int, page_no: int, timeout=None, session=None):
-            calls.append(page_no)
-            return "<tr><td data-un='user1'></td></tr>"
-
-    status = update_contests._resolve_vip_presence(
-        conn,
-        dk=FakeDK(),
-        dk_id=404,
-        start_date="2026-03-29 13:35:00",
-        vip_names=["vip_alpha"],
-    )
-
-    assert status == update_contests.VIP_UNKNOWN
-    assert calls == [1, 2]
-    assert update_contests.db_get_vip_presence(conn, 404) is None
-
-
-def test_parse_entrant_usernames_accepts_single_or_double_quotes():
-    html = "<td data-un='vip_alpha'></td><td data-un=\"vip_beta\"></td>"
-    names = update_contests._parse_entrant_usernames(html)
-    assert names == ["vip_alpha", "vip_beta"]
-
-
-def test_should_refresh_absent_normalizes_timezone_before_subtraction():
-    now_local = datetime.datetime.now().astimezone().replace(microsecond=0)
-    checked_at = (now_local - datetime.timedelta(minutes=11)).replace(tzinfo=None).isoformat(sep=" ")
-    start_date = (now_local + datetime.timedelta(minutes=30)).astimezone(datetime.timezone.utc).isoformat()
-
-    assert update_contests._should_refresh_absent(checked_at, start_date) is True
-
-
-def test_should_refresh_absent_is_sticky_after_start():
-    now_local = datetime.datetime.now().replace(microsecond=0)
-    checked_at = (now_local - datetime.timedelta(minutes=30)).isoformat(sep=" ")
-    start_date = (now_local - datetime.timedelta(minutes=1)).isoformat(sep=" ")
-
-    assert update_contests._should_refresh_absent(checked_at, start_date) is False
 
 
 def test_warning_notification_suppressed_when_vip_presence_absent(monkeypatch):
@@ -1653,7 +1541,7 @@ def test_warning_notification_suppressed_when_vip_presence_absent(monkeypatch):
 
     resolver_calls: list[int] = []
 
-    def fake_resolver(conn, *, dk, dk_id, start_date, vip_names):
+    def fake_resolver(conn, dk, dk_id, start_date, vip_names):
         resolver_calls.append(dk_id)
         return update_contests.VIP_ABSENT
 
@@ -1662,7 +1550,7 @@ def test_warning_notification_suppressed_when_vip_presence_absent(monkeypatch):
     monkeypatch.setattr(update_contests, "_sport_choices", lambda: {"nba": DummySport})
     monkeypatch.setattr(update_contests, "_warning_schedule_for", lambda _sport: [25])
     monkeypatch.setattr(update_contests, "Draftkings", _StubDraftkings)
-    monkeypatch.setattr(update_contests, "_resolve_vip_presence", fake_resolver)
+    monkeypatch.setattr(update_contests, "_check_vip_presence", fake_resolver)
     monkeypatch.setattr(update_contests, "_maybe_send_soft_finish_announcement", lambda *args, **kwargs: None)
 
     update_contests.check_contests_for_completion(conn)
@@ -1696,7 +1584,7 @@ def test_warning_notification_sent_when_vip_presence_unknown(monkeypatch):
 
     resolver_calls: list[int] = []
 
-    def fake_resolver(conn, *, dk, dk_id, start_date, vip_names):
+    def fake_resolver(conn, dk, dk_id, start_date, vip_names):
         resolver_calls.append(dk_id)
         return update_contests.VIP_UNKNOWN
 
@@ -1705,7 +1593,7 @@ def test_warning_notification_sent_when_vip_presence_unknown(monkeypatch):
     monkeypatch.setattr(update_contests, "_sport_choices", lambda: {"nba": DummySport})
     monkeypatch.setattr(update_contests, "_warning_schedule_for", lambda _sport: [25])
     monkeypatch.setattr(update_contests, "Draftkings", _StubDraftkings)
-    monkeypatch.setattr(update_contests, "_resolve_vip_presence", fake_resolver)
+    monkeypatch.setattr(update_contests, "_check_vip_presence", fake_resolver)
     monkeypatch.setattr(update_contests, "_maybe_send_soft_finish_announcement", lambda *args, **kwargs: None)
 
     update_contests.check_contests_for_completion(conn)
@@ -1785,7 +1673,7 @@ def test_live_notification_suppressed_when_vip_presence_absent(monkeypatch):
     monkeypatch.setattr(update_contests, "Draftkings", _StubDraftkings)
     monkeypatch.setattr(
         update_contests,
-        "_resolve_vip_presence",
+        "_check_vip_presence",
         lambda *_args, **_kwargs: update_contests.VIP_ABSENT,
     )
     monkeypatch.setattr(
@@ -1841,7 +1729,7 @@ def test_completed_notification_suppressed_when_vip_presence_absent(monkeypatch)
     monkeypatch.setattr(update_contests, "Draftkings", _StubDraftkings)
     monkeypatch.setattr(
         update_contests,
-        "_resolve_vip_presence",
+        "_check_vip_presence",
         lambda *_args, **_kwargs: update_contests.VIP_ABSENT,
     )
     monkeypatch.setattr(
@@ -1867,58 +1755,24 @@ def test_completed_notification_suppressed_when_vip_presence_absent(monkeypatch)
     assert update_contests.db_has_notification(conn, 333, "completed") is False
 
 
-class TestVipKey:
-    def test_strips_and_lowercases(self):
-        assert update_contests._vip_key("  VipUser  ") == "vipuser"
-
-    def test_non_string_returns_empty(self):
-        assert update_contests._vip_key(None) == ""
-        assert update_contests._vip_key(123) == ""
-
-
-class TestParseEntrantUsernames:
-    def test_extracts_single_quotes(self):
-        html = "<td data-un='PlayerOne'></td>"
-        assert update_contests._parse_entrant_usernames(html) == ["playerone"]
-
-    def test_extracts_double_quotes(self):
-        html = '<td data-un="PlayerTwo"></td>'
-        assert update_contests._parse_entrant_usernames(html) == ["playertwo"]
-
-    def test_extracts_multiple(self):
-        html = "<td data-un='Alice'></td><td data-un='Bob'></td>"
-        assert update_contests._parse_entrant_usernames(html) == ["alice", "bob"]
-
-    def test_empty_html_returns_empty(self):
-        assert update_contests._parse_entrant_usernames("") == []
-
-    def test_no_matches_returns_empty(self):
-        assert update_contests._parse_entrant_usernames("<td>no usernames</td>") == []
-
-
-class TestEntrantPayloadIsAmbiguous:
-    def test_not_ambiguous_when_entrants_found(self):
-        assert update_contests._entrant_payload_is_ambiguous("<td data-un='x'>", ["x"]) is False
-
-    def test_ambiguous_when_no_entrants_but_data_un_present(self):
-        assert update_contests._entrant_payload_is_ambiguous("<td data-un=''>", []) is True
-
-    def test_not_ambiguous_when_no_data_un(self):
-        assert update_contests._entrant_payload_is_ambiguous("<td>no attrs</td>", []) is False
-
-
 class TestCheckVipPresence:
     def test_returns_unknown_when_no_client(self):
         assert update_contests._check_vip_presence(None, None, 1, "2026-01-01", ["vip"]) == update_contests.VIP_UNKNOWN
 
-    def test_delegates_to_resolve_when_client_provided(self, monkeypatch):
+    def test_delegates_to_vip_presence_when_client_provided(self, monkeypatch):
+        conn = sqlite3.connect(":memory:")
         calls = []
 
-        def fake_resolve(conn, *, dk, dk_id, start_date, vip_names):
-            calls.append((dk_id, start_date))
-            return update_contests.VIP_PRESENT
+        class FakeVipPresence:
+            def __init__(self, results, store):
+                self._results = results
+                self._store = store
 
-        monkeypatch.setattr(update_contests, "_resolve_vip_presence", fake_resolve)
-        result = update_contests._check_vip_presence(object(), object(), 99, "2026-06-01", ["vip"])
-        assert result == update_contests.VIP_PRESENT
-        assert calls == [(99, "2026-06-01")]
+            def verdict(self, dk_id, start_date, vip_names):
+                calls.append((dk_id, start_date, vip_names))
+                return vip_presence.VIP_PRESENT
+
+        monkeypatch.setattr(update_contests, "VipPresence", FakeVipPresence)
+        result = update_contests._check_vip_presence(conn, object(), 99, "2026-06-01", ["vip"])
+        assert result == vip_presence.VIP_PRESENT
+        assert calls == [(99, "2026-06-01", ["vip"])]
