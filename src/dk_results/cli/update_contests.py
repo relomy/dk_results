@@ -75,9 +75,12 @@ def _sport_choices() -> Mapping[str, type[Sport]]:
 
 
 def _build_discord_sender() -> DiscordRest | None:
-    if not _is_notifications_enabled():
-        logger.info("Discord notifications disabled via DISCORD_NOTIFICATIONS_ENABLED.")
-        return None
+    """Build the Discord sender from credentials alone.
+
+    Whether notifications are *enabled* is a separate, explicit decision
+    (`_is_notifications_enabled`) injected into the processor; a sender may be
+    wired yet held idle by a disabled run.
+    """
     token = os.getenv("DISCORD_BOT_TOKEN")
     channel_id_raw = os.getenv("DISCORD_CHANNEL_ID")
     if not token or not channel_id_raw:
@@ -219,8 +222,12 @@ class _UnavailableContestResults:
 
 def _build_completion_processor(conn) -> CompletionProcessor:
     """Wire the completion workflow's collaborators for one run."""
+    notifications_enabled = _is_notifications_enabled()
     sender = _build_discord_sender()
-    vips = _load_vips() if sender else []
+    # Presence and VIP suppression only matter for announcements, which the
+    # explicit `notifications_enabled` gate authorizes — resolve them by that
+    # flag, not by whether a sender happens to be wired.
+    vips = _load_vips() if notifications_enabled else []
 
     try:
         dk_client: Draftkings | None = Draftkings()
@@ -232,7 +239,9 @@ def _build_completion_processor(conn) -> CompletionProcessor:
         dk_client = None
 
     results = dk_client if dk_client is not None else _UnavailableContestResults()
-    presence = VipPresence(dk_client, NotificationStore(conn)) if (sender and dk_client is not None) else None
+    presence = (
+        VipPresence(dk_client, NotificationStore(conn)) if (notifications_enabled and dk_client is not None) else None
+    )
 
     config = CompletionProcessorConfig(
         sport_choices=_sport_choices(),
@@ -242,6 +251,7 @@ def _build_completion_processor(conn) -> CompletionProcessor:
         spreadsheet_id=SPREADSHEET_ID,
         sheet_gid_map=SHEET_GID_MAP,
         vips=vips,
+        notifications_enabled=notifications_enabled,
     )
 
     return CompletionProcessor(

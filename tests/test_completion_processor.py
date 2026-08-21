@@ -149,7 +149,15 @@ def _insert_contest(conn, *, dk_id, name, start_date, status, completed=0, draft
     conn.commit()
 
 
-def _make_config(*, vips=None, warning_schedules=None, sport_choices=None, spreadsheet_id=None, sheet_gid_map=None):
+def _make_config(
+    *,
+    vips=None,
+    warning_schedules=None,
+    sport_choices=None,
+    spreadsheet_id=None,
+    sheet_gid_map=None,
+    notifications_enabled=True,
+):
     return CompletionProcessorConfig(
         sport_choices=sport_choices if sport_choices is not None else {"NBA": DummySport},
         warning_schedules=warning_schedules if warning_schedules is not None else {"default": []},
@@ -158,6 +166,7 @@ def _make_config(*, vips=None, warning_schedules=None, sport_choices=None, sprea
         spreadsheet_id=spreadsheet_id,
         sheet_gid_map=sheet_gid_map or {},
         vips=vips or [],
+        notifications_enabled=notifications_enabled,
     )
 
 
@@ -190,6 +199,34 @@ def test_live_milestone_announced_then_silent_on_second_run():
     # notification is recorded — either way, a second run stays silent.
     processor.run(conn)
     assert len(sender.messages) == 1
+
+
+def test_disabled_notifications_send_nothing_even_with_sender():
+    """A disabled run still advances state but short-circuits every send.
+
+    Story 7: ``notifications_enabled`` is the authority, independent of whether a
+    sender is wired. Here a live transition would normally announce, but the
+    disabled flag suppresses it while the DB is still advanced to LIVE.
+    """
+    conn = _conn_with_table()
+    _insert_contest(conn, dk_id=1, name="Contest1", start_date="2024-01-01 00:00:00", status="UPCOMING")
+
+    results = FakeContestResults(details={1: _detail(status="LIVE", completed=0)})
+    sender = RecordingSender()
+    processor = _make_processor(
+        conn,
+        results=results,
+        sender=sender,
+        presence=FakeVipPresence(VIP_UNKNOWN),
+        config=_make_config(notifications_enabled=False),
+    )
+
+    processor.run(conn)
+
+    assert sender.messages == []
+    # State sync is not gated: the contest advanced to LIVE.
+    row = conn.execute("SELECT status FROM contests WHERE dk_id = 1").fetchone()
+    assert row[0] == "LIVE"
 
 
 def test_completed_milestone_announced_once_after_live():

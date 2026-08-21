@@ -60,6 +60,11 @@ class CompletionProcessorConfig:
     spreadsheet_id: str | None
     sheet_gid_map: Mapping[str, int]
     vips: list[str]
+    # Whether milestone announcements may be sent this run. Resolved explicitly
+    # at the composition root (from ``DISCORD_NOTIFICATIONS_ENABLED``) and
+    # independent of whether a sender is wired: "off" is a deliberate state, so a
+    # disabled run still constructs the processor and short-circuits every send.
+    notifications_enabled: bool = True
 
 
 # ── Pure helpers (no config) ─────────────────────────────────────────────────
@@ -222,13 +227,23 @@ class CompletionProcessor:
         """Advance and announce every tracked contest's milestones."""
         store = NotificationStore(conn)
 
-        if self._sender:
+        if self._announcing:
             self._run_warnings(store)
 
         self._sync_and_notify(store)
 
-        if self._sender:
+        if self._announcing:
             self._run_soft_finish(store)
+
+    @property
+    def _announcing(self) -> bool:
+        """Whether milestone announcements may be sent this run.
+
+        Two independent inputs must both hold: notifications are explicitly
+        enabled (``notifications_enabled``) and a sender is wired. Contest-state
+        sync runs regardless; only sends are gated.
+        """
+        return self._config.notifications_enabled and self._sender is not None
 
     # ── Suppression policy ──────────────────────────────────────────────────
 
@@ -395,7 +410,8 @@ class CompletionProcessor:
                     skip_draft_groups.append(draft_group)
                     logger.debug("contest data is the same, not updating")
 
-                if self._sender and sport_name in sport_choices:
+                if self._announcing and sport_name in sport_choices:
+                    assert self._sender is not None  # implied by _announcing
                     sport_cls = sport_choices[sport_name]
                     live_row = self._db.get_live_contest(
                         sport_cls.name,

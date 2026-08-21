@@ -29,9 +29,17 @@ def test_sport_choices_filters_invalid():
     assert "" not in choices
 
 
-def test_build_discord_sender_disabled(monkeypatch):
+def test_build_discord_sender_ignores_notifications_flag(monkeypatch):
+    # The sender is built from credentials alone; whether notifications are
+    # enabled is a separate decision injected into the processor. A disabled run
+    # can still have a sender wired (held idle by the processor's gate).
     monkeypatch.setattr(update_contests, "DISCORD_NOTIFICATIONS_ENABLED", "false")
-    assert update_contests._build_discord_sender() is None
+    monkeypatch.setenv("DISCORD_BOT_TOKEN", "tok")
+    monkeypatch.setenv("DISCORD_CHANNEL_ID", "123")
+
+    sender = update_contests._build_discord_sender()
+
+    assert isinstance(sender, update_contests.DiscordRest)
 
 
 def test_build_discord_sender_missing_config(monkeypatch):
@@ -243,14 +251,42 @@ def test_build_completion_processor_uses_stub_results_when_client_init_fails(mon
     assert processor._presence is None
 
 
-def test_build_completion_processor_no_sender_has_no_presence(monkeypatch):
+def test_build_completion_processor_injects_enabled_flag(monkeypatch):
     conn = sqlite3.connect(":memory:")
-    monkeypatch.setattr(update_contests, "_build_discord_sender", lambda: None)
+
+    class FakeSender:
+        def send_message(self, message):  # pragma: no cover - not called here
+            pass
+
+    monkeypatch.setattr(update_contests, "DISCORD_NOTIFICATIONS_ENABLED", "true")
+    monkeypatch.setattr(update_contests, "_build_discord_sender", lambda: FakeSender())
     monkeypatch.setattr(update_contests, "Draftkings", lambda: object())
 
     processor = update_contests._build_completion_processor(conn)
 
-    assert processor._sender is None
+    assert processor._config.notifications_enabled is True
+    assert processor._presence is not None
+
+
+def test_build_completion_processor_disabled_wires_idle_sender(monkeypatch):
+    # A disabled run still constructs the processor with a wired sender, but the
+    # explicit gate is off, presence is skipped, and no VIPs are resolved.
+    conn = sqlite3.connect(":memory:")
+
+    class FakeSender:
+        def send_message(self, message):  # pragma: no cover - not called here
+            pass
+
+    sender = FakeSender()
+    monkeypatch.setattr(update_contests, "DISCORD_NOTIFICATIONS_ENABLED", "false")
+    monkeypatch.setattr(update_contests, "_build_discord_sender", lambda: sender)
+    monkeypatch.setattr(update_contests, "_load_vips", lambda: ["FooBar"])
+    monkeypatch.setattr(update_contests, "Draftkings", lambda: object())
+
+    processor = update_contests._build_completion_processor(conn)
+
+    assert processor._config.notifications_enabled is False
+    assert processor._sender is sender
     assert processor._presence is None
     assert processor._config.vips == []
 
