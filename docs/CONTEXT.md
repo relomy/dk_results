@@ -13,6 +13,9 @@
 - **ContestStandings** — the data structure produced by parsing a DraftKings contest's salary and standings CSVs. Owns players, users, VIP list, cash line, and non-cashing stats. Contest metadata (`contest_id`, `name`) stays with callers. Module: `classes/contest_standings.py`.
 - **SportProcessor** — the module that owns the full "process one sport, write to sheet" workflow. Public interface: `SportProcessor.run(sport_name, sport_cls) -> int`. Three injected ports: `DkPort` (DraftKings HTTP), `SheetPort` (Google Sheets, via `sheet_factory: Callable[[str], SheetPort]`), `BonusSenderPort` (Discord). `ContestDatabase` is injected directly (local-substitutable). Raises `NoLiveContestError`, `StandingsUnavailableError`, or `StandsParseError` when a sport must be skipped. Module: `sport_processor.py`.
 
+- **ContestDatabase** — the single boundary for reading and writing contest rows in SQLite (live, upcoming, incomplete, and completion state). Module: `classes/contestdatabase.py`.
+  _Avoid_: NotificationStore (owns notification/presence rows, not contests); ContestResultsPort (live DraftKings readouts, not stored rows).
+
 ## Contest completion & notifications
 
 - **CompletionProcessor** — the module that advances each tracked contest and announces its milestones: warning, live, completed, soft-finish. Reads its work list from `ContestDatabase`, not from DraftKings. Module: `completion_processor.py`.
