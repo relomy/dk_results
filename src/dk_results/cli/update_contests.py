@@ -15,6 +15,7 @@ import yaml
 from dfs_common import contests, state
 
 from dk_results.bot.discord_rest import DiscordRest
+from dk_results.classes.contestdatabase import ContestDatabase
 from dk_results.classes.draftkings import Draftkings
 from dk_results.classes.sport import Sport, get_sport_choices
 from dk_results.config import load_and_apply_settings
@@ -643,6 +644,7 @@ def _maybe_send_soft_finish_announcement(
 
 def check_contests_for_completion(conn) -> None:
     """Check each contest for completion/positions_paid data."""
+    contest_db = ContestDatabase.from_connection(conn, logger=logger)
     create_notifications_table(conn)
     create_vip_presence_table(conn)
     sender = _build_discord_sender()
@@ -661,13 +663,12 @@ def check_contests_for_completion(conn) -> None:
     if sender:
         logged_schedules: set[str] = set()
         for sport_cls in _sport_choices().values():
-            upcoming_match = db_get_next_upcoming_contest(
-                conn,
+            upcoming_match = contest_db.get_next_upcoming_contest(
                 sport_cls.name,
                 sport_cls.sheet_min_entry_fee,
                 sport_cls.keyword,
             )
-            upcoming_any = db_get_next_upcoming_contest_any(conn, sport_cls.name)
+            upcoming_any = contest_db.get_next_upcoming_contest_any(sport_cls.name)
             row = upcoming_match or upcoming_any
             if not row:
                 continue
@@ -731,7 +732,7 @@ def check_contests_for_completion(conn) -> None:
                     warning_minutes,
                 )
 
-    incomplete_contests = db_get_incomplete_contests(conn)
+    incomplete_contests = contest_db.get_incomplete_contests()
 
     # if there are no incomplete contests, return
     if not incomplete_contests:
@@ -791,14 +792,11 @@ def check_contests_for_completion(conn) -> None:
 
             # if contest data is different, update it
             if positions_paid != contest_data["positions_paid"] or status != new_status or completed != new_completed:
-                db_update_contest(
-                    conn,
-                    [
-                        contest_data["positions_paid"],
-                        new_status,
-                        new_completed,
-                        dk_id,
-                    ],
+                contest_db.update_contest(
+                    dk_id,
+                    positions_paid=contest_data["positions_paid"],
+                    status=new_status,
+                    completed=new_completed,
                 )
             else:
                 # if contest data is the same, don't update other contests in the same draft group
@@ -807,8 +805,7 @@ def check_contests_for_completion(conn) -> None:
 
             if sender and sport_name in sport_choices:
                 sport_cls = sport_choices[sport_name]
-                live_row = db_get_live_contest(
-                    conn,
+                live_row = contest_db.get_live_contest(
                     sport_cls.name,
                     sport_cls.sheet_min_entry_fee,
                     sport_cls.keyword,
@@ -905,8 +902,7 @@ def check_contests_for_completion(conn) -> None:
 
     if sender:
         for sport_cls in sport_choices.values():
-            live_row = db_get_live_contest(
-                conn,
+            live_row = contest_db.get_live_contest(
                 sport_cls.name,
                 sport_cls.sheet_min_entry_fee,
                 sport_cls.keyword,
@@ -982,123 +978,6 @@ def get_contest_data(dk_id) -> dict | None:
         logger.error(f"Request error: {req_ex}")
 
     return None
-
-
-def db_update_contest(conn, contest_to_update) -> None:
-    """Update contest fields based on get_contest_data()."""
-    logger.debug("trying to update contest %i", contest_to_update[3])
-    cur = conn.cursor()
-
-    sql = "UPDATE contests SET positions_paid=?, status=?, completed=? WHERE dk_id=?"
-
-    try:
-        cur.execute(sql, contest_to_update)
-        conn.commit()
-        logger.info("Total %d records updated successfully!", cur.rowcount)
-    except sqlite3.Error as err:
-        logger.error("sqlite error: %s", err.args[0])
-
-
-def db_get_live_contest(conn, sport: str, entry_fee: int = 25, keyword: str = "%") -> tuple | None:
-    """Get a live contest matching the criteria."""
-    cur = conn.cursor()
-    try:
-        base_sql = (
-            "SELECT dk_id, name, draft_group, positions_paid, start_date "
-            "FROM contests "
-            "WHERE sport=? "
-            "  AND name LIKE ? "
-            "  AND start_date <= datetime('now', 'localtime') "
-            "  AND completed=0 "
-        )
-
-        ordering = " ORDER BY entry_fee DESC, entries DESC, start_date DESC, dk_id DESC LIMIT 1"
-
-        cur.execute(base_sql + "  AND entry_fee >= ?" + ordering, (sport, keyword, entry_fee))
-        row = cur.fetchone()
-        if row:
-            logger.debug("returning %s", row)
-            return row
-
-        cur.execute(base_sql + "  AND entry_fee < ?" + ordering, (sport, keyword, entry_fee))
-        row = cur.fetchone()
-        if row:
-            logger.debug("returning %s", row)
-        return row
-    except sqlite3.Error as err:
-        logger.error("sqlite error in db_get_live_contest(): %s", err.args[0])
-        return None
-
-
-def db_get_incomplete_contests(conn):
-    """Get the incomplete contests from the database."""
-    try:
-        # get cursor
-        cur = conn.cursor()
-
-        # execute SQL command
-        sql = (
-            "SELECT dk_id, draft_group, entries, positions_paid, status, completed, name, start_date, sport "
-            "FROM contests "
-            "WHERE start_date <= datetime('now', 'localtime') "
-            "  AND (positions_paid IS NULL OR completed = 0)"
-        )
-        cur.execute(sql)
-
-        # return all rows
-        return cur.fetchall()
-    except sqlite3.Error as err:
-        logger.error(f"sqlite error [check_db_contests_for_completion()]: {err.args[0]}")
-
-    return None
-
-
-def db_get_next_upcoming_contest(conn, sport: str, entry_fee: int = 25, keyword: str = "%") -> tuple | None:
-    """Get the next upcoming contest matching criteria."""
-    try:
-        cur = conn.cursor()
-        sql = (
-            "SELECT dk_id, name, draft_group, positions_paid, start_date "
-            "FROM contests "
-            "WHERE sport=? "
-            "  AND name LIKE ? "
-            "  AND entry_fee >= ? "
-            "  AND start_date > datetime('now', 'localtime') "
-            "  AND completed=0 "
-            "ORDER BY start_date ASC, entry_fee DESC, entries DESC "
-            "LIMIT 1"
-        )
-        cur.execute(sql, (sport, keyword, entry_fee))
-        row = cur.fetchone()
-        if row is not None:
-            logger.debug("returning %s", row)
-        return row if row else None
-    except sqlite3.Error as err:
-        logger.error("sqlite error in db_get_next_upcoming_contest(): %s", err.args[0])
-        return None
-
-
-def db_get_next_upcoming_contest_any(conn, sport: str) -> tuple | None:
-    """Get the next upcoming contest for a sport, regardless of criteria."""
-    try:
-        cur = conn.cursor()
-        sql = (
-            "SELECT dk_id, name, draft_group, positions_paid, start_date "
-            "FROM contests "
-            "WHERE sport=? "
-            "  AND start_date > datetime('now', 'localtime') "
-            "  AND completed=0 "
-            "ORDER BY start_date ASC, entry_fee DESC, entries DESC "
-            "LIMIT 1"
-        )
-        cur.execute(sql, (sport,))
-        row = cur.fetchone()
-        if row is not None:
-            logger.debug("returning %s", row)
-        return row if row else None
-    except sqlite3.Error as err:
-        logger.error("sqlite error in db_get_next_upcoming_contest_any(): %s", err.args[0])
-        return None
 
 
 def _build_parser() -> argparse.ArgumentParser:
