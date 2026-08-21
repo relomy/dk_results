@@ -297,7 +297,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "aiohttp", specifier = ">=3.14.1" },
+    { name = "aiohttp", specifier = ">=3.14.3" },
     { name = "cryptography", specifier = ">=48.0.1" },
     { name = "dfs-common", editable = "../dfs_common" },
     { name = "discord" },
