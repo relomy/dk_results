@@ -17,6 +17,7 @@ from dfs_common import contests, state
 from dk_results.bot.discord_rest import DiscordRest
 from dk_results.classes.contestdatabase import ContestDatabase
 from dk_results.classes.draftkings import Draftkings
+from dk_results.classes.notification_store import NotificationStore
 from dk_results.classes.sport import Sport, get_sport_choices
 from dk_results.config import load_and_apply_settings
 from dk_results.logging import configure_logging
@@ -235,82 +236,36 @@ def _contests_db_path() -> str:
     return str(state.contests_db_path())
 
 
+# These thin wrappers delegate to NotificationStore, the single writer of the
+# contest_notifications and contest_vip_presence tables. Constructing the store
+# creates its tables (idempotent), matching the old defensive table creation.
 def create_notifications_table(conn) -> None:
-    sql = """
-    CREATE TABLE IF NOT EXISTS contest_notifications (
-        dk_id INTEGER NOT NULL,
-        event TEXT NOT NULL,
-        announced_at datetime NOT NULL DEFAULT (datetime('now', 'localtime')),
-        PRIMARY KEY (dk_id, event)
-    );
-    """
-    conn.execute(sql)
-    conn.commit()
+    NotificationStore(conn)
 
 
 def create_vip_presence_table(conn) -> None:
-    sql = """
-    CREATE TABLE IF NOT EXISTS contest_vip_presence (
-        dk_id INTEGER PRIMARY KEY,
-        status TEXT NOT NULL,
-        checked_at datetime NOT NULL DEFAULT (datetime('now', 'localtime'))
-    );
-    """
-    conn.execute(sql)
-    conn.commit()
+    NotificationStore(conn)
 
 
 def db_get_vip_presence(conn, dk_id: int) -> tuple[str, str] | None:
-    cur = conn.cursor()
-    cur.execute(
-        "SELECT status, checked_at FROM contest_vip_presence WHERE dk_id=? LIMIT 1",
-        (dk_id,),
-    )
-    return cur.fetchone()
+    return NotificationStore(conn).get_presence(dk_id)
 
 
 def db_upsert_vip_presence(conn, dk_id: int, status: str) -> None:
-    create_vip_presence_table(conn)
-    conn.execute(
-        """
-        INSERT INTO contest_vip_presence (dk_id, status)
-        VALUES (?, ?)
-        ON CONFLICT(dk_id) DO UPDATE SET
-            status=excluded.status,
-            checked_at=datetime('now', 'localtime')
-        """,
-        (dk_id, status),
-    )
-    conn.commit()
+    NotificationStore(conn).upsert_presence(dk_id, status)
 
 
 def db_has_notification(conn, dk_id: int, event: str) -> bool:
-    cur = conn.cursor()
-    cur.execute(
-        "SELECT 1 FROM contest_notifications WHERE dk_id=? AND event=? LIMIT 1",
-        (dk_id, event),
-    )
-    return cur.fetchone() is not None
+    return NotificationStore(conn).has_notification(dk_id, event)
 
 
 def db_has_any_soft_finish_notification(conn, dk_id: int) -> bool:
-    cur = conn.cursor()
-    cur.execute(
-        "SELECT 1 FROM contest_notifications WHERE dk_id=? AND event LIKE 'soft_finish:%' LIMIT 1",
-        (dk_id,),
-    )
-    return cur.fetchone() is not None
+    return NotificationStore(conn).has_any_soft_finish_notification(dk_id)
 
 
 def db_insert_notification(conn, dk_id: int, event: str) -> None:
     try:
-        create_notifications_table(conn)
-        cur = conn.cursor()
-        cur.execute(
-            "INSERT OR IGNORE INTO contest_notifications (dk_id, event) VALUES (?, ?)",
-            (dk_id, event),
-        )
-        conn.commit()
+        NotificationStore(conn).record_notification(dk_id, event)
     except (sqlite3.Error, AttributeError) as err:
         logger.error("sqlite error inserting notification: %s", err)
 
