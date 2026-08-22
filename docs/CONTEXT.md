@@ -21,7 +21,7 @@
 
 ## Contest completion & notifications
 
-- **CompletionProcessor** — the module that advances each tracked contest and announces its milestones: warning, live, completed, soft-finish. Reads its work list from `ContestDatabase`, not from DraftKings. Module: `completion_processor.py`.
+- **CompletionProcessor** — the module that advances each tracked contest and announces its milestones: warning, live, completed, soft-finish. Public interface: `CompletionProcessor.run(conn) -> None`. Injected collaborators: `ContestDatabase` (work list + state writes), `ContestResultsPort` (the only external DraftKings edge), a presence oracle (`VipPresence`), and `BonusSenderPort` (Discord); `NotificationStore` is built from the run's `conn` for idempotency. Reads its work list from `ContestDatabase`, not from DraftKings. Owns the suppression policy: an `absent` presence verdict suppresses an announcement, `unknown` allows it. Announcements are gated by an explicit `notifications_enabled` flag (resolved at the CLI edge from `DISCORD_NOTIFICATIONS_ENABLED`), independent of whether a sender is wired: a disabled run still constructs the processor and syncs contest state but short-circuits every send. Module: `completion_processor.py`.
 - **Notification event** — the identity of a single announcement about a contest, used to keep announcing idempotent. One per milestone: starting-soon warning, live, completed, soft-finish.
 - **NotificationStore** — persistence that keeps a milestone from being announced twice, and caches VIP presence. Module: `classes/notification_store.py`.
   _Avoid_: ContestDatabase (owns contest rows, not notifications).
