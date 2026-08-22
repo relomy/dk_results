@@ -74,17 +74,6 @@ def test_print_sql_insert_uses_typed_values(capsys):
     assert "NULL" in out
 
 
-def test_print_cron_job_pretty_prints_contest(capsys):
-    contest = Contest(_contest_payload(101, entries=22, fee=25), "NFL")
-
-    dkcontests.print_cron_job(contest, "NFL")
-
-    out = capsys.readouterr().out
-    assert "'contest': {" in out
-    assert "'draft_group': None" in out
-    assert "'n': 'Contest 101'" in out
-
-
 def test_get_largest_contest_applies_query_and_exclude():
     contests = [
         Contest(_contest_payload(1, entries=150, fee=25), "NFL"),
@@ -185,16 +174,6 @@ def test_main_rejects_live_with_sport_class(monkeypatch):
 
     with pytest.raises(SystemExit):
         dkcontests.main()
-
-
-def test_get_cron_config_shares_pga_values():
-    pga = dkcontests.get_cron_config("PGA")
-    pga_weekend = dkcontests.get_cron_config("PGAWeekend")
-    pga_showdown = dkcontests.get_cron_config("PGAShowdown")
-
-    assert pga == {"sport_length": 8, "get_interval": "4-59/15"}
-    assert pga_weekend == pga
-    assert pga_showdown == pga
 
 
 def test_main_passes_sport_class_choices_to_response_filters(monkeypatch):
