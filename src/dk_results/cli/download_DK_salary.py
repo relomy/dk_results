@@ -4,7 +4,7 @@ from datetime import datetime
 
 import requests
 
-from dk_results.classes.cookieservice import get_dk_cookies
+from dk_results.draftkings.cookieservice import get_dk_cookies
 
 
 def download_salary_csv(filename, csv_url):

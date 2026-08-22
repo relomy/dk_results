@@ -10,13 +10,12 @@ from zoneinfo import ZoneInfo
 from dfs_common import state
 from dfs_common.discord import WebhookSender
 
-from dk_results.classes.contestdatabase import ContestDatabase
-from dk_results.classes.draftkings import Draftkings
-from dk_results.classes.sheets_service import build_dfs_sheet_service
-from dk_results.classes.sport import Sport, get_sport_choices
 from dk_results.config import load_and_apply_settings
+from dk_results.domain.sport import Sport, get_sport_choices
+from dk_results.draftkings.draftkings import Draftkings
 from dk_results.logging import configure_logging
 from dk_results.paths import repo_file
+from dk_results.persistence.contestdatabase import ContestDatabase
 from dk_results.services.snapshot_exporter import (
     DEFAULT_STANDINGS_LIMIT,
     build_snapshot,
@@ -24,6 +23,7 @@ from dk_results.services.snapshot_exporter import (
     to_stable_json,
     to_utc_iso,
 )
+from dk_results.sheets.sheets_service import build_dfs_sheet_service
 from dk_results.sport_processor import (
     NoLiveContestError,
     SportProcessor,

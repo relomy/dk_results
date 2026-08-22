@@ -2,7 +2,7 @@ import datetime
 import logging
 from typing import Any, Type
 
-from dk_results.classes.sport import Sport
+from dk_results.domain.sport import Sport
 from dk_results.lobby.parsing import _parse_start_date, log_draft_group_event
 
 logger = logging.getLogger(__name__)

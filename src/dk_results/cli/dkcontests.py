@@ -41,8 +41,8 @@ from collections.abc import Mapping
 from pprint import pformat
 from typing import Type
 
-from dk_results.classes.contest import Contest
-from dk_results.classes.sport import Sport, get_sport_choices
+from dk_results.domain.contest import Contest
+from dk_results.domain.sport import Sport, get_sport_choices
 from dk_results.lobby.common import valid_date
 from dk_results.lobby.contest_filter import filter_double_ups, largest_by_entries
 from dk_results.lobby.double_ups import get_stats

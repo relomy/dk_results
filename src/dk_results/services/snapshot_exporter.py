@@ -11,13 +11,13 @@ from zoneinfo import ZoneInfo
 
 from dfs_common import state
 
-from dk_results.classes.contest_standings import parse_contest_standings
-from dk_results.classes.contestdatabase import ContestDatabase
-from dk_results.classes.draftkings import Draftkings
-from dk_results.classes.sport import Sport, get_sport_choices
-from dk_results.classes.trainfinder import TrainFinder
+from dk_results.analytics.trainfinder import TrainFinder
 from dk_results.config import load_settings
+from dk_results.domain.contest_standings import parse_contest_standings
+from dk_results.domain.sport import Sport, get_sport_choices
+from dk_results.draftkings.draftkings import Draftkings
 from dk_results.paths import repo_file
+from dk_results.persistence.contestdatabase import ContestDatabase
 from dk_results.vip_lineups import build_vip_entries, fetch_vip_lineups, load_vips
 
 logger = logging.getLogger(__name__)

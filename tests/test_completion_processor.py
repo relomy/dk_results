@@ -9,8 +9,6 @@ silent on a second run (idempotency).
 import datetime
 import sqlite3
 
-from dk_results.classes.contestdatabase import ContestDatabase
-from dk_results.classes.vip_presence import VIP_ABSENT, VIP_PRESENT, VIP_UNKNOWN
 from dk_results.completion_processor import (
     COMPLETED_STATUSES,
     CompletionProcessor,
@@ -21,6 +19,8 @@ from dk_results.completion_processor import (
     _soft_finish_eligible,
     _soft_finish_event_key,
 )
+from dk_results.notifications.vip_presence import VIP_ABSENT, VIP_PRESENT, VIP_UNKNOWN
+from dk_results.persistence.contestdatabase import ContestDatabase
 
 CONTESTS_TABLE_SQL = """
 CREATE TABLE contests (
@@ -235,7 +235,7 @@ def test_completed_milestone_announced_once_after_live():
     _insert_contest(conn, dk_id=1, name="Contest1", start_date=past, status="LIVE")
 
     # A prior "live" notification must exist for the completed announcement.
-    from dk_results.classes.notification_store import NotificationStore
+    from dk_results.persistence.notification_store import NotificationStore
 
     NotificationStore(conn).record_notification(1, "live")
 

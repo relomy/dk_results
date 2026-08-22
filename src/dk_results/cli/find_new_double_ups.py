@@ -10,16 +10,16 @@ from dfs_common import contests, state
 from dfs_common.discord import WebhookSender
 from dotenv import load_dotenv
 
-from dk_results.classes.contest import Contest
-from dk_results.classes.contestdatabase import ContestDatabase
-from dk_results.classes.sport import Sport, get_sport_choices
 from dk_results.config import load_and_apply_settings
 from dk_results.discord_roles import DISCORD_ROLE_MAP
+from dk_results.domain.contest import Contest
+from dk_results.domain.sport import Sport, get_sport_choices
 from dk_results.lobby.double_ups import get_double_ups
 from dk_results.lobby.fetch import DEFAULT_HEADERS, LOBBY_URL_TEMPLATE, get_dk_lobby, requests_fetch_json
 from dk_results.lobby.formatting import format_discord_messages
 from dk_results.lobby.parsing import build_draft_group_start_map
 from dk_results.logging import configure_logging
+from dk_results.persistence.contestdatabase import ContestDatabase
 
 logger = logging.getLogger(__name__)
 
@@ -137,7 +137,7 @@ def _init_runtime() -> None:
 
 
 def _load_lobby_cookies():
-    from dk_results.classes.cookieservice import get_dk_cookies
+    from dk_results.draftkings.cookieservice import get_dk_cookies
 
     _, cookies = get_dk_cookies()
     return cookies

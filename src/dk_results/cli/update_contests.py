@@ -11,15 +11,15 @@ import yaml
 from dfs_common import contests, state
 
 from dk_results.bot.discord_rest import DiscordRest
-from dk_results.classes.contestdatabase import ContestDatabase
-from dk_results.classes.draftkings import Draftkings
-from dk_results.classes.notification_store import NotificationStore
-from dk_results.classes.sport import Sport, get_sport_choices
-from dk_results.classes.vip_presence import VipPresence
 from dk_results.completion_processor import CompletionProcessor, CompletionProcessorConfig
 from dk_results.config import load_and_apply_settings
+from dk_results.domain.sport import Sport, get_sport_choices
+from dk_results.draftkings.draftkings import Draftkings
 from dk_results.logging import configure_logging
+from dk_results.notifications.vip_presence import VipPresence
 from dk_results.paths import repo_file
+from dk_results.persistence.contestdatabase import ContestDatabase
+from dk_results.persistence.notification_store import NotificationStore
 
 configure_logging()
 logger = logging.getLogger(__name__)

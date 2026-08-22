@@ -3,10 +3,11 @@ import runpy
 import sys
 import types
 
-from classes.contest import Contest
-from classes.sport import Sport
 from lobby.double_ups import get_stats
 from lobby.fetch import get_dk_lobby, get_lobby_response, requests_fetch_json
+
+from dk_results.domain.contest import Contest
+from dk_results.domain.sport import Sport
 
 
 def _contest_payload(dk_id: int, *, entries: int = 200, fee: int = 10):
@@ -29,7 +30,7 @@ def _contest_payload(dk_id: int, *, entries: int = 200, fee: int = 10):
 def test_import_find_new_double_ups_has_no_runtime_side_effects(monkeypatch):
     calls = {"dotenv": 0, "logging": 0, "cookies": 0}
 
-    fake_cookieservice = types.ModuleType("classes.cookieservice")
+    fake_cookieservice = types.ModuleType("dk_results.draftkings.cookieservice")
 
     def fake_get_dk_cookies(*_args, **_kwargs):
         calls["cookies"] += 1
@@ -37,7 +38,7 @@ def test_import_find_new_double_ups_has_no_runtime_side_effects(monkeypatch):
 
     fake_cookieservice.get_dk_cookies = fake_get_dk_cookies
 
-    fake_contestdatabase = types.ModuleType("classes.contestdatabase")
+    fake_contestdatabase = types.ModuleType("dk_results.persistence.contestdatabase")
 
     class FakeContestDatabase:
         def __init__(self, *_args, **_kwargs):
@@ -45,8 +46,8 @@ def test_import_find_new_double_ups_has_no_runtime_side_effects(monkeypatch):
 
     fake_contestdatabase.ContestDatabase = FakeContestDatabase
 
-    monkeypatch.setitem(sys.modules, "classes.cookieservice", fake_cookieservice)
-    monkeypatch.setitem(sys.modules, "classes.contestdatabase", fake_contestdatabase)
+    monkeypatch.setitem(sys.modules, "dk_results.draftkings.cookieservice", fake_cookieservice)
+    monkeypatch.setitem(sys.modules, "dk_results.persistence.contestdatabase", fake_contestdatabase)
     monkeypatch.setattr(
         "dotenv.load_dotenv",
         lambda *_args, **_kwargs: calls.__setitem__("dotenv", calls["dotenv"] + 1),

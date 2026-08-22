@@ -14,9 +14,9 @@ See `docs/CONTEXT.md` for the shared vocabulary and the canonical entries for
 ```
 Root shims (dkcontests.py, db_main.py, …)      thin sys.path adapters → cli.*
   └─ cli/            argument parsing + wiring  (adapters over deep modules)
-       └─ sport_processor.py  ORCHESTRATOR      (SportProcessor.run)
-            ├─ DkPort  ──── classes/draftkings.py + dksession + cookieservice
-            ├─ SheetPort ── classes/dfs_sheet_service → repository → dfs_common
+  └─ sport_processor.py  ORCHESTRATOR      (SportProcessor.run)
+            ├─ DkPort  ──── draftkings/draftkings.py + dksession + cookieservice
+            ├─ SheetPort ── sheets/dfs_sheet_service → repository → dfs_common
             └─ BonusSenderPort ── bot/discord_rest, dfs_common WebhookSender
   Domain (pure): sport, player, user, contest, lineup, contest_standings,
                  bonus_rules, dfs_sheet_domain
@@ -71,14 +71,14 @@ fetch is injectable. `load_vips()` and `build_vip_entries()` round out the inter
 
 | Module | Interface | Depth / role |
 |---|---|---|
-| `classes/sport.py` | `Sport` base + ~22 sport subclasses; registry fns `iter_sports`, `get_sport_choices`, `get_sport`, `require_sport`, `get_lineup_range` | Deep: a large sport taxonomy behind small lookup fns. **Seam:** registry is *discovered dynamically* from subclasses (`_build_sport_registry`) — read-only `Mapping`. |
-| `classes/contest_standings.py` | `parse_contest_standings(salary_rows, standings_rows, …) -> ContestStandings`; `players_to_values` | Deep pure parser (canonical in CONTEXT.md). Contest metadata stays with callers. |
-| `classes/lineup.py` | `parse_lineup_string`, `Lineup`, `LockedSlot`, `normalize_name`, `LineupParseError` | Parsing + value object; validates roster slots. |
-| `classes/player.py` | `Player` | Athlete value object, per-sport aware. |
-| `classes/user.py` | `User` | DK user value object. |
-| `classes/contest.py` | `Contest` (from JSON) + `get_dt_from_timestamp` | Contest value object. |
-| `classes/bonus_rules.py` | `parse_bonus_counts(sport, stats_description)` | Pure per-sport parsing rules (golf/nba/mlb/soc). |
-| `classes/dfs_sheet_domain.py` | `end_col_for_sport`, `data/header/lineup_range_for_sport`, `build_values_for_vip_lineup` | Pure sheet-range + value formatting; no I/O. |
+| `domain/sport.py` | `Sport` base + ~22 sport subclasses; registry fns `iter_sports`, `get_sport_choices`, `get_sport`, `require_sport`, `get_lineup_range` | Deep: a large sport taxonomy behind small lookup fns. **Seam:** registry is *discovered dynamically* from subclasses (`_build_sport_registry`) — read-only `Mapping`. |
+| `domain/contest_standings.py` | `parse_contest_standings(salary_rows, standings_rows, …) -> ContestStandings`; `players_to_values` | Deep pure parser (canonical in CONTEXT.md). Contest metadata stays with callers. |
+| `domain/lineup.py` | `parse_lineup_string`, `Lineup`, `LockedSlot`, `normalize_name`, `LineupParseError` | Parsing + value object; validates roster slots. |
+| `domain/player.py` | `Player` | Athlete value object, per-sport aware. |
+| `domain/user.py` | `User` | DK user value object. |
+| `domain/contest.py` | `Contest` (from JSON) + `get_dt_from_timestamp` | Contest value object. |
+| `domain/bonus_rules.py` | `parse_bonus_counts(sport, stats_description)` | Pure per-sport parsing rules (golf/nba/mlb/soc). |
+| `domain/dfs_sheet_domain.py` | `end_col_for_sport`, `data/header/lineup_range_for_sport`, `build_values_for_vip_lineup` | Pure sheet-range + value formatting; no I/O. |
 
 ---
 
@@ -86,9 +86,9 @@ fetch is injectable. `load_vips()` and `build_vip_entries()` round out the inter
 
 | Module | Interface | Role |
 |---|---|---|
-| `classes/draftkings.py` | `Draftkings`: `get_leaderboard`, `get_contest_detail`, `get_lobby_contests`, `get_entry`, `get_contest_entrants_page`, `download_contest_rows`, `download_salary_csv`, `clone_auth_to` | Deep HTTP client — the concrete **`DkPort` adapter**. |
-| `classes/dksession.py` | `DkSession`: `get_session`, `setup_session`, `cj_from_pickle` | Authenticated `requests.Session` construction. |
-| `classes/cookieservice.py` | `get_dk_cookies`, `get_rookie_cookies`, `cookies_to_dict/_jar`, `load/save_cookies_to_pickle` | Cookie acquisition/persistence seam under DkSession. |
+| `draftkings/draftkings.py` | `Draftkings`: `get_leaderboard`, `get_contest_detail`, `get_lobby_contests`, `get_entry`, `get_contest_entrants_page`, `download_contest_rows`, `download_salary_csv`, `clone_auth_to` | Deep HTTP client — the concrete **`DkPort` adapter**. |
+| `draftkings/dksession.py` | `DkSession`: `get_session`, `setup_session`, `cj_from_pickle` | Authenticated `requests.Session` construction. |
+| `draftkings/cookieservice.py` | `get_dk_cookies`, `get_rookie_cookies`, `cookies_to_dict/_jar`, `load/save_cookies_to_pickle` | Cookie acquisition/persistence seam under DkSession. |
 
 ---
 
@@ -96,10 +96,10 @@ fetch is injectable. `load_vips()` and `build_vip_entries()` round out the inter
 
 | Module | Interface | Role |
 |---|---|---|
-| `classes/dfs_sheet_service.py` | `DfsSheetService`: `clear_standings/lineups`, `write_players/column(s)`, `add_contest_details/last_updated/min_cash/non_cashing_info/train_info/optimal_lineup`, `write_vip_lineups`, `get_players`, `find_sheet_id` | Deep service — the concrete **`SheetPort` adapter**. |
-| `classes/dfs_sheet_repository.py` | `DfsSheetRepository` | Thin wrapper over `dfs_common` SheetClient (data-access seam). |
-| `classes/sheets_service.py` | `build_dfs_sheet_service`, `make_sheet_client`, `fetch_sheet_gids` | Factory / composition root so entry points need one import. |
-| `classes/dfs_sheet_domain.py` | *(see Domain)* | Pure formatting used by the service. |
+| `sheets/dfs_sheet_service.py` | `DfsSheetService`: `clear_standings/lineups`, `write_players/column(s)`, `add_contest_details/last_updated/min_cash/non_cashing_info/train_info/optimal_lineup`, `write_vip_lineups`, `get_players`, `find_sheet_id` | Deep service — the concrete **`SheetPort` adapter**. |
+| `sheets/dfs_sheet_repository.py` | `DfsSheetRepository` | Thin wrapper over `dfs_common` SheetClient (data-access seam). |
+| `sheets/sheets_service.py` | `build_dfs_sheet_service`, `make_sheet_client`, `fetch_sheet_gids` | Factory / composition root so entry points need one import. |
+| `domain/dfs_sheet_domain.py` | *(see Domain)* | Pure formatting used by the service. |
 
 ---
 
@@ -107,8 +107,8 @@ fetch is injectable. `load_vips()` and `build_vip_entries()` round out the inter
 
 | Module | Interface | Notes |
 |---|---|---|
-| `classes/optimizer.py` | `Optimizer.get_optimal_lineup() -> list[Player] \| None` | LP solver (PuLP). **Shallow interface risk:** callers only need `get_optimal_lineup`, but `create_decision_variables`, `define_*_constraint`, `solve_problem`, `extract_optimal_lineup` are all public — internal LP steps leaking through the interface. Candidate to make private. |
-| `classes/trainfinder.py` | `TrainFinder`: `get_total_users`, `get_total_users_above_salary`, `get_users_above_salary_spent` | Clusters users by salary spent ("trains"). |
+| `analytics/optimizer.py` | `Optimizer.get_optimal_lineup() -> list[Player] \| None` | LP solver (PuLP). **Shallow interface risk:** callers only need `get_optimal_lineup`, but `create_decision_variables`, `define_*_constraint`, `solve_problem`, `extract_optimal_lineup` are all public — internal LP steps leaking through the interface. Candidate to make private. |
+| `analytics/trainfinder.py` | `TrainFinder`: `get_total_users`, `get_total_users_above_salary`, `get_users_above_salary_spent` | Clusters users by salary spent ("trains"). |
 
 ---
 
@@ -165,8 +165,8 @@ exposes `main()`. Root-level scripts (`dkcontests.py`, `db_main.py`,
 | `config.py` | `load_settings`, `apply_environment_defaults`, `load_and_apply_settings` | Settings from `dfs_common`. |
 | `logging.py` | `configure_logging(level_override)` | Central logging for every entry point. |
 | `paths.py` | `find_repo_root`, `repo_root`, `repo_file` | Repo-root-relative path resolution. |
-| `classes/contestdatabase.py` | `ContestDatabase`: `create_table`, `compare_contests`, `insert_contests`, `sync_draft_group_start_dates`, `get_live_contest(s)`, `get_next_upcoming_contest(_any)`, `get_contest_*` | SQLite persistence for contests — deep data-access module, injected into `SportProcessor`. |
-| `classes/bonus_announcements.py` | `announce_vip_bonuses`, `create_bonus_announcements_table`, `BonusCandidate` | Bonus dedupe (CAS on a counter) + webhook delivery. |
+| `persistence/contestdatabase.py` | `ContestDatabase`: `create_table`, `compare_contests`, `insert_contests`, `sync_draft_group_start_dates`, `get_live_contest(s)`, `get_next_upcoming_contest(_any)`, `get_contest_*` | SQLite persistence for contests — deep data-access module, injected into `SportProcessor`. |
+| `notifications/bonus_announcements.py` | `announce_vip_bonuses`, `create_bonus_announcements_table`, `BonusCandidate` | Bonus dedupe (CAS on a counter) + webhook delivery. |
 | `discord_roles.py` | *(constants/roles)* | Discord role mapping. |
 
 ---
@@ -177,7 +177,7 @@ Deletion-test candidates — modules whose removal would *concentrate* complexit
 back into callers, i.e. worth keeping/deepening — versus surfaces worth
 tightening:
 
-1. **`classes/optimizer.py` — tighten a shallow interface.** Only
+1. **`analytics/optimizer.py` — tighten a shallow interface.** Only
    `get_optimal_lineup()` is needed by callers; the LP-construction steps are
    public. Making them private shrinks the interface without losing behaviour
    (a textbook "hide more complexity inside").

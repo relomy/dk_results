@@ -3,8 +3,6 @@ import datetime
 import sys
 
 import pytest
-from classes.contest import Contest
-from classes.sport import NFLShowdownSport, NFLSport, PGAShowdownSport, PGAWeekendSport, Sport
 from dfs_common.discord import WebhookSender
 from lobby.common import get_salary_date, is_time_between, valid_date
 from lobby.double_ups import get_stats
@@ -26,6 +24,8 @@ from dk_results.cli.find_new_double_ups import (
     send_discord_notification,
     set_quiet_verbosity,
 )
+from dk_results.domain.contest import Contest
+from dk_results.domain.sport import NFLShowdownSport, NFLSport, PGAShowdownSport, PGAWeekendSport, Sport
 
 
 def test_find_new_double_ups_exposes_webhook_sender():
@@ -558,7 +558,7 @@ def test_parse_args_parses_sport_and_quiet(monkeypatch):
 
 def test_main_executes_with_fakes(monkeypatch, tmp_path):
     monkeypatch.setattr(
-        "dk_results.classes.cookieservice.get_dk_cookies",
+        "dk_results.draftkings.cookieservice.get_dk_cookies",
         lambda *_a, **_k: ({}, RequestsCookieJar()),
     )
 
@@ -610,7 +610,7 @@ def test_get_stats_counts_multiple_entry_fees():
 
 def test_main_with_webhook_and_quiet(monkeypatch):
     monkeypatch.setattr(
-        "dk_results.classes.cookieservice.get_dk_cookies",
+        "dk_results.draftkings.cookieservice.get_dk_cookies",
         lambda *_a, **_k: ({}, RequestsCookieJar()),
     )
 
@@ -649,7 +649,7 @@ def test_main_with_webhook_and_quiet(monkeypatch):
 
 def test_main_resolves_db_path_once(monkeypatch):
     monkeypatch.setattr(
-        "dk_results.classes.cookieservice.get_dk_cookies",
+        "dk_results.draftkings.cookieservice.get_dk_cookies",
         lambda *_a, **_k: ({}, RequestsCookieJar()),
     )
 
