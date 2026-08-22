@@ -1,7 +1,7 @@
 import sqlite3
 
-import classes.bonus_announcements as bonus_announcements
-from classes.bonus_announcements import (
+import dk_results.notifications.bonus_announcements as bonus_announcements
+from dk_results.notifications.bonus_announcements import (
     announce_vip_bonuses,
     create_bonus_announcements_table,
 )

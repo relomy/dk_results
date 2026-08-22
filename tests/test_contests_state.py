@@ -1,9 +1,9 @@
 import pytest
-from classes.contestdatabase import ContestDatabase
 from dfs_common import state
 
 from dk_results.cli.find_new_double_ups import _upsert_contests
 from dk_results.domain.contest import Contest
+from dk_results.persistence.contestdatabase import ContestDatabase
 
 
 def _payload(dk_id: int):

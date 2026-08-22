@@ -4,7 +4,7 @@ from dk_results import paths
 
 
 def test_repo_root_finds_pyproject_from_nested_start():
-    start = Path(__file__).resolve().parent / "classes"
+    start = Path(__file__).resolve().parent
     root = paths.find_repo_root(start)
     assert root == Path(__file__).resolve().parents[1]
 

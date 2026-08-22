@@ -1,7 +1,8 @@
 import pickle
 
-from classes import cookieservice
 from requests.cookies import RequestsCookieJar
+
+from dk_results.draftkings import cookieservice
 
 
 def test_get_rookie_cookies_pi_path(monkeypatch):

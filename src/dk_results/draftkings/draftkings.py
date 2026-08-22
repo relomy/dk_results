@@ -1,4 +1,4 @@
-# classes/draftkings.py
+# DraftKings HTTP adapter.
 from __future__ import annotations
 
 import csv

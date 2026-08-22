@@ -2,10 +2,11 @@ from __future__ import annotations
 
 import datetime
 
-from classes.dfs_sheet_repository import DfsSheetRepository
-from classes.dfs_sheet_service import DfsSheetService
-from classes.sheets_service import build_dfs_sheet_service
 from dfs_common.sheets import SheetClient
+
+from dk_results.sheets.dfs_sheet_repository import DfsSheetRepository
+from dk_results.sheets.dfs_sheet_service import DfsSheetService
+from dk_results.sheets.sheets_service import build_dfs_sheet_service
 
 
 class FakeService:

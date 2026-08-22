@@ -6,9 +6,10 @@ from types import SimpleNamespace
 from typing import cast
 
 import pytest
-from classes.draftkings import Draftkings
 from requests.cookies import RequestsCookieJar
 from requests.sessions import Session
+
+from dk_results.draftkings.draftkings import Draftkings
 
 
 class _FakeResponse:

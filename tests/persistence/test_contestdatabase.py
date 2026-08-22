@@ -3,9 +3,9 @@ import logging
 import sqlite3
 
 import pytest
-from classes.contestdatabase import ContestDatabase
 
 from dk_results.domain.contest import Contest
+from dk_results.persistence.contestdatabase import ContestDatabase
 
 
 @pytest.fixture
@@ -342,7 +342,7 @@ def test_get_live_contest_logs_key_value(contest_db, caplog):
         start_date="2026-05-14 06:45:00",
     )
 
-    with caplog.at_level(logging.DEBUG, logger="classes.contestdatabase"):
+    with caplog.at_level(logging.DEBUG, logger="dk_results.persistence.contestdatabase"):
         contest_db.get_live_contest("GOLF", 25, "%")
 
     assert any("contest_lookup" in r.getMessage() and "contest_id=" in r.getMessage() for r in caplog.records)

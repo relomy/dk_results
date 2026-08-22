@@ -558,7 +558,7 @@ def test_parse_args_parses_sport_and_quiet(monkeypatch):
 
 def test_main_executes_with_fakes(monkeypatch, tmp_path):
     monkeypatch.setattr(
-        "dk_results.classes.cookieservice.get_dk_cookies",
+        "dk_results.draftkings.cookieservice.get_dk_cookies",
         lambda *_a, **_k: ({}, RequestsCookieJar()),
     )
 
@@ -610,7 +610,7 @@ def test_get_stats_counts_multiple_entry_fees():
 
 def test_main_with_webhook_and_quiet(monkeypatch):
     monkeypatch.setattr(
-        "dk_results.classes.cookieservice.get_dk_cookies",
+        "dk_results.draftkings.cookieservice.get_dk_cookies",
         lambda *_a, **_k: ({}, RequestsCookieJar()),
     )
 
@@ -649,7 +649,7 @@ def test_main_with_webhook_and_quiet(monkeypatch):
 
 def test_main_resolves_db_path_once(monkeypatch):
     monkeypatch.setattr(
-        "dk_results.classes.cookieservice.get_dk_cookies",
+        "dk_results.draftkings.cookieservice.get_dk_cookies",
         lambda *_a, **_k: ({}, RequestsCookieJar()),
     )
 

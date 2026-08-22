@@ -1,7 +1,7 @@
 import yaml
 
-from dk_results.classes.sheets_service import fetch_sheet_gids
 from dk_results.paths import repo_file
+from dk_results.sheets.sheets_service import fetch_sheet_gids
 
 
 def main() -> None:

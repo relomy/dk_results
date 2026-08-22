@@ -2,9 +2,9 @@ import datetime
 import sqlite3
 
 import pytest
-from classes.draftkings import Draftkings
-from classes.notification_store import NotificationStore
-from classes.vip_presence import (
+
+from dk_results.draftkings.draftkings import Draftkings
+from dk_results.notifications.vip_presence import (
     VIP_ABSENT,
     VIP_ENTRANT_PAGE_LIMIT,
     VIP_PRESENT,
@@ -16,6 +16,7 @@ from classes.vip_presence import (
     _should_refresh_absent,
     vip_key,
 )
+from dk_results.persistence.notification_store import NotificationStore
 
 
 def _page(*usernames: str) -> str:

@@ -15,8 +15,8 @@ See `docs/CONTEXT.md` for the shared vocabulary and the canonical entries for
 Root shims (dkcontests.py, db_main.py, …)      thin sys.path adapters → cli.*
   └─ cli/            argument parsing + wiring  (adapters over deep modules)
   └─ sport_processor.py  ORCHESTRATOR      (SportProcessor.run)
-            ├─ DkPort  ──── classes/draftkings.py + dksession + cookieservice
-            ├─ SheetPort ── classes/dfs_sheet_service → repository → dfs_common
+            ├─ DkPort  ──── draftkings/draftkings.py + dksession + cookieservice
+            ├─ SheetPort ── sheets/dfs_sheet_service → repository → dfs_common
             └─ BonusSenderPort ── bot/discord_rest, dfs_common WebhookSender
   Domain (pure): sport, player, user, contest, lineup, contest_standings,
                  bonus_rules, dfs_sheet_domain
@@ -86,9 +86,9 @@ fetch is injectable. `load_vips()` and `build_vip_entries()` round out the inter
 
 | Module | Interface | Role |
 |---|---|---|
-| `classes/draftkings.py` | `Draftkings`: `get_leaderboard`, `get_contest_detail`, `get_lobby_contests`, `get_entry`, `get_contest_entrants_page`, `download_contest_rows`, `download_salary_csv`, `clone_auth_to` | Deep HTTP client — the concrete **`DkPort` adapter**. |
-| `classes/dksession.py` | `DkSession`: `get_session`, `setup_session`, `cj_from_pickle` | Authenticated `requests.Session` construction. |
-| `classes/cookieservice.py` | `get_dk_cookies`, `get_rookie_cookies`, `cookies_to_dict/_jar`, `load/save_cookies_to_pickle` | Cookie acquisition/persistence seam under DkSession. |
+| `draftkings/draftkings.py` | `Draftkings`: `get_leaderboard`, `get_contest_detail`, `get_lobby_contests`, `get_entry`, `get_contest_entrants_page`, `download_contest_rows`, `download_salary_csv`, `clone_auth_to` | Deep HTTP client — the concrete **`DkPort` adapter**. |
+| `draftkings/dksession.py` | `DkSession`: `get_session`, `setup_session`, `cj_from_pickle` | Authenticated `requests.Session` construction. |
+| `draftkings/cookieservice.py` | `get_dk_cookies`, `get_rookie_cookies`, `cookies_to_dict/_jar`, `load/save_cookies_to_pickle` | Cookie acquisition/persistence seam under DkSession. |
 
 ---
 
@@ -96,9 +96,9 @@ fetch is injectable. `load_vips()` and `build_vip_entries()` round out the inter
 
 | Module | Interface | Role |
 |---|---|---|
-| `classes/dfs_sheet_service.py` | `DfsSheetService`: `clear_standings/lineups`, `write_players/column(s)`, `add_contest_details/last_updated/min_cash/non_cashing_info/train_info/optimal_lineup`, `write_vip_lineups`, `get_players`, `find_sheet_id` | Deep service — the concrete **`SheetPort` adapter**. |
-| `classes/dfs_sheet_repository.py` | `DfsSheetRepository` | Thin wrapper over `dfs_common` SheetClient (data-access seam). |
-| `classes/sheets_service.py` | `build_dfs_sheet_service`, `make_sheet_client`, `fetch_sheet_gids` | Factory / composition root so entry points need one import. |
+| `sheets/dfs_sheet_service.py` | `DfsSheetService`: `clear_standings/lineups`, `write_players/column(s)`, `add_contest_details/last_updated/min_cash/non_cashing_info/train_info/optimal_lineup`, `write_vip_lineups`, `get_players`, `find_sheet_id` | Deep service — the concrete **`SheetPort` adapter**. |
+| `sheets/dfs_sheet_repository.py` | `DfsSheetRepository` | Thin wrapper over `dfs_common` SheetClient (data-access seam). |
+| `sheets/sheets_service.py` | `build_dfs_sheet_service`, `make_sheet_client`, `fetch_sheet_gids` | Factory / composition root so entry points need one import. |
 | `domain/dfs_sheet_domain.py` | *(see Domain)* | Pure formatting used by the service. |
 
 ---
@@ -165,8 +165,8 @@ exposes `main()`. Root-level scripts (`dkcontests.py`, `db_main.py`,
 | `config.py` | `load_settings`, `apply_environment_defaults`, `load_and_apply_settings` | Settings from `dfs_common`. |
 | `logging.py` | `configure_logging(level_override)` | Central logging for every entry point. |
 | `paths.py` | `find_repo_root`, `repo_root`, `repo_file` | Repo-root-relative path resolution. |
-| `classes/contestdatabase.py` | `ContestDatabase`: `create_table`, `compare_contests`, `insert_contests`, `sync_draft_group_start_dates`, `get_live_contest(s)`, `get_next_upcoming_contest(_any)`, `get_contest_*` | SQLite persistence for contests — deep data-access module, injected into `SportProcessor`. |
-| `classes/bonus_announcements.py` | `announce_vip_bonuses`, `create_bonus_announcements_table`, `BonusCandidate` | Bonus dedupe (CAS on a counter) + webhook delivery. |
+| `persistence/contestdatabase.py` | `ContestDatabase`: `create_table`, `compare_contests`, `insert_contests`, `sync_draft_group_start_dates`, `get_live_contest(s)`, `get_next_upcoming_contest(_any)`, `get_contest_*` | SQLite persistence for contests — deep data-access module, injected into `SportProcessor`. |
+| `notifications/bonus_announcements.py` | `announce_vip_bonuses`, `create_bonus_announcements_table`, `BonusCandidate` | Bonus dedupe (CAS on a counter) + webhook delivery. |
 | `discord_roles.py` | *(constants/roles)* | Discord role mapping. |
 
 ---

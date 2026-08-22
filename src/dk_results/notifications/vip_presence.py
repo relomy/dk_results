@@ -21,7 +21,7 @@ from typing import Any, Protocol
 
 import requests
 
-from dk_results.classes.notification_store import NotificationStore
+from dk_results.persistence.notification_store import NotificationStore
 
 logger = logging.getLogger(__name__)
 

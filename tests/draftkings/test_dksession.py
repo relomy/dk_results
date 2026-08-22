@@ -1,7 +1,8 @@
 import pickle
 
-from classes import dksession as dksession_module
 from requests.cookies import RequestsCookieJar
+
+from dk_results.draftkings import dksession as dksession_module
 
 
 def test_dksession_init_and_get_session(monkeypatch):

@@ -1,6 +1,6 @@
 import logging
 
-from dk_results.classes.dksession import DkSession
+from dk_results.draftkings.dksession import DkSession
 from dk_results.logging import configure_logging
 
 # load the logging configuration

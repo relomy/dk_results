@@ -1,7 +1,8 @@
 import sqlite3
 
 import pytest
-from classes.notification_store import NotificationStore
+
+from dk_results.persistence.notification_store import NotificationStore
 
 
 @pytest.fixture

@@ -27,7 +27,7 @@ def _default_output_path(snapshot: dict[str, Any], sport: str) -> pathlib.Path:
 
 def run_export_fixture(args: Any) -> int:
     logging.getLogger("Draftkings").setLevel(logging.INFO)
-    logging.getLogger("classes.results").setLevel(logging.INFO)
+    logging.getLogger("dk_results.commands.export_fixture").setLevel(logging.INFO)
     configure_runtime()
     sport = normalize_sport_name(args.sport)
     contest_id = int(args.contest_id) if args.contest_id is not None else None
@@ -76,7 +76,7 @@ def _parse_bundle_item(raw_item: str) -> tuple[str, int]:
 
 def run_export_bundle(args: Any) -> int:
     logging.getLogger("Draftkings").setLevel(logging.INFO)
-    logging.getLogger("classes.results").setLevel(logging.INFO)
+    logging.getLogger("dk_results.commands.export_fixture").setLevel(logging.INFO)
     configure_runtime()
     standings_limit = int(args.standings_limit) if args.standings_limit else DEFAULT_STANDINGS_LIMIT
 
