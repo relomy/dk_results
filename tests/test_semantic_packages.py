@@ -28,17 +28,16 @@ def test_domain_and_analytics_modules_use_semantic_packages() -> None:
 
     for module in DOMAIN_MODULES:
         assert (source_root / "domain" / f"{module}.py").is_file()
-        assert not (source_root / "classes" / f"{module}.py").exists()
 
     for module in ANALYTICS_MODULES:
         assert (source_root / "analytics" / f"{module}.py").is_file()
-        assert not (source_root / "classes" / f"{module}.py").exists()
 
     for package, modules in PACKAGE_MODULES.items():
         assert (source_root / package / "__init__.py").is_file()
         for module in modules:
             assert (source_root / package / f"{module}.py").is_file()
-            assert not (source_root / "classes" / f"{module}.py").exists()
+
+    assert not any(path.name == "classes" for path in source_root.iterdir())
 
 
 def test_semantic_packages_do_not_reexport_modules() -> None:
