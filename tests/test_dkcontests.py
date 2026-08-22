@@ -2,6 +2,7 @@ import datetime
 import sys
 
 import pytest
+from pydantic import ValidationError
 
 import dk_results.cli.dkcontests as dkcontests
 from dk_results.domain.contest import Contest
@@ -46,8 +47,8 @@ def test_get_contests_handles_list_response(monkeypatch):
 
 def test_print_stats_includes_largest_entry_count(capsys):
     contests = [
-        Contest(_contest_payload(1, entries=150, fee=25), "NFL"),
-        Contest(_contest_payload(2, entries=230, fee=25), "NFL"),
+        Contest.from_lobby(_contest_payload(1, entries=150, fee=25), "NFL"),
+        Contest.from_lobby(_contest_payload(2, entries=230, fee=25), "NFL"),
     ]
 
     dkcontests.print_stats(contests)
@@ -58,7 +59,7 @@ def test_print_stats_includes_largest_entry_count(capsys):
 
 
 def test_print_sql_insert_uses_typed_values(capsys):
-    contest = Contest(
+    contest = Contest.from_lobby(
         {**_contest_payload(99, entries=22, fee=25), "n": "Weekend PGA TOUR Single Entry"},
         "GOLF",
     )
@@ -74,11 +75,57 @@ def test_print_sql_insert_uses_typed_values(capsys):
     assert "NULL" in out
 
 
+def test_from_lobby_maps_readable_fields_and_flags():
+    contest = Contest.from_lobby(
+        {**_contest_payload(7, entries=200, fee=25), "n": "  Padded Name  "},
+        "NFL",
+    )
+
+    assert contest.id == 7
+    assert contest.name == "Padded Name"
+    assert contest.draft_group == 10
+    assert contest.entry_fee == 25
+    assert contest.entry_count == 0
+    assert contest.max_entry_count == 1
+    assert contest.game_type == "Classic"
+    assert contest.game_type_id == 1
+    assert contest.start_dt == datetime.datetime.fromtimestamp(1700000000)
+    assert contest.is_double_up is True
+    assert contest.is_guaranteed is True
+
+
+def test_from_lobby_flags_default_false_when_attr_key_absent():
+    contest = Contest.from_lobby({**_contest_payload(8), "attr": {}}, "NFL")
+
+    assert contest.is_double_up is False
+    assert contest.is_guaranteed is False
+    assert contest.is_starred is False
+
+
+def test_from_lobby_missing_required_key_raises_naming_field():
+    payload = _contest_payload(9)
+    del payload["sd"]
+
+    with pytest.raises(ValidationError) as excinfo:
+        Contest.from_lobby(payload, "NFL")
+
+    message = str(excinfo.value)
+    assert "sd" in message
+    assert "Field required" in message
+
+
+def test_contest_is_frozen():
+    contest = Contest.from_lobby(_contest_payload(10), "NFL")
+
+    with pytest.raises(ValidationError):
+        contest.name = "mutated"
+
+
 def test_get_largest_contest_applies_query_and_exclude():
     contests = [
-        Contest(_contest_payload(1, entries=150, fee=25), "NFL"),
-        Contest({**_contest_payload(2, entries=260, fee=25), "n": "Main Slate"}, "NFL"),
-        Contest({**_contest_payload(3, entries=280, fee=25), "n": "Main Excluded"}, "NFL"),
+        Contest.from_lobby(_contest_payload(1, entries=150, fee=25), "NFL"),
+        Contest.from_lobby({**_contest_payload(2, entries=260, fee=25), "n": "Main Slate"}, "NFL"),
+        Contest.from_lobby({**_contest_payload(3, entries=280, fee=25), "n": "Main Excluded"}, "NFL"),
     ]
 
     largest = dkcontests.get_largest_contest(
@@ -95,8 +142,8 @@ def test_get_largest_contest_applies_query_and_exclude():
 
 def test_get_largest_contest_applies_game_type_id():
     contests = [
-        Contest({**_contest_payload(11, entries=200), "gameTypeId": 6}, "GOLF"),
-        Contest({**_contest_payload(12, entries=300), "gameTypeId": 87}, "GOLF"),
+        Contest.from_lobby({**_contest_payload(11, entries=200), "gameTypeId": 6}, "GOLF"),
+        Contest.from_lobby({**_contest_payload(12, entries=300), "gameTypeId": 87}, "GOLF"),
     ]
 
     largest = dkcontests.get_largest_contest(

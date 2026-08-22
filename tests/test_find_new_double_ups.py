@@ -129,7 +129,7 @@ def test_process_sport_syncs_draft_group_start_dates(monkeypatch):
 
 
 def test_upsert_contests_uses_dfs_common(monkeypatch):
-    contest = Contest(_contest_payload(303), "NBA")
+    contest = Contest.from_lobby(_contest_payload(303), "NBA")
     calls = {"db_path": None, "rows": None}
 
     monkeypatch.setattr("dk_results.cli.find_new_double_ups.state.contests_db_path", lambda: "/tmp/contests.db")
@@ -411,7 +411,7 @@ def test_valid_date_rejects_invalid():
 
 
 def test_get_stats_counts_dubs():
-    contests = [Contest(_contest_payload(1), "NBA")]
+    contests = [Contest.from_lobby(_contest_payload(1), "NBA")]
     stats = get_stats(contests)
     assert stats[contests[0].start_dt.strftime("%Y-%m-%d")]["dubs"][10] == 1
 
@@ -432,7 +432,7 @@ def test_set_quiet_verbosity():
 
 
 def test_format_discord_messages():
-    contests = [Contest(_contest_payload(1), "NBA")]
+    contests = [Contest.from_lobby(_contest_payload(1), "NBA")]
     msg = format_discord_messages(contests)
     assert "New dub found!" in msg
 
@@ -538,7 +538,7 @@ def test_get_draft_groups_allows_suffixless():
 
 
 def test_get_stats_counts_duplicate_dubs():
-    contests = [Contest(_contest_payload(1), "NBA"), Contest(_contest_payload(2), "NBA")]
+    contests = [Contest.from_lobby(_contest_payload(1), "NBA"), Contest.from_lobby(_contest_payload(2), "NBA")]
     stats = get_stats(contests)
     date_key = contests[0].start_dt.strftime("%Y-%m-%d")
     assert stats[date_key]["dubs"][10] == 2
@@ -599,7 +599,7 @@ def test_get_stats_counts_multiple_entry_fees():
     contest1 = _contest_payload(1)
     contest2 = _contest_payload(2)
     contest2["a"] = 25
-    contests = [Contest(contest1, "NBA"), Contest(contest2, "NBA")]
+    contests = [Contest.from_lobby(contest1, "NBA"), Contest.from_lobby(contest2, "NBA")]
 
     stats = get_stats(contests)
     date_key = contests[0].start_dt.strftime("%Y-%m-%d")

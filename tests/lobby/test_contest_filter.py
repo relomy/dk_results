@@ -34,7 +34,7 @@ def _payload(
 
 
 def _contest(dk_id: int, sport: str = "NFL", **kwargs) -> Contest:
-    return Contest(_payload(dk_id, **kwargs), sport)
+    return Contest.from_lobby(_payload(dk_id, **kwargs), sport)
 
 
 # ── base double-up predicate ──────────────────────────────────────────────────

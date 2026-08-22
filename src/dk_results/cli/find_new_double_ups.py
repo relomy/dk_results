@@ -101,7 +101,7 @@ def process_sport(
         cookies=lobby_cookies,
     )
 
-    contests = [Contest(c, sport_obj.name) for c in response_contests]
+    contests = [Contest.from_lobby(c, sport_obj.name) for c in response_contests]
     double_ups = get_double_ups(
         contests,
         draft_groups,

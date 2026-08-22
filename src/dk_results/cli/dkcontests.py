@@ -289,7 +289,7 @@ def main():
         response_contests = get_contests_from_response(response)
 
     # create list of Contest objects
-    contests = [Contest(c, selected_sport) for c in response_contests]
+    contests = [Contest.from_lobby(c, selected_sport) for c in response_contests]
 
     # print stats for contests
     print_stats(contests)

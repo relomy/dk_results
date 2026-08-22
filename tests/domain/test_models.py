@@ -102,7 +102,7 @@ def test_user_str_and_repr_smoke():
 
 
 def test_contest_fields_and_flags_from_dict():
-    contest = Contest(
+    contest = Contest.from_lobby(
         {
             "sd": "/Date(1700000000000)/",
             "n": " Contest ",
@@ -129,7 +129,7 @@ def test_contest_fields_and_flags_from_dict():
 
 
 def test_contest_get_dt_from_timestamp_and_str_smoke():
-    contest = Contest(
+    contest = Contest.from_lobby(
         {
             "sd": "/Date(0)/",
             "n": "Contest",
