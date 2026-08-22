@@ -13,12 +13,12 @@ from typing import Any, Callable, Protocol, runtime_checkable
 import requests
 from dfs_common import state
 
+from dk_results.analytics.optimizer import Optimizer
+from dk_results.analytics.trainfinder import TrainFinder
 from dk_results.classes.bonus_announcements import announce_vip_bonuses
-from dk_results.classes.contest_standings import ContestStandings, parse_contest_standings, players_to_values
 from dk_results.classes.contestdatabase import ContestDatabase
-from dk_results.classes.optimizer import Optimizer
-from dk_results.classes.sport import Sport
-from dk_results.classes.trainfinder import TrainFinder
+from dk_results.domain.contest_standings import ContestStandings, parse_contest_standings, players_to_values
+from dk_results.domain.sport import Sport
 from dk_results.vip_lineups import build_vip_entries, fetch_vip_lineups
 
 logger = logging.getLogger(__name__)

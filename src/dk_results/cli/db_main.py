@@ -13,8 +13,8 @@ from dfs_common.discord import WebhookSender
 from dk_results.classes.contestdatabase import ContestDatabase
 from dk_results.classes.draftkings import Draftkings
 from dk_results.classes.sheets_service import build_dfs_sheet_service
-from dk_results.classes.sport import Sport, get_sport_choices
 from dk_results.config import load_and_apply_settings
+from dk_results.domain.sport import Sport, get_sport_choices
 from dk_results.logging import configure_logging
 from dk_results.paths import repo_file
 from dk_results.services.snapshot_exporter import (

@@ -10,7 +10,7 @@ from dfs_common import state
 from discord.ext import commands
 
 from dk_results.classes.contestdatabase import ContestDatabase
-from dk_results.classes.sport import Sport, get_sport_choices
+from dk_results.domain.sport import Sport, get_sport_choices
 from dk_results.logging import configure_logging
 from dk_results.paths import repo_file
 

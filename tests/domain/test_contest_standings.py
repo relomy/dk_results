@@ -2,12 +2,12 @@ import logging
 
 import pytest
 
-from dk_results.classes.contest_standings import (
+from dk_results.analytics.optimizer import Optimizer
+from dk_results.domain.contest_standings import (
     parse_contest_standings,
     players_to_values,
 )
-from dk_results.classes.optimizer import Optimizer
-from dk_results.classes.sport import NBASport, NFLSport
+from dk_results.domain.sport import NBASport, NFLSport
 
 
 def _salary_rows():

@@ -1,4 +1,4 @@
-from classes.dfs_sheet_domain import (
+from dk_results.domain.dfs_sheet_domain import (
     build_values_for_vip_lineup,
     data_range_for_sport,
     end_col_for_sport,

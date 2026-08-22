@@ -1,7 +1,7 @@
 import logging
 from typing import Any
 
-from .user import User
+from dk_results.domain.user import User
 
 
 class TrainFinder:

@@ -3,8 +3,9 @@ import logging
 import sqlite3
 
 import pytest
-from classes.contest import Contest
 from classes.contestdatabase import ContestDatabase
+
+from dk_results.domain.contest import Contest
 
 
 @pytest.fixture

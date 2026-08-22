@@ -127,8 +127,8 @@ The Discord bot responds to the following commands (see handler functions in
 - `!sports` -> list supported sports (`bot/discord_bot.py:sports`)
 - `!health` -> bot and host uptime (`bot/discord_bot.py:health`)
 
-Supported sports are derived from `Sport.__subclasses__()` in `classes/sport.py` and
-used in CLI/bot choices (`classes/sport.py:Sport`, `db_main.py:main`,
+Supported sports are derived from `Sport.__subclasses__()` in `domain/sport.py` and
+used in CLI/bot choices (`domain/sport.py:Sport`, `db_main.py:main`,
 `find_new_double_ups.py:main`, `bot/discord_bot.py:_sport_choices`).
 
 ## Configuration (Environment Variables)

@@ -3,10 +3,11 @@ import runpy
 import sys
 import types
 
-from classes.contest import Contest
-from classes.sport import Sport
 from lobby.double_ups import get_stats
 from lobby.fetch import get_dk_lobby, get_lobby_response, requests_fetch_json
+
+from dk_results.domain.contest import Contest
+from dk_results.domain.sport import Sport
 
 
 def _contest_payload(dk_id: int, *, entries: int = 200, fee: int = 10):

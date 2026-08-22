@@ -2,7 +2,7 @@ import datetime
 import logging
 import sqlite3
 
-from dk_results.classes.contest import Contest
+from dk_results.domain.contest import Contest
 
 
 class ContestDatabase:

@@ -1,4 +1,4 @@
-from classes.bonus_rules import parse_bonus_counts
+from dk_results.domain.bonus_rules import parse_bonus_counts
 
 
 def test_parse_bonus_counts_golf_handles_tokens_and_counts():

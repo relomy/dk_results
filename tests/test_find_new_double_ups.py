@@ -3,8 +3,6 @@ import datetime
 import sys
 
 import pytest
-from classes.contest import Contest
-from classes.sport import NFLShowdownSport, NFLSport, PGAShowdownSport, PGAWeekendSport, Sport
 from dfs_common.discord import WebhookSender
 from lobby.common import get_salary_date, is_time_between, valid_date
 from lobby.double_ups import get_stats
@@ -26,6 +24,8 @@ from dk_results.cli.find_new_double_ups import (
     send_discord_notification,
     set_quiet_verbosity,
 )
+from dk_results.domain.contest import Contest
+from dk_results.domain.sport import NFLShowdownSport, NFLSport, PGAShowdownSport, PGAWeekendSport, Sport
 
 
 def test_find_new_double_ups_exposes_webhook_sender():

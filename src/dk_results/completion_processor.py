@@ -28,8 +28,8 @@ from typing import Any, Protocol
 
 from dk_results.classes.contestdatabase import ContestDatabase
 from dk_results.classes.notification_store import NotificationStore
-from dk_results.classes.sport import Sport
 from dk_results.classes.vip_presence import VIP_ABSENT, ContestResultsPort, vip_key
+from dk_results.domain.sport import Sport
 from dk_results.sport_processor import BonusSenderPort
 
 logger = logging.getLogger(__name__)

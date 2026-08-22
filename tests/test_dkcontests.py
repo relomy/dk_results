@@ -2,9 +2,9 @@ import datetime
 import sys
 
 import pytest
-from classes.contest import Contest
 
 import dk_results.cli.dkcontests as dkcontests
+from dk_results.domain.contest import Contest
 
 
 def _contest_payload(dk_id: int, *, entries: int = 200, fee: int = 25):

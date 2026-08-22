@@ -1,6 +1,7 @@
 import pytest
-from classes.lineup import Lineup, LineupParseError, LockedSlot, parse_lineup_string
-from classes.player import Player
+
+from dk_results.domain.lineup import Lineup, LineupParseError, LockedSlot, parse_lineup_string
+from dk_results.domain.player import Player
 
 
 class DummySport:

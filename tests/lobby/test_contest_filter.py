@@ -1,7 +1,6 @@
 import datetime
 
-from classes.contest import Contest
-
+from dk_results.domain.contest import Contest
 from dk_results.lobby.contest_filter import filter_double_ups, largest_by_entries
 
 

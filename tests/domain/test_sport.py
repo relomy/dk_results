@@ -1,5 +1,6 @@
 import pytest
-from classes.sport import (
+
+from dk_results.domain.sport import (
     NFLShowdownSport,
     NHLSport,
     Sport,
@@ -71,7 +72,7 @@ def test_get_primary_sport_prefers_draftkings_override_and_falls_back_to_name():
 
 
 def test_fixed_sport_configuration_collections_are_tuples():
-    from classes.sport import CFBSport, GolfSport
+    from dk_results.domain.sport import CFBSport, GolfSport
 
     assert isinstance(CFBSport.positions, tuple)
     assert isinstance(CFBSport.position_constraints, tuple)

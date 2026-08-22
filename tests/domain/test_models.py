@@ -1,10 +1,10 @@
 import datetime
 
-from classes.contest import Contest
-from classes.lineup import Lineup
-from classes.player import Player
-from classes.sport import NFLSport
-from classes.user import User
+from dk_results.domain.contest import Contest
+from dk_results.domain.lineup import Lineup
+from dk_results.domain.player import Player
+from dk_results.domain.sport import NFLSport
+from dk_results.domain.user import User
 
 
 def test_player_post_init_splits_roster_pos_and_casts_salary():

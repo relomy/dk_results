@@ -3,8 +3,8 @@ from typing import Type
 
 import pulp as pl
 
-from .player import Player
-from .sport import Sport
+from dk_results.domain.player import Player
+from dk_results.domain.sport import Sport
 
 
 class Optimizer:

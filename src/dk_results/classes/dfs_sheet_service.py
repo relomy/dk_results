@@ -3,12 +3,13 @@
 import datetime
 from typing import Any, Sequence
 
-from .dfs_sheet_domain import (
+from dk_results.domain.dfs_sheet_domain import (
     build_values_for_vip_lineup,
     data_range_for_sport,
     header_range_for_sport,
     lineup_range_for_sport,
 )
+
 from .dfs_sheet_repository import DfsSheetRepository
 
 

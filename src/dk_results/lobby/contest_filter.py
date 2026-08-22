@@ -1,7 +1,7 @@
 import datetime
 from collections.abc import Sequence
 
-from dk_results.classes.contest import Contest
+from dk_results.domain.contest import Contest
 
 
 def is_double_up_contest(contest: Contest) -> bool:

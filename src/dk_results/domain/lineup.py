@@ -3,7 +3,7 @@ import unicodedata
 from dataclasses import dataclass
 from typing import Type
 
-from dk_results.classes.sport import Sport
+from dk_results.domain.sport import Sport
 
 from .player import Player
 

@@ -6,9 +6,9 @@ from collections import OrderedDict
 from pathlib import Path
 
 import pytest
-from classes.sport import NFLSport
 
 import dk_results.cli.db_main as db_main
+from dk_results.domain.sport import NFLSport
 from dk_results.sport_processor import (
     NoLiveContestError,
     SportProcessor,
