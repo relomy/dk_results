@@ -412,13 +412,13 @@ def test_get_incomplete_contests_returns_started_and_pending(contest_db):
     assert row1[4] == "UPCOMING" and row1[8] == "NBA"
 
 
-def test_get_incomplete_contests_error_returns_empty():
+def test_get_incomplete_contests_error_returns_none():
     class BoomConn:
         def cursor(self):
             raise sqlite3.Error("boom")
 
     db = ContestDatabase.from_connection(BoomConn())  # type: ignore[arg-type]
-    assert db.get_incomplete_contests() == []
+    assert db.get_incomplete_contests() is None
 
 
 def test_update_contest_writes_fields(contest_db):
