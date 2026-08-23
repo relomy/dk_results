@@ -1,6 +1,6 @@
 from types import SimpleNamespace
 
-from dk_results.analytics.contest_metrics import average_remaining_salary, remaining_ownership, remaining_salary
+from dk_results.analytics.contest_metrics import average_remaining_salary, remaining_ownership
 
 
 def test_remaining_ownership_ignores_final_slots() -> None:
@@ -11,7 +11,6 @@ def test_remaining_ownership_ignores_final_slots() -> None:
 
 
 def test_remaining_salary_and_average_are_pure() -> None:
-    assert remaining_salary([{"salary": 10000}, {"salary": 5000}]) == 35000.0
     users = [
         SimpleNamespace(lineupobj=SimpleNamespace(lineup=[SimpleNamespace(salary=10000, game_info="Live")])),
         SimpleNamespace(lineupobj=SimpleNamespace(lineup=[SimpleNamespace(salary=5000, game_info="Live")])),

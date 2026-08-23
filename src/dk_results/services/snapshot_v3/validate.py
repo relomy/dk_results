@@ -61,12 +61,104 @@ def _validate_contest_required_fields(sport: str, contest: dict[str, Any]) -> li
             continue
         if not _has_type(value, expected_type):
             violations.append(f"sports.{sport}.contests[0].{field} has invalid type")
+    if contest.get("start_time") is not None and not _is_valid_timestamp(contest["start_time"]):
+        violations.append(f"sports.{sport}.contests[0].start_time must be a valid ISO timestamp")
+    if contest.get("max_entries_per_user") is not None and not _has_type(contest["max_entries_per_user"], int):
+        violations.append(f"sports.{sport}.contests[0].max_entries_per_user has invalid type")
+    return violations
+
+
+def _validate_sport_payload(sport: str, sport_payload: dict[str, Any]) -> list[str]:
+    violations: list[str] = []
+    required_fields: dict[str, type] = {
+        "status": str,
+        "updated_at": str,
+        "players": list,
+        "primary_contest": dict,
+        "contests": list,
+    }
+    for field, expected_type in required_fields.items():
+        value = sport_payload.get(field)
+        if value is None:
+            violations.append(f"sports.{sport}.{field} is required")
+        elif not _has_type(value, expected_type):
+            violations.append(f"sports.{sport}.{field} has invalid type")
+
+    if isinstance(sport_payload.get("updated_at"), str) and not _is_valid_timestamp(sport_payload["updated_at"]):
+        violations.append(f"sports.{sport}.updated_at must be a valid ISO timestamp")
+    if isinstance(sport_payload.get("status"), str) and sport_payload["status"] not in {"ok", "stale", "error"}:
+        violations.append(f"sports.{sport}.status has invalid value")
+
+    players = sport_payload.get("players")
+    if isinstance(players, list):
+        for index, row in enumerate(players):
+            if not isinstance(row, dict):
+                violations.append(f"sports.{sport}.players[{index}] must be an object")
+                continue
+            for field in ("name", "player_key"):
+                if field in row and row[field] is not None and not _is_non_empty_string(row[field]):
+                    violations.append(f"sports.{sport}.players[{index}].{field} has invalid type")
+
+    contests = sport_payload.get("contests")
+    if isinstance(contests, list):
+        for index, row in enumerate(contests):
+            if not isinstance(row, dict):
+                violations.append(f"sports.{sport}.contests[{index}] must be an object")
+
+    primary = sport_payload.get("primary_contest")
+    if isinstance(primary, dict):
+        for field in ("contest_id", "contest_key"):
+            if not _is_non_empty_string(primary.get(field)):
+                violations.append(f"sports.{sport}.primary_contest.{field} is required")
+        if "selection_reason" not in primary or not isinstance(primary.get("selection_reason"), dict):
+            violations.append(f"sports.{sport}.primary_contest.selection_reason is required")
+        if not _is_valid_timestamp(primary.get("selected_at")):
+            violations.append(f"sports.{sport}.primary_contest.selected_at must be a valid ISO timestamp")
+    return violations
+
+
+def _validate_section_rows(sport: str, contest: dict[str, Any]) -> list[str]:
+    violations: list[str] = []
+    for section in ("standings", "vip_lineups", "train_clusters"):
+        rows = contest.get(section)
+        if rows is None:
+            continue
+        if not isinstance(rows, list):
+            violations.append(f"sports.{sport}.contests[0].{section} has invalid type")
+            continue
+        for index, row in enumerate(rows):
+            if not isinstance(row, dict):
+                violations.append(f"sports.{sport}.contests[0].{section}[{index}] must be an object")
+    for section in ("ownership_watchlist", "live_metrics", "metrics"):
+        value = contest.get(section)
+        if value is not None and not isinstance(value, dict):
+            violations.append(f"sports.{sport}.contests[0].{section} has invalid type")
+    live_metrics = contest.get("live_metrics")
+    if isinstance(live_metrics, dict):
+        if "updated_at" in live_metrics and not _is_valid_timestamp(live_metrics.get("updated_at")):
+            violations.append(f"sports.{sport}.contests[0].live_metrics.updated_at must be a valid ISO timestamp")
+        cash_line = live_metrics.get("cash_line")
+        if cash_line is not None and not isinstance(cash_line, dict):
+            violations.append(f"sports.{sport}.contests[0].live_metrics.cash_line has invalid type")
+    metrics = contest.get("metrics")
+    if isinstance(metrics, dict):
+        if "updated_at" in metrics and not _is_valid_timestamp(metrics.get("updated_at")):
+            violations.append(f"sports.{sport}.contests[0].metrics.updated_at must be a valid ISO timestamp")
+        for section in ("distance_to_cash", "threat"):
+            value = metrics.get(section)
+            if value is not None and not isinstance(value, dict):
+                violations.append(f"sports.{sport}.contests[0].metrics.{section} has invalid type")
     return violations
 
 
 def _validate_contest_id_coherence(sport: str, contest: dict[str, Any]) -> list[str]:
     violations: list[str] = []
     contest_id = str(contest.get("contest_id") or "")
+    expected_sport = sport.lower()
+    if contest.get("sport") != expected_sport:
+        violations.append(f"sports.{sport}.contests[0].sport must match sport key")
+    if contest.get("contest_key") != f"{expected_sport}:{contest_id}":
+        violations.append(f"sports.{sport}.contests[0].contest_key must match sport and contest_id")
 
     for section_name in ("standings", "vip_lineups", "train_clusters", "players"):
         rows = contest.get(section_name)
@@ -194,6 +286,7 @@ def validate_v3_envelope(payload: dict[str, Any]) -> list[str]:
             continue
 
         sport_payload = sport_payload_raw
+        violations.extend(_validate_sport_payload(sport_name, sport_payload))
         single_contest_violations = validate_single_contest(sport_payload)
         if single_contest_violations:
             for message in single_contest_violations:
@@ -206,6 +299,7 @@ def validate_v3_envelope(payload: dict[str, Any]) -> list[str]:
             continue
 
         violations.extend(_validate_contest_required_fields(sport_name, contest))
+        violations.extend(_validate_section_rows(sport_name, contest))
         violations.extend(_validate_contest_id_coherence(sport_name, contest))
         violations.extend(_validate_train_cluster_references(sport_name, contest))
 
@@ -213,6 +307,8 @@ def validate_v3_envelope(payload: dict[str, Any]) -> list[str]:
         if not isinstance(primary_contest, dict):
             violations.append(f"sports.{sport_name}.primary_contest is required")
         else:
+            if str(primary_contest.get("contest_id") or "") != str(contest.get("contest_id") or ""):
+                violations.append(f"sports.{sport_name}.primary_contest.contest_id must match contests[0].contest_id")
             if str(primary_contest.get("contest_key") or "") != str(contest.get("contest_key") or ""):
                 violations.append(f"sports.{sport_name}.primary_contest.contest_key must match contests[0].contest_key")
 

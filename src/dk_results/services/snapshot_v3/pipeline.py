@@ -4,12 +4,13 @@ from __future__ import annotations
 
 import datetime
 import os
+from collections.abc import Callable
 from typing import Any
 
 from dk_results.config import load_settings
 from dk_results.domain.sport import get_sport_choices
 from dk_results.services.snapshot_v3.builder import build_sport_payload
-from dk_results.services.snapshot_v3.collector import collect_raw_bundle
+from dk_results.services.snapshot_v3.collector import CollectedSnapshot, collect_snapshot
 from dk_results.services.snapshot_v3.constants import DEFAULT_STANDINGS_LIMIT
 from dk_results.services.snapshot_v3.contracts import SCHEMA_VERSION
 from dk_results.services.snapshot_v3.derive import (
@@ -61,12 +62,14 @@ def _build_single_sport_payload(
     contest_id: int | None,
     standings_limit: int,
     generated_at: str,
+    collector: Callable[..., dict[str, Any] | CollectedSnapshot],
 ) -> dict[str, Any]:
-    raw_bundle = collect_raw_bundle(
+    collected = collector(
         sport=sport,
         contest_id=contest_id,
         standings_limit=standings_limit,
     )
+    raw_bundle = collected.as_dict() if isinstance(collected, CollectedSnapshot) else collected
     derived = {
         "avg_salary_per_player_remaining": derive_avg_salary_per_player_remaining(raw_bundle),
         "distance_to_cash": derive_distance_to_cash(raw_bundle),
@@ -80,6 +83,7 @@ def build_snapshot_v3_envelope(
     *,
     standings_limit: int = DEFAULT_STANDINGS_LIMIT,
     generated_at: str | None = None,
+    collector: Callable[..., dict[str, Any] | CollectedSnapshot] | None = None,
 ) -> dict[str, Any]:
     resolved_generated_at = _resolved_generated_at(generated_at)
     sports: dict[str, Any] = {}
@@ -91,6 +95,7 @@ def build_snapshot_v3_envelope(
             contest_id=contest_id,
             standings_limit=standings_limit,
             generated_at=resolved_generated_at,
+            collector=collector or collect_snapshot,
         )
 
     envelope = {

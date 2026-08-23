@@ -1,5 +1,24 @@
-from dk_results.services.snapshot_v3.collector import collect_raw_bundle
+from dk_results.services.snapshot_v3.collector import _leaderboard_row_payout_cents, collect_raw_bundle
 from dk_results.services.snapshot_v3.derive import derive_threat
+
+
+def test_leaderboard_payout_parser_sums_cash_winnings_and_ignores_non_cash() -> None:
+    assert (
+        _leaderboard_row_payout_cents(
+            {
+                "winnings": [
+                    {"payoutType": "CASH", "winningValue": "12.34"},
+                    {"payoutType": "TICKET", "winningValue": "5.00"},
+                    {"payoutType": "CASH", "winningValue": "0.66"},
+                ]
+            }
+        )
+        == 1300
+    )
+
+
+def test_leaderboard_payout_parser_prefers_scalar_winning_value() -> None:
+    assert _leaderboard_row_payout_cents({"winningValue": "3.25", "winnings": [{"winningValue": "99.00"}]}) == 325
 
 
 def test_collect_raw_bundle_returns_expected_raw_shape(monkeypatch) -> None:

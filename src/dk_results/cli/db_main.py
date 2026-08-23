@@ -136,6 +136,9 @@ def main() -> None:
             continue
 
     if args.snapshot_out:
+        if not selected_contests:
+            logger.info("snapshot skipped: no contests selected; existing output preserved")
+            return
         payload = build_snapshot_payload(
             selected_contests,
             standings_limit=args.standings_limit,

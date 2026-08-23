@@ -7,12 +7,14 @@ import datetime
 import hashlib
 import logging
 import os
+from dataclasses import dataclass
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
-from typing import Any
+from typing import Any, cast
 from zoneinfo import ZoneInfo
 
 from dfs_common import state
 
+from dk_results.analytics.contest_metrics import average_remaining_salary, remaining_ownership
 from dk_results.analytics.trainfinder import TrainFinder
 from dk_results.domain.contest_standings import parse_contest_standings
 from dk_results.domain.sport import Sport
@@ -38,6 +40,16 @@ COOKIES_FILE = str(repo_file("pickled_cookies_works.txt"))
 CANDIDATE_LIMIT = 5
 
 
+@dataclass(frozen=True)
+class CollectedSnapshot:
+    """Normalized collection result crossing into snapshot derivation/building."""
+
+    bundle: dict[str, Any]
+
+    def as_dict(self) -> dict[str, Any]:
+        return dict(self.bundle)
+
+
 def _sport_choices() -> dict[str, type[Sport]]:
     from dk_results.domain.sport import get_sport_choices
 
@@ -56,50 +68,6 @@ def _rank_numeric(value: Any) -> int | None:
                 return int(text[1:])
             except ValueError:
                 return None
-    return None
-
-
-def _ownership_remaining_for_user(user: Any) -> float | None:
-    lineup_obj = getattr(user, "lineupobj", None)
-    if not lineup_obj:
-        return None
-    total = 0.0
-    has_any = False
-    for player in getattr(lineup_obj, "lineup", []):
-        if getattr(player, "game_info", "") == "Final":
-            continue
-        ownership = getattr(player, "ownership", None)
-        if ownership in (None, ""):
-            continue
-        has_any = True
-        total += float(ownership) * 100
-    if not has_any:
-        return 0.0
-    return total
-
-
-def _avg_salary_per_player_remaining(users: list[Any]) -> float | None:
-    total_salary = 0.0
-    remaining_slots = 0
-    saw_any_slot = False
-    for user in users:
-        lineup_obj = getattr(user, "lineupobj", None)
-        if not lineup_obj:
-            continue
-        for player in getattr(lineup_obj, "lineup", []):
-            saw_any_slot = True
-            if str(getattr(player, "game_info", "")).strip() == "Final":
-                continue
-            salary = to_float(getattr(player, "salary", None))
-            if not isinstance(salary, (int, float)):
-                continue
-            total_salary += float(salary)
-            remaining_slots += 1
-
-    if remaining_slots > 0:
-        return total_salary / float(remaining_slots)
-    if saw_any_slot:
-        return 0.0
     return None
 
 
@@ -231,13 +199,29 @@ def _dollars_to_cents_half_up(value: Any) -> int | None:
 
 
 def _leaderboard_row_payout_cents(row: dict[str, Any]) -> int | None:
-    candidates = (
-        row.get("winningValue"),
-        row.get("winnings"),
-        row.get("payout"),
-        row.get("cash"),
-    )
-    for candidate in candidates:
+    winning_value = _dollars_to_cents_half_up(row.get("winningValue"))
+    if winning_value is not None:
+        return winning_value
+
+    winnings = row.get("winnings")
+    if isinstance(winnings, list):
+        cash_total = 0
+        found_cash = False
+        for payout in winnings:
+            if not isinstance(payout, dict):
+                continue
+            payout_kind = _first_not_blank(payout.get("payoutType"), payout.get("description"))
+            if payout_kind is not None and "cash" not in str(payout_kind).lower():
+                continue
+            value = _first_not_blank(payout.get("winningValue"), payout.get("value"), payout.get("amount"))
+            cents = _dollars_to_cents_half_up(value)
+            if cents is not None:
+                cash_total += cents
+                found_cash = True
+        if found_cash:
+            return cash_total
+
+    for candidate in (row.get("payout"), row.get("cash")):
         cents = _dollars_to_cents_half_up(candidate)
         if cents is not None:
             return cents
@@ -603,6 +587,18 @@ def _collect_source_snapshot(
         )
 
         vip_lookup = {vip.name for vip in results.vip_list}
+        vip_lineup_rows: list[dict[str, Any]] = [
+            cast(dict[str, Any], row) for row in vip_lineups if isinstance(row, dict)
+        ]
+        vip_points_by_entry = {
+            str(row.get("vip_entry_key") or row.get("entry_key")): to_float(row.get("pts"))
+            for row in vip_lineup_rows
+            if (row.get("vip_entry_key") or row.get("entry_key")) not in (None, "")
+            and to_float(row.get("pts")) is not None
+        }
+        for vip in results.vip_list:
+            if vip.player_id not in (None, "") and str(vip.player_id) not in vip_points_by_entry:
+                vip_points_by_entry[str(vip.player_id)] = to_float(vip.pts)
         standings = []
         cash_points_cutoff = results.min_cash_pts if results.min_rank > 0 else None
         for user in results.users:
@@ -610,7 +606,11 @@ def _collect_source_snapshot(
             points = to_float(user.pts)
             entry_key = user.player_id
             payout_cents = leaderboard_payout_by_entry.get(str(entry_key), None) if entry_key else None
-            if isinstance(payout_cents, int):
+            is_vip = user.name in vip_lookup
+            vip_points = vip_points_by_entry.get(str(entry_key)) if entry_key else None
+            if is_vip and isinstance(vip_points, (int, float)) and isinstance(cash_points_cutoff, (int, float)):
+                is_cashing = float(vip_points) >= float(cash_points_cutoff)
+            elif isinstance(payout_cents, int):
                 is_cashing = payout_cents > 0
             elif isinstance(points, (int, float)) and isinstance(cash_points_cutoff, (int, float)):
                 is_cashing = float(points) >= float(cash_points_cutoff)
@@ -625,8 +625,13 @@ def _collect_source_snapshot(
                     "points": points,
                     "payout_cents": payout_cents,
                     "is_cashing": is_cashing,
-                    "ownership_remaining_total_pct": _ownership_remaining_for_user(user),
-                    "is_vip": user.name in vip_lookup,
+                    "ownership_remaining_total_pct": (
+                        remaining_ownership(getattr(getattr(user, "lineupobj", None), "lineup", ()))
+                        if getattr(user, "lineupobj", None)
+                        else None
+                    ),
+                    "remaining_salary": user.salary,
+                    "is_vip": is_vip,
                 }
             )
 
@@ -672,7 +677,7 @@ def _collect_source_snapshot(
             if row["ownership_remaining_total_pct"] is not None
         ]
         ownership_remaining_total = sum(ownership_values) / len(ownership_values) if ownership_values else None
-        avg_salary_per_player_remaining = _avg_salary_per_player_remaining(results.users)
+        avg_salary_per_player_remaining = average_remaining_salary(results.users)
 
         top_remaining_players: list[dict[str, Any]] = []
         if results.non_cashing_users > 0:
@@ -831,12 +836,12 @@ def _collect_source_snapshot(
             contest_db.close()
 
 
-def collect_raw_bundle(
+def collect_snapshot(
     *,
     sport: str,
     contest_id: int | None = None,
     standings_limit: int = DEFAULT_STANDINGS_LIMIT,
-) -> dict[str, Any]:
+) -> CollectedSnapshot:
     raw = _collect_source_snapshot(
         sport=sport,
         contest_id=contest_id,
@@ -866,18 +871,31 @@ def collect_raw_bundle(
             ownership[field] = _normalize_top_remaining_players(rows, unique_name_to_player_key)
 
     selection = dict(raw.get("selection") or {})
-    return {
-        "sport": raw.get("sport"),
-        "contest": dict(raw.get("contest") or {}),
-        "selected_contest_id": selection.get("selected_contest_id"),
-        "selection_reason": selection.get("reason"),
-        "candidates": list(raw.get("candidates") or []),
-        "cash_line": dict(raw.get("cash_line") or {}),
-        "players": players,
-        "ownership": ownership,
-        "standings": standings,
-        "vip_lineups": vip_lineups,
-        "train_clusters": train_clusters,
-        "truncation": dict(raw.get("truncation") or {}),
-        "metadata": dict(raw.get("metadata") or {}),
-    }
+    return CollectedSnapshot(
+        bundle={
+            "sport": raw.get("sport"),
+            "contest": dict(raw.get("contest") or {}),
+            "selected_contest_id": selection.get("selected_contest_id"),
+            "selection_reason": selection.get("reason"),
+            "candidates": list(raw.get("candidates") or []),
+            "cash_line": dict(raw.get("cash_line") or {}),
+            "players": players,
+            "ownership": ownership,
+            "standings": standings,
+            "vip_lineups": vip_lineups,
+            "train_clusters": train_clusters,
+            "truncation": dict(raw.get("truncation") or {}),
+            "metadata": dict(raw.get("metadata") or {}),
+        }
+    )
+
+
+def collect_raw_bundle(
+    *,
+    sport: str,
+    contest_id: int | None = None,
+    standings_limit: int = DEFAULT_STANDINGS_LIMIT,
+) -> dict[str, Any]:
+    """Compatibility wrapper returning the normalized bundle mapping."""
+
+    return collect_snapshot(sport=sport, contest_id=contest_id, standings_limit=standings_limit).as_dict()

@@ -20,14 +20,6 @@ def remaining_ownership(slots: Iterable[Any]) -> float:
     return total
 
 
-def remaining_salary(slots: Iterable[Any], salary_cap: float = 50000.0) -> float | None:
-    """Return salary left after the supplied lineup slots, or ``None`` if empty."""
-
-    salaries = [slot.get("salary") if isinstance(slot, Mapping) else getattr(slot, "salary", None) for slot in slots]
-    salaries = [float(salary) for salary in salaries if salary not in (None, "")]
-    return salary_cap - sum(salaries) if salaries else None
-
-
 def average_remaining_salary(users: Iterable[Any]) -> float | None:
     """Return the slot-weighted average salary for unfinished lineup slots."""
 

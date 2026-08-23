@@ -5,7 +5,7 @@ def test_build_snapshot_v3_envelope_normalizes_generated_at_and_orders_sports(mo
     build_calls: list[tuple[str, str]] = []
 
     monkeypatch.setattr(
-        "dk_results.services.snapshot_v3.pipeline.collect_raw_bundle",
+        "dk_results.services.snapshot_v3.pipeline.collect_snapshot",
         lambda *, sport, contest_id, standings_limit: {
             "sport": sport,
             "contest": {"contest_id": str(contest_id or sport)},
@@ -62,7 +62,7 @@ def test_build_snapshot_v3_envelope_normalizes_generated_at_and_orders_sports(mo
 
 def test_build_snapshot_v3_envelope_raises_on_validation_errors(monkeypatch) -> None:
     monkeypatch.setattr(
-        "dk_results.services.snapshot_v3.pipeline.collect_raw_bundle",
+        "dk_results.services.snapshot_v3.pipeline.collect_snapshot",
         lambda *, sport, contest_id, standings_limit: {
             "sport": sport,
             "contest": {"contest_id": str(contest_id or "1")},

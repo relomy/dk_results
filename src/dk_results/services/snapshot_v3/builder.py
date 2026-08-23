@@ -37,7 +37,11 @@ def _cash_line_metric(cash_line: dict[str, Any]) -> dict[str, Any] | None:
         "rank_cutoff": rank_cutoff,
         "points_cutoff": points_cutoff,
     }
-    if metric["rank_cutoff"] is None and metric["points_cutoff"] is None and cutoff_type == "unknown":
+    if cutoff_type == "rank" and metric["rank_cutoff"] is None:
+        return None
+    if cutoff_type == "points" and metric["points_cutoff"] is None:
+        return None
+    if metric["rank_cutoff"] is None and metric["points_cutoff"] is None:
         return None
     return metric
 

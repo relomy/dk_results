@@ -90,6 +90,14 @@ uv run python db_main.py --sport NBA GOLF --snapshot-out /tmp/live-snapshot.json
 
 `--snapshot-out` is opt-in and emits the same schema-3 envelope as the exporter commands; it does not change normal sheet-writing behavior when omitted.
 
+Snapshot operations:
+
+- A scheduled `db_main --snapshot-out` run with no successfully selected contests
+  skips snapshot generation and leaves any existing output artifact unchanged.
+- To roll back a bad snapshot, restore the last known-good schema-3 artifact (or
+  deploy the previous producer version) and rerun the publish step. Runtime
+  compatibility with retired snapshot schemas is not supported.
+
 - `db_main.py` updates Google Sheets for a live contest per sport by downloading salary
   and standings CSVs, constructing `Results`, and writing via `DfsSheetService`
   (`db_main.py:process_sport`, `dk_results/draftkings/client.py:download_salary_csv`,

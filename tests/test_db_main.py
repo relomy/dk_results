@@ -436,6 +436,41 @@ def test_main_snapshot_out_writes_opt_in_envelope(monkeypatch, tmp_path):
     assert payload["snapshot_at"].endswith("Z")
 
 
+def test_main_snapshot_out_skips_and_preserves_existing_output_when_no_contests(monkeypatch, tmp_path):
+    out = tmp_path / "snapshot.json"
+    original = '{"schema_version":3,"sports":{"nba":{}}}\n'
+    out.write_text(original, encoding="utf-8")
+    monkeypatch.setattr(db_main, "load_dotenv", lambda: None)
+    monkeypatch.setattr(db_main, "load_and_apply_settings", lambda: None)
+    monkeypatch.setattr(db_main.state, "contests_db_path", lambda: tmp_path / "contests.db")
+    monkeypatch.setattr(db_main, "ContestDatabase", lambda _path: object())
+    monkeypatch.setattr(db_main, "Draftkings", lambda: object())
+    monkeypatch.setattr(db_main, "load_vips", lambda: [])
+    monkeypatch.setattr(
+        db_main.argparse.ArgumentParser,
+        "parse_args",
+        lambda _self: Namespace(
+            sport=["NFL"],
+            nolineups=False,
+            verbose=False,
+            snapshot_out=str(out),
+            standings_limit=123,
+        ),
+    )
+
+    class _FakeSportProcessor:
+        def __init__(self, **kwargs):
+            pass
+
+        def run(self, sport_name, sport_cls):
+            raise NoLiveContestError("none")
+
+    monkeypatch.setattr(db_main, "SportProcessor", _FakeSportProcessor)
+    db_main.main()
+
+    assert out.read_text(encoding="utf-8") == original
+
+
 def test_main_verbose_enables_debug_without_mutating_log_level_env(monkeypatch, tmp_path):
     monkeypatch.setenv("LOG_LEVEL", "INFO")
     monkeypatch.setattr(db_main, "load_dotenv", lambda: None)
