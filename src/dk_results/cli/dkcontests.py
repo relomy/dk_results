@@ -38,7 +38,6 @@ Response format: {
 import argparse
 import datetime
 from collections.abc import Mapping
-from pprint import pformat
 from typing import Type
 
 from dk_results.domain.contest import Contest
@@ -49,23 +48,6 @@ from dk_results.lobby.double_ups import get_stats
 from dk_results.lobby.draft_group_filter import filter_draft_groups
 from dk_results.lobby.fetch import get_lobby_response
 from dk_results.lobby.parsing import get_contests_from_response
-
-_PGA_CRON_CONFIG = {"sport_length": 8, "get_interval": "4-59/15"}
-_SPORT_CRON_CONFIG = {
-    "NBA": {"sport_length": 6, "get_interval": "*/5"},
-    "NFL": {"sport_length": 6, "get_interval": "*/5"},
-    "CFB": {"sport_length": 6, "get_interval": "*/5"},
-    "MLB": {"sport_length": 7, "get_interval": "2-59/10"},
-    "PGA": _PGA_CRON_CONFIG,
-    "PGAWeekend": _PGA_CRON_CONFIG,
-    "PGAShowdown": _PGA_CRON_CONFIG,
-    "SOC": {"sport_length": 3, "get_interval": "*/5"},
-    "TEN": {"sport_length": 15, "get_interval": "5-59/10"},
-    "LOL": {"sport_length": 4, "get_interval": "*/5"},
-    "MMA": {"sport_length": 6, "get_interval": "*/10"},
-    "NAS": {"sport_length": 4, "get_interval": "*/5"},
-    "USFL": {"sport_length": 6, "get_interval": "*/10"},
-}
 
 
 def get_contests(sport: str, live: bool = False):
@@ -122,10 +104,6 @@ def get_draft_group_info(
     return None
 
 
-def get_cron_config(sport: str) -> dict[str, int | str]:
-    return _SPORT_CRON_CONFIG[sport]
-
-
 def get_largest_contest(
     contests,
     dt,
@@ -170,60 +148,6 @@ def get_contests_by_entries(contests, entry_fee, limit):
         [c for c in contests if c.entry_fee == entry_fee and c.entries > limit],
         key=lambda x: x.entries,
         reverse=True,
-    )
-
-
-def set_cron_interval(contest, sport_length):
-    # add about how long the slate should be
-    end_dt = contest.start_dt + datetime.timedelta(hours=sport_length)
-
-    # if dates are the same, we don't add days or hours
-    if contest.start_dt.date() == end_dt.date():
-        # print("dates are the same")
-        hours = f"{contest.start_dt:%H}-{end_dt:%H}"
-        days = f"{contest.start_dt:%d}"
-    else:
-        # print("dates are not the same - that means end_dt extends into the next day")
-        # don't double print 00s
-        if end_dt.strftime("%H") == "00":
-            hours = f"{end_dt:%H},{contest.start_dt:%H}-23"
-        else:
-            hours = f"00-{end_dt:%H},{contest.start_dt:%H}-23"
-        days = f"{contest.start_dt:%d}-{end_dt:%d}"
-
-    return f"{hours} {days} {end_dt:%m} *"
-
-
-def print_cron_job(contest, sport, draft_group_info=None):
-    print(
-        pformat(
-            {"contest": vars(contest), "draft_group": draft_group_info},
-            sort_dicts=False,
-            compact=True,
-            width=160,
-        )
-    )
-    home_dir = "/home/pi/Desktop"
-    pipenv_path = "/usr/local/bin/pipenv"
-
-    cron_config = get_cron_config(sport)
-
-    # set some long strings up as variables
-    py_str = f"cd {home_dir}/dk_results && {pipenv_path} run python"
-    dl_str = f"{py_str} download_DK_salary.py"
-    get_str = f"export DISPLAY=:1 && {py_str} main.py"
-    # cron_str = set_cron_interval(contest, dict_sports[sport]["get_interval"])
-    cron_str = set_cron_interval(contest, int(cron_config["sport_length"]))
-    out_str = f"{home_dir}/{sport}_results.log 2>&1"
-    file_str = f"DKSalaries_{sport}_{contest.start_dt:%A}.csv"
-
-    # print(
-    #     f"{dl_interval} {cron_str} {dl_str} -s {sport} -dg {contest.draft_group} >> {out_str}"
-    # )
-    print(f"Download CSV for this slate:\n{dl_str} -s {sport} -dg {contest.draft_group} -f {file_str}\n")
-    print(
-        f"{cron_config['get_interval']} {cron_str} {get_str} -s {sport} "
-        f"-i {contest.id} -dg {contest.draft_group} >> {out_str}"
     )
 
 
@@ -365,7 +289,7 @@ def main():
         response_contests = get_contests_from_response(response)
 
     # create list of Contest objects
-    contests = [Contest(c, selected_sport) for c in response_contests]
+    contests = [Contest.from_lobby(c, selected_sport) for c in response_contests]
 
     # print stats for contests
     print_stats(contests)
@@ -383,18 +307,6 @@ def main():
     # check if contest is empty
     if not contest:
         exit("No contests found.")
-
-    # change GOLF back to PGA
-    output_sport = selected_sport
-    if output_sport == "GOLF":
-        output_sport = "PGA"
-
-    # print out cron job for our other scripts
-    print_cron_job(
-        contest,
-        output_sport,
-        draft_group_info=get_draft_group_info(response, contest.draft_group),
-    )
 
     print_sql_insert(contest)
 

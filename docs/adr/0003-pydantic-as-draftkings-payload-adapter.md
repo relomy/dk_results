@@ -1,0 +1,5 @@
+# Pydantic as the DraftKings-payload adapter, not the domain substrate
+
+`Contest` — the DraftKings lobby row — is a `pydantic.BaseModel` used purely as an adapter at the DraftKings-payload boundary: it validates the raw lobby `dict` field by field via `Contest.from_lobby(dk_dict, sport)`, fails with a naming `ValidationError` on payload drift, and is frozen so it flows inward as a read-only DTO. pydantic is confined to `dk_results` and does not cross the `dfs_common` seam; nothing pydantic-typed is added to `dfs_common`.
+
+pydantic is adopted only for boundary/payload adapters, not as the substrate for domain objects. `ContestStandings`, `ContestDatabase`, `Player`, `User`, and `Lineup` stay plain. The rejected alternative was converting `Contest` (and, by precedent, the wider domain) to pydantic models with behaviour and serialization bookkeeping, which would make a validation-library choice a cross-repo lockstep dependency and blur the domain/boundary line. Other serialization boundaries named here (CSVs, SQLite rows, config/YAML) are future adapters, not part of this decision.

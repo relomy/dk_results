@@ -25,7 +25,7 @@ def _payload(dk_id: int):
 
 def test_contests_upsert_writes_shared_db(tmp_path, monkeypatch):
     monkeypatch.setenv("DFS_STATE_DIR", str(tmp_path))
-    contest = Contest(_payload(101), "GOLF")
+    contest = Contest.from_lobby(_payload(101), "GOLF")
     _upsert_contests([contest])
 
     db = ContestDatabase(str(state.contests_db_path()))
@@ -56,7 +56,7 @@ def test_contests_db_path_logs_info(tmp_path, monkeypatch, caplog):
 
 
 def test_upsert_contests_uses_state_path_once(monkeypatch):
-    contest = Contest(_payload(202), "NBA")
+    contest = Contest.from_lobby(_payload(202), "NBA")
     captured = {"db_path": None, "calls": 0}
 
     def fake_db_path():

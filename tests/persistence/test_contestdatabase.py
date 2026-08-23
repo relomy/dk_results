@@ -173,18 +173,18 @@ def test_compare_contests_empty_returns(contest_db):
 
 
 def test_compare_contests_filters_existing(contest_db):
-    contest = Contest(_contest_payload(101), "NBA")
+    contest = Contest.from_lobby(_contest_payload(101), "NBA")
     contest_db.insert_contests([contest])
 
     contests = [
-        Contest(_contest_payload(101), "NBA"),
-        Contest(_contest_payload(202), "NBA"),
+        Contest.from_lobby(_contest_payload(101), "NBA"),
+        Contest.from_lobby(_contest_payload(202), "NBA"),
     ]
     assert contest_db.compare_contests(contests) == [202]
 
 
 def test_insert_contests_writes_rows(contest_db):
-    contests = [Contest(_contest_payload(303), "NBA")]
+    contests = [Contest.from_lobby(_contest_payload(303), "NBA")]
     contest_db.insert_contests(contests)
     rows = list(contest_db.conn.execute("SELECT dk_id FROM contests"))
     assert rows == [(303,)]

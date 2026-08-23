@@ -93,8 +93,8 @@ def test_get_dk_lobby_uses_injected_fetch_json():
 
 def test_get_stats_include_largest_for_interactive_use():
     contests = [
-        Contest(_contest_payload(1, entries=120, fee=10), "NBA"),
-        Contest(_contest_payload(2, entries=300, fee=10), "NBA"),
+        Contest.from_lobby(_contest_payload(1, entries=120, fee=10), "NBA"),
+        Contest.from_lobby(_contest_payload(2, entries=300, fee=10), "NBA"),
     ]
 
     stats = get_stats(contests, include_largest=True)
