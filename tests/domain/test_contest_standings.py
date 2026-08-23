@@ -2,7 +2,7 @@ import logging
 
 import pytest
 
-from dk_results.analytics.optimizer import Optimizer
+from dk_results.analytics.lineup_solver import PulpCbcSolver
 from dk_results.domain.contest_standings import (
     parse_contest_standings,
     players_to_values,
@@ -233,8 +233,7 @@ def test_standings_pos_does_not_affect_optimizer_pos():
     tom = standings.players["Tom Brady"]
     assert tom.standings_pos == "QB/FLEX"
     assert tom.pos == "QB"
-    optimizer = Optimizer(NFLSport, standings.players)
-    selected = optimizer._create_decision_variables()
+    selected = PulpCbcSolver()._create_decision_variables(standings.players)
     assert ("Tom Brady", "QB") in selected
     assert ("Tom Brady", "FLEX") not in selected
 
@@ -256,8 +255,7 @@ def test_nba_dual_position_player():
     values = players_to_values(standings.players, "NBA")
     combo_row = next(r for r in values if r[1] == "Combo Guard")
     assert combo_row[0] == "PG/SG"
-    optimizer = Optimizer(NBASport, standings.players)
-    selected = optimizer._create_decision_variables()
+    selected = PulpCbcSolver()._create_decision_variables(standings.players)
     assert ("Combo Guard", "PG") in selected
     assert ("Combo Guard", "SG") in selected
 

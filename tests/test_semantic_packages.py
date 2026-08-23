@@ -11,7 +11,7 @@ DOMAIN_MODULES = {
     "sport",
     "user",
 }
-ANALYTICS_MODULES = {"optimizer", "trainfinder"}
+ANALYTICS_MODULES = {"lineup_solver", "optimizer", "trainfinder"}
 PACKAGE_MODULES = {
     "sheets": {"dfs_sheet_repository", "dfs_sheet_service", "sheets_service"},
     "draftkings": {"cookieservice", "dksession", "draftkings"},
