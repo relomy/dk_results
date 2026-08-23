@@ -444,7 +444,7 @@ def test_main_snapshot_out_skips_and_preserves_existing_output_when_no_contests(
     monkeypatch.setattr(db_main, "load_and_apply_settings", lambda: None)
     monkeypatch.setattr(db_main.state, "contests_db_path", lambda: tmp_path / "contests.db")
     monkeypatch.setattr(db_main, "ContestDatabase", lambda _path: object())
-    monkeypatch.setattr(db_main, "Draftkings", lambda: object())
+    monkeypatch.setattr(db_main, "DraftKings", lambda: object())
     monkeypatch.setattr(db_main, "load_vips", lambda: [])
     monkeypatch.setattr(
         db_main.argparse.ArgumentParser,

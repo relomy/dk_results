@@ -18,7 +18,7 @@ from dk_results.analytics.contest_metrics import average_remaining_salary, remai
 from dk_results.analytics.trainfinder import TrainFinder
 from dk_results.domain.contest_standings import parse_contest_standings
 from dk_results.domain.sport import Sport
-from dk_results.draftkings.draftkings import Draftkings
+from dk_results.draftkings import DraftKings as Draftkings
 from dk_results.paths import repo_file
 from dk_results.persistence.contestdatabase import ContestDatabase
 from dk_results.services.snapshot_v3.constants import DEFAULT_STANDINGS_LIMIT
