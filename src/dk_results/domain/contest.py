@@ -41,7 +41,7 @@ class Contest(BaseModel):
     start_date: str = Field(alias="sd")
     name: str = Field(alias="n")
     draft_group: int = Field(alias="dg")
-    total_prizes: int = Field(alias="po")
+    total_prizes: int | float = Field(alias="po")
     entries: int = Field(alias="m")
     entry_fee: int | float = Field(alias="a")
     entry_count: int = Field(alias="ec")

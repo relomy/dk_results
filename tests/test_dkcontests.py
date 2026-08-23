@@ -94,6 +94,12 @@ def test_from_lobby_maps_readable_fields_and_flags():
     assert contest.is_guaranteed is True
 
 
+def test_from_lobby_accepts_fractional_total_prizes():
+    contest = Contest.from_lobby({**_contest_payload(13), "po": 22.5}, "NFL")
+
+    assert contest.total_prizes == 22.5
+
+
 def test_from_lobby_flags_default_false_when_attr_key_absent():
     contest = Contest.from_lobby({**_contest_payload(8), "attr": {}}, "NFL")
 
