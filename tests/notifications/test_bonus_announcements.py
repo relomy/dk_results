@@ -1,10 +1,8 @@
 import sqlite3
+from dataclasses import dataclass
 
 import dk_results.notifications.bonus_announcements as bonus_announcements
-from dk_results.notifications.bonus_announcements import (
-    announce_vip_bonuses,
-    create_bonus_announcements_table,
-)
+from dk_results.notifications.bonus_announcements import announce_vip_bonuses
 
 
 class _Sender:
@@ -20,8 +18,30 @@ class _Sender:
 
 def _build_conn() -> sqlite3.Connection:
     conn = sqlite3.connect(":memory:")
-    create_bonus_announcements_table(conn)
+    bonus_announcements._SqliteBonusStateStore(conn).create_table()
     return conn
+
+
+@dataclass
+class _StateStore:
+    old_count: int = 0
+    updated: bool = True
+    ensured: bool = False
+    committed: bool = False
+    compare_and_set_args: tuple[int, int] | None = None
+
+    def load_count(self, _key):
+        return self.old_count
+
+    def ensure_row(self, _key) -> None:
+        self.ensured = True
+
+    def compare_and_set(self, _key, old_count: int, new_count: int) -> bool:
+        self.compare_and_set_args = (old_count, new_count)
+        return self.updated
+
+    def commit(self) -> None:
+        self.committed = True
 
 
 def test_announce_vip_bonuses_skips_empty_lineups():
@@ -36,6 +56,34 @@ def test_announce_vip_bonuses_skips_empty_lineups():
     )
     assert sent == 0
     assert sender.messages == []
+
+
+def test_announce_candidate_uses_internal_state_store_seam():
+    candidate = bonus_announcements.BonusCandidate(
+        display_name="Rory McIlroy",
+        normalized_player_name="Rory McIlroy",
+        bonus_code="EAG",
+        new_count=3,
+        max_ownership=0.347,
+        vip_users=["amy"],
+    )
+    sender = _Sender()
+    state_store = _StateStore(old_count=1)
+
+    result = bonus_announcements._announce_candidate(
+        state_store=state_store,
+        sender=sender,
+        sport="GOLF",
+        contest_id=777,
+        candidate=candidate,
+    )
+
+    assert result.persisted_announcements == 2
+    assert result.webhook_messages == 2
+    assert state_store.ensured is True
+    assert state_store.committed is True
+    assert state_store.compare_and_set_args == (1, 3)
+    assert len(sender.messages) == 2
 
 
 def test_announce_vip_bonuses_first_run_insert_and_update():
@@ -234,7 +282,11 @@ def test_announce_vip_bonuses_cas_rowcount_zero_skips_update(monkeypatch):
         (999, "GOLF", "Rory McIlroy", "EAG", 1),
     )
     conn.commit()
-    monkeypatch.setattr(bonus_announcements, "_cas_update_count", lambda *_a, **_k: False)
+    monkeypatch.setattr(
+        bonus_announcements._SqliteBonusStateStore,
+        "compare_and_set",
+        lambda *_a, **_k: False,
+    )
     vip_lineups = [
         {
             "user": "amy",
