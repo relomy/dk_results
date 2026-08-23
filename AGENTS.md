@@ -1,54 +1,25 @@
 # Repository Instructions
 
-## Scope
+dk_results is operational tooling for DraftKings contest tracking, Google Sheets
+updates, and Discord notifications.
 
-Apply these instructions to all work under `dk_results/`.
+## Essentials
 
-## Repository Context
+- Run everything through `uv` (Python `>=3.11,<3.12`); `uv sync` builds the venv.
+- Source in `src/`, tests in `tests/`.
+- `dfs-common` is a private git dependency; read `docs/TESTING.md` when a `uv`
+  command fails while building the venv.
 
-- Stack: Python
-- Python: `>=3.11,<3.12`
-- Package manager / runner: `uv`
-- Source code: `src/`
-- Tests: `tests/`
-- Local dependency: `dfs-common` from `../dfs_common` (editable source)
+## Further instructions
 
-## Working style
+Read these when the task calls for them:
 
-- Make the smallest safe change that solves the request.
-- Prefer existing code and seams before adding abstractions.
-- Keep unrelated refactors out of the change.
-- Ask before changing public outputs or integrations.
-
-## Change boundaries
-
-- Keep edits in this repository.
-- Ask before changing `../dfs_common` or any other repository.
-
-## Completion
-
-Before reporting a change complete:
-
-- Run the relevant tests for the touched functionality; use the full suite when the scope is broad.
-- Run `uv run ruff format --check --exclude .ci .`.
-- Run `uv run ruff check .`.
-- Run `uv run ty check`.
-- Report every command run and every failure with its exact command and a concise summary.
-
-The repository-wide test command is `uv run pytest`.
-
-## Commit messages
-
-- Use this format for commits: `type(scope): short summary`.
-- Keep `type` lowercase (`feat`, `fix`, `test`, `docs`, `chore`, etc.); make the summary imperative and concise.
-
-## Handoff
-
-In the final response, state:
-
-- what changed, including files and behavior;
-- what commands were run and whether they passed;
-- any remaining risk or follow-up.
+- **Testing & verification** — `docs/TESTING.md`: the checks to run before
+  reporting a change complete, and the `dfs-common` build gotcha.
+- **Code conventions** — `docs/CONVENTIONS.md`: change size, seams, and
+  repository boundaries.
+- **Delivery workflow** — `docs/WORKFLOW.md`: commit message format and handoff
+  report.
 
 ## Agent skills
 
