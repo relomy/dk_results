@@ -155,9 +155,11 @@ class NFLShowdownSport(Sport):
 
     draftkings_sport = "NFL"
 
-    # Showdown roster differs from the classic NFL layout; optimizer stays off
-    # (inherits the opt-in default) until confirmed against a real file.
-    positions = ("CPT", "FLEX")
+    # Layout confirmed from a real standings file: 1 CPT + 5 FLEX. Optimizer
+    # stays off (inherits the opt-in default): the CPT slot scores and costs 1.5x,
+    # which the flat per-player solver does not yet model, so a size-correct
+    # lineup would still misvalue the captain. See ADR-0005.
+    positions = ("CPT", "FLEX", "FLEX", "FLEX", "FLEX", "FLEX")
 
     # DK sometimes uses team-vs-team suffixes and sometimes event labels
     # like "(Super Bowl LX)" for the same showdown game type.
@@ -255,7 +257,9 @@ class WeekendGolfSport(Sport):
     name = "WeekendGolf"
     draftkings_sport = "GOLF"
 
-    positions = ("WG",)
+    # optimizer — layout confirmed from a real standings file: six WG slots.
+    positions = ("WG", "WG", "WG", "WG", "WG", "WG")
+    allow_optimizer = True
 
 
 class MLBSport(Sport):

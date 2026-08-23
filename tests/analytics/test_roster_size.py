@@ -36,6 +36,7 @@ from dk_results.domain.sport import (
     SOCSport,
     Sport,
     USFLSport,
+    WeekendGolfSport,
     XFLSport,
 )
 
@@ -106,6 +107,10 @@ def _golf_slate() -> dict[str, Player]:
     return _pool("G", "G", 10, 7000)
 
 
+def _weekend_golf_slate() -> dict[str, Player]:
+    return _pool("WG", "WG", 10, 7000)
+
+
 def _nhl_slate() -> dict[str, Player]:
     slate: dict[str, Player] = {}
     slate.update(_pool("C", "C/UTIL", 4, 5000))
@@ -137,6 +142,7 @@ _GATED = "gated (#62): positions unconfirmed against a real file; enumerate + en
         pytest.param(SOCSport, _soc_slate(), 8, id="soc"),
         pytest.param(CFBSport, _cfb_slate(), 8, id="cfb"),
         pytest.param(GolfSport, _golf_slate(), 6, id="golf"),
+        pytest.param(WeekendGolfSport, _weekend_golf_slate(), 6, id="weekend_golf"),
         # Gated: positions not yet confirmed, so allow_optimizer stays False.
         pytest.param(NHLSport, _nhl_slate(), 9, id="nhl", marks=pytest.mark.xfail(reason=_GATED, strict=True)),
         pytest.param(XFLSport, _xfl_slate(), 7, id="xfl", marks=pytest.mark.xfail(reason=_GATED, strict=True)),
@@ -155,7 +161,7 @@ def test_optimizer_fills_full_roster(sport: type[Sport], slate: dict[str, Player
 def test_allow_optimizer_is_opt_in() -> None:
     # The base default is off; only confirmed sports turn it on (ADR-0005).
     assert Sport.allow_optimizer is False
-    for enabled in (NFLSport, NBASport, MLBSport, SOCSport, CFBSport, GolfSport):
+    for enabled in (NFLSport, NBASport, MLBSport, SOCSport, CFBSport, GolfSport, WeekendGolfSport):
         assert enabled.allow_optimizer is True, f"{enabled.name} should be enabled"
     for gated in (NHLSport, XFLSport, USFLSport):
         assert gated.allow_optimizer is False, f"{gated.name} should be gated"

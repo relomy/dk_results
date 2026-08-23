@@ -27,9 +27,17 @@ removed.
 A sport is optimized only once its `positions` layout is confirmed against a real
 DraftKings salary/standings file, so an unverified sport cannot silently ship a
 wrong lineup. Enabled at introduction, from confirmed layouts: **NFL, NBA, MLB,
-SOC, CFB, GOLF**. Everything else — NHL, NASCAR, Tennis, MMA, LOL, the PGA and
-Weekend-Golf variants, all Showdown variants, and XFL/USFL — stays off until
-confirmed.
+SOC, CFB, GOLF, WeekendGolf**. Everything else — NHL, NASCAR, Tennis, MMA, LOL,
+the PGA variants, all Showdown variants, and XFL/USFL — stays off until confirmed.
+
+**Showdown is confirmed but still gated.** NFL Showdown's layout is known from a
+real file (1 `CPT` + 5 `FLEX`), and `positions` records it, but the `CPT` slot
+scores and costs 1.5x. The flat per-player solver applies one `fpts`/`salary`
+regardless of slot, so it would fill a size-correct lineup that misvalues the
+captain. Correct showdown optimization needs a captain-multiplier model — a
+separate enhancement — so `allow_optimizer` stays off. Size-correctness is not
+value-correctness here, so showdown is deliberately excluded from the roster-size
+acceptance test.
 
 XFL and USFL are a specific hazard: they author a `WR/TE` compound slot, but
 `Player.roster_pos = roster_pos_raw.split("/")` would split a real `WR/TE`
