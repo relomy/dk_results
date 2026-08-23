@@ -4,12 +4,12 @@ import pickle
 import requests
 from requests.cookies import RequestsCookieJar
 
-from .cookieservice import get_dk_cookies
+from .cookies import get_dk_cookies
 
 logger = logging.getLogger(__name__)
 
 
-class DkSession:
+class AuthSession:
     """Create and hold an authenticated DraftKings requests.Session."""
 
     def __init__(self) -> None:

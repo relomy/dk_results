@@ -14,7 +14,7 @@ from dk_results.bot.discord_rest import DiscordRest
 from dk_results.completion_processor import CompletionProcessor, CompletionProcessorConfig
 from dk_results.config import load_and_apply_settings
 from dk_results.domain.sport import Sport, get_sport_choices
-from dk_results.draftkings.draftkings import Draftkings
+from dk_results.draftkings import DraftKings
 from dk_results.logging import configure_logging
 from dk_results.notifications.vip_presence import VipPresence
 from dk_results.paths import repo_file
@@ -195,7 +195,7 @@ class _UnavailableContestResults:
     """A `ContestResultsPort` used when the DraftKings client cannot be built.
 
     Every read raises, so `CompletionProcessor` degrades exactly as the original
-    per-call ``Draftkings()`` construction did: contest-state reads return
+    per-call ``DraftKings()`` construction did: contest-state reads return
     ``None`` and soft-finish evaluation is skipped, while presence stays absent.
     """
 
@@ -230,10 +230,10 @@ def _build_completion_processor(conn) -> CompletionProcessor:
     vips = _load_vips() if notifications_enabled else []
 
     try:
-        dk_client: Draftkings | None = Draftkings()
+        dk_client: DraftKings | None = DraftKings()
     except Exception:
         logger.warning(
-            "VIP presence checks disabled; Draftkings client initialization failed",
+            "VIP presence checks disabled; DraftKings client initialization failed",
             exc_info=True,
         )
         dk_client = None

@@ -137,7 +137,7 @@ def _init_runtime() -> None:
 
 
 def _load_lobby_cookies():
-    from dk_results.draftkings.cookieservice import get_dk_cookies
+    from dk_results.draftkings.cookies import get_dk_cookies
 
     _, cookies = get_dk_cookies()
     return cookies

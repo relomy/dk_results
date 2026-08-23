@@ -30,13 +30,13 @@ def _contest_payload(dk_id: int, *, entries: int = 200, fee: int = 10):
 def test_import_find_new_double_ups_has_no_runtime_side_effects(monkeypatch):
     calls = {"dotenv": 0, "logging": 0, "cookies": 0}
 
-    fake_cookieservice = types.ModuleType("dk_results.draftkings.cookieservice")
+    fake_cookies = types.ModuleType("dk_results.draftkings.cookies")
 
     def fake_get_dk_cookies(*_args, **_kwargs):
         calls["cookies"] += 1
         return ({}, {})
 
-    fake_cookieservice.get_dk_cookies = fake_get_dk_cookies
+    fake_cookies.get_dk_cookies = fake_get_dk_cookies
 
     fake_contestdatabase = types.ModuleType("dk_results.persistence.contestdatabase")
 
@@ -46,7 +46,7 @@ def test_import_find_new_double_ups_has_no_runtime_side_effects(monkeypatch):
 
     fake_contestdatabase.ContestDatabase = FakeContestDatabase
 
-    monkeypatch.setitem(sys.modules, "dk_results.draftkings.cookieservice", fake_cookieservice)
+    monkeypatch.setitem(sys.modules, "dk_results.draftkings.cookies", fake_cookies)
     monkeypatch.setitem(sys.modules, "dk_results.persistence.contestdatabase", fake_contestdatabase)
     monkeypatch.setattr(
         "dotenv.load_dotenv",
@@ -149,11 +149,11 @@ def test_get_lobby_response_uses_injected_client():
 
 
 def test_get_lobby_response_constructs_default_client(monkeypatch):
-    class FakeDraftkings:
+    class FakeDraftKings:
         def get_lobby_contests(self, sport, live=False):
             return {"sport": sport, "live": live}
 
-    monkeypatch.setattr("lobby.fetch.Draftkings", lambda: FakeDraftkings())
+    monkeypatch.setattr("lobby.fetch.DraftKings", lambda: FakeDraftKings())
 
     result = get_lobby_response("NBA", live=False)
 

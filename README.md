@@ -75,12 +75,12 @@ uv run python export_fixture.py publish \
 ```
 
 Notes:
-- The exporter reuses the same `dk_results` data sources/endpoints already in use (contest DB + existing `Draftkings` client methods); no new scraping endpoints are introduced.
+- The exporter reuses the same `dk_results` data sources/endpoints already in use (contest DB + existing `DraftKings` client methods); no new scraping endpoints are introduced.
 - Contest selection is deterministic and includes a `selection.reason` object plus compact candidate summary for transparency.
 - Output is byte-stable for tests (`sort_keys`, fixed separators, stable ordering) and keeps major sections present with explicit `null` where data is unavailable.
 - Export output uses a snapshot envelope: `schema_version`, `snapshot_at`, `generated_at`, and `sports` keyed by sport code.
 - Each sport snapshot includes both legacy fields and normalized contract sections: `status`, `updated_at`, `primary_contest`, `contests`, and `players`.
-- Cookies/auth handling follows existing project mechanisms (`dk_results/draftkings/dksession.py`, `pickled_cookies_works.txt`); no credentials are printed in logs.
+- Cookies/auth handling follows existing project mechanisms (`dk_results/draftkings/session.py`, `pickled_cookies_works.txt`); no credentials are printed in logs.
 
 Optional `db_main.py` addendum export for integration testing:
 
@@ -92,8 +92,8 @@ uv run python db_main.py --sport NBA GOLF --snapshot-out /tmp/live-snapshot.json
 
 - `db_main.py` updates Google Sheets for a live contest per sport by downloading salary
   and standings CSVs, constructing `Results`, and writing via `DfsSheetService`
-  (`db_main.py:process_sport`, `dk_results/draftkings/draftkings.py:download_salary_csv`,
-  `dk_results/draftkings/draftkings.py:download_contest_rows`, `dk_results/domain/contest_standings.py:ContestStandings`,
+  (`db_main.py:process_sport`, `dk_results/draftkings/client.py:download_salary_csv`,
+  `dk_results/draftkings/client.py:download_contest_rows`, `dk_results/domain/contest_standings.py:ContestStandings`,
   `dk_results/sheets/dfs_sheet_service.py:DfsSheetService`).
 - `find_new_double_ups.py` polls the DraftKings lobby, filters double-up contests using
   sport-specific thresholds, compares against the database, inserts new contests, and
@@ -152,12 +152,12 @@ Sample config files are provided to copy/adapt:
 | `CONTEST_WARNING_MINUTES`       | `update_contests.py:CONTEST_WARNING_MINUTES`                                                                                                                 | Default warning minutes used if schedule file missing.            |
 | `CONTEST_WARNING_SCHEDULE_FILE` | `update_contests.py:WARNING_SCHEDULE_FILE_ENV`                                                                                                               | Defaults to `contest_warning_schedules.yaml`.                     |
 | `DISCORD_LOG_FILE`              | `bot/discord_bot.py:DISCORD_LOG_FILE`                                                                                                                        | Optional file path for bot logs.                                  |
-| `DK_PLATFORM`                   | `dk_results/draftkings/cookieservice.py:get_rookie_cookies`                                                                                                  | Controls cookie source path behavior.                             |
-| `COOKIES_DB_PATH`               | `dk_results/draftkings/cookieservice.py:get_rookie_cookies`                                                                                                  | Optional Chromium cookie DB path for DK cookies.                  |
+| `DK_PLATFORM`                   | `dk_results/draftkings/cookies.py:get_rookie_cookies`                                                                                                  | Controls cookie source path behavior.                             |
+| `COOKIES_DB_PATH`               | `dk_results/draftkings/cookies.py:get_rookie_cookies`                                                                                                  | Optional Chromium cookie DB path for DK cookies.                  |
 
-Both `find_new_double_ups.py` and `dk_results/draftkings/cookieservice.py` call `dotenv.load_dotenv()`
+Both `find_new_double_ups.py` and `dk_results/draftkings/cookies.py` call `dotenv.load_dotenv()`
 to load environment defaults (`find_new_double_ups.py:load_dotenv`,
-`dk_results/draftkings/cookieservice.py:load_dotenv`).
+`dk_results/draftkings/cookies.py:load_dotenv`).
 
 Google Sheets access uses the shared `dfs_common` helpers that expect a
 `client_secret.json` service account file located in the repository root. The guard in
@@ -188,8 +188,8 @@ so place the credential file at the repo root before running `db_main.py` or the
   (`db_main.py:load_vips`).
 - `salary/` and `contests/` are used to store downloaded CSVs for salary and standings
   (`db_main.py:SALARY_DIR`, `db_main.py:CONTEST_DIR`,
-  `dk_results/draftkings/draftkings.py:download_salary_csv`,
-  `dk_results/draftkings/draftkings.py:download_contest_rows`).
+  `dk_results/draftkings/client.py:download_salary_csv`,
+  `dk_results/draftkings/client.py:download_contest_rows`).
 
 ## Contest Warning Schedules
 

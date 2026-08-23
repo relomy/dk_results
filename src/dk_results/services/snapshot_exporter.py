@@ -15,7 +15,7 @@ from dk_results.analytics.trainfinder import TrainFinder
 from dk_results.config import load_settings
 from dk_results.domain.contest_standings import parse_contest_standings
 from dk_results.domain.sport import Sport, get_sport_choices
-from dk_results.draftkings.draftkings import Draftkings
+from dk_results.draftkings import DraftKings
 from dk_results.paths import repo_file
 from dk_results.persistence.contestdatabase import ContestDatabase
 from dk_results.vip_lineups import build_vip_entries, fetch_vip_lineups, load_vips
@@ -430,7 +430,7 @@ def collect_snapshot_data(
 
         mode = "primary_live"
         selected: tuple | None = None
-        dk = Draftkings()
+        dk = DraftKings()
         if contest_id is not None:
             mode = "explicit_id"
             if contest_db is not None:

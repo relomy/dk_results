@@ -14,13 +14,13 @@ from urllib.parse import urlsplit, urlunsplit
 
 import requests
 
-from .dksession import DkSession
+from .session import AuthSession
 
 
-class Draftkings:
+class DraftKings:
     """
     Thin HTTP client for DraftKings endpoints. Owns an authenticated requests.Session
-    created from DkSession unless a session is provided.
+    created from AuthSession unless a session is provided.
     """
 
     def __init__(
@@ -31,7 +31,7 @@ class Draftkings:
         contest_dir: str = "contests",
         session: Optional[requests.Session] = None,
     ) -> None:
-        self.session = session or DkSession().get_session()
+        self.session = session or AuthSession().get_session()
         self.timeout_sec = timeout_sec
         self.cookies_dump_file = cookies_dump_file
         self.contest_dir = contest_dir

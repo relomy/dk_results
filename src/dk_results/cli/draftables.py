@@ -1,6 +1,6 @@
 import logging
 
-from dk_results.draftkings.dksession import DkSession
+from dk_results.draftkings.session import AuthSession
 from dk_results.logging import configure_logging
 
 # load the logging configuration
@@ -8,8 +8,8 @@ configure_logging()
 logger = logging.getLogger(__name__)
 
 
-dksession = DkSession()
-session = dksession.get_session()
+auth_session = AuthSession()
+session = auth_session.get_session()
 
 dk_id = 181453948
 dg = 133307
