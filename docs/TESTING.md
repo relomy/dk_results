@@ -35,3 +35,13 @@ access — a token or SSH key with read scope). In a Claude Code web session, ad
 `relomy/dfs-common` to the session's scope first, then clone it to the sibling
 path. Once it's in place, `uv sync` builds the editable install and the checks
 run.
+
+## Lockfile hygiene
+
+`dfs-common` is an editable path dependency, so uv reads its current
+`pyproject.toml` metadata whenever it resolves the environment. After changing
+the sibling checkout, regenerate and commit the lockfile with `uv lock`.
+
+Use `uv run --locked ...` (or `UV_LOCKED=1`) for commands that must verify the
+environment without rewriting `uv.lock`; it fails clearly when the lockfile no
+longer matches either project metadata or the editable sibling dependency.
