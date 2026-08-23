@@ -3,7 +3,7 @@ import sys
 from typing import Sequence
 
 from dk_results.commands.export_fixture import run_export_bundle, run_export_fixture, run_publish_snapshot
-from dk_results.services.snapshot_v3 import DEFAULT_STANDINGS_LIMIT
+from dk_results.services.snapshot_v3.pipeline import DEFAULT_STANDINGS_LIMIT
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -16,6 +16,10 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         default=DEFAULT_STANDINGS_LIMIT,
         help="Maximum number of standings rows to include",
+    )
+    parser.add_argument(
+        "--generated-at",
+        help="Optional RFC3339 timestamp override for deterministic generated_at output.",
     )
     return parser
 
@@ -34,6 +38,10 @@ def build_bundle_parser() -> argparse.ArgumentParser:
         type=int,
         default=DEFAULT_STANDINGS_LIMIT,
         help="Maximum number of standings rows to include per sport",
+    )
+    parser.add_argument(
+        "--generated-at",
+        help="Optional RFC3339 timestamp override for deterministic generated_at output.",
     )
     return parser
 

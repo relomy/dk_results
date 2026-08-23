@@ -16,13 +16,9 @@ from dk_results.draftkings import DraftKings
 from dk_results.logging import configure_logging
 from dk_results.paths import repo_file
 from dk_results.persistence.contestdatabase import ContestDatabase
-from dk_results.services.snapshot_v3 import (
-    DEFAULT_STANDINGS_LIMIT,
-    build_dashboard_envelope,
-    build_snapshot,
-    to_stable_json,
-    to_utc_iso,
-)
+from dk_results.services.json_stable import to_stable_json
+from dk_results.services.snapshot_v3.constants import DEFAULT_STANDINGS_LIMIT
+from dk_results.services.snapshot_v3.pipeline import build_snapshot_v3_envelope
 from dk_results.sheets.sheets_service import build_dfs_sheet_service
 from dk_results.sport_processor import (
     NoLiveContestError,
@@ -68,18 +64,10 @@ def build_snapshot_payload(
     selected_contests: dict[str, int],
     standings_limit: int = DEFAULT_STANDINGS_LIMIT,
 ) -> dict[str, Any]:
-    generated_at = to_utc_iso(datetime.datetime.now(datetime.timezone.utc))
-    sports: dict[str, Any] = {}
-    for sport_name in sorted(selected_contests):
-        contest_id = selected_contests[sport_name]
-        snapshot = build_snapshot(
-            sport=sport_name,
-            contest_id=contest_id,
-            standings_limit=standings_limit,
-        )
-        sports[sport_name] = snapshot
-
-    return build_dashboard_envelope(sports, generated_at=generated_at)
+    return build_snapshot_v3_envelope(
+        {sport: contest_id for sport, contest_id in selected_contests.items()},
+        standings_limit=standings_limit,
+    )
 
 
 def write_snapshot_payload(path: pathlib.Path, payload: dict[str, Any]) -> None:

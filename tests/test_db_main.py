@@ -411,15 +411,19 @@ def test_main_snapshot_out_writes_opt_in_envelope(monkeypatch, tmp_path):
 
     monkeypatch.setattr(db_main, "SportProcessor", _FakeSportProcessor)
 
-    def _fake_snapshot(*, sport: str, contest_id: int | None, standings_limit: int):
+    def _fake_snapshot(selected_contests, *, standings_limit: int, generated_at=None):
+        assert selected_contests == {"NFL": 111, "GOLF": 222}
         return {
-            "sport": sport,
-            "selection": {"selected_contest_id": contest_id},
-            "truncation": {"limit": standings_limit},
-            "metadata": {"warnings": [], "missing_fields": []},
+            "schema_version": 3,
+            "snapshot_at": generated_at or "2026-02-14T10:00:00Z",
+            "generated_at": generated_at or "2026-02-14T10:00:00Z",
+            "sports": {
+                "nfl": {"primary_contest": {"contest_id": "111"}, "contests": [{}]},
+                "golf": {"contests": [{}]},
+            },
         }
 
-    monkeypatch.setattr(db_main, "build_snapshot", _fake_snapshot)
+    monkeypatch.setattr(db_main, "build_snapshot_v3_envelope", _fake_snapshot)
 
     db_main.main()
 
