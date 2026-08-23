@@ -35,7 +35,10 @@ class Sport:
     contest_restraint_type_id: int | None = None
     contest_restraint_game_type_id: int | None = None
 
-    allow_optimizer: bool = True
+    # Opt-in: a sport is optimized only once its ``positions`` layout is
+    # confirmed against a real DraftKings salary file (see ADR-0005). An
+    # unconfirmed sport stays off rather than risk shipping a wrong lineup.
+    allow_optimizer: bool = False
     allow_suffixless_draft_groups: bool = True
 
     @classmethod
@@ -116,14 +119,7 @@ class NFLSport(Sport):
 
     # optimizer
     positions = ("QB", "RB", "RB", "WR", "WR", "WR", "TE", "FLEX", "DST")
-    # positions_count = 9
-    # position_constraints = [
-    #     ("QB", 1, None),  # 1 or 2 (SFLEX)
-    #     ("RB", 2, 3),  # 2 <> 4 (FLEX/SFLEX)
-    #     ("WR", 3, 4),  # 3 <> 5 (FLEX/SFLEX)
-    #     ("TE", 1, 2),
-    #     ("DST", 1, None),
-    # ]
+    allow_optimizer = True
 
 
 class NFLAfternoonSport(Sport):
@@ -159,7 +155,11 @@ class NFLShowdownSport(Sport):
 
     draftkings_sport = "NFL"
 
-    positions = ("CPT", "FLEX")
+    # Layout confirmed from a real standings file: 1 CPT + 5 FLEX. Optimizer
+    # stays off (inherits the opt-in default): the CPT slot scores and costs 1.5x,
+    # which the flat per-player solver does not yet model, so a size-correct
+    # lineup would still misvalue the captain. See ADR-0005.
+    positions = ("CPT", "FLEX", "FLEX", "FLEX", "FLEX", "FLEX")
 
     # DK sometimes uses team-vs-team suffixes and sometimes event labels
     # like "(Super Bowl LX)" for the same showdown game type.
@@ -169,7 +169,6 @@ class NFLShowdownSport(Sport):
     contest_restraint_game_type_id = 96
 
     # flags
-    allow_optimizer = False
     allow_suffixless_draft_groups = True
 
 
@@ -185,14 +184,7 @@ class NBASport(Sport):
 
     # optimizer
     positions = ("PG", "SG", "SF", "PF", "C", "G", "F", "UTIL")
-    # positions_count = 8
-    # position_constraints = [
-    #     ("PG", 1, 2),
-    #     ("SG", 1, 2),
-    #     ("SF", 1, 2),
-    #     ("PF", 1, 2),
-    #     ("C", 1, 2),
-    # ]
+    allow_optimizer = True
 
 
 class CFBSport(Sport):
@@ -206,14 +198,11 @@ class CFBSport(Sport):
     dub_min_entry_fee = 2
     dub_min_entries = 100
 
-    # optimizer
+    # optimizer — layout confirmed from a real standings file (QB, RB, RB, WR,
+    # WR, WR, FLEX, S-FLEX); DraftKings encodes FLEX / S-FLEX eligibility in
+    # each player's roster_pos.
     positions = ("QB", "RB", "RB", "WR", "WR", "WR", "FLEX", "S-FLEX")
-    positions_count = 8
-    position_constraints = (
-        ("QB", 1, 2),  # 1 or 2 (SFLEX)
-        ("RB", 2, 4),  # 2 <> 4 (FLEX/SFLEX)
-        ("WR", 3, 5),  # 3 <> 5 (FLEX/SFLEX)
-    )
+    allow_optimizer = True
 
 
 class GolfSport(Sport):
@@ -231,10 +220,9 @@ class GolfSport(Sport):
 
     lineup_range = "L8:Z56"
 
-    # optimizer
-    positions = ("G",)
-    positions_count = 6
-    position_constraints = (("G", 6, None),)
+    # optimizer — a DraftKings golf roster is six G slots.
+    positions = ("G", "G", "G", "G", "G", "G")
+    allow_optimizer = True
 
 
 class PGAMainSport(Sport):
@@ -269,7 +257,9 @@ class WeekendGolfSport(Sport):
     name = "WeekendGolf"
     draftkings_sport = "GOLF"
 
-    positions = ("WG",)
+    # optimizer — layout confirmed from a real standings file: six WG slots.
+    positions = ("WG", "WG", "WG", "WG", "WG", "WG")
+    allow_optimizer = True
 
 
 class MLBSport(Sport):
@@ -279,7 +269,10 @@ class MLBSport(Sport):
     sheet_name = "MLB"
     lineup_range = "J3:Z71"
 
-    positions = ("P", "C", "1B", "2B", "3B", "SS", "OF")
+    # optimizer — layout confirmed from a real standings file: 2 P, 1 each of
+    # C/1B/2B/3B/SS, 3 OF = 10 slots.
+    positions = ("P", "P", "C", "1B", "2B", "3B", "SS", "OF", "OF", "OF")
+    allow_optimizer = True
 
 
 class NascarSport(Sport):
@@ -344,7 +337,10 @@ class SOCSport(Sport):
     dub_min_entries = 50
     contest_restraint_game_type_id = 122
 
+    # optimizer — layout confirmed from a real standings file: 2 F, 2 M, 2 D,
+    # 1 GK, 1 UTIL = 8 slots.
     positions = ("F", "F", "M", "M", "D", "D", "GK", "UTIL")
+    allow_optimizer = True
 
 
 class SOCShowdownSport(Sport):
@@ -354,8 +350,9 @@ class SOCShowdownSport(Sport):
 
     contest_restraint_game_type_id = 123
 
+    # Showdown roster differs from the classic SOC layout; optimizer stays off
+    # (inherits the opt-in default) until confirmed against a real file.
     positions = ("CPT", "FLEX")
-    allow_optimizer = False
 
 
 SPORT_REGISTRY = _build_sport_registry(iter(Sport.__subclasses__()))
