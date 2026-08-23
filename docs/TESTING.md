@@ -12,18 +12,26 @@ broad; the relevant subset when it's narrow.
 - `uv run ruff check .`
 - `uv run ty check`
 
-## Gotcha: dfs-common is a private git dependency
+## Gotcha: dfs-common is an editable sibling checkout
 
-`dfs-common` is sourced from a private repo (`relomy/dfs-common`, branch `main`)
-in `[tool.uv.sources]`. Every `uv` command builds the venv first, so `pytest`,
-`ruff`, and `ty` all fail *before running a single test* when the environment
-can't fetch it:
+`dfs-common` is sourced as an editable path dependency in `[tool.uv.sources]`:
 
-- `fatal: could not read Username for 'https://github.com'` — no git credentials
-  for the private repo.
-- `Distribution not found at: file:///.../dfs_common` — an older path-based
-  source expecting a sibling checkout that isn't there.
+```toml
+dfs-common = { path = "../dfs_common", editable = true }
+```
 
-Fix: give the environment read access to `relomy/dfs-common` — a GitHub token or
-SSH key with read scope. In a Claude Code web session, add the repo to the
-session's scope first. Then `uv lock` / `uv sync` resolve it and the checks run.
+So `uv` expects the private `relomy/dfs-common` repo checked out as a sibling
+directory at `../dfs_common`, next to this repo. Every `uv` command builds the
+venv first, so `pytest`, `ruff`, and `ty` all fail *before running a single
+test* when that checkout is missing:
+
+- `Distribution not found at: file:///.../dfs_common` — the sibling checkout
+  isn't there.
+- `fatal: could not read Username for 'https://github.com'` — you tried to clone
+  it without git credentials for the private repo.
+
+Fix: clone `relomy/dfs-common` to `../dfs_common` (private, so you need git read
+access — a token or SSH key with read scope). In a Claude Code web session, add
+`relomy/dfs-common` to the session's scope first, then clone it to the sibling
+path. Once it's in place, `uv sync` builds the editable install and the checks
+run.
