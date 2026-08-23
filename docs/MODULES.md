@@ -15,7 +15,7 @@ See `docs/CONTEXT.md` for the shared vocabulary and the canonical entries for
 Root shims (dkcontests.py, db_main.py, …)      thin sys.path adapters → cli.*
   └─ cli/            argument parsing + wiring  (adapters over deep modules)
   └─ sport_processor.py  ORCHESTRATOR      (SportProcessor.run)
-            ├─ DkPort  ──── draftkings/draftkings.py + dksession + cookieservice
+            ├─ DkPort  ──── draftkings/client.py + session.py + cookies.py
             ├─ SheetPort ── sheets/dfs_sheet_service → repository → dfs_common
             └─ BonusSenderPort ── bot/discord_rest, dfs_common WebhookSender
   Domain (pure): sport, player, user, contest, lineup, contest_standings,
@@ -86,9 +86,9 @@ fetch is injectable. `load_vips()` and `build_vip_entries()` round out the inter
 
 | Module | Interface | Role |
 |---|---|---|
-| `draftkings/draftkings.py` | `Draftkings`: `get_leaderboard`, `get_contest_detail`, `get_lobby_contests`, `get_entry`, `get_contest_entrants_page`, `download_contest_rows`, `download_salary_csv`, `clone_auth_to` | Deep HTTP client — the concrete **`DkPort` adapter**. |
-| `draftkings/dksession.py` | `DkSession`: `get_session`, `setup_session`, `cj_from_pickle` | Authenticated `requests.Session` construction. |
-| `draftkings/cookieservice.py` | `get_dk_cookies`, `get_rookie_cookies`, `cookies_to_dict/_jar`, `load/save_cookies_to_pickle` | Cookie acquisition/persistence seam under DkSession. |
+| `draftkings/client.py` | `DraftKings`: `get_leaderboard`, `get_contest_detail`, `get_lobby_contests`, `get_entry`, `get_contest_entrants_page`, `download_contest_rows`, `download_salary_csv`, `clone_auth_to` | Deep HTTP client — the concrete **`DkPort` adapter**. |
+| `draftkings/session.py` | `AuthSession`: `get_session`, `setup_session`, `cj_from_pickle` | Authenticated `requests.Session` construction. |
+| `draftkings/cookies.py` | `get_dk_cookies`, `get_rookie_cookies`, `cookies_to_dict/_jar`, `load/save_cookies_to_pickle` | Cookie acquisition/persistence seam under AuthSession. |
 
 ---
 

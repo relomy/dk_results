@@ -12,7 +12,7 @@ from dfs_common.discord import WebhookSender
 
 from dk_results.config import load_and_apply_settings
 from dk_results.domain.sport import Sport, get_sport_choices
-from dk_results.draftkings.draftkings import Draftkings
+from dk_results.draftkings import DraftKings
 from dk_results.logging import configure_logging
 from dk_results.paths import repo_file
 from dk_results.persistence.contestdatabase import ContestDatabase
@@ -131,7 +131,7 @@ def main() -> None:
 
     processor = SportProcessor(
         contest_db=ContestDatabase(str(state.contests_db_path())),
-        dk=Draftkings(),
+        dk=DraftKings(),
         sheet_factory=lambda sport: build_dfs_sheet_service(sport),
         bonus_sender=_build_bonus_sender(),
         config=SportProcessorConfig(

@@ -3,7 +3,7 @@ import sqlite3
 
 import pytest
 
-from dk_results.draftkings.draftkings import Draftkings
+from dk_results.draftkings import DraftKings
 from dk_results.notifications.vip_presence import (
     VIP_ABSENT,
     VIP_ENTRANT_PAGE_LIMIT,
@@ -64,7 +64,7 @@ def _seed_presence(store: NotificationStore, dk_id: int, status: str, checked_at
 
 
 def test_draftkings_satisfies_contest_results_port():
-    port: type[ContestResultsPort] = Draftkings
+    port: type[ContestResultsPort] = DraftKings
     for method in ("get_contest_detail", "get_contest_entrants_page", "get_leaderboard"):
         assert callable(getattr(port, method))
 

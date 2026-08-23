@@ -120,7 +120,7 @@ class _FakeContestDbNoLive:
         return None
 
 
-class _FakeDraftkings:
+class _FakeDraftKings:
     def download_salary_csv(self, _sport: str, _draft_group: int, filename: str) -> None:
         path = Path(filename)
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -146,12 +146,12 @@ class _FakeVipLineup:
         }
 
 
-class _FakeDraftkingsNoStandings(_FakeDraftkings):
+class _FakeDraftKingsNoStandings(_FakeDraftKings):
     def download_contest_rows(self, *_args, **_kwargs):
         return None
 
 
-class _FakeDraftkingsTrackVipEntries(_FakeDraftkings):
+class _FakeDraftKingsTrackVipEntries(_FakeDraftKings):
     captured_vip_entries: dict = {}
 
     def download_contest_rows(self, *_args, **_kwargs):
@@ -218,7 +218,7 @@ def _make_processor(
     salary_dir: str = "",
 ) -> SportProcessor:
     if dk is None:
-        dk = _FakeDraftkings()
+        dk = _FakeDraftKings()
     if sheet is None:
         sheet = _FakeSheet()
     return SportProcessor(
@@ -272,7 +272,7 @@ def test_process_sport_emits_no_vip_events_for_standings_skip(tmp_path, caplog):
     processor = _make_processor(
         _FakeContestDb(),
         vips=["UserA"],
-        dk=_FakeDraftkingsNoStandings(),
+        dk=_FakeDraftKingsNoStandings(),
         salary_dir=str(tmp_path),
     )
     with caplog.at_level(logging.INFO):
@@ -315,7 +315,7 @@ def test_vip_fetch_requested_uses_filtered_entry_keys(monkeypatch, tmp_path, cap
     processor = _make_processor(
         _FakeContestDb(),
         vips=["UserA", "UserB"],
-        dk=_FakeDraftkingsTrackVipEntries(),
+        dk=_FakeDraftKingsTrackVipEntries(),
         salary_dir=str(tmp_path),
     )
     with caplog.at_level(logging.INFO):
@@ -388,7 +388,7 @@ def test_main_snapshot_out_writes_opt_in_envelope(monkeypatch, tmp_path):
     monkeypatch.setattr(db_main, "load_and_apply_settings", lambda: None)
     monkeypatch.setattr(db_main.state, "contests_db_path", lambda: tmp_path / "contests.db")
     monkeypatch.setattr(db_main, "ContestDatabase", lambda _path: object())
-    monkeypatch.setattr(db_main, "Draftkings", lambda: object())
+    monkeypatch.setattr(db_main, "DraftKings", lambda: object())
     monkeypatch.setattr(db_main, "load_vips", lambda: [])
     monkeypatch.setattr(
         db_main.argparse.ArgumentParser,
@@ -438,7 +438,7 @@ def test_main_verbose_enables_debug_without_mutating_log_level_env(monkeypatch, 
     monkeypatch.setattr(db_main, "load_and_apply_settings", lambda: None)
     monkeypatch.setattr(db_main.state, "contests_db_path", lambda: tmp_path / "contests.db")
     monkeypatch.setattr(db_main, "ContestDatabase", lambda _path: object())
-    monkeypatch.setattr(db_main, "Draftkings", lambda: object())
+    monkeypatch.setattr(db_main, "DraftKings", lambda: object())
     monkeypatch.setattr(db_main, "load_vips", lambda: [])
 
     class _FakeSportProcessor:
@@ -476,7 +476,7 @@ def test_main_verbose_flag_is_boolean(monkeypatch, tmp_path):
     monkeypatch.setattr(db_main, "load_and_apply_settings", lambda: None)
     monkeypatch.setattr(db_main.state, "contests_db_path", lambda: tmp_path / "contests.db")
     monkeypatch.setattr(db_main, "ContestDatabase", lambda _path: object())
-    monkeypatch.setattr(db_main, "Draftkings", lambda: object())
+    monkeypatch.setattr(db_main, "DraftKings", lambda: object())
     monkeypatch.setattr(db_main, "load_vips", lambda: [])
 
     class _FakeSportProcessor:
@@ -519,7 +519,7 @@ def test_main_verbose_uses_explicit_logging_override(monkeypatch, tmp_path):
     monkeypatch.setattr(db_main, "load_and_apply_settings", lambda: None)
     monkeypatch.setattr(db_main.state, "contests_db_path", lambda: tmp_path / "contests.db")
     monkeypatch.setattr(db_main, "ContestDatabase", lambda _path: object())
-    monkeypatch.setattr(db_main, "Draftkings", lambda: object())
+    monkeypatch.setattr(db_main, "DraftKings", lambda: object())
     monkeypatch.setattr(db_main, "load_vips", lambda: [])
 
     class _FakeSportProcessor:
@@ -555,7 +555,7 @@ def test_main_loads_vips_once_per_invocation(monkeypatch, tmp_path):
     monkeypatch.setattr(db_main, "load_and_apply_settings", lambda: None)
     monkeypatch.setattr(db_main.state, "contests_db_path", lambda: tmp_path / "contests.db")
     monkeypatch.setattr(db_main, "ContestDatabase", lambda _path: object())
-    monkeypatch.setattr(db_main, "Draftkings", lambda: object())
+    monkeypatch.setattr(db_main, "DraftKings", lambda: object())
 
     calls = {"load_vips": 0}
 

@@ -1930,7 +1930,7 @@ def test_collect_snapshot_data_emits_avg_salary_per_player_remaining(monkeypatch
 
     monkeypatch.setattr(snapshot_exporter, "_sport_choices", lambda: {"NBA": _FakeSport})
     monkeypatch.setattr(snapshot_exporter, "ContestDatabase", lambda _path: _FakeContestDb())
-    monkeypatch.setattr(snapshot_exporter, "Draftkings", _FakeDraftKings)
+    monkeypatch.setattr(snapshot_exporter, "DraftKings", _FakeDraftKings)
     monkeypatch.setattr(snapshot_exporter, "parse_contest_standings", lambda *_a, **_kw: _FakeResults())
     monkeypatch.setattr(snapshot_exporter, "TrainFinder", _FakeTrainFinder)
     monkeypatch.setattr(snapshot_exporter, "load_vips", lambda: ["vip1", "vip2"])
@@ -2374,7 +2374,7 @@ def test_collect_snapshot_data_sources_prize_pool_from_db_metadata(monkeypatch, 
 
     monkeypatch.setattr(snapshot_exporter, "_sport_choices", lambda: {"NBA": _FakeSport})
     monkeypatch.setattr(snapshot_exporter, "ContestDatabase", lambda _path: _FakeContestDb())
-    monkeypatch.setattr(snapshot_exporter, "Draftkings", _FakeDraftKings)
+    monkeypatch.setattr(snapshot_exporter, "DraftKings", _FakeDraftKings)
     monkeypatch.setattr(snapshot_exporter, "parse_contest_standings", lambda *_a, **_kw: _FakeResults())
     monkeypatch.setattr(snapshot_exporter, "TrainFinder", _FakeTrainFinder)
     monkeypatch.setattr(snapshot_exporter, "load_vips", lambda: [])
@@ -2484,7 +2484,7 @@ def test_collect_snapshot_data_ownership_totals_and_watchlist_are_pre_truncation
 
     monkeypatch.setattr(snapshot_exporter, "_sport_choices", lambda: {"NBA": _FakeSport})
     monkeypatch.setattr(snapshot_exporter, "ContestDatabase", lambda _path: _FakeContestDb())
-    monkeypatch.setattr(snapshot_exporter, "Draftkings", _FakeDraftKings)
+    monkeypatch.setattr(snapshot_exporter, "DraftKings", _FakeDraftKings)
     monkeypatch.setattr(snapshot_exporter, "parse_contest_standings", lambda *_a, **_kw: _FakeResults())
     monkeypatch.setattr(snapshot_exporter, "TrainFinder", _FakeTrainFinder)
     monkeypatch.setattr(snapshot_exporter, "load_vips", lambda: ["vip1", "vip2"])
@@ -2583,7 +2583,7 @@ def test_collect_snapshot_data_uses_leaderboard_payout_for_cashing(monkeypatch, 
 
     monkeypatch.setattr(snapshot_exporter, "_sport_choices", lambda: {"NBA": _FakeSport})
     monkeypatch.setattr(snapshot_exporter, "ContestDatabase", lambda _path: _FakeContestDb())
-    monkeypatch.setattr(snapshot_exporter, "Draftkings", _FakeDraftKings)
+    monkeypatch.setattr(snapshot_exporter, "DraftKings", _FakeDraftKings)
     monkeypatch.setattr(snapshot_exporter, "parse_contest_standings", lambda *_a, **_kw: _FakeResults())
     monkeypatch.setattr(snapshot_exporter, "TrainFinder", _FakeTrainFinder)
     monkeypatch.setattr(snapshot_exporter, "load_vips", lambda: ["vip1"])
@@ -2700,7 +2700,7 @@ def test_collect_snapshot_data_uses_points_cutoff_when_payout_unavailable(monkey
 
     monkeypatch.setattr(snapshot_exporter, "_sport_choices", lambda: {"NBA": _FakeSport})
     monkeypatch.setattr(snapshot_exporter, "ContestDatabase", lambda _path: _FakeContestDb())
-    monkeypatch.setattr(snapshot_exporter, "Draftkings", _FakeDraftKings)
+    monkeypatch.setattr(snapshot_exporter, "DraftKings", _FakeDraftKings)
     monkeypatch.setattr(snapshot_exporter, "parse_contest_standings", lambda *_a, **_kw: _FakeResults())
     monkeypatch.setattr(snapshot_exporter, "TrainFinder", _FakeTrainFinder)
     monkeypatch.setattr(snapshot_exporter, "load_vips", lambda: ["vip1"])
@@ -2828,7 +2828,7 @@ def test_collect_snapshot_data_uses_winnings_cash_fallback_when_winning_value_mi
 
     monkeypatch.setattr(snapshot_exporter, "_sport_choices", lambda: {"NBA": _FakeSport})
     monkeypatch.setattr(snapshot_exporter, "ContestDatabase", lambda _path: _FakeContestDb())
-    monkeypatch.setattr(snapshot_exporter, "Draftkings", _FakeDraftKings)
+    monkeypatch.setattr(snapshot_exporter, "DraftKings", _FakeDraftKings)
     monkeypatch.setattr(snapshot_exporter, "parse_contest_standings", lambda *_a, **_kw: _FakeResults())
     monkeypatch.setattr(snapshot_exporter, "TrainFinder", _FakeTrainFinder)
     monkeypatch.setattr(snapshot_exporter, "load_vips", lambda: ["vip1"])
@@ -2953,7 +2953,7 @@ def test_collect_snapshot_data_winning_value_precedence_over_winnings(monkeypatc
 
     monkeypatch.setattr(snapshot_exporter, "_sport_choices", lambda: {"NBA": _FakeSport})
     monkeypatch.setattr(snapshot_exporter, "ContestDatabase", lambda _path: _FakeContestDb())
-    monkeypatch.setattr(snapshot_exporter, "Draftkings", _FakeDraftKings)
+    monkeypatch.setattr(snapshot_exporter, "DraftKings", _FakeDraftKings)
     monkeypatch.setattr(snapshot_exporter, "parse_contest_standings", lambda *_a, **_kw: _FakeResults())
     monkeypatch.setattr(snapshot_exporter, "TrainFinder", _FakeTrainFinder)
     monkeypatch.setattr(snapshot_exporter, "load_vips", lambda: ["vip1"])
@@ -3076,7 +3076,7 @@ def test_collect_snapshot_data_marks_not_cashing_when_payout_and_cutoff_unavaila
 
     monkeypatch.setattr(snapshot_exporter, "_sport_choices", lambda: {"NBA": _FakeSport})
     monkeypatch.setattr(snapshot_exporter, "ContestDatabase", lambda _path: _FakeContestDb())
-    monkeypatch.setattr(snapshot_exporter, "Draftkings", _FakeDraftKings)
+    monkeypatch.setattr(snapshot_exporter, "DraftKings", _FakeDraftKings)
     monkeypatch.setattr(snapshot_exporter, "parse_contest_standings", lambda *_a, **_kw: _FakeResults())
     monkeypatch.setattr(snapshot_exporter, "TrainFinder", _FakeTrainFinder)
     monkeypatch.setattr(snapshot_exporter, "load_vips", lambda: ["vip1"])

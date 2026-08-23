@@ -5,7 +5,7 @@ import requests
 from requests.cookies import RequestsCookieJar
 
 from dk_results.domain.sport import Sport
-from dk_results.draftkings.draftkings import Draftkings
+from dk_results.draftkings import DraftKings
 from dk_results.lobby.draft_group_filter import filter_draft_groups
 from dk_results.lobby.parsing import get_contests_from_response
 
@@ -59,8 +59,8 @@ def get_lobby_response(
     sport: str,
     *,
     live: bool = False,
-    dk_client: Draftkings | None = None,
+    dk_client: DraftKings | None = None,
 ) -> dict[str, Any] | list[dict[str, Any]]:
-    """Fetch raw lobby response via Draftkings client (used by dkcontests)."""
-    client = dk_client or Draftkings()
+    """Fetch raw lobby response via DraftKings client (used by dkcontests)."""
+    client = dk_client or DraftKings()
     return client.get_lobby_contests(sport, live=live)
