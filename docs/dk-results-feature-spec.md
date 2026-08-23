@@ -14,7 +14,7 @@ This document defines product features of `dk_results` independent of any single
    - canonical snapshot envelope
    - `latest.json`
    - UTC-day manifests
-3. `db_main --snapshot-out` compatibility snapshot envelope (legacy/raw sport payload shape).
+3. `db_main --snapshot-out` schema-3 snapshot envelope.
 4. Discord notifications (contest lifecycle + VIP bonus signals).
 5. CLI/runtime jobs for scheduled operation.
 

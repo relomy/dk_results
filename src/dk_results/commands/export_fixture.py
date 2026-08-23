@@ -3,7 +3,7 @@ import pathlib
 from datetime import datetime, timedelta
 from typing import Any
 
-from dk_results.services.snapshot_exporter import (
+from dk_results.services.snapshot_v3 import (
     DEFAULT_STANDINGS_LIMIT,
     build_dashboard_envelope,
     build_snapshot,

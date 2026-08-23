@@ -16,10 +16,10 @@ from dk_results.draftkings import DraftKings
 from dk_results.logging import configure_logging
 from dk_results.paths import repo_file
 from dk_results.persistence.contestdatabase import ContestDatabase
-from dk_results.services.snapshot_exporter import (
+from dk_results.services.snapshot_v3 import (
     DEFAULT_STANDINGS_LIMIT,
+    build_dashboard_envelope,
     build_snapshot,
-    normalize_snapshot_for_output,
     to_stable_json,
     to_utc_iso,
 )
@@ -77,14 +77,9 @@ def build_snapshot_payload(
             contest_id=contest_id,
             standings_limit=standings_limit,
         )
-        sports[sport_name.lower()] = normalize_snapshot_for_output(snapshot)
+        sports[sport_name] = snapshot
 
-    return {
-        "schema_version": 2,
-        "snapshot_at": generated_at,
-        "generated_at": generated_at,
-        "sports": sports,
-    }
+    return build_dashboard_envelope(sports, generated_at=generated_at)
 
 
 def write_snapshot_payload(path: pathlib.Path, payload: dict[str, Any]) -> None:

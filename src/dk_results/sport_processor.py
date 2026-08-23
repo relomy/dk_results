@@ -436,18 +436,22 @@ class SportProcessor:
             self._config.salary_limit,
             users_above_salary,
         )
-        trains: dict[str, dict[str, Any]] = trainfinder.get_users_above_salary_spent(self._config.salary_limit)
-        for key in [k for k in trains if trains[k]["count"] == 1]:
+        trains = trainfinder.get_users_above_salary_spent(self._config.salary_limit)
+        for key in [k for k in trains if trains[k].user_count == 1]:
             del trains[key]
-        sorted_trains: OrderedDict[str, dict[str, Any]] = OrderedDict(
-            sorted(trains.items(), key=lambda kv: kv[1]["count"], reverse=True)[:5]
-        )
+        sorted_trains = OrderedDict(sorted(trains.items(), key=lambda kv: kv[1].user_count, reverse=True)[:5])
         info: list[list[Any]] = [["Rank", "Users", "Score", "PMR"]]
-        for v in sorted_trains.values():
-            row = [v["rank"], v["count"], v["pts"], v["pmr"]]
-            logger.debug("train users=%s score=%s pmr=%s lineup=%s", v["count"], v["pts"], v["pmr"], v["lineup"])
-            if v["lineup"]:
-                row.extend([player.name for player in v["lineup"].lineup])
+        for cluster in sorted_trains.values():
+            row = [cluster.rank, cluster.user_count, cluster.points, cluster.pmr]
+            logger.debug(
+                "train users=%s score=%s pmr=%s lineup=%s",
+                cluster.user_count,
+                cluster.points,
+                cluster.pmr,
+                cluster.lineup,
+            )
+            if cluster.lineup:
+                row.extend([player.name for player in cluster.lineup.lineup])
             info.append(row)
         sheet.add_train_info(info)
 

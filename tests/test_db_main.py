@@ -424,10 +424,10 @@ def test_main_snapshot_out_writes_opt_in_envelope(monkeypatch, tmp_path):
     db_main.main()
 
     payload = json.loads(out.read_text(encoding="utf-8"))
-    assert payload["schema_version"] == 2
+    assert payload["schema_version"] == 3
     assert sorted(payload["sports"].keys()) == ["golf", "nfl"]
-    assert payload["sports"]["nfl"]["selection"]["selected_contest_id"] == "111"
-    assert payload["sports"]["golf"]["truncation"]["limit"] == 123
+    assert payload["sports"]["nfl"]["primary_contest"]["contest_id"] == "111"
+    assert len(payload["sports"]["golf"]["contests"]) == 1
     assert payload["generated_at"].endswith("Z")
     assert payload["snapshot_at"].endswith("Z")
 
@@ -614,7 +614,7 @@ def test_write_snapshot_payload_is_byte_stable(tmp_path):
         [
             ("snapshot_at", "2026-01-01T00:00:00Z"),
             ("sports", {"nfl": {"b": 2, "a": 1}}),
-            ("schema_version", 2),
+            ("schema_version", 3),
             ("generated_at", "2026-01-01T00:00:00Z"),
         ]
     )
@@ -624,7 +624,7 @@ def test_write_snapshot_payload_is_byte_stable(tmp_path):
     assert out.read_text(encoding="utf-8") == (
         "{\n"
         '  "generated_at":"2026-01-01T00:00:00Z",\n'
-        '  "schema_version":2,\n'
+        '  "schema_version":3,\n'
         '  "snapshot_at":"2026-01-01T00:00:00Z",\n'
         '  "sports":{\n'
         '    "nfl":{\n'

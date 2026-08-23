@@ -23,7 +23,7 @@ Root shims (dkcontests.py, db_main.py, …)      thin sys.path adapters → cli.
   Lobby pkg:     fetch → parsing → draft_group_filter → contest_filter →
                  double_ups → formatting
   Analytics:     optimizer (LP), trainfinder (clustering)
-  Snapshot:      services/snapshot_exporter, commands/export_fixture, vip_lineups
+  Snapshot:      services/snapshot_v3, commands/export_fixture, vip_lineups
   Bot:           bot/discord_bot, discord_rest, botinterface
   Cross-cutting: config, logging, paths, discord_roles
 ```
@@ -49,7 +49,7 @@ entire "find live contest → download rows → parse standings → compute anal
   "skip this sport"; `SportProcessorConfig` (frozen) carries filesystem/limit config.
 - **Depth:** high — the biggest leverage-per-interface unit in the repo.
 
-### Snapshot Exporter — `services/snapshot_exporter.py` *(deep, but broad)*
+### Snapshot v3 — `services/snapshot_v3.py`
 Turns raw DK data into the deterministic, decision-ready JSON snapshot consumed
 by the dashboard. Public surface: `collect_snapshot_data`, `build_snapshot`,
 `normalize_snapshot_for_output`, `snapshot_to_json`/`to_stable_json`,
@@ -181,7 +181,7 @@ tightening:
    `get_optimal_lineup()` is needed by callers; the LP-construction steps are
    public. Making them private shrinks the interface without losing behaviour
    (a textbook "hide more complexity inside").
-2. **`services/snapshot_exporter.py` — split along contract seams.** ~2k lines
+2. **`services/snapshot_v3.py` — split along contract seams.** ~2k lines
    with many `_*_contract` builders. The public builders are deep, but internal
    locality is low. If it keeps growing, extract per-contract modules
    (cash-line, ownership, trains, vip-lineups, threats) behind the existing

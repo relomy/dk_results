@@ -4,7 +4,7 @@ import json
 from argparse import Namespace
 
 import commands.export_fixture as export_command
-import services.snapshot_exporter as snapshot_exporter
+import services.snapshot_v3 as snapshot_exporter
 
 import dk_results.cli.export_fixture as export_fixture
 
@@ -31,7 +31,7 @@ def _valid_envelope_for_validation() -> dict:
     contest = _canonical_contest_seed(contest_id="123", name="Contest", sport="nba")
     contest["contest_key"] = "nba:123"
     return {
-        "schema_version": 2,
+        "schema_version": 3,
         "snapshot_at": "2026-02-14T00:00:00Z",
         "generated_at": "2026-02-14T00:00:00Z",
         "sports": {
@@ -485,7 +485,7 @@ def test_run_export_bundle_writes_two_sports(monkeypatch, tmp_path):
     payload = out.read_text(encoding="utf-8")
 
     assert rc == 0
-    assert '"schema_version":2' in payload
+    assert '"schema_version":3' in payload
     assert '"nba"' in payload
     assert '"golf"' in payload
     assert '"contest_id":"123"' in payload
@@ -567,7 +567,7 @@ def test_run_export_fixture_emits_envelope_and_contract_sections(monkeypatch, tm
     contest = sport["contests"][0]
 
     assert rc == 0
-    assert payload["schema_version"] == 2
+    assert payload["schema_version"] == 3
     assert payload["generated_at"].endswith("Z")
     assert payload["snapshot_at"].endswith("Z")
     assert set(sport.keys()) == {
@@ -672,7 +672,7 @@ def test_run_export_bundle_emits_contests_primary_contest_and_players(monkeypatc
     payload = json.loads(out.read_text(encoding="utf-8"))
 
     assert rc == 0
-    assert payload["schema_version"] == 2
+    assert payload["schema_version"] == 3
     assert sorted(payload["sports"].keys()) == ["golf", "nba"]
     assert payload["sports"]["nba"]["primary_contest"]["contest_id"] == "123"
     assert isinstance(payload["sports"]["nba"]["primary_contest"]["selection_reason"], str)
@@ -690,7 +690,7 @@ def test_run_publish_snapshot_writes_latest_and_manifest(monkeypatch, tmp_path):
     snapshot_file.write_text(
         snapshot_exporter.to_stable_json(
             {
-                "schema_version": 2,
+                "schema_version": 3,
                 "snapshot_at": "2026-02-15T01:30:00Z",
                 "generated_at": "2026-02-15T01:30:05Z",
                 "sports": {
@@ -2201,7 +2201,7 @@ def test_standings_is_cashing_derived_from_payout_presence(monkeypatch, tmp_path
 
 def test_validate_canonical_snapshot_detects_disallowed_keys_and_numeric_strings():
     payload = {
-        "schema_version": 2,
+        "schema_version": 3,
         "snapshot_at": "2026-02-14T00:00:00Z",
         "generated_at": "2026-02-14T00:00:00Z",
         "sports": {
@@ -2241,7 +2241,6 @@ def test_validate_canonical_snapshot_has_required_field_and_type_coverage():
         "prize_pool_cents": "missing_required:sports.nba.contests.0.prize_pool_cents",
         "currency": "missing_required:sports.nba.contests.0.currency",
         "max_entries": "missing_required:sports.nba.contests.0.max_entries",
-        "max_entries_per_user": "missing_required:sports.nba.contests.0.max_entries_per_user",
     }
     for field_name, expected_violation in required_field_cases.items():
         payload = _valid_envelope_for_validation()
@@ -2262,7 +2261,6 @@ def test_validate_canonical_snapshot_has_required_field_and_type_coverage():
         "currency": 123,
         "entries_count": "1000",
         "max_entries": "1000",
-        "max_entries_per_user": "1",
     }
     for field_name, wrong_value in wrong_type_cases.items():
         payload = _valid_envelope_for_validation()
@@ -3117,7 +3115,7 @@ def test_collect_snapshot_data_marks_not_cashing_when_payout_and_cutoff_unavaila
 
 def test_dashboard_contract_gate_discriminates_envelope_vs_raw_shape():
     raw_snapshot_out_shape = {
-        "schema_version": 2,
+        "schema_version": 3,
         "snapshot_at": "2026-02-14T00:00:00Z",
         "generated_at": "2026-02-14T00:00:00Z",
         "contest": {},
@@ -3126,7 +3124,7 @@ def test_dashboard_contract_gate_discriminates_envelope_vs_raw_shape():
         "standings": [],
     }
     envelope = {
-        "schema_version": 2,
+        "schema_version": 3,
         "snapshot_at": "2026-02-14T00:00:00Z",
         "generated_at": "2026-02-14T00:00:00Z",
         "sports": {

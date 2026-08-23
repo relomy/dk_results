@@ -1,7 +1,21 @@
 import logging
+from dataclasses import dataclass
 from typing import Any
 
 from dk_results.domain.user import User
+
+
+@dataclass(frozen=True)
+class TrainCluster:
+    """Named result for users sharing points and remaining time."""
+
+    cluster_key: str
+    rank: int | None
+    points: float | None
+    pmr: float | str | None
+    lineup: Any
+    user_count: int
+    entry_keys: tuple[str, ...] = ()
 
 
 class TrainFinder:
@@ -22,27 +36,23 @@ class TrainFinder:
 
         return count
 
-    def get_users_above_salary_spent(self, salary: int) -> dict[str, dict[str, Any]]:
-        # users { data }
-        # data: { pmr pts lineup count }
-        return_users: dict[str, dict[str, Any]] = {}
+    def get_users_above_salary_spent(self, salary: int) -> dict[str, TrainCluster]:
+        clusters: dict[str, TrainCluster] = {}
 
         for user in self.Users:
             if user.salary <= salary:
                 key = f"{user.pts}-{user.pmr}"
-                if key not in return_users:
-                    return_users[key] = {
-                        "pos": 0,
-                        "pmr": 0.0,
-                        "pts": 0.0,
-                        "lineup": None,
-                        "count": 0,
-                    }
-                    return_users[key]["rank"] = user.rank
-                    return_users[key]["pts"] = user.pts
-                    return_users[key]["lineup"] = user.lineupobj
-                    return_users[key]["pmr"] = user.pmr
+                current = clusters.get(key)
+                if current is None:
+                    current = TrainCluster(key, user.rank, user.pts, user.pmr, user.lineupobj, 0)
+                clusters[key] = TrainCluster(
+                    current.cluster_key,
+                    current.rank,
+                    current.points,
+                    current.pmr,
+                    current.lineup,
+                    current.user_count + 1,
+                    (*current.entry_keys, str(user.player_id)),
+                )
 
-                return_users[key]["count"] += 1
-
-        return return_users
+        return clusters

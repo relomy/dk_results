@@ -11,6 +11,7 @@ from zoneinfo import ZoneInfo
 
 from dfs_common import state
 
+from dk_results.analytics.contest_metrics import average_remaining_salary, remaining_ownership
 from dk_results.analytics.trainfinder import TrainFinder
 from dk_results.config import load_settings
 from dk_results.domain.contest_standings import parse_contest_standings
@@ -18,6 +19,13 @@ from dk_results.domain.sport import Sport, get_sport_choices
 from dk_results.draftkings import DraftKings
 from dk_results.paths import repo_file
 from dk_results.persistence.contestdatabase import ContestDatabase
+from dk_results.services.snapshot_contract import (
+    CollectedSnapshot,
+    DashboardEnvelope,
+    DerivedSnapshot,
+    collected_snapshot_from_mapping,
+    validate_v3_envelope,
+)
 from dk_results.vip_lineups import build_vip_entries, fetch_vip_lineups, load_vips
 
 logger = logging.getLogger(__name__)
@@ -169,44 +177,11 @@ def _ownership_remaining_for_user(user: Any) -> float | None:
     lineup_obj = getattr(user, "lineupobj", None)
     if not lineup_obj:
         return None
-    total = 0.0
-    has_any = False
-    for player in getattr(lineup_obj, "lineup", []):
-        if getattr(player, "game_info", "") == "Final":
-            continue
-        ownership = getattr(player, "ownership", None)
-        if ownership in (None, ""):
-            continue
-        has_any = True
-        total += float(ownership) * 100
-    if not has_any:
-        return 0.0
-    return total
+    return remaining_ownership(getattr(lineup_obj, "lineup", []))
 
 
 def _avg_salary_per_player_remaining(users: list[Any]) -> float | None:
-    total_salary = 0.0
-    remaining_slots = 0
-    saw_any_slot = False
-    for user in users:
-        lineup_obj = getattr(user, "lineupobj", None)
-        if not lineup_obj:
-            continue
-        for player in getattr(lineup_obj, "lineup", []):
-            saw_any_slot = True
-            if str(getattr(player, "game_info", "")).strip() == "Final":
-                continue
-            salary = _to_float(getattr(player, "salary", None))
-            if not isinstance(salary, (int, float)):
-                continue
-            total_salary += float(salary)
-            remaining_slots += 1
-
-    if remaining_slots > 0:
-        return total_salary / float(remaining_slots)
-    if saw_any_slot:
-        return 0.0
-    return None
+    return average_remaining_salary(users)
 
 
 def _lineup_signature(user: Any) -> str:
@@ -409,7 +384,7 @@ def collect_snapshot_data(
     sport: str,
     contest_id: int | None = None,
     standings_limit: int = DEFAULT_STANDINGS_LIMIT,
-) -> dict[str, Any]:
+) -> CollectedSnapshot:
     sport_map = _sport_choices()
     sport_cls = sport_map[sport.upper()]
     contest_db: ContestDatabase | None = None
@@ -660,7 +635,7 @@ def collect_snapshot_data(
         trains = TrainFinder(results.users).get_users_above_salary_spent(SALARY_LIMIT)
         train_clusters = []
         for key, cluster in trains.items():
-            if cluster.get("count", 0) <= 1:
+            if cluster.user_count <= 1:
                 continue
             members = [u for u in results.users if f"{u.pts}-{u.pmr}" == key]
             members.sort(
@@ -676,10 +651,10 @@ def collect_snapshot_data(
                 {
                     "cluster_id": cluster_id_from_signature(signature),
                     "cluster_rule": "salary_remaining<=40000_and_same_points_pmr",
-                    "user_count": int(cluster.get("count") or 0),
-                    "rank": cluster.get("rank"),
-                    "points": _to_float(cluster.get("pts")),
-                    "pmr": _to_float(cluster.get("pmr")),
+                    "user_count": cluster.user_count,
+                    "rank": cluster.rank,
+                    "points": _to_float(cluster.points),
+                    "pmr": _to_float(cluster.pmr),
                     "lineup_signature": signature,
                     "entry_keys": [member.player_id for member in members],
                 }
@@ -692,63 +667,65 @@ def collect_snapshot_data(
             )
         )
 
-        return {
-            "sport": sport_cls.name,
-            "contest": {
-                "contest_id": dk_id,
-                "name": contest_name,
-                "sport": sport_cls.name.lower(),
-                "draft_group": draft_group,
-                "start_time_utc": to_utc_iso(start_date),
-                "is_primary": True,
-                "contest_type": "classic",
-                "state": _normalize_contest_state(contest_state, contest_completed),
-                "entry_fee": entry_fee,
-                "currency": "USD",
-                "entries": max_entries,
-                "max_entries": max_entries,
-                "max_entries_per_user": max_entries_per_user,
-                "prize_pool": prize_pool,
-                "positions_paid": positions_paid,
-            },
-            "selection": {
-                "selected_contest_id": dk_id,
-                "reason": build_selection_reason(
-                    mode=mode,
-                    sport=sport_cls.name,
-                    min_entry_fee=sport_cls.sheet_min_entry_fee,
-                    keyword=sport_cls.keyword,
-                    selected_from_candidate_count=len(candidate_rows),
-                    contest_id=int(dk_id) if mode == "explicit_id" else None,
-                ),
-            },
-            "candidates": summarize_candidates(candidate_rows, top_n=CANDIDATE_LIMIT),
-            "cash_line": {
-                "cutoff_type": "positions_paid",
-                "rank": cash_rank,
-                "points": cash_points,
-                "delta_to_cash": cash_delta,
-            },
-            "vip_lineups": vip_lineups,
-            "players": players,
-            "ownership": {
-                "ownership_remaining_total_pct": ownership_remaining_total,
-                "avg_salary_per_player_remaining": avg_salary_per_player_remaining,
-                "non_cashing_user_count": results.non_cashing_users,
-                "non_cashing_avg_pmr": results.non_cashing_avg_pmr,
-                "watchlist_entries": watchlist_entries,
-                "non_cashing_top_remaining_players": top_remaining_players,
-                "top_remaining_players": top_remaining_players,
-            },
-            "train_clusters": train_clusters,
-            "standings": standings,
-            "truncation": {
-                "applied": applied,
-                "limit": limit,
-                "total_rows_before_truncation": total_before,
-                "total_rows_after_truncation": len(standings),
-            },
-        }
+        return collected_snapshot_from_mapping(
+            {
+                "sport": sport_cls.name,
+                "contest": {
+                    "contest_id": dk_id,
+                    "name": contest_name,
+                    "sport": sport_cls.name.lower(),
+                    "draft_group": draft_group,
+                    "start_time_utc": to_utc_iso(start_date),
+                    "is_primary": True,
+                    "contest_type": "classic",
+                    "state": _normalize_contest_state(contest_state, contest_completed),
+                    "entry_fee": entry_fee,
+                    "currency": "USD",
+                    "entries": max_entries,
+                    "max_entries": max_entries,
+                    "max_entries_per_user": max_entries_per_user,
+                    "prize_pool": prize_pool,
+                    "positions_paid": positions_paid,
+                },
+                "selection": {
+                    "selected_contest_id": dk_id,
+                    "reason": build_selection_reason(
+                        mode=mode,
+                        sport=sport_cls.name,
+                        min_entry_fee=sport_cls.sheet_min_entry_fee,
+                        keyword=sport_cls.keyword,
+                        selected_from_candidate_count=len(candidate_rows),
+                        contest_id=int(dk_id) if mode == "explicit_id" else None,
+                    ),
+                },
+                "candidates": summarize_candidates(candidate_rows, top_n=CANDIDATE_LIMIT),
+                "cash_line": {
+                    "cutoff_type": "positions_paid",
+                    "rank": cash_rank,
+                    "points": cash_points,
+                    "delta_to_cash": cash_delta,
+                },
+                "vip_lineups": vip_lineups,
+                "players": players,
+                "ownership": {
+                    "ownership_remaining_total_pct": ownership_remaining_total,
+                    "avg_salary_per_player_remaining": avg_salary_per_player_remaining,
+                    "non_cashing_user_count": results.non_cashing_users,
+                    "non_cashing_avg_pmr": results.non_cashing_avg_pmr,
+                    "watchlist_entries": watchlist_entries,
+                    "non_cashing_top_remaining_players": top_remaining_players,
+                    "top_remaining_players": top_remaining_players,
+                },
+                "train_clusters": train_clusters,
+                "standings": standings,
+                "truncation": {
+                    "applied": applied,
+                    "limit": limit,
+                    "total_rows_before_truncation": total_before,
+                    "total_rows_after_truncation": len(standings),
+                },
+            }
+        )
     finally:
         if contest_db is not None:
             contest_db.close()
@@ -762,7 +739,8 @@ def build_snapshot(
         contest_id=contest_id,
         standings_limit=standings_limit,
     )
-    snapshot = _merge_dict(_default_snapshot(sport), collected)
+    collected_mapping = collected.to_dict() if isinstance(collected, CollectedSnapshot) else collected
+    snapshot = _merge_dict(_default_snapshot(sport), collected_mapping)
     snapshot["snapshot_generated_at_utc"] = to_utc_iso(datetime.datetime.now(datetime.timezone.utc))
 
     missing = [path for path in _find_missing_fields(snapshot) if not path.startswith("metadata.missing_fields")]
@@ -804,6 +782,8 @@ def _normalize_value(value: Any, path: str, warnings: list[dict[str, Any]]) -> A
 
 
 def normalize_snapshot_for_output(snapshot: dict[str, Any]) -> dict[str, Any]:
+    if isinstance(snapshot, CollectedSnapshot):
+        snapshot = snapshot.to_dict()
     result = copy.deepcopy(snapshot)
     warnings: list[dict[str, Any]] = list(result.get("metadata", {}).get("warnings", []))
     normalized = _normalize_value(result, "", warnings)
@@ -1794,10 +1774,18 @@ def build_dashboard_sport_snapshot(snapshot: dict[str, Any], generated_at: str) 
     contest_id = selection.get("selected_contest_id") or contest.get("contest_id")
     truncation = dict(normalized.get("truncation") or {})
     players = list(normalized.get("players") or [])
+    players.sort(key=lambda row: (str(row.get("player_key") or ""), str(row.get("player_name") or "")))
     player_lookup = _build_player_name_lookup(players)
     player_status_lookup = _build_player_status_lookup(players)
     standings_rows = list(normalized.get("standings") or [])
     standings_rows = _normalize_standings_rows(standings_rows)
+    standings_rows.sort(
+        key=lambda row: (
+            _rank_numeric(row.get("rank")) is None,
+            _rank_numeric(row.get("rank")) or 0,
+            str(row.get("entry_key") or ""),
+        )
+    )
     standings_by_entry_key = {
         str(row.get("entry_key")): row
         for row in standings_rows
@@ -1852,6 +1840,9 @@ def build_dashboard_sport_snapshot(snapshot: dict[str, Any], generated_at: str) 
             player_lookup,
             standings_by_entry_key,
         )
+        contest_object["train_clusters"]["clusters"].sort(
+            key=lambda row: str(row.get("cluster_key") or row.get("cluster_id") or "")
+        )
 
     vip_source = normalized.get("vip_lineups")
     if isinstance(vip_source, list):
@@ -1863,6 +1854,9 @@ def build_dashboard_sport_snapshot(snapshot: dict[str, Any], generated_at: str) 
             standings_by_entry_key,
             standings_by_username,
             cash_line,
+        )
+        contest_object["vip_lineups"].sort(
+            key=lambda row: (str(row.get("entry_key") or ""), str(row.get("display_name") or ""))
         )
     metrics: dict[str, Any] = {}
     if "vip_lineups" in contest_object:
@@ -1888,16 +1882,34 @@ def build_dashboard_sport_snapshot(snapshot: dict[str, Any], generated_at: str) 
     trains = _train_metrics(contest_object.get("train_clusters"))
     if trains:
         metrics["trains"] = trains
+    derived = DerivedSnapshot(
+        distance_to_cash=metrics.get("distance_to_cash"),
+        threat=metrics.get("threat"),
+        avg_salary_per_player_remaining=(
+            _to_float(ownership_source.get("avg_salary_per_player_remaining"))
+            if isinstance(ownership_source, dict)
+            else None
+        ),
+    )
+    metrics = {
+        key: value
+        for key, value in {
+            "distance_to_cash": derived.distance_to_cash,
+            "threat": derived.threat,
+            "ownership_summary": metrics.get("ownership_summary"),
+            "non_cashing": metrics.get("non_cashing"),
+            "trains": metrics.get("trains"),
+        }.items()
+        if value
+    }
     if metrics:
         contest_object["metrics"] = {"updated_at": updated_at, **metrics}
     live_metrics: dict[str, Any] = {
         "updated_at": updated_at,
         "cash_line": cash_line,
     }
-    if isinstance(ownership_source, dict):
-        avg_salary_per_player_remaining = _to_float(ownership_source.get("avg_salary_per_player_remaining"))
-        if isinstance(avg_salary_per_player_remaining, (int, float)):
-            live_metrics["avg_salary_per_player_remaining"] = float(avg_salary_per_player_remaining)
+    if derived.avg_salary_per_player_remaining is not None:
+        live_metrics["avg_salary_per_player_remaining"] = derived.avg_salary_per_player_remaining
     contest_object["live_metrics"] = live_metrics
     contest_object.pop("ownership", None)
     contest_object.pop("selection", None)
@@ -1925,20 +1937,21 @@ def build_dashboard_sport_snapshot(snapshot: dict[str, Any], generated_at: str) 
     return sport_snapshot
 
 
-def build_dashboard_envelope(sports: dict[str, dict[str, Any]]) -> dict[str, Any]:
-    generated_at = to_utc_iso(datetime.datetime.now(datetime.timezone.utc))
+def build_dashboard_envelope(sports: dict[str, dict[str, Any]], *, generated_at: str | None = None) -> dict[str, Any]:
+    generated_at = (
+        to_utc_iso(generated_at) if generated_at else to_utc_iso(datetime.datetime.now(datetime.timezone.utc))
+    )
     if generated_at is None:
         raise RuntimeError("Failed to build generated_at timestamp")
     output_sports: dict[str, Any] = {}
     for sport, snapshot in sorted(sports.items()):
         sport_snapshot = build_dashboard_sport_snapshot(snapshot, generated_at)
         output_sports[sport.lower()] = sport_snapshot
-    return {
-        "schema_version": 2,
-        "snapshot_at": generated_at,
-        "generated_at": generated_at,
-        "sports": output_sports,
-    }
+    return DashboardEnvelope(
+        snapshot_at=generated_at,
+        generated_at=generated_at,
+        sports=output_sports,
+    ).to_dict()
 
 
 def is_dashboard_envelope(payload: Any) -> bool:
@@ -1993,7 +2006,7 @@ def _walk_paths(value: Any, path: str = "") -> list[tuple[str, Any]]:
 
 
 def validate_canonical_snapshot(payload: dict[str, Any]) -> list[str]:
-    violations: list[str] = []
+    violations: list[str] = validate_v3_envelope(payload)
     allowed_numeric_string_suffixes = (
         ".contest_id",
         ".contest_key",
@@ -2029,7 +2042,6 @@ def validate_canonical_snapshot(payload: dict[str, Any]) -> list[str]:
         "prize_pool_cents": int,
         "currency": str,
         "max_entries": int,
-        "max_entries_per_user": int,
     }
     valid_states = {"upcoming", "live", "completed", "cancelled"}
     sports = payload.get("sports")
@@ -2040,6 +2052,8 @@ def validate_canonical_snapshot(payload: dict[str, Any]) -> list[str]:
             contests = sport_payload.get("contests") or []
             if not isinstance(contests, list):
                 continue
+            if len(contests) != 1:
+                violations.append(f"cardinality:sports.{sport_key}.contests")
             selected_contest: dict[str, Any] | None = None
             for idx, contest in enumerate(contests):
                 if not isinstance(contest, dict):
