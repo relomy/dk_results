@@ -16,6 +16,8 @@ class Sport:
     name: str = ""
     positions: tuple[str, ...] = ()
 
+    salary_cap: int = 50000
+
     sheet_min_entry_fee: int = 25
     keyword: str = "%"
 

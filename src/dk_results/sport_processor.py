@@ -226,17 +226,18 @@ class SportProcessor:
             optimizer = Optimizer(sport_cls, results.players)
             optimized_players = optimizer.get_optimal_lineup()
             if optimized_players:
-                optimized_players.sort(key=lambda x: (sport_cls.positions.index(x.pos), x.name))
+                optimized_players.sort(key=lambda sp: (sport_cls.positions.index(sp.slot), sp.player.name))
             if not optimized_players:
                 return
 
             optimized_info: list[list[Any]] = [["Pos", "Name", "Salary", "Pts", "Value", "Own%"]]
-            for player in optimized_players:
-                row = [player.pos, player.name, player.salary, player.fpts, player.value, player.ownership]
+            for selected in optimized_players:
+                player = selected.player
+                row = [selected.slot, player.name, player.salary, player.fpts, player.value, player.ownership]
                 logger.info(
                     "top_player sport=%s pos=%s name=%r score=%s salary=%s value=%.2f own=%s",
                     sport_name,
-                    player.pos,
+                    selected.slot,
                     player.name,
                     player.fpts,
                     player.salary,
