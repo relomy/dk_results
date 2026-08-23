@@ -33,18 +33,18 @@ class Optimizer:
             del players["49ers "]
 
     def get_optimal_lineup(self) -> list[Player] | None:
-        selected_players = self.create_decision_variables()
-        self.define_objective(selected_players)
-        self.define_budget_constraint(selected_players)
-        self.define_player_count_constraint(selected_players)
-        self.define_position_constraints(selected_players)
+        selected_players = self._create_decision_variables()
+        self._define_objective(selected_players)
+        self._define_budget_constraint(selected_players)
+        self._define_player_count_constraint(selected_players)
+        self._define_position_constraints(selected_players)
 
-        self.solve_problem()
+        self._solve_problem()
 
-        return self.extract_optimal_lineup(selected_players)
+        return self._extract_optimal_lineup(selected_players)
 
     # Helper methods
-    def create_decision_variables(self) -> dict[tuple[str, str], pl.LpVariable]:
+    def _create_decision_variables(self) -> dict[tuple[str, str], pl.LpVariable]:
         selected_players: dict[tuple[str, str], pl.LpVariable] = {}
         for player in self.players:
             selected_positions = self.players[player].roster_pos
@@ -52,7 +52,7 @@ class Optimizer:
                 selected_players[(player, pos)] = pl.LpVariable(f"{player}_{pos}", 0, 1, pl.LpInteger)
         return selected_players
 
-    def define_budget_constraint(self, selected_players: dict[tuple[str, str], pl.LpVariable]) -> None:
+    def _define_budget_constraint(self, selected_players: dict[tuple[str, str], pl.LpVariable]) -> None:
         budget = 50000
         total_salary = sum(
             self.players[player].salary * selected_players[(player, pos)]
@@ -61,14 +61,14 @@ class Optimizer:
         )
         self.prob += (total_salary <= budget, "Budget Constraint")
 
-    def define_player_count_constraint(self, selected_players: dict[tuple[str, str], pl.LpVariable]) -> None:
+    def _define_player_count_constraint(self, selected_players: dict[tuple[str, str], pl.LpVariable]) -> None:
         for player in self.players:
             self.prob += (
                 sum(selected_players[player, pos] for pos in self.players[player].roster_pos) <= 1,
                 f"Only one position for player {player}",
             )
 
-    def define_objective(self, selected_players: dict[tuple[str, str], pl.LpVariable]) -> None:
+    def _define_objective(self, selected_players: dict[tuple[str, str], pl.LpVariable]) -> None:
         self.prob += (
             sum(
                 self.players[player].fpts * selected_players[(player, pos)]
@@ -78,12 +78,12 @@ class Optimizer:
             "Total Points",
         )
 
-    def define_position_constraints(self, selected_players: dict[tuple[str, str], pl.LpVariable]) -> None:
+    def _define_position_constraints(self, selected_players: dict[tuple[str, str], pl.LpVariable]) -> None:
         for position in self.sport_obj.positions:
-            x = self.create_position_constraint(selected_players, position)
+            x = self._create_position_constraint(selected_players, position)
             self.prob += x
 
-    def create_position_constraint(
+    def _create_position_constraint(
         self, selected_players: dict[tuple[str, str], pl.LpVariable], position: str
     ) -> pl.LpConstraint:
         count = pl.lpSum(
@@ -93,10 +93,10 @@ class Optimizer:
         )
         return count == self.sport_obj.positions.count(position)
 
-    def solve_problem(self) -> None:
+    def _solve_problem(self) -> None:
         pl.GLPK(msg=0).solve(self.prob)
 
-    def extract_optimal_lineup(self, selected_players: dict[tuple[str, str], pl.LpVariable]) -> list[Player] | None:
+    def _extract_optimal_lineup(self, selected_players: dict[tuple[str, str], pl.LpVariable]) -> list[Player] | None:
         optimal_players: list[Player] = []
         if self.prob.status == 1:
             total_points = 0.0

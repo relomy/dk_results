@@ -234,7 +234,7 @@ def test_standings_pos_does_not_affect_optimizer_pos():
     assert tom.standings_pos == "QB/FLEX"
     assert tom.pos == "QB"
     optimizer = Optimizer(NFLSport, standings.players)
-    selected = optimizer.create_decision_variables()
+    selected = optimizer._create_decision_variables()
     assert ("Tom Brady", "QB") in selected
     assert ("Tom Brady", "FLEX") not in selected
 
@@ -257,7 +257,7 @@ def test_nba_dual_position_player():
     combo_row = next(r for r in values if r[1] == "Combo Guard")
     assert combo_row[0] == "PG/SG"
     optimizer = Optimizer(NBASport, standings.players)
-    selected = optimizer.create_decision_variables()
+    selected = optimizer._create_decision_variables()
     assert ("Combo Guard", "PG") in selected
     assert ("Combo Guard", "SG") in selected
 
