@@ -74,9 +74,12 @@ def test_get_primary_sport_prefers_draftkings_override_and_falls_back_to_name():
 def test_fixed_sport_configuration_collections_are_tuples():
     from dk_results.domain.sport import CFBSport, GolfSport
 
+    # positions is the sole source of truth for the roster (ADR-0005); the old
+    # positions_count / position_constraints attributes are retired.
     assert isinstance(CFBSport.positions, tuple)
-    assert isinstance(CFBSport.position_constraints, tuple)
-    assert isinstance(GolfSport.position_constraints, tuple)
+    assert isinstance(GolfSport.positions, tuple)
+    assert not hasattr(GolfSport, "position_constraints")
+    assert not hasattr(GolfSport, "positions_count")
 
 
 def test_get_suffix_patterns_compiles_and_refreshes_as_immutable_tuple():

@@ -45,13 +45,23 @@ class _RecordingSolver:
 
 def test_get_optimal_lineup_maps_assignments_to_selected_players() -> None:
     players = _slate()
-    solver = _RecordingSolver([Assignment("QB1", "QB"), Assignment("RB1", "FLEX")])
+    # A full roster: one assignment per slot in _TinySport.positions.
+    solver = _RecordingSolver(
+        [
+            Assignment("QB1", "QB"),
+            Assignment("RB1", "RB"),
+            Assignment("RB2", "FLEX"),
+            Assignment("49ers ", "DST"),
+        ]
+    )
 
     result = Optimizer(_TinySport, players, solver=solver).get_optimal_lineup()
 
     assert result == [
         SelectedPlayer(players["QB1"], "QB"),
-        SelectedPlayer(players["RB1"], "FLEX"),
+        SelectedPlayer(players["RB1"], "RB"),
+        SelectedPlayer(players["RB2"], "FLEX"),
+        SelectedPlayer(players["49ers "], "DST"),
     ]
 
 
