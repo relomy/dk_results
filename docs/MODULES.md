@@ -49,16 +49,14 @@ entire "find live contest → download rows → parse standings → compute anal
   "skip this sport"; `SportProcessorConfig` (frozen) carries filesystem/limit config.
 - **Depth:** high — the biggest leverage-per-interface unit in the repo.
 
-### Snapshot v3 — `services/snapshot_v3.py`
-Turns raw DK data into the deterministic, decision-ready JSON snapshot consumed
-by the dashboard. Public surface: `collect_snapshot_data`, `build_snapshot`,
-`normalize_snapshot_for_output`, `snapshot_to_json`/`to_stable_json`,
-`build_dashboard_sport_snapshot`, `build_dashboard_envelope`,
-`is_dashboard_envelope`, `validate_canonical_snapshot`.
-- **Depth:** high behaviour, but the module is ~2k lines with a large private
-  surface (contracts for cash line, ownership, trains, VIP lineups, threats).
-  A candidate to split along its internal contract seams
-  (`_*_contract` helpers) if it keeps growing — see "Notes for architecture work".
+### Snapshot v3 — `services/snapshot_v3/`
+Collects current DraftKings data, derives analytics, and builds the deterministic
+schema-3 JSON envelope consumed by downstream systems. The package is split into
+collection, derivation, contract building, normalization, validation, and stable
+serialization seams. Its public orchestration surface is
+`pipeline.build_snapshot_v3_envelope`.
+- **Depth:** high — the package keeps external collection at the boundary and
+  exposes one schema-3 generation path.
 
 ### VIP Lineups — `vip_lineups.py`
 `fetch_vip_lineups(...)` gathers VIP entries and parses their scorecards into
@@ -181,11 +179,10 @@ tightening:
    `get_optimal_lineup()` is needed by callers; the LP-construction steps are
    public. Making them private shrinks the interface without losing behaviour
    (a textbook "hide more complexity inside").
-2. **`services/snapshot_v3.py` — split along contract seams.** ~2k lines
-   with many `_*_contract` builders. The public builders are deep, but internal
-   locality is low. If it keeps growing, extract per-contract modules
-   (cash-line, ownership, trains, vip-lineups, threats) behind the existing
-   `build_snapshot` interface.
+2. **`services/snapshot_v3/` — preserve the contract seams.** Collection,
+   derivation, building, normalization, validation, and serialization are kept
+   as separate modules behind `build_snapshot_v3_envelope`; extend those seams
+   rather than introducing another snapshot generation surface.
 3. **`cli/update_contests.py` — a CLI carrying domain logic.** Contest-completion
    detection, VIP-presence, soft-finish announcements, and SQLite helpers live in
    an "adapter" tier. Its DB/notification logic could move into a deep module

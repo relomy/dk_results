@@ -77,10 +77,10 @@ uv run python export_fixture.py publish \
 Notes:
 - The exporter reuses the same `dk_results` data sources/endpoints already in use (contest DB + existing `DraftKings` client methods); no new scraping endpoints are introduced.
 - Contest selection is deterministic and includes a `selection.reason` object plus compact candidate summary for transparency.
-- Output is byte-stable for tests (`sort_keys`, fixed separators, stable ordering) and keeps major sections present with explicit `null` where data is unavailable.
+- Output is byte-stable for tests (`sort_keys`, fixed separators, stable ordering) and omits unavailable optional sections rather than emitting legacy/raw compatibility fields.
 - Export output uses a snapshot envelope: `schema_version`, `snapshot_at`, `generated_at`, and `sports` keyed by sport code.
-- Each sport snapshot includes both legacy fields and normalized contract sections: `status`, `updated_at`, `primary_contest`, `contests`, and `players`.
-- Cookies/auth handling follows existing project mechanisms (`dk_results/draftkings/session.py`, `pickled_cookies_works.txt`); no credentials are printed in logs.
+- Each sport snapshot uses the schema-3 contract sections: `status`, `updated_at`, `primary_contest`, `contests`, and `players`.
+ - Cookies/auth handling follows existing project mechanisms (`dk_results/draftkings/dksession.py`, `pickled_cookies_works.txt`); no credentials are printed in logs.
 
 Optional `db_main.py` addendum export for integration testing:
 
@@ -88,7 +88,7 @@ Optional `db_main.py` addendum export for integration testing:
 uv run python db_main.py --sport NBA GOLF --snapshot-out /tmp/live-snapshot.json
 ```
 
-`--snapshot-out` is opt-in and does not change normal sheet-writing behavior when omitted.
+`--snapshot-out` is opt-in and emits the same schema-3 envelope as the exporter commands; it does not change normal sheet-writing behavior when omitted.
 
 - `db_main.py` updates Google Sheets for a live contest per sport by downloading salary
   and standings CSVs, constructing `Results`, and writing via `DfsSheetService`
