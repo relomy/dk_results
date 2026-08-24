@@ -6,7 +6,7 @@ import logging
 import sqlite3
 import time
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Protocol
 
 from dk_results.domain.bonus_rules import parse_bonus_counts
 from dk_results.domain.lineup import normalize_name
@@ -75,25 +75,107 @@ class BonusCandidate:
     vip_users: list[str]
 
 
-def create_bonus_announcements_table(conn: sqlite3.Connection) -> None:
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS bonus_announcements (
-            contest_id INTEGER NOT NULL,
-            sport TEXT NOT NULL,
-            normalized_player_name TEXT NOT NULL,
-            bonus_code TEXT NOT NULL,
-            last_announced_count INTEGER NOT NULL DEFAULT 0,
-            updated_at datetime NOT NULL DEFAULT (datetime('now', 'localtime'))
-        );
-        """
-    )
-    conn.execute(
-        """
-        CREATE UNIQUE INDEX IF NOT EXISTS bonus_announcements_unique_key
-        ON bonus_announcements (contest_id, sport, normalized_player_name, bonus_code);
-        """
-    )
+@dataclass(frozen=True)
+class _BonusKey:
+    contest_id: int
+    sport: str
+    normalized_player_name: str
+    bonus_code: str
+
+
+@dataclass(frozen=True)
+class _CandidateOutcome:
+    persisted_announcements: int = 0
+    webhook_messages: int = 0
+    send_failures: int = 0
+    db_failures: int = 0
+    cas_skips: int = 0
+
+
+class _BonusSender(Protocol):
+    def send_message(self, message: str) -> None: ...
+
+
+class _BonusStateStore(Protocol):
+    def create_table(self) -> None: ...
+
+    def load_count(self, key: _BonusKey) -> int: ...
+
+    def ensure_row(self, key: _BonusKey) -> None: ...
+
+    def compare_and_set(self, key: _BonusKey, old_count: int, new_count: int) -> bool: ...
+
+    def commit(self) -> None: ...
+
+
+class _SqliteBonusStateStore:
+    def __init__(self, conn: sqlite3.Connection) -> None:
+        self._conn = conn
+
+    def create_table(self) -> None:
+        self._conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS bonus_announcements (
+                contest_id INTEGER NOT NULL,
+                sport TEXT NOT NULL,
+                normalized_player_name TEXT NOT NULL,
+                bonus_code TEXT NOT NULL,
+                last_announced_count INTEGER NOT NULL DEFAULT 0,
+                updated_at datetime NOT NULL DEFAULT (datetime('now', 'localtime'))
+            );
+            """
+        )
+        self._conn.execute(
+            """
+            CREATE UNIQUE INDEX IF NOT EXISTS bonus_announcements_unique_key
+            ON bonus_announcements (contest_id, sport, normalized_player_name, bonus_code);
+            """
+        )
+
+    def load_count(self, key: _BonusKey) -> int:
+        row = self._conn.execute(
+            """
+            SELECT last_announced_count
+            FROM bonus_announcements
+            WHERE contest_id=? AND sport=? AND normalized_player_name=? AND bonus_code=?
+            """,
+            (key.contest_id, key.sport, key.normalized_player_name, key.bonus_code),
+        ).fetchone()
+        return int(row[0]) if row else 0
+
+    def ensure_row(self, key: _BonusKey) -> None:
+        self._conn.execute(
+            """
+            INSERT INTO bonus_announcements (
+                contest_id, sport, normalized_player_name, bonus_code, last_announced_count
+            )
+            VALUES (?, ?, ?, ?, 0)
+            ON CONFLICT (contest_id, sport, normalized_player_name, bonus_code) DO NOTHING
+            """,
+            (key.contest_id, key.sport, key.normalized_player_name, key.bonus_code),
+        )
+
+    def compare_and_set(self, key: _BonusKey, old_count: int, new_count: int) -> bool:
+        cur = self._conn.execute(
+            """
+            UPDATE bonus_announcements
+            SET last_announced_count=?, updated_at=datetime('now', 'localtime')
+            WHERE contest_id=? AND sport=? AND normalized_player_name=? AND bonus_code=?
+              AND last_announced_count=?
+            """,
+            (
+                new_count,
+                key.contest_id,
+                key.sport,
+                key.normalized_player_name,
+                key.bonus_code,
+                old_count,
+            ),
+        )
+        return cur.rowcount > 0
+
+    def commit(self) -> None:
+        self._conn.commit()
 
 
 def _format_vip_users(vip_users: list[str], limit: int = 5) -> str:
@@ -139,71 +221,6 @@ def _format_message(sport: str, candidate: BonusCandidate, announced_count: int)
         points_text = f"{points_text}, {_format_points(total_points)} total bonus pts"
     action = meta["action"]
     return f"{sport}: {candidate.display_name} ({ownership}) {action} ({points_text}) (VIPs: {vip_part})"
-
-
-def _load_old_count(
-    conn: sqlite3.Connection,
-    contest_id: int,
-    sport: str,
-    normalized_player_name: str,
-    bonus_code: str,
-) -> int:
-    row = conn.execute(
-        """
-        SELECT last_announced_count
-        FROM bonus_announcements
-        WHERE contest_id=? AND sport=? AND normalized_player_name=? AND bonus_code=?
-        """,
-        (contest_id, sport, normalized_player_name, bonus_code),
-    ).fetchone()
-    return int(row[0]) if row else 0
-
-
-def _ensure_row_exists(
-    conn: sqlite3.Connection,
-    contest_id: int,
-    sport: str,
-    normalized_player_name: str,
-    bonus_code: str,
-) -> None:
-    conn.execute(
-        """
-        INSERT INTO bonus_announcements (
-            contest_id, sport, normalized_player_name, bonus_code, last_announced_count
-        )
-        VALUES (?, ?, ?, ?, 0)
-        ON CONFLICT (contest_id, sport, normalized_player_name, bonus_code) DO NOTHING
-        """,
-        (contest_id, sport, normalized_player_name, bonus_code),
-    )
-
-
-def _cas_update_count(
-    conn: sqlite3.Connection,
-    contest_id: int,
-    sport: str,
-    normalized_player_name: str,
-    bonus_code: str,
-    old_count: int,
-    new_count: int,
-) -> bool:
-    cur = conn.execute(
-        """
-        UPDATE bonus_announcements
-        SET last_announced_count=?, updated_at=datetime('now', 'localtime')
-        WHERE contest_id=? AND sport=? AND normalized_player_name=? AND bonus_code=?
-          AND last_announced_count=?
-        """,
-        (
-            new_count,
-            contest_id,
-            sport,
-            normalized_player_name,
-            bonus_code,
-            old_count,
-        ),
-    )
-    return cur.rowcount > 0
 
 
 def _collect_candidates(sport: str, vip_lineups: list[dict[str, Any]]) -> list[BonusCandidate]:
@@ -257,13 +274,92 @@ def _collect_candidates(sport: str, vip_lineups: list[dict[str, Any]]) -> list[B
     return candidates
 
 
+def _announce_candidate(
+    *,
+    state_store: _BonusStateStore,
+    sender: _BonusSender,
+    sport: str,
+    contest_id: int,
+    candidate: BonusCandidate,
+    logger: logging.Logger | None = None,
+) -> _CandidateOutcome:
+    log = logger or logging.getLogger(__name__)
+    key = _BonusKey(
+        contest_id=contest_id,
+        sport=sport,
+        normalized_player_name=candidate.normalized_player_name,
+        bonus_code=candidate.bonus_code,
+    )
+    old_count = state_store.load_count(key)
+    new_count = candidate.new_count
+    if new_count <= old_count:
+        return _CandidateOutcome()
+
+    meta = _get_bonus_meta(sport, candidate.bonus_code)
+    if meta["count_mode"] == "binary":
+        counts_to_announce = [1]
+    else:
+        counts_to_announce = list(range(old_count + 1, new_count + 1))
+    log.debug(
+        "VIP bonus transition: sport=%s contest_id=%s player=%s bonus=%s old_count=%d new_count=%d messages_to_send=%d",
+        sport,
+        contest_id,
+        candidate.normalized_player_name,
+        candidate.bonus_code,
+        old_count,
+        new_count,
+        len(counts_to_announce),
+    )
+
+    try:
+        for count_value in counts_to_announce:
+            sender.send_message(_format_message(sport, candidate, count_value))
+    except Exception as err:
+        log.error(
+            "Failed to send bonus announcement for %s %s in contest %s: %s",
+            candidate.normalized_player_name,
+            candidate.bonus_code,
+            contest_id,
+            err,
+        )
+        return _CandidateOutcome(send_failures=1)
+
+    webhook_messages = len(counts_to_announce)
+    try:
+        state_store.ensure_row(key)
+        updated = state_store.compare_and_set(key, old_count, new_count)
+        state_store.commit()
+        if not updated:
+            log.debug(
+                "Skipping DB advance for %s %s in contest %s; count changed in another run.",
+                candidate.normalized_player_name,
+                candidate.bonus_code,
+                contest_id,
+            )
+            return _CandidateOutcome(webhook_messages=webhook_messages, cas_skips=1)
+    except sqlite3.Error as err:
+        log.error(
+            "Failed to persist bonus announcement for %s %s in contest %s: %s",
+            candidate.normalized_player_name,
+            candidate.bonus_code,
+            contest_id,
+            err,
+        )
+        return _CandidateOutcome(webhook_messages=webhook_messages, db_failures=1)
+
+    return _CandidateOutcome(
+        persisted_announcements=webhook_messages,
+        webhook_messages=webhook_messages,
+    )
+
+
 def announce_vip_bonuses(
     *,
     conn: sqlite3.Connection,
     sport: str,
     contest_id: int,
     vip_lineups: list[dict[str, Any]],
-    sender: Any | None,
+    sender: _BonusSender | None,
     logger: logging.Logger | None = None,
 ) -> int:
     """Announce newly observed bonus opportunities for VIP lineups."""
@@ -279,7 +375,8 @@ def announce_vip_bonuses(
         len(vip_lineups),
     )
 
-    create_bonus_announcements_table(conn)
+    state_store = _SqliteBonusStateStore(conn)
+    state_store.create_table()
     candidates = _collect_candidates(sport, vip_lineups)
     if not candidates:
         elapsed_ms = int((time.monotonic() - started_at) * 1000)
@@ -311,86 +408,19 @@ def announce_vip_bonuses(
     db_failures = 0
     cas_skips = 0
     for candidate in candidates:
-        old_count = _load_old_count(
-            conn,
-            contest_id,
-            sport,
-            candidate.normalized_player_name,
-            candidate.bonus_code,
+        outcome = _announce_candidate(
+            state_store=state_store,
+            sender=sender,
+            sport=sport,
+            contest_id=contest_id,
+            candidate=candidate,
+            logger=log,
         )
-        new_count = candidate.new_count
-        if new_count <= old_count:
-            continue
-
-        meta = _get_bonus_meta(sport, candidate.bonus_code)
-        if meta["count_mode"] == "binary":
-            counts_to_announce = [1]
-        else:
-            counts_to_announce = list(range(old_count + 1, new_count + 1))
-        log.debug(
-            "VIP bonus transition: sport=%s contest_id=%s player=%s bonus=%s "
-            "old_count=%d new_count=%d messages_to_send=%d",
-            sport,
-            contest_id,
-            candidate.normalized_player_name,
-            candidate.bonus_code,
-            old_count,
-            new_count,
-            len(counts_to_announce),
-        )
-
-        try:
-            for count_value in counts_to_announce:
-                sender.send_message(_format_message(sport, candidate, count_value))
-            webhook_messages += len(counts_to_announce)
-        except Exception as err:
-            send_failures += 1
-            log.error(
-                "Failed to send bonus announcement for %s %s in contest %s: %s",
-                candidate.normalized_player_name,
-                candidate.bonus_code,
-                contest_id,
-                err,
-            )
-            continue
-
-        try:
-            _ensure_row_exists(
-                conn,
-                contest_id,
-                sport,
-                candidate.normalized_player_name,
-                candidate.bonus_code,
-            )
-            updated = _cas_update_count(
-                conn,
-                contest_id,
-                sport,
-                candidate.normalized_player_name,
-                candidate.bonus_code,
-                old_count,
-                new_count,
-            )
-            conn.commit()
-            if not updated:
-                cas_skips += 1
-                log.debug(
-                    "Skipping DB advance for %s %s in contest %s; count changed in another run.",
-                    candidate.normalized_player_name,
-                    candidate.bonus_code,
-                    contest_id,
-                )
-                continue
-            persisted_announcements += len(counts_to_announce)
-        except sqlite3.Error as err:
-            db_failures += 1
-            log.error(
-                "Failed to persist bonus announcement for %s %s in contest %s: %s",
-                candidate.normalized_player_name,
-                candidate.bonus_code,
-                contest_id,
-                err,
-            )
+        persisted_announcements += outcome.persisted_announcements
+        webhook_messages += outcome.webhook_messages
+        send_failures += outcome.send_failures
+        db_failures += outcome.db_failures
+        cas_skips += outcome.cas_skips
 
     elapsed_ms = int((time.monotonic() - started_at) * 1000)
     log.info(
