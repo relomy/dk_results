@@ -1,6 +1,6 @@
 # Testing & verification
 
-How to run this repo's checks, and the one gotcha that stops them cold.
+How to run this repo's checks, and how the `dfs-common` dependency is resolved.
 
 ## Completion checks
 
@@ -8,40 +8,73 @@ Run before reporting any change complete. Use the full suite when the change is
 broad; the relevant subset when it's narrow.
 
 - `uv run pytest` — the repository-wide test command.
-- `uv run ruff format --check --exclude .ci .`
+- `uv run ruff format --check .`
 - `uv run ruff check .`
 - `uv run ty check`
 
-## Gotcha: dfs-common is an editable sibling checkout
+## dfs-common is a git dependency
 
-`dfs-common` is sourced as an editable path dependency in `[tool.uv.sources]`:
+`dfs-common` is sourced from the private `relomy/dfs-common` GitHub repo in
+`[tool.uv.sources]`, tracking its `main` branch:
 
 ```toml
+dfs-common = { git = "https://github.com/relomy/dfs-common", branch = "main" }
+```
+
+No sibling `../dfs_common` checkout is required — `uv sync` clones the
+dependency directly over HTTPS. This requires non-interactive GitHub read
+access to the private repo:
+
+- **Local dev**: a git credential helper (e.g. `gh auth login`, macOS Keychain)
+  that already authenticates `https://github.com` requests.
+- **Claude/Codex cloud sessions**: add `relomy/dfs-common` to the session's
+  repo scope; the session's GitHub App credentials authenticate the clone
+  automatically. No manual sibling clone is needed anymore.
+- **CI**: the `DFS_COMMON_CHECKOUT_TOKEN` secret is rewritten into a git
+  `insteadOf` URL before `uv sync` runs (see `.github/workflows/ci.yml`).
+
+If dependency installation fails with a git authentication error, the fix is
+to make sure one of the above credential sources is in place — not to clone a
+sibling directory.
+
+## Explicit dependency refreshes
+
+The `pyproject.toml` source declaration expresses policy ("follow `main`").
+`uv.lock` records the exact commit that was resolved and tested. Routine
+`uv sync` / `uv run pytest` do **not** silently advance that commit — they
+install whatever is already locked.
+
+To pick up new `dfs-common` commits, refresh the lock entry explicitly:
+
+```bash
+uv lock --upgrade-package dfs-common
+uv sync
+uv run pytest
+```
+
+Commit the resulting `uv.lock` diff once the refreshed dependency has been
+tested — that diff is meaningful (a new shared-library revision), not noise,
+and should go through normal review.
+
+## Locked verification
+
+Use `uv sync --locked` (or `uv run --locked ...`) for any command that must
+verify the environment without rewriting `uv.lock` — this is what CI runs. It
+fails clearly, instead of silently re-resolving, when `pyproject.toml` and
+`uv.lock` have drifted apart.
+
+## Temporary local editable-path override
+
+While actively developing unpublished changes in `dfs_common` itself, you can
+temporarily point this repo at a sibling checkout instead of the git
+dependency:
+
+```toml
+[tool.uv.sources]
 dfs-common = { path = "../dfs_common", editable = true }
 ```
 
-So `uv` expects the private `relomy/dfs-common` repo checked out as a sibling
-directory at `../dfs_common`, next to this repo. Every `uv` command builds the
-venv first, so `pytest`, `ruff`, and `ty` all fail *before running a single
-test* when that checkout is missing:
-
-- `Distribution not found at: file:///.../dfs_common` — the sibling checkout
-  isn't there.
-- `fatal: could not read Username for 'https://github.com'` — you tried to clone
-  it without git credentials for the private repo.
-
-Fix: clone `relomy/dfs-common` to `../dfs_common` (private, so you need git read
-access — a token or SSH key with read scope). In a Claude Code web session, add
-`relomy/dfs-common` to the session's scope first, then clone it to the sibling
-path. Once it's in place, `uv sync` builds the editable install and the checks
-run.
-
-## Lockfile hygiene
-
-`dfs-common` is an editable path dependency, so uv reads its current
-`pyproject.toml` metadata whenever it resolves the environment. After changing
-the sibling checkout, regenerate and commit the lockfile with `uv lock`.
-
-Use `uv run --locked ...` (or `UV_LOCKED=1`) for commands that must verify the
-environment without rewriting `uv.lock`; it fails clearly when the lockfile no
-longer matches either project metadata or the editable sibling dependency.
+Run `uv sync` to pick it up. This is an exceptional, temporary development
+step — revert `pyproject.toml` (and regenerate `uv.lock` back to the git
+source) before committing, so normal local, CI, and cloud runs stay on the
+git-based dependency.

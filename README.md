@@ -15,7 +15,9 @@ notifications (see `db_main.py:main`, `update_contests.py:check_contests_for_com
 ## Shared Infrastructure
 
 - Google Sheets + Discord primitives are provided by `dfs_common`.
-- Local development expects `dfs_common` as a sibling directory (see `pyproject.toml:[tool.uv.sources]`).
+- `dfs-common` is installed as a git dependency tracking `main` (see
+  `pyproject.toml:[tool.uv.sources]` and `docs/TESTING.md`); no sibling
+  checkout is required.
 
 ## Sheet Service
 

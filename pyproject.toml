@@ -37,7 +37,7 @@ package = true
 default-groups = ["dev"]
 
 [tool.uv.sources]
-dfs-common = { path = "../dfs_common", editable = true }
+dfs-common = { git = "https://github.com/relomy/dfs-common", branch = "main" }
 
 [build-system]
 requires = ["setuptools>=68"]
