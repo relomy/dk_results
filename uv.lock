@@ -223,23 +223,15 @@ dependencies = [
     { name = "cryptography" },
     { name = "google-api-python-client" },
     { name = "google-auth" },
-    { name = "httplib2" },
-    { name = "idna" },
-    { name = "pyasn1" },
     { name = "requests" },
-    { name = "urllib3" },
 ]
 
 [package.metadata]
 requires-dist = [
-    { name = "cryptography", specifier = ">=48.0.1" },
+    { name = "cryptography", specifier = ">=46.0.6" },
     { name = "google-api-python-client" },
     { name = "google-auth" },
-    { name = "httplib2", specifier = ">=0.32.0" },
-    { name = "idna", specifier = ">=3.15" },
-    { name = "pyasn1", specifier = ">=0.6.4" },
     { name = "requests", specifier = ">=2.33.0" },
-    { name = "urllib3", specifier = ">=2.7.0" },
 ]
 
 [package.metadata.requires-dev]
