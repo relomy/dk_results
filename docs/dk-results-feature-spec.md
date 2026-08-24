@@ -14,7 +14,7 @@ This document defines product features of `dk_results` independent of any single
    - canonical snapshot envelope
    - `latest.json`
    - UTC-day manifests
-3. `db_main --snapshot-out` compatibility snapshot envelope (legacy/raw sport payload shape).
+3. `db_main --snapshot-out` schema-3 snapshot envelope.
 4. Discord notifications (contest lifecycle + VIP bonus signals).
 5. CLI/runtime jobs for scheduled operation.
 
@@ -236,27 +236,23 @@ Outputs:
 Unavailable conditions:
 - Exporter canonical commands fail if required envelope metadata is missing/invalid.
 
-### F10b. `db_main --snapshot-out` Compatibility Snapshot
+### F10b. `db_main --snapshot-out` Scheduled Snapshot Output
 Goal:
-- Emit a multi-sport snapshot envelope from the scheduled sheet pipeline for integration/testing compatibility.
+- Emit the canonical multi-sport schema-3 snapshot envelope from the scheduled sheet pipeline.
 
 Inputs:
 - Selected contests processed by `db_main`.
-- Per-sport snapshots built via `build_snapshot` and normalized.
+- Per-sport snapshots built and normalized by the schema-3 pipeline.
 
 Computation:
-- Build envelope with schema_version/snapshot timestamps and normalized raw per-sport payloads.
+- Build and validate the same schema-3 envelope used by the exporter commands.
 - Write output when `--snapshot-out` is provided.
 
 Outputs:
-- Compatibility snapshot envelope written to the configured output path.
-
-Notes:
-- This payload shape is not the canonical exporter contract shape used by `export_fixture.py` bundle/single outputs.
-- Consumers requiring canonical contract guarantees should use exporter commands.
+- Schema-3 snapshot envelope written to the configured output path.
 
 Unavailable conditions:
-- If no contests are selected/processed, emitted payload may be partial/empty by sport rather than hard-failing.
+- If no contests are selected/processed, the command emits no snapshot rather than a legacy/raw compatibility envelope.
 
 ### F11. Operational Notifications
 Goal:

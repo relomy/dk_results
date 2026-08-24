@@ -411,25 +411,64 @@ def test_main_snapshot_out_writes_opt_in_envelope(monkeypatch, tmp_path):
 
     monkeypatch.setattr(db_main, "SportProcessor", _FakeSportProcessor)
 
-    def _fake_snapshot(*, sport: str, contest_id: int | None, standings_limit: int):
+    def _fake_snapshot(selected_contests, *, standings_limit: int, generated_at=None):
+        assert selected_contests == {"NFL": 111, "GOLF": 222}
         return {
-            "sport": sport,
-            "selection": {"selected_contest_id": contest_id},
-            "truncation": {"limit": standings_limit},
-            "metadata": {"warnings": [], "missing_fields": []},
+            "schema_version": 3,
+            "snapshot_at": generated_at or "2026-02-14T10:00:00Z",
+            "generated_at": generated_at or "2026-02-14T10:00:00Z",
+            "sports": {
+                "nfl": {"primary_contest": {"contest_id": "111"}, "contests": [{}]},
+                "golf": {"contests": [{}]},
+            },
         }
 
-    monkeypatch.setattr(db_main, "build_snapshot", _fake_snapshot)
+    monkeypatch.setattr(db_main, "build_snapshot_v3_envelope", _fake_snapshot)
 
     db_main.main()
 
     payload = json.loads(out.read_text(encoding="utf-8"))
-    assert payload["schema_version"] == 2
+    assert payload["schema_version"] == 3
     assert sorted(payload["sports"].keys()) == ["golf", "nfl"]
-    assert payload["sports"]["nfl"]["selection"]["selected_contest_id"] == "111"
-    assert payload["sports"]["golf"]["truncation"]["limit"] == 123
+    assert payload["sports"]["nfl"]["primary_contest"]["contest_id"] == "111"
+    assert len(payload["sports"]["golf"]["contests"]) == 1
     assert payload["generated_at"].endswith("Z")
     assert payload["snapshot_at"].endswith("Z")
+
+
+def test_main_snapshot_out_skips_and_preserves_existing_output_when_no_contests(monkeypatch, tmp_path):
+    out = tmp_path / "snapshot.json"
+    original = '{"schema_version":3,"sports":{"nba":{}}}\n'
+    out.write_text(original, encoding="utf-8")
+    monkeypatch.setattr(db_main, "load_dotenv", lambda: None)
+    monkeypatch.setattr(db_main, "load_and_apply_settings", lambda: None)
+    monkeypatch.setattr(db_main.state, "contests_db_path", lambda: tmp_path / "contests.db")
+    monkeypatch.setattr(db_main, "ContestDatabase", lambda _path: object())
+    monkeypatch.setattr(db_main, "DraftKings", lambda: object())
+    monkeypatch.setattr(db_main, "load_vips", lambda: [])
+    monkeypatch.setattr(
+        db_main.argparse.ArgumentParser,
+        "parse_args",
+        lambda _self: Namespace(
+            sport=["NFL"],
+            nolineups=False,
+            verbose=False,
+            snapshot_out=str(out),
+            standings_limit=123,
+        ),
+    )
+
+    class _FakeSportProcessor:
+        def __init__(self, **kwargs):
+            pass
+
+        def run(self, sport_name, sport_cls):
+            raise NoLiveContestError("none")
+
+    monkeypatch.setattr(db_main, "SportProcessor", _FakeSportProcessor)
+    db_main.main()
+
+    assert out.read_text(encoding="utf-8") == original
 
 
 def test_main_verbose_enables_debug_without_mutating_log_level_env(monkeypatch, tmp_path):
@@ -614,7 +653,7 @@ def test_write_snapshot_payload_is_byte_stable(tmp_path):
         [
             ("snapshot_at", "2026-01-01T00:00:00Z"),
             ("sports", {"nfl": {"b": 2, "a": 1}}),
-            ("schema_version", 2),
+            ("schema_version", 3),
             ("generated_at", "2026-01-01T00:00:00Z"),
         ]
     )
@@ -624,7 +663,7 @@ def test_write_snapshot_payload_is_byte_stable(tmp_path):
     assert out.read_text(encoding="utf-8") == (
         "{\n"
         '  "generated_at":"2026-01-01T00:00:00Z",\n'
-        '  "schema_version":2,\n'
+        '  "schema_version":3,\n'
         '  "snapshot_at":"2026-01-01T00:00:00Z",\n'
         '  "sports":{\n'
         '    "nfl":{\n'
