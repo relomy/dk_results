@@ -29,6 +29,7 @@
 
 - **ContestDatabase** — the single boundary for reading and writing contest rows in SQLite (live, upcoming, incomplete, and completion state). Module: `persistence/contestdatabase.py`.
   _Avoid_: NotificationStore (owns notification/presence rows, not contests); ContestResultsPort (live DraftKings readouts, not stored rows).
+- **ContestRow** — the named, frozen shape returned by `ContestDatabase.get_contest_by_id` and built from a DraftKings contest detail by the snapshot collector; replaces positional tuple indexing for the by-id contest read. The four trailing fields (`contest_state`, `contest_completed`, `prize_pool`, `max_entries_per_user`) are DK-detail-only and default to `None` on a DB read. See ADR-0006. The other `ContestDatabase` queries still return positional tuples.
 
 ## Contest completion & notifications
 

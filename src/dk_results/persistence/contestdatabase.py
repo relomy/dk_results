@@ -1,8 +1,49 @@
 import datetime
 import logging
 import sqlite3
+from dataclasses import dataclass
+from typing import Any
 
 from dk_results.domain.contest import Contest
+
+
+@dataclass(frozen=True)
+class ContestRow:
+    """A single contest row as read by :meth:`ContestDatabase.get_contest_by_id`.
+
+    The seven leading fields mirror that query's ``SELECT`` order. The four trailing
+    fields carry contract/state metadata that only the DraftKings-detail constructor
+    (``_contest_row_from_detail`` in the snapshot collector) populates; a plain by-id
+    DB read leaves them ``None``. Field values are the heterogeneous scalars SQLite and
+    the DK payload return, so they stay ``Any`` — the win here is the *named*, ordered
+    shape replacing positional tuple indexing.
+    """
+
+    dk_id: Any
+    name: Any
+    draft_group: Any
+    positions_paid: Any
+    start_date: Any
+    entry_fee: Any
+    entries: Any
+    contest_state: Any = None
+    contest_completed: Any = None
+    prize_pool: Any = None
+    max_entries_per_user: Any = None
+
+    @classmethod
+    def from_db_row(cls, row: tuple) -> "ContestRow":
+        """Build a row from ``get_contest_by_id``'s 7-column result."""
+        dk_id, name, draft_group, positions_paid, start_date, entry_fee, entries = row[:7]
+        return cls(
+            dk_id=dk_id,
+            name=name,
+            draft_group=draft_group,
+            positions_paid=positions_paid,
+            start_date=start_date,
+            entry_fee=entry_fee,
+            entries=entries,
+        )
 
 
 class ContestDatabase:
@@ -396,12 +437,12 @@ class ContestDatabase:
         except sqlite3.Error as err:
             self.logger.error("sqlite error in update_contest(): %s", err.args[0])
 
-    def get_contest_by_id(self, dk_id: int) -> tuple | None:
+    def get_contest_by_id(self, dk_id: int) -> ContestRow | None:
         """
         Get one contest by dk_id.
 
         Returns:
-            tuple | None: (dk_id, name, draft_group, positions_paid, start_date, entry_fee, entries)
+            ContestRow | None: the typed contest row, or None if absent / on SQLite error.
         """
         cur = self.conn.cursor()
         try:
@@ -412,7 +453,8 @@ class ContestDatabase:
                 "LIMIT 1"
             )
             cur.execute(sql, (dk_id,))
-            return cur.fetchone()
+            row = cur.fetchone()
+            return ContestRow.from_db_row(row) if row is not None else None
         except sqlite3.Error as err:
             self.logger.error("sqlite error in get_contest_by_id(): %s", err.args[0])
             return None

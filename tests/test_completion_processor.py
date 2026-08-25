@@ -382,7 +382,7 @@ def test_state_sync_updates_db_without_sender():
     db = ContestDatabase.from_connection(conn)
     assert db.get_contest_state(1) == ("COMPLETED", 1)
     row = db.get_contest_by_id(1)
-    assert row is not None and row[3] == 42  # positions_paid
+    assert row is not None and row.positions_paid == 42
 
 
 def test_unavailable_results_are_skipped_gracefully():

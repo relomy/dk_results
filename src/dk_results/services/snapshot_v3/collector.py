@@ -18,7 +18,7 @@ from dk_results.domain.contest_standings import parse_contest_standings
 from dk_results.domain.sport import Sport
 from dk_results.draftkings import DraftKings as Draftkings
 from dk_results.paths import repo_file
-from dk_results.persistence.contestdatabase import ContestDatabase
+from dk_results.persistence.contestdatabase import ContestDatabase, ContestRow
 from dk_results.services.snapshot_v3 import sections
 from dk_results.services.snapshot_v3.constants import DEFAULT_STANDINGS_LIMIT
 from dk_results.services.snapshot_v3.normalize import (
@@ -119,7 +119,7 @@ def _first_not_blank(*values: Any) -> Any:
     return None
 
 
-def _contest_row_from_detail(dk_id: int, detail: dict[str, Any]) -> tuple:
+def _contest_row_from_detail(dk_id: int, detail: dict[str, Any]) -> ContestRow:
     contest_detail = detail.get("contestDetail", {})
     payout_summary = contest_detail.get("payoutSummary") or []
     positions_paid = None
@@ -140,18 +140,18 @@ def _contest_row_from_detail(dk_id: int, detail: dict[str, Any]) -> tuple:
         contest_detail.get("maxEntriesPerPerson"),
         contest_detail.get("maxEntryCount"),
     )
-    return (
-        dk_id,
-        contest_detail.get("name"),
-        contest_detail.get("draftGroupId"),
-        positions_paid,
-        start_time,
-        contest_detail.get("entryFee"),
-        contest_detail.get("maximumEntries"),
-        contest_detail.get("contestState") or contest_detail.get("contestStatus"),
-        contest_detail.get("isCompleted"),
-        prize_pool,
-        max_entries_per_user,
+    return ContestRow(
+        dk_id=dk_id,
+        name=contest_detail.get("name"),
+        draft_group=contest_detail.get("draftGroupId"),
+        positions_paid=positions_paid,
+        start_date=start_time,
+        entry_fee=contest_detail.get("entryFee"),
+        entries=contest_detail.get("maximumEntries"),
+        contest_state=contest_detail.get("contestState") or contest_detail.get("contestStatus"),
+        contest_completed=contest_detail.get("isCompleted"),
+        prize_pool=prize_pool,
+        max_entries_per_user=max_entries_per_user,
     )
 
 
@@ -467,7 +467,7 @@ def _select_contest(
         )
 
     mode = "primary_live"
-    selected: tuple | None = None
+    selected: ContestRow | None = None
     if contest_id is not None:
         mode = "explicit_id"
         if contest_db is not None:
@@ -484,20 +484,17 @@ def _select_contest(
     if not selected:
         raise RuntimeError(f"No contest found for sport={sport_cls.name}")
 
-    dk_id, contest_name, draft_group, positions_paid, start_date, entry_fee, entries = selected[:7]
-    contest_state = None
-    contest_completed = None
-    prize_pool = None
-    max_entries = entries
-    max_entries_per_user = None
-    if len(selected) >= 8:
-        contest_state = selected[7]
-    if len(selected) >= 9:
-        contest_completed = selected[8]
-    if len(selected) >= 10 and selected[9] not in (None, ""):
-        prize_pool = selected[9]
-    if len(selected) >= 11 and selected[10] not in (None, ""):
-        max_entries_per_user = selected[10]
+    dk_id = selected.dk_id
+    contest_name = selected.name
+    draft_group = selected.draft_group
+    positions_paid = selected.positions_paid
+    start_date = selected.start_date
+    entry_fee = selected.entry_fee
+    contest_state = selected.contest_state
+    contest_completed = selected.contest_completed
+    prize_pool = selected.prize_pool if selected.prize_pool not in (None, "") else None
+    max_entries = selected.entries
+    max_entries_per_user = selected.max_entries_per_user if selected.max_entries_per_user not in (None, "") else None
     if contest_db is not None:
         state_row = contest_db.get_contest_state(int(dk_id))
         if state_row:
