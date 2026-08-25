@@ -55,6 +55,12 @@ schema-3 JSON envelope consumed by downstream systems. The package is split into
 collection, derivation, contract building, normalization, validation, and stable
 serialization seams. Its public orchestration surface is
 `pipeline.build_snapshot_v3_envelope`.
+- **Collection split:** `collector.py` keeps IO and contest selection at the
+  boundary; `sections.py` holds the pure per-section builders
+  (`build_standings_rows`, `build_players`, `build_top_remaining_players`,
+  `build_watchlist`, `build_cash_line`, `build_train_clusters`) that turn a parsed
+  `ContestStandings` into snapshot sections, so the collector reads as an
+  IO → parse → delegate → assemble orchestrator.
 - **Depth:** high — the package keeps external collection at the boundary and
   exposes one schema-3 generation path.
 
