@@ -32,7 +32,7 @@ jobs:
         env:
           DFS_COMMON_CHECKOUT_TOKEN: ${{ secrets.DFS_COMMON_CHECKOUT_TOKEN }}
         run: |
-          git config --global url."https://x-access-token:${DFS_COMMON_CHECKOUT_TOKEN}@github.com/".insteadOf "https://github.com/"
+          git config --global url."https://x-access-token:${DFS_COMMON_CHECKOUT_TOKEN}@github.com/${{ github.repository_owner }}/".insteadOf "https://github.com/${{ github.repository_owner }}/"
 
       - name: Setup Python
         uses: actions/setup-python@v5
