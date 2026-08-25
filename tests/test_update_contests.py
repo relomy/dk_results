@@ -219,6 +219,7 @@ def test_build_completion_processor_wires_collaborators(monkeypatch):
 
     sender = FakeSender()
     fake_client = object()
+    monkeypatch.setattr(update_contests, "DISCORD_NOTIFICATIONS_ENABLED", "true")
     monkeypatch.setattr(update_contests, "_build_discord_sender", lambda: sender)
     monkeypatch.setattr(update_contests, "_load_vips", lambda: ["FooBar"])
     monkeypatch.setattr(update_contests, "DraftKings", lambda: fake_client)
