@@ -5,7 +5,7 @@ import sqlite3
 import pytest
 
 from dk_results.domain.contest import Contest
-from dk_results.persistence.contestdatabase import ContestDatabase
+from dk_results.persistence.contestdatabase import ContestDatabase, ContestRow
 
 
 @pytest.fixture
@@ -326,7 +326,17 @@ def test_get_contest_by_id_returns_row(contest_db):
     _insert_contest(contest_db, dk_id=55, sport="NBA", entry_fee=25, entries=123)
     row = contest_db.get_contest_by_id(55)
 
-    assert row == (55, "Contest", 1, None, "2024-01-01 00:00:00", 25, 123)
+    assert row == ContestRow(
+        dk_id=55,
+        name="Contest",
+        draft_group=1,
+        positions_paid=None,
+        start_date="2024-01-01 00:00:00",
+        entry_fee=25,
+        entries=123,
+    )
+    # The four detail-only fields default to None for a by-id DB read.
+    assert row.contest_state is None and row.prize_pool is None
 
 
 def test_get_live_contest_logs_key_value(contest_db, caplog):
@@ -429,7 +439,7 @@ def test_update_contest_writes_fields(contest_db):
 
     assert contest_db.get_contest_state(1) == ("COMPLETED", 1)
     row = contest_db.get_contest_by_id(1)
-    assert row is not None and row[3] == 42
+    assert row is not None and row.positions_paid == 42
 
 
 def test_update_contest_handles_error(caplog):
