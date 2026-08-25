@@ -253,6 +253,44 @@ class CompletionProcessor:
             return False
         return self._presence.verdict(dk_id, start_date, self._config.vips) == VIP_ABSENT
 
+    def _announce_transition(
+        self,
+        store: NotificationStore,
+        *,
+        kind: str,
+        prefix: str,
+        sport_name: str,
+        contest_name: str,
+        start_date: str,
+        dk_id: int,
+        log_label: str,
+        log_suffix: str = "",
+    ) -> bool:
+        """Presence-gated send + record for one announcement.
+
+        Owns the identical ``presence_absent -> send_message -> record_notification``
+        dance shared by the warning, live, and completed milestones. The caller keeps
+        the ``has_notification`` gate — its wording and elif branches differ per
+        milestone. Returns ``True`` when an ``absent`` presence verdict suppressed the
+        send, so a caller can short-circuit the rest of its loop iteration.
+        """
+        assert self._sender is not None
+        if self._presence_absent(dk_id, start_date):
+            logger.info(
+                "skipping %s notification for %s dk_id=%s%s; vip_presence=absent",
+                log_label,
+                sport_name,
+                dk_id,
+                log_suffix,
+            )
+            return True
+        message = self._format_contest_announcement(prefix, sport_name, contest_name, start_date, dk_id)
+        logger.info("sending %s notification for %s dk_id=%s%s", log_label, sport_name, dk_id, log_suffix)
+        self._sender.send_message(message)
+        store.record_notification(dk_id, kind)
+        logger.info("%s notification stored for %s dk_id=%s%s", log_label, sport_name, dk_id, log_suffix)
+        return False
+
     # ── Warnings ────────────────────────────────────────────────────────────
 
     def _run_warnings(self, store: NotificationStore) -> None:
@@ -298,34 +336,16 @@ class CompletionProcessor:
                         warning_minutes,
                     )
                     continue
-                if self._presence_absent(dk_id, str(start_date)):
-                    logger.info(
-                        "skipping warning notification for %s dk_id=%s (%sm); vip_presence=absent",
-                        sport_cls.name,
-                        dk_id,
-                        warning_minutes,
-                    )
-                    continue
-                message = self._format_contest_announcement(
-                    f"Contest starting soon ({warning_minutes}m)",
-                    sport_cls.name,
-                    name,
-                    str(start_date),
-                    dk_id,
-                )
-                logger.info(
-                    "sending warning notification for %s dk_id=%s (%sm)",
-                    sport_cls.name,
-                    dk_id,
-                    warning_minutes,
-                )
-                self._sender.send_message(message)
-                store.record_notification(dk_id, warning_key)
-                logger.info(
-                    "warning notification stored for %s dk_id=%s (%sm)",
-                    sport_cls.name,
-                    dk_id,
-                    warning_minutes,
+                self._announce_transition(
+                    store,
+                    kind=warning_key,
+                    prefix=f"Contest starting soon ({warning_minutes}m)",
+                    sport_name=sport_cls.name,
+                    contest_name=name,
+                    start_date=str(start_date),
+                    dk_id=dk_id,
+                    log_label="warning",
+                    log_suffix=f" ({warning_minutes}m)",
                 )
 
     def _warning_schedule_for(self, sport_name: str) -> list[int]:
@@ -431,69 +451,26 @@ class CompletionProcessor:
                             sport_name,
                             dk_id,
                         )
-                    if is_new_live and is_primary_live and not store.has_notification(dk_id, "live"):
-                        if self._presence_absent(dk_id, str(start_date)):
+                        if store.has_notification(dk_id, "live"):
                             logger.info(
-                                "skipping live notification for %s dk_id=%s; vip_presence=absent",
+                                "live notification already sent for %s dk_id=%s",
                                 sport_name,
                                 dk_id,
                             )
+                        elif self._announce_transition(
+                            store,
+                            kind="live",
+                            prefix="Contest started",
+                            sport_name=sport_name,
+                            contest_name=name,
+                            start_date=str(start_date),
+                            dk_id=dk_id,
+                            log_label="live",
+                        ):
                             continue
-                        message = self._format_contest_announcement(
-                            "Contest started",
-                            sport_name,
-                            name,
-                            str(start_date),
-                            dk_id,
-                        )
-                        logger.info(
-                            "sending live notification for %s dk_id=%s",
-                            sport_name,
-                            dk_id,
-                        )
-                        self._sender.send_message(message)
-                        store.record_notification(dk_id, "live")
-                        logger.info(
-                            "live notification stored for %s dk_id=%s",
-                            sport_name,
-                            dk_id,
-                        )
-                    elif is_new_live and is_primary_live:
-                        logger.info(
-                            "live notification already sent for %s dk_id=%s",
-                            sport_name,
-                            dk_id,
-                        )
 
                     if is_new_completed:
-                        if store.has_notification(dk_id, "live") and not store.has_notification(dk_id, "completed"):
-                            if self._presence_absent(dk_id, str(start_date)):
-                                logger.info(
-                                    "skipping completed notification for %s dk_id=%s; vip_presence=absent",
-                                    sport_name,
-                                    dk_id,
-                                )
-                                continue
-                            message = self._format_contest_announcement(
-                                "Contest ended",
-                                sport_name,
-                                name,
-                                str(start_date),
-                                dk_id,
-                            )
-                            logger.info(
-                                "sending completed notification for %s dk_id=%s",
-                                sport_name,
-                                dk_id,
-                            )
-                            self._sender.send_message(message)
-                            store.record_notification(dk_id, "completed")
-                            logger.info(
-                                "completed notification stored for %s dk_id=%s",
-                                sport_name,
-                                dk_id,
-                            )
-                        elif store.has_notification(dk_id, "completed"):
+                        if store.has_notification(dk_id, "completed"):
                             logger.info(
                                 "completed notification already sent for %s dk_id=%s",
                                 sport_name,
@@ -504,6 +481,17 @@ class CompletionProcessor:
                                 "skipping completed notification for %s dk_id=%s; live notification missing",
                                 sport_name,
                                 dk_id,
+                            )
+                        else:
+                            self._announce_transition(
+                                store,
+                                kind="completed",
+                                prefix="Contest ended",
+                                sport_name=sport_name,
+                                contest_name=name,
+                                start_date=str(start_date),
+                                dk_id=dk_id,
+                                log_label="completed",
                             )
             except Exception as error:
                 logger.error(error)
