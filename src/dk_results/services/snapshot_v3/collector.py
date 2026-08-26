@@ -524,22 +524,152 @@ def _select_contest(
     )
 
 
+def _fetch_leaderboard_payouts(dk: Draftkings, dk_id: Any) -> dict[str, int]:
+    """Read the leaderboard payout map, returning an empty map on any failure."""
+    try:
+        leaderboard_payload = dk.get_leaderboard(int(dk_id))
+        if isinstance(leaderboard_payload, dict):
+            return _leaderboard_payout_map(leaderboard_payload)
+    except Exception:
+        logger.warning("leaderboard payout lookup failed for contest_id=%s", dk_id, exc_info=True)
+    return {}
+
+
+def _build_vip_points_by_entry(
+    vip_lineup_rows: list[dict[str, Any]],
+    vip_list: list[Any],
+) -> dict[str, float | None]:
+    """Map entry key to VIP points, preferring lineup rows then falling back to the VIP list."""
+    vip_points_by_entry: dict[str, float | None] = {
+        str(row.get("vip_entry_key") or row.get("entry_key")): to_float(row.get("pts"))
+        for row in vip_lineup_rows
+        if (row.get("vip_entry_key") or row.get("entry_key")) not in (None, "") and to_float(row.get("pts")) is not None
+    }
+    for vip in vip_list:
+        if vip.player_id not in (None, "") and str(vip.player_id) not in vip_points_by_entry:
+            vip_points_by_entry[str(vip.player_id)] = to_float(vip.pts)
+    return vip_points_by_entry
+
+
+def _compute_ownership_remaining_total(full_standings: list[dict[str, Any]]) -> float | None:
+    """Average the non-null remaining-ownership totals across standings rows."""
+    ownership_values = [
+        row["ownership_remaining_total_pct"]
+        for row in full_standings
+        if row["ownership_remaining_total_pct"] is not None
+    ]
+    if not ownership_values:
+        return None
+    return sum(ownership_values) / len(ownership_values)
+
+
+def _apply_truncation(
+    full_standings: list[dict[str, Any]],
+    standings_limit: int,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Cap standings to the limit and describe what was truncated."""
+    total_before = len(full_standings)
+    limit = standings_limit if standings_limit and standings_limit > 0 else None
+    applied = bool(limit and total_before > limit)
+    standings = full_standings[:limit] if applied and limit is not None else full_standings
+    truncation = {
+        "applied": applied,
+        "limit": limit,
+        "total_rows_before_truncation": total_before,
+        "total_rows_after_truncation": len(standings),
+    }
+    return standings, truncation
+
+
+def _assemble_source_bundle(
+    *,
+    sport_cls: type[Sport],
+    resolved: _ResolvedContest,
+    dk_id: Any,
+    draft_group: Any,
+    cash_line: dict[str, Any],
+    vip_lineups: list[Any],
+    players: list[dict[str, Any]],
+    ownership_remaining_total: float | None,
+    avg_salary_per_player_remaining: Any,
+    non_cashing_user_count: Any,
+    non_cashing_avg_pmr: Any,
+    watchlist_entries: list[Any],
+    top_remaining_players: list[Any],
+    train_clusters: list[Any],
+    standings: list[dict[str, Any]],
+    truncation: dict[str, Any],
+) -> dict[str, Any]:
+    """Assemble the raw source-snapshot dict from already-computed pieces (pure)."""
+    return {
+        "sport": sport_cls.name,
+        "contest": {
+            "contest_id": dk_id,
+            "name": resolved.contest_name,
+            "sport": sport_cls.name.lower(),
+            "draft_group": draft_group,
+            "start_time_utc": to_utc_iso(resolved.start_date),
+            "is_primary": True,
+            "contest_type": "classic",
+            "state": _normalize_contest_state(resolved.contest_state, resolved.contest_completed),
+            "entry_fee": resolved.entry_fee,
+            "currency": "USD",
+            "entries": resolved.max_entries,
+            "max_entries": resolved.max_entries,
+            "max_entries_per_user": resolved.max_entries_per_user,
+            "prize_pool": resolved.prize_pool,
+            "positions_paid": resolved.positions_paid,
+        },
+        "selection": {
+            "selected_contest_id": dk_id,
+            "reason": _build_selection_reason(
+                mode=resolved.mode,
+                sport=sport_cls.name,
+                min_entry_fee=sport_cls.sheet_min_entry_fee,
+                keyword=sport_cls.keyword,
+                selected_from_candidate_count=len(resolved.candidate_rows),
+                contest_id=int(dk_id) if resolved.mode == "explicit_id" else None,
+            ),
+        },
+        "candidates": _summarize_candidates(resolved.candidate_rows, top_n=CANDIDATE_LIMIT),
+        "cash_line": cash_line,
+        "vip_lineups": vip_lineups,
+        "players": players,
+        "ownership": {
+            "ownership_remaining_total_pct": ownership_remaining_total,
+            "avg_salary_per_player_remaining": avg_salary_per_player_remaining,
+            "non_cashing_user_count": non_cashing_user_count,
+            "non_cashing_avg_pmr": non_cashing_avg_pmr,
+            "watchlist_entries": watchlist_entries,
+            "non_cashing_top_remaining_players": top_remaining_players,
+            "top_remaining_players": top_remaining_players,
+        },
+        "train_clusters": train_clusters,
+        "standings": standings,
+        "truncation": truncation,
+    }
+
+
 def _collect_source_snapshot(
     *,
     sport: str,
     contest_id: int | None = None,
     standings_limit: int = DEFAULT_STANDINGS_LIMIT,
+    dk: Draftkings | None = None,
+    contest_db: ContestDatabase | None = None,
 ) -> dict[str, Any]:
     sport_map = _sport_choices()
     sport_cls = sport_map[sport.upper()]
-    contest_db: ContestDatabase | None = None
-    try:
-        contest_db = ContestDatabase(str(state.contests_db_path()))
-    except Exception:
-        contest_db = None
+    owns_db = False
+    if contest_db is None:
+        try:
+            contest_db = ContestDatabase(str(state.contests_db_path()))
+            owns_db = True
+        except Exception:
+            contest_db = None
 
     try:
-        dk = Draftkings()
+        dk = dk or Draftkings()
         resolved = _select_contest(
             sport_cls=sport_cls,
             contest_db=contest_db,
@@ -563,13 +693,7 @@ def _collect_source_snapshot(
         )
         if not standings_rows:
             raise RuntimeError(f"Contest standings unavailable for contest_id={dk_id}")
-        leaderboard_payout_by_entry: dict[str, int] = {}
-        try:
-            leaderboard_payload = dk.get_leaderboard(int(dk_id))
-            if isinstance(leaderboard_payload, dict):
-                leaderboard_payout_by_entry = _leaderboard_payout_map(leaderboard_payload)
-        except Exception:
-            logger.warning("leaderboard payout lookup failed for contest_id=%s", dk_id, exc_info=True)
+        leaderboard_payout_by_entry = _fetch_leaderboard_payouts(dk, dk_id)
 
         vips = load_vips()
         with open(salary_path, newline="", encoding="utf-8") as salary_file:
@@ -611,15 +735,7 @@ def _collect_source_snapshot(
         vip_lineup_rows: list[dict[str, Any]] = [
             cast(dict[str, Any], row) for row in vip_lineups if isinstance(row, dict)
         ]
-        vip_points_by_entry = {
-            str(row.get("vip_entry_key") or row.get("entry_key")): to_float(row.get("pts"))
-            for row in vip_lineup_rows
-            if (row.get("vip_entry_key") or row.get("entry_key")) not in (None, "")
-            and to_float(row.get("pts")) is not None
-        }
-        for vip in results.vip_list:
-            if vip.player_id not in (None, "") and str(vip.player_id) not in vip_points_by_entry:
-                vip_points_by_entry[str(vip.player_id)] = to_float(vip.pts)
+        vip_points_by_entry = _build_vip_points_by_entry(vip_lineup_rows, results.vip_list)
 
         full_standings = sections.build_standings_rows(
             results,
@@ -629,81 +745,36 @@ def _collect_source_snapshot(
         )
         players = sections.build_players(results)
 
-        ownership_values = [
-            row["ownership_remaining_total_pct"]
-            for row in full_standings
-            if row["ownership_remaining_total_pct"] is not None
-        ]
-        ownership_remaining_total = sum(ownership_values) / len(ownership_values) if ownership_values else None
+        ownership_remaining_total = _compute_ownership_remaining_total(full_standings)
         avg_salary_per_player_remaining = average_remaining_salary(results.users)
         top_remaining_players = sections.build_top_remaining_players(results)
         watchlist_entries = sections.build_watchlist(full_standings)
 
-        total_before = len(full_standings)
-        limit = standings_limit if standings_limit and standings_limit > 0 else None
-        applied = bool(limit and total_before > limit)
-        if applied and limit is not None:
-            standings = full_standings[:limit]
-        else:
-            standings = full_standings
+        standings, truncation = _apply_truncation(full_standings, standings_limit)
 
         cash_line = sections.build_cash_line(results, full_standings)
         train_clusters = sections.build_train_clusters(results)
 
-        return {
-            "sport": sport_cls.name,
-            "contest": {
-                "contest_id": dk_id,
-                "name": resolved.contest_name,
-                "sport": sport_cls.name.lower(),
-                "draft_group": draft_group,
-                "start_time_utc": to_utc_iso(resolved.start_date),
-                "is_primary": True,
-                "contest_type": "classic",
-                "state": _normalize_contest_state(resolved.contest_state, resolved.contest_completed),
-                "entry_fee": resolved.entry_fee,
-                "currency": "USD",
-                "entries": resolved.max_entries,
-                "max_entries": resolved.max_entries,
-                "max_entries_per_user": resolved.max_entries_per_user,
-                "prize_pool": resolved.prize_pool,
-                "positions_paid": resolved.positions_paid,
-            },
-            "selection": {
-                "selected_contest_id": dk_id,
-                "reason": _build_selection_reason(
-                    mode=resolved.mode,
-                    sport=sport_cls.name,
-                    min_entry_fee=sport_cls.sheet_min_entry_fee,
-                    keyword=sport_cls.keyword,
-                    selected_from_candidate_count=len(resolved.candidate_rows),
-                    contest_id=int(dk_id) if resolved.mode == "explicit_id" else None,
-                ),
-            },
-            "candidates": _summarize_candidates(resolved.candidate_rows, top_n=CANDIDATE_LIMIT),
-            "cash_line": cash_line,
-            "vip_lineups": vip_lineups,
-            "players": players,
-            "ownership": {
-                "ownership_remaining_total_pct": ownership_remaining_total,
-                "avg_salary_per_player_remaining": avg_salary_per_player_remaining,
-                "non_cashing_user_count": results.non_cashing_users,
-                "non_cashing_avg_pmr": results.non_cashing_avg_pmr,
-                "watchlist_entries": watchlist_entries,
-                "non_cashing_top_remaining_players": top_remaining_players,
-                "top_remaining_players": top_remaining_players,
-            },
-            "train_clusters": train_clusters,
-            "standings": standings,
-            "truncation": {
-                "applied": applied,
-                "limit": limit,
-                "total_rows_before_truncation": total_before,
-                "total_rows_after_truncation": len(standings),
-            },
-        }
+        return _assemble_source_bundle(
+            sport_cls=sport_cls,
+            resolved=resolved,
+            dk_id=dk_id,
+            draft_group=draft_group,
+            cash_line=cash_line,
+            vip_lineups=vip_lineups,
+            players=players,
+            ownership_remaining_total=ownership_remaining_total,
+            avg_salary_per_player_remaining=avg_salary_per_player_remaining,
+            non_cashing_user_count=results.non_cashing_users,
+            non_cashing_avg_pmr=results.non_cashing_avg_pmr,
+            watchlist_entries=watchlist_entries,
+            top_remaining_players=top_remaining_players,
+            train_clusters=train_clusters,
+            standings=standings,
+            truncation=truncation,
+        )
     finally:
-        if contest_db is not None:
+        if owns_db and contest_db is not None:
             contest_db.close()
 
 
