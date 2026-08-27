@@ -46,3 +46,20 @@
 - **Presence verdict** — a VipPresence result: `present`, `absent`, or `unknown`. `absent` suppresses announcements; `unknown` allows them.
 - **ContestResultsPort** — the seam through which the completion workflow reads one contest's live DraftKings readouts — state, entrants, leaderboard — by `dk_id`.
   _Avoid_: lobby feed (source of new contests); stored contest state (`ContestDatabase.get_contest_state`).
+
+## Snapshot feed to the dashboard
+
+- **Snapshot feed** — the scheduled ETL that delivers snapshots to the `dk_dashboard` reader: build a multi-sport snapshot artifact, publish its index files, then load everything to the object store. Runs on the same host/scheduler as the other externally-scheduled entry points. See ADR-0007.
+  _Avoid_: sync, mirror.
+- **Publish step** — deriving the `latest pointer` and the day's `manifest` entry from an existing snapshot artifact (`export_fixture.py publish` → `run_publish_snapshot`). Pure file derivation; performs no network I/O.
+  _Avoid_: upload (that is the load step).
+- **Load step** — uploading the published keys (`snapshots/*`, `manifest/*`, `latest.json`) to the object store. Lives in `dk_results` and speaks the object store's S3-compatible API directly; ordered snapshot → manifest → `latest.json` last so the pointer never names a key that is not yet stored. See ADR-0007.
+  _Avoid_: publish (that is the file derivation step); sync.
+- **Latest pointer** — the single mutable `latest.json` object naming the newest snapshot's key plus today's and yesterday's manifest paths. Overwritten every cycle; read first by every dashboard client.
+  _Avoid_: index, catalog.
+- **Day manifest** — the accumulative per-UTC-day index of snapshot keys and their per-sport status. Read-modify-write against the object store each cycle (append the new entry), so a wiped producer rebuilds it from stored state. Same object the dashboard calls its **Manifest**.
+  _Avoid_: catalog.
+- **Data root** — the local staging directory the publish step writes into before the load step uploads it. Ephemeral per run (`mktemp`): nothing snapshot-related persists on the producer, because the object store is the source of truth.
+  _Avoid_: cache, spool.
+- **Object store** — the Cloudflare R2 bucket (`dk-dashboard-data`, resolved from an env var, never hard-coded) that is the delivery contract between `dk_results` (sole writer) and `dk_dashboard` (sole reader). Key layout — `snapshots/<ts>.json`, `manifest/<utc-date>.json`, `latest.json` — is an API both repos depend on. Retention is an object-store lifecycle rule, not producer state. See ADR-0007.
+  _Avoid_: bucket (name it the object store; "bucket" is the concrete R2 resource).
