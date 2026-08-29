@@ -89,3 +89,21 @@ def test_parse_bonus_counts_soc_gk_not_matched_as_goal():
     stats = "1 GK, 3 SOG, 0 G"
     counts = parse_bonus_counts("SOC", stats)
     assert counts == {}
+
+
+def test_parse_bonus_counts_nfl_detects_all_bonuses():
+    stats = "1 TD, 120YDS, 100YdRec, 100YdRush, 300YdPass"
+    counts = parse_bonus_counts("NFL", stats)
+    assert counts == {"100YdRec": 1, "100YdRush": 1, "300YdPass": 1}
+
+
+def test_parse_bonus_counts_nfl_no_bonuses():
+    stats = "1 TD, 65 YDS"
+    counts = parse_bonus_counts("NFL", stats)
+    assert counts == {}
+
+
+def test_parse_bonus_counts_cfb_shares_nfl_bonus_tokens():
+    stats = "2 TD, 100YdRush"
+    counts = parse_bonus_counts("CFB", stats)
+    assert counts == {"100YdRush": 1}

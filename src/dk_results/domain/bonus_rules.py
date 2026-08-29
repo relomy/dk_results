@@ -10,6 +10,13 @@ _NBA_TDBL_RE = re.compile(r"\bTDbl\b")
 _MLB_HR_RE = re.compile(r"(?<!\w)(\d+)\s*HR(?!\w)")
 _SOC_GOAL_RE = re.compile(r"(?<!\w)(\d+)\s*G(?!\w)")
 
+# NOTE: unverified against a real DK statsDescription sample; DK's exact token
+# spelling for these football yardage bonuses is a best guess (see NFL/CFB
+# bonus announcement work) and should be corrected once a live example is seen.
+_NFL_100_REC_RE = re.compile(r"\b100YdRec\b")
+_NFL_100_RUSH_RE = re.compile(r"\b100YdRush\b")
+_NFL_300_PASS_RE = re.compile(r"\b300YdPass\b")
+
 
 def _parse_golf_bonus_counts(stats_description: str) -> dict[str, int]:
     counts: dict[str, int] = {}
@@ -46,6 +53,18 @@ def _parse_soc_bonus_counts(stats_description: str) -> dict[str, int]:
     return {}
 
 
+def _parse_football_bonus_counts(stats_description: str) -> dict[str, int]:
+    text = stats_description or ""
+    counts: dict[str, int] = {}
+    if _NFL_100_REC_RE.search(text):
+        counts["100YdRec"] = 1
+    if _NFL_100_RUSH_RE.search(text):
+        counts["100YdRush"] = 1
+    if _NFL_300_PASS_RE.search(text):
+        counts["300YdPass"] = 1
+    return counts
+
+
 def parse_bonus_counts(sport: str, stats_description: str) -> dict[str, int]:
     """Parse bonus counts from a DK statsDescription string for a supported sport."""
     if sport == "GOLF":
@@ -56,4 +75,6 @@ def parse_bonus_counts(sport: str, stats_description: str) -> dict[str, int]:
         return _parse_mlb_bonus_counts(stats_description)
     if sport == "SOC":
         return _parse_soc_bonus_counts(stats_description)
+    if sport in ("NFL", "CFB"):
+        return _parse_football_bonus_counts(stats_description)
     return {}
