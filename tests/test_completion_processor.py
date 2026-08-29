@@ -406,6 +406,38 @@ def test_unavailable_results_are_skipped_gracefully():
     assert ContestDatabase.from_connection(conn).get_contest_state(1) == ("UPCOMING", 0)
 
 
+def test_same_draft_group_skips_following_contest_after_unchanged_update():
+    conn = _conn_with_table()
+    _insert_contest(
+        conn,
+        dk_id=1,
+        name="First",
+        start_date="2024-01-01 00:00:00",
+        status="LIVE",
+        draft_group=7,
+        positions_paid=10,
+    )
+    _insert_contest(
+        conn,
+        dk_id=2,
+        name="Second",
+        start_date="2024-01-01 00:00:00",
+        status="LIVE",
+        draft_group=7,
+        positions_paid=10,
+    )
+    results = FakeContestResults(
+        details={
+            1: _detail(status="LIVE", completed=0, positions_paid=10),
+            2: _detail(status="LIVE", completed=0, positions_paid=10),
+        }
+    )
+
+    _make_processor(conn, results=results, sender=None, presence=None).run(conn)
+
+    assert results.detail_calls == [1]
+
+
 # ── _get_contest_data ────────────────────────────────────────────────────────
 
 

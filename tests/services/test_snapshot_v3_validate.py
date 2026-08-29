@@ -106,6 +106,22 @@ def test_validate_v3_envelope_requires_exactly_one_contest() -> None:
     assert "sports.nba.contests must contain exactly 1 contest" in validate_v3_envelope(payload)
 
 
+def test_validate_v3_envelope_reports_malformed_sport_rows() -> None:
+    payload = _valid_envelope()
+    sport_payload = payload["sports"]["nba"]
+    sport_payload["players"] = [{"name": 12}, "not-an-object"]
+    sport_payload["contests"] = [{"contest_id": "188080404"}, "not-an-object"]
+    sport_payload["primary_contest"] = {"contest_id": "188080404"}
+
+    violations = validate_v3_envelope(payload)
+
+    assert "sports.nba.players[0].name has invalid type" in violations
+    assert "sports.nba.players[1] must be an object" in violations
+    assert "sports.nba.contests[1] must be an object" in violations
+    assert "sports.nba.primary_contest.contest_key is required" in violations
+    assert "sports.nba.primary_contest.selection_reason is required" in violations
+
+
 def test_validate_v3_envelope_detects_mixed_contest_ids_across_sections() -> None:
     payload = _valid_envelope()
     payload["sports"]["nba"]["contests"][0]["vip_lineups"][0]["contest_id"] = "different"

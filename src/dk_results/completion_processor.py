@@ -378,123 +378,164 @@ class CompletionProcessor:
             start_date,
             sport_name,
         ) in incomplete_contests:
-            if positions_paid is not None and draft_group in skip_draft_groups:
-                logger.debug("dk_id: {} positions_paid: {}".format(dk_id, positions_paid))
-                logger.debug(
-                    "skipping %s because we've already updated %d [skipped draft groups %s]",
-                    name,
-                    draft_group,
-                    " ".join(str(dg) for dg in skip_draft_groups),
-                )
+            if self._should_skip_contest(dk_id, draft_group, positions_paid, name, skip_draft_groups):
                 continue
 
-            logger.debug(
-                "getting contest data for %s [id: %i start: %s dg: %d]",
-                name,
-                dk_id,
-                start_date,
-                draft_group,
-            )
-
             try:
-                contest_data = self._get_contest_data(dk_id)
-
-                if contest_data is None:
-                    continue
-
-                logger.debug(
-                    "existing: status: %s entries: %s positions_paid: %s",
-                    status,
+                contest_data = self._sync_contest(
+                    dk_id,
+                    draft_group,
                     entries,
                     positions_paid,
+                    status,
+                    completed,
+                    name,
+                    start_date,
+                    sport_name,
+                    skip_draft_groups,
                 )
-                logger.debug(contest_data)
-
-                new_status = contest_data["status"]
-                new_completed = contest_data["completed"]
-
-                # if contest data is different, update it
-                if (
-                    positions_paid != contest_data["positions_paid"]
-                    or status != new_status
-                    or completed != new_completed
-                ):
-                    self._db.update_contest(
+                if contest_data is not None:
+                    self._notify_contest(
+                        store,
                         dk_id,
-                        positions_paid=contest_data["positions_paid"],
-                        status=new_status,
-                        completed=new_completed,
+                        name,
+                        start_date,
+                        sport_name,
+                        status,
+                        completed,
+                        contest_data,
+                        sport_choices,
                     )
-                else:
-                    # if contest data is the same, don't update other contests in the same draft group
-                    skip_draft_groups.append(draft_group)
-                    logger.debug("contest data is the same, not updating")
-
-                if self._announcing and sport_name in sport_choices:
-                    assert self._sender is not None  # implied by _announcing
-                    sport_cls = sport_choices[sport_name]
-                    live_row = self._db.get_live_contest(
-                        sport_cls.name,
-                        sport_cls.sheet_min_entry_fee,
-                        sport_cls.keyword,
-                    )
-                    is_primary_live = bool(live_row and live_row[0] == dk_id)
-
-                    is_new_live = status != "LIVE" and new_status == "LIVE"
-                    is_new_completed = (status not in COMPLETED_STATUSES and new_status in COMPLETED_STATUSES) or (
-                        completed == 0 and new_completed == 1
-                    )
-
-                    if is_new_live and is_primary_live:
-                        logger.info(
-                            "live transition detected for %s dk_id=%s",
-                            sport_name,
-                            dk_id,
-                        )
-                        if store.has_notification(dk_id, "live"):
-                            logger.info(
-                                "live notification already sent for %s dk_id=%s",
-                                sport_name,
-                                dk_id,
-                            )
-                        elif self._announce_transition(
-                            store,
-                            kind="live",
-                            prefix="Contest started",
-                            sport_name=sport_name,
-                            contest_name=name,
-                            start_date=str(start_date),
-                            dk_id=dk_id,
-                            log_label="live",
-                        ):
-                            continue
-
-                    if is_new_completed:
-                        if store.has_notification(dk_id, "completed"):
-                            logger.info(
-                                "completed notification already sent for %s dk_id=%s",
-                                sport_name,
-                                dk_id,
-                            )
-                        elif not store.has_notification(dk_id, "live"):
-                            logger.info(
-                                "skipping completed notification for %s dk_id=%s; live notification missing",
-                                sport_name,
-                                dk_id,
-                            )
-                        else:
-                            self._announce_transition(
-                                store,
-                                kind="completed",
-                                prefix="Contest ended",
-                                sport_name=sport_name,
-                                contest_name=name,
-                                start_date=str(start_date),
-                                dk_id=dk_id,
-                                log_label="completed",
-                            )
             except Exception as error:
                 logger.error(error)
+
+    @staticmethod
+    def _should_skip_contest(
+        dk_id: int, draft_group: int, positions_paid: int | None, name: str, skip_draft_groups: list[int]
+    ) -> bool:
+        if positions_paid is None or draft_group not in skip_draft_groups:
+            return False
+        logger.debug("dk_id: {} positions_paid: {}".format(dk_id, positions_paid))
+        logger.debug(
+            "skipping %s because we've already updated %d [skipped draft groups %s]",
+            name,
+            draft_group,
+            " ".join(str(dg) for dg in skip_draft_groups),
+        )
+        return True
+
+    def _sync_contest(
+        self,
+        dk_id: int,
+        draft_group: int,
+        entries: int,
+        positions_paid: int | None,
+        status: str,
+        completed: int,
+        name: str,
+        start_date: object,
+        sport_name: str,
+        skip_draft_groups: list[int],
+    ) -> dict | None:
+        logger.debug(
+            "getting contest data for %s [id: %i start: %s dg: %d]",
+            name,
+            dk_id,
+            start_date,
+            draft_group,
+        )
+        contest_data = self._get_contest_data(dk_id)
+        if contest_data is None:
+            return None
+        logger.debug(
+            "existing: status: %s entries: %s positions_paid: %s",
+            status,
+            entries,
+            positions_paid,
+        )
+        logger.debug(contest_data)
+        new_status = contest_data["status"]
+        new_completed = contest_data["completed"]
+        if positions_paid != contest_data["positions_paid"] or status != new_status or completed != new_completed:
+            self._db.update_contest(
+                dk_id,
+                positions_paid=contest_data["positions_paid"],
+                status=new_status,
+                completed=new_completed,
+            )
+        else:
+            skip_draft_groups.append(draft_group)
+            logger.debug("contest data is the same, not updating")
+        return contest_data
+
+    def _notify_contest(
+        self,
+        store: NotificationStore,
+        dk_id: int,
+        name: str,
+        start_date: object,
+        sport_name: str,
+        status: str,
+        completed: int,
+        contest_data: dict[str, Any],
+        sport_choices: Mapping[str, type[Sport]],
+    ) -> None:
+        if not self._announcing or sport_name not in sport_choices:
+            return
+        assert self._sender is not None
+        new_status = contest_data["status"]
+        new_completed = contest_data["completed"]
+        if self._is_new_primary_live(sport_choices[sport_name], dk_id, status, new_status):
+            self._announce_live(store, dk_id, name, start_date, sport_name)
+        if self._is_new_completed(status, new_status, completed, new_completed):
+            self._announce_completed(store, dk_id, name, start_date, sport_name)
+
+    def _is_new_primary_live(self, sport_cls, dk_id, status, new_status) -> bool:
+        live_row = self._db.get_live_contest(sport_cls.name, sport_cls.sheet_min_entry_fee, sport_cls.keyword)
+        return status != "LIVE" and new_status == "LIVE" and bool(live_row and live_row[0] == dk_id)
+
+    @staticmethod
+    def _is_new_completed(status, new_status, completed, new_completed) -> bool:
+        return (status not in COMPLETED_STATUSES and new_status in COMPLETED_STATUSES) or (
+            completed == 0 and new_completed == 1
+        )
+
+    def _announce_live(self, store, dk_id, name, start_date, sport_name) -> None:
+        logger.info("live transition detected for %s dk_id=%s", sport_name, dk_id)
+        if store.has_notification(dk_id, "live"):
+            logger.info("live notification already sent for %s dk_id=%s", sport_name, dk_id)
+            return
+        self._announce_transition(
+            store,
+            kind="live",
+            prefix="Contest started",
+            sport_name=sport_name,
+            contest_name=name,
+            start_date=str(start_date),
+            dk_id=dk_id,
+            log_label="live",
+        )
+
+    def _announce_completed(self, store, dk_id, name, start_date, sport_name) -> None:
+        if store.has_notification(dk_id, "completed"):
+            logger.info("completed notification already sent for %s dk_id=%s", sport_name, dk_id)
+        elif not store.has_notification(dk_id, "live"):
+            logger.info(
+                "skipping completed notification for %s dk_id=%s; live notification missing",
+                sport_name,
+                dk_id,
+            )
+        else:
+            self._announce_transition(
+                store,
+                kind="completed",
+                prefix="Contest ended",
+                sport_name=sport_name,
+                contest_name=name,
+                start_date=str(start_date),
+                dk_id=dk_id,
+                log_label="completed",
+            )
 
     def _get_contest_data(self, dk_id) -> dict | None:
         try:

@@ -89,31 +89,48 @@ def _validate_sport_payload(sport: str, sport_payload: dict[str, Any]) -> list[s
     if isinstance(sport_payload.get("status"), str) and sport_payload["status"] not in {"ok", "stale", "error"}:
         violations.append(f"sports.{sport}.status has invalid value")
 
-    players = sport_payload.get("players")
-    if isinstance(players, list):
-        for index, row in enumerate(players):
-            if not isinstance(row, dict):
-                violations.append(f"sports.{sport}.players[{index}] must be an object")
-                continue
-            for field in ("name", "player_key"):
-                if field in row and row[field] is not None and not _is_non_empty_string(row[field]):
-                    violations.append(f"sports.{sport}.players[{index}].{field} has invalid type")
+    violations.extend(_validate_sport_players(sport, sport_payload.get("players")))
+    violations.extend(_validate_sport_contests(sport, sport_payload.get("contests")))
+    violations.extend(_validate_primary_contest(sport, sport_payload.get("primary_contest")))
+    return violations
 
-    contests = sport_payload.get("contests")
-    if isinstance(contests, list):
-        for index, row in enumerate(contests):
-            if not isinstance(row, dict):
-                violations.append(f"sports.{sport}.contests[{index}] must be an object")
 
-    primary = sport_payload.get("primary_contest")
-    if isinstance(primary, dict):
-        for field in ("contest_id", "contest_key"):
-            if not _is_non_empty_string(primary.get(field)):
-                violations.append(f"sports.{sport}.primary_contest.{field} is required")
-        if "selection_reason" not in primary or not isinstance(primary.get("selection_reason"), dict):
-            violations.append(f"sports.{sport}.primary_contest.selection_reason is required")
-        if not _is_valid_timestamp(primary.get("selected_at")):
-            violations.append(f"sports.{sport}.primary_contest.selected_at must be a valid ISO timestamp")
+def _validate_sport_players(sport: str, players: Any) -> list[str]:
+    if not isinstance(players, list):
+        return []
+    violations: list[str] = []
+    for index, row in enumerate(players):
+        if not isinstance(row, dict):
+            violations.append(f"sports.{sport}.players[{index}] must be an object")
+            continue
+        for field in ("name", "player_key"):
+            if field in row and row[field] is not None and not _is_non_empty_string(row[field]):
+                violations.append(f"sports.{sport}.players[{index}].{field} has invalid type")
+    return violations
+
+
+def _validate_sport_contests(sport: str, contests: Any) -> list[str]:
+    if not isinstance(contests, list):
+        return []
+    return [
+        f"sports.{sport}.contests[{index}] must be an object"
+        for index, row in enumerate(contests)
+        if not isinstance(row, dict)
+    ]
+
+
+def _validate_primary_contest(sport: str, primary: Any) -> list[str]:
+    if not isinstance(primary, dict):
+        return []
+    violations = [
+        f"sports.{sport}.primary_contest.{field} is required"
+        for field in ("contest_id", "contest_key")
+        if not _is_non_empty_string(primary.get(field))
+    ]
+    if "selection_reason" not in primary or not isinstance(primary.get("selection_reason"), dict):
+        violations.append(f"sports.{sport}.primary_contest.selection_reason is required")
+    if not _is_valid_timestamp(primary.get("selected_at")):
+        violations.append(f"sports.{sport}.primary_contest.selected_at must be a valid ISO timestamp")
     return violations
 
 
@@ -280,74 +297,80 @@ def validate_v3_envelope(payload: dict[str, Any]) -> list[str]:
         return violations
 
     for sport, sport_payload_raw in sports.items():
-        sport_name = str(sport)
-        if not isinstance(sport_payload_raw, dict):
-            violations.append(f"sports.{sport_name} must be an object")
+        violations.extend(_validate_sport_entry(str(sport), sport_payload_raw))
+
+    return violations
+
+
+def _validate_sport_entry(sport: str, sport_payload_raw: Any) -> list[str]:
+    if not isinstance(sport_payload_raw, dict):
+        return [f"sports.{sport} must be an object"]
+    sport_payload = sport_payload_raw
+    violations = _validate_sport_payload(sport, sport_payload)
+    single_contest_violations = validate_single_contest(sport_payload)
+    if single_contest_violations:
+        return violations + [
+            message.replace("sport_payload.", f"sports.{sport}.") for message in single_contest_violations
+        ]
+    contest = sport_payload.get("contests", [])[0]
+    if not isinstance(contest, dict):
+        return violations + [f"sports.{sport}.contests[0] must be an object"]
+    violations.extend(_validate_contest_required_fields(sport, contest))
+    violations.extend(_validate_section_rows(sport, contest))
+    violations.extend(_validate_contest_id_coherence(sport, contest))
+    violations.extend(_validate_train_cluster_references(sport, contest))
+    violations.extend(_validate_primary_coherence(sport, sport_payload, contest))
+    violations.extend(_validate_contest_metrics(sport, sport_payload, contest))
+    return violations
+
+
+def _validate_primary_coherence(sport: str, sport_payload: dict[str, Any], contest: dict[str, Any]) -> list[str]:
+    primary = sport_payload.get("primary_contest")
+    if not isinstance(primary, dict):
+        return [f"sports.{sport}.primary_contest is required"]
+    violations = []
+    for field in ("contest_id", "contest_key"):
+        if str(primary.get(field) or "") != str(contest.get(field) or ""):
+            violations.append(f"sports.{sport}.primary_contest.{field} must match contests[0].{field}")
+    return violations
+
+
+def _validate_contest_metrics(sport: str, sport_payload: dict[str, Any], contest: dict[str, Any]) -> list[str]:
+    metrics = contest.get("metrics")
+    if not isinstance(metrics, dict):
+        return []
+    violations = []
+    distance_to_cash = metrics.get("distance_to_cash")
+    if isinstance(distance_to_cash, dict) and isinstance(distance_to_cash.get("per_vip"), list):
+        violations.extend(
+            _prefix_contract_path(sport, message)
+            for message in validate_distance_to_cash_rows(distance_to_cash["per_vip"])
+        )
+    threat = metrics.get("threat")
+    if isinstance(threat, dict) and isinstance(threat.get("top_swing_players"), list):
+        violations.extend(_validate_top_swing_players(sport, sport_payload, contest, threat["top_swing_players"]))
+    return violations
+
+
+def _validate_top_swing_players(
+    sport: str, sport_payload: dict[str, Any], contest: dict[str, Any], rows: list[Any]
+) -> list[str]:
+    violations = [_prefix_contract_path(sport, message) for message in validate_top_swing_players(rows)]
+    known_keys = _collect_known_player_keys(sport_payload, contest)
+    seen_keys: set[str] = set()
+    for index, row in enumerate(rows):
+        if not isinstance(row, dict) or not _is_non_empty_string(row.get("player_key")):
             continue
-
-        sport_payload = sport_payload_raw
-        violations.extend(_validate_sport_payload(sport_name, sport_payload))
-        single_contest_violations = validate_single_contest(sport_payload)
-        if single_contest_violations:
-            for message in single_contest_violations:
-                violations.append(message.replace("sport_payload.", f"sports.{sport_name}."))
-            continue
-
-        contest = sport_payload.get("contests", [])[0]
-        if not isinstance(contest, dict):
-            violations.append(f"sports.{sport_name}.contests[0] must be an object")
-            continue
-
-        violations.extend(_validate_contest_required_fields(sport_name, contest))
-        violations.extend(_validate_section_rows(sport_name, contest))
-        violations.extend(_validate_contest_id_coherence(sport_name, contest))
-        violations.extend(_validate_train_cluster_references(sport_name, contest))
-
-        primary_contest = sport_payload.get("primary_contest")
-        if not isinstance(primary_contest, dict):
-            violations.append(f"sports.{sport_name}.primary_contest is required")
-        else:
-            if str(primary_contest.get("contest_id") or "") != str(contest.get("contest_id") or ""):
-                violations.append(f"sports.{sport_name}.primary_contest.contest_id must match contests[0].contest_id")
-            if str(primary_contest.get("contest_key") or "") != str(contest.get("contest_key") or ""):
-                violations.append(f"sports.{sport_name}.primary_contest.contest_key must match contests[0].contest_key")
-
-        metrics = contest.get("metrics")
-        if isinstance(metrics, dict):
-            distance_to_cash = metrics.get("distance_to_cash")
-            if isinstance(distance_to_cash, dict):
-                per_vip = distance_to_cash.get("per_vip")
-                if isinstance(per_vip, list):
-                    for message in validate_distance_to_cash_rows(per_vip):
-                        violations.append(_prefix_contract_path(sport_name, message))
-
-            threat = metrics.get("threat")
-            if isinstance(threat, dict):
-                top_swing_players = threat.get("top_swing_players")
-                if isinstance(top_swing_players, list):
-                    for message in validate_top_swing_players(top_swing_players):
-                        violations.append(_prefix_contract_path(sport_name, message))
-
-                    known_player_keys = _collect_known_player_keys(sport_payload, contest)
-                    seen_player_keys: set[str] = set()
-                    for index, row in enumerate(top_swing_players):
-                        if not isinstance(row, dict):
-                            continue
-                        player_key = row.get("player_key")
-                        if not _is_non_empty_string(player_key):
-                            continue
-                        normalized_key = str(player_key)
-                        if known_player_keys and normalized_key not in known_player_keys:
-                            violations.append(
-                                f"sports.{sport_name}.contests[0].metrics.threat.top_swing_players[{index}].player_key "
-                                "is not in known contest player set"
-                            )
-                        if normalized_key in seen_player_keys:
-                            violations.append(
-                                f"sports.{sport_name}.contests[0].metrics.threat.top_swing_players "
-                                f"has duplicate player_key {normalized_key}"
-                            )
-                            break
-                        seen_player_keys.add(normalized_key)
-
+        key = str(row["player_key"])
+        if known_keys and key not in known_keys:
+            violations.append(
+                f"sports.{sport}.contests[0].metrics.threat.top_swing_players[{index}].player_key "
+                "is not in known contest player set"
+            )
+        if key in seen_keys:
+            violations.append(
+                f"sports.{sport}.contests[0].metrics.threat.top_swing_players has duplicate player_key {key}"
+            )
+            break
+        seen_keys.add(key)
     return violations

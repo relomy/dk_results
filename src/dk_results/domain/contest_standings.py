@@ -193,6 +193,68 @@ def _add_to_dict(player: Player, d: dict[str, int]) -> dict[str, int]:
     return d
 
 
+def _parse_standing_user(
+    sport: Sport | Type[Sport], players: dict[str, Player], row: list[str]
+) -> tuple[User, int | None, float | None]:
+    rank, player_id, name, pmr, points, lineup = row[:6]
+    parsed_rank: int | None = None
+    parsed_points: float | None = None
+    if rank:
+        try:
+            parsed_rank = int(rank)
+        except (TypeError, ValueError):
+            pass
+    if points:
+        try:
+            parsed_points = float(points)
+        except (TypeError, ValueError):
+            pass
+    lineupobj = Lineup(sport, players, lineup)
+    user = User(parsed_rank, player_id, name, pmr, parsed_points, lineup)
+    user.set_lineup_obj(lineupobj)
+    return user, parsed_rank, parsed_points
+
+
+def _record_non_cashing_user(
+    sport: Sport | Type[Sport],
+    players: dict[str, Player],
+    lineup: str,
+    non_cashing_players: dict[str, int],
+    showdown_captains: dict[str, int],
+) -> None:
+    if sport.name not in ["NFL", "NFLShowdown", "CFB", "NBA"]:
+        return
+    for player in parse_lineup_string(sport, players, lineup):
+        if isinstance(player, LockedSlot):
+            continue
+        if player.pos == "CPT":
+            _add_to_dict(player, showdown_captains)
+        if player.game_info != "Final":
+            _add_to_dict(player, non_cashing_players)
+
+
+def _update_cash_stats(
+    positions_paid: int | None,
+    parsed_rank: int | None,
+    parsed_points: float | None,
+    pmr: str,
+    sport: Sport | Type[Sport],
+    players: dict[str, Player],
+    lineup: str,
+    non_cashing_players: dict[str, int],
+    showdown_captains: dict[str, int],
+    min_rank: int,
+    min_cash_pts: float,
+    non_cashing_total_pmr: float,
+) -> tuple[int, float, float, int]:
+    if positions_paid is None or parsed_rank is None or parsed_points is None:
+        return min_rank, min_cash_pts, non_cashing_total_pmr, 0
+    if positions_paid >= parsed_rank and min_cash_pts > parsed_points:
+        return parsed_rank, parsed_points, non_cashing_total_pmr, 0
+    _record_non_cashing_user(sport, players, lineup, non_cashing_players, showdown_captains)
+    return min_rank, min_cash_pts, non_cashing_total_pmr + float(pmr), 1
+
+
 def _parse_standings_rows(
     sport: Sport | Type[Sport],
     players: dict[str, Player],
@@ -225,49 +287,27 @@ def _parse_standings_rows(
             _accumulate_player_stats(row, aggregated_player_stats)
             continue
 
-        rank, player_id, name, pmr, points, lineup = row[:6]
-        parsed_rank: int | None = None
-        parsed_points: float | None = None
-
-        if rank:
-            try:
-                parsed_rank = int(rank)
-                rank = parsed_rank
-            except (TypeError, ValueError):
-                parsed_rank = None
-        if points:
-            try:
-                parsed_points = float(points)
-                points = parsed_points
-            except (TypeError, ValueError):
-                parsed_points = None
-
-        lineupobj = Lineup(sport, players, lineup)
-        user = User(parsed_rank, player_id, name, pmr, parsed_points, lineup)
-        user.set_lineup_obj(lineupobj)
+        user, parsed_rank, parsed_points = _parse_standing_user(sport, players, row)
         users.append(user)
 
-        if name in vips:
+        if user.name in vips:
             vip_list.append(user)
 
-        if positions_paid is not None and parsed_rank is not None and parsed_points is not None:
-            if positions_paid >= parsed_rank and min_cash_pts > parsed_points:
-                min_rank = parsed_rank
-                min_cash_pts = parsed_points
-            else:
-                non_cashing_total_pmr += float(pmr)
-
-                if sport.name in ["NFL", "NFLShowdown", "CFB", "NBA"]:
-                    lineup_players = parse_lineup_string(sport, players, lineup)
-                    for player in lineup_players:
-                        if isinstance(player, LockedSlot):
-                            continue
-                        if player.pos == "CPT":
-                            showdown_captains = _add_to_dict(player, showdown_captains)
-                        if player.game_info == "Final":
-                            continue
-                        non_cashing_players = _add_to_dict(player, non_cashing_players)
-                    non_cashing_users += 1
+        min_rank, min_cash_pts, non_cashing_total_pmr, added_non_cashing = _update_cash_stats(
+            positions_paid,
+            parsed_rank,
+            parsed_points,
+            row[3],
+            sport,
+            players,
+            row[5],
+            non_cashing_players,
+            showdown_captains,
+            min_rank,
+            min_cash_pts,
+            non_cashing_total_pmr,
+        )
+        non_cashing_users += added_non_cashing
 
         _accumulate_player_stats(row, aggregated_player_stats)
 
