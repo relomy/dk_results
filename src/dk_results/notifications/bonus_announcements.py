@@ -11,6 +11,29 @@ from typing import Any, Protocol
 from dk_results.domain.bonus_rules import parse_bonus_counts
 from dk_results.domain.lineup import normalize_name
 
+# NFL and CFB share DraftKings classic football scoring bonuses (100+ yard
+# rushing/receiving, 300+ yard passing), so the same bonus meta applies to both.
+_FOOTBALL_BONUS_META: dict[str, dict[str, Any]] = {
+    "100YdRec": {
+        "label": "100+ yard receiving game",
+        "action": "recorded a 100+ yard receiving game",
+        "points": 3,
+        "count_mode": "binary",
+    },
+    "100YdRush": {
+        "label": "100+ yard rushing game",
+        "action": "recorded a 100+ yard rushing game",
+        "points": 3,
+        "count_mode": "binary",
+    },
+    "300YdPass": {
+        "label": "300+ yard passing game",
+        "action": "recorded a 300+ yard passing game",
+        "points": 3,
+        "count_mode": "binary",
+    },
+}
+
 BONUS_META: dict[str, dict[str, dict[str, Any]]] = {
     "GOLF": {
         "EAG": {
@@ -62,6 +85,8 @@ BONUS_META: dict[str, dict[str, dict[str, Any]]] = {
             "count_mode": "incremental",
         },
     },
+    "NFL": _FOOTBALL_BONUS_META,
+    "CFB": _FOOTBALL_BONUS_META,
 }
 
 
