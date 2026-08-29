@@ -286,88 +286,92 @@ def _normalize_vip_lineup_rows(
     sport: str,
     unique_name_to_player_key: dict[str, str],
 ) -> list[dict[str, Any]]:
-    standings_entry_keys_by_name: dict[str, set[str]] = {}
-    for row in standings:
-        if not isinstance(row, dict):
-            continue
-        username = row.get("username")
-        entry_key = row.get("entry_key")
-        if username in (None, "") or entry_key in (None, ""):
-            continue
-        standings_entry_keys_by_name.setdefault(str(username).strip().lower(), set()).add(str(entry_key))
-
-    standings_entry_key_by_name = {
-        name: next(iter(entry_keys))
-        for name, entry_keys in standings_entry_keys_by_name.items()
-        if len(entry_keys) == 1
-    }
+    standings_entry_key_by_name = _unique_standings_entry_keys(standings)
 
     normalized_rows: list[dict[str, Any]] = []
     for row in raw_vip_lineups:
-        if not isinstance(row, dict):
-            continue
-
-        display_name = row.get("display_name") or row.get("user") or row.get("username")
-        entry_key = row.get("entry_key")
-        if entry_key in (None, "") and display_name not in (None, ""):
-            entry_key = standings_entry_key_by_name.get(str(display_name).strip().lower())
-        vip_entry_key = row.get("vip_entry_key") if row.get("vip_entry_key") not in (None, "") else entry_key
-
-        players_source = row.get("players_live")
-        if not isinstance(players_source, list):
-            players_source = row.get("lineup")
-        if not isinstance(players_source, list):
-            players_source = row.get("players")
-        if not isinstance(players_source, list):
-            players_source = []
-
-        players_live: list[dict[str, Any]] = []
-        for slot in players_source:
-            if not isinstance(slot, dict):
-                continue
-            player_name = slot.get("player_name") or slot.get("name")
-            if player_name in (None, ""):
-                continue
-            player_key = slot.get("player_key")
-            if player_key in (None, ""):
-                player_key = unique_name_to_player_key.get(normalize_name(player_name))
-            if player_key in (None, ""):
-                player_key = _derive_composite_player_key(
-                    sport,
-                    {
-                        **slot,
-                        "player_name": player_name,
-                    },
-                )
-            live_slot: dict[str, Any] = {"player_name": str(player_name)}
-            if player_key not in (None, ""):
-                live_slot["player_key"] = str(player_key)
-            salary = to_float(slot.get("salary"))
-            if salary is not None:
-                live_slot["salary"] = int(round(salary))
-            live_slot["is_live"] = is_live_from_slot(slot)
-            players_live.append(live_slot)
-
-        normalized: dict[str, Any] = {}
-        if display_name not in (None, ""):
-            normalized["display_name"] = str(display_name)
-        if entry_key not in (None, ""):
-            normalized["entry_key"] = str(entry_key)
-        if vip_entry_key not in (None, ""):
-            normalized["vip_entry_key"] = str(vip_entry_key)
-
-        for key in ("rank", "pts", "pmr"):
-            value = row.get(key)
-            if value not in (None, ""):
-                normalized[key] = value
-
-        if players_live:
-            normalized["players_live"] = players_live
-
+        normalized = _normalize_vip_lineup_row(row, sport, standings_entry_key_by_name, unique_name_to_player_key)
         if normalized:
             normalized_rows.append(normalized)
 
     return normalized_rows
+
+
+def _unique_standings_entry_keys(standings: list[dict[str, Any]]) -> dict[str, str]:
+    keys_by_name: dict[str, set[str]] = {}
+    for row in standings:
+        if not isinstance(row, dict):
+            continue
+        username, entry_key = row.get("username"), row.get("entry_key")
+        if username not in (None, "") and entry_key not in (None, ""):
+            keys_by_name.setdefault(str(username).strip().lower(), set()).add(str(entry_key))
+    return {name: next(iter(keys)) for name, keys in keys_by_name.items() if len(keys) == 1}
+
+
+def _normalize_vip_lineup_row(
+    row: Any,
+    sport: str,
+    standings_entry_keys: dict[str, str],
+    unique_name_to_player_key: dict[str, str],
+) -> dict[str, Any]:
+    if not isinstance(row, dict):
+        return {}
+    display_name = row.get("display_name") or row.get("user") or row.get("username")
+    entry_key = row.get("entry_key")
+    if entry_key in (None, "") and display_name not in (None, ""):
+        entry_key = standings_entry_keys.get(str(display_name).strip().lower())
+    vip_entry_key = row.get("vip_entry_key") if row.get("vip_entry_key") not in (None, "") else entry_key
+    normalized: dict[str, Any] = {
+        key: str(value)
+        for key, value in {
+            "display_name": display_name,
+            "entry_key": entry_key,
+            "vip_entry_key": vip_entry_key,
+        }.items()
+        if value not in (None, "")
+    }
+    for key in ("rank", "pts", "pmr"):
+        if row.get(key) not in (None, ""):
+            normalized[key] = row[key]
+    players_live = [
+        live_slot
+        for slot in _vip_players_source(row)
+        if (live_slot := _normalize_vip_player_slot(slot, sport, unique_name_to_player_key))
+    ]
+    if players_live:
+        normalized["players_live"] = players_live
+    return normalized
+
+
+def _vip_players_source(row: dict[str, Any]) -> list[Any]:
+    for key in ("players_live", "lineup", "players"):
+        value = row.get(key)
+        if isinstance(value, list):
+            return value
+    return []
+
+
+def _normalize_vip_player_slot(
+    slot: Any, sport: str, unique_name_to_player_key: dict[str, str]
+) -> dict[str, Any] | None:
+    if not isinstance(slot, dict):
+        return None
+    player_name = slot.get("player_name") or slot.get("name")
+    if player_name in (None, ""):
+        return None
+    player_key = slot.get("player_key")
+    if player_key in (None, ""):
+        player_key = unique_name_to_player_key.get(normalize_name(player_name))
+    if player_key in (None, ""):
+        player_key = _derive_composite_player_key(sport, {**slot, "player_name": player_name})
+    live_slot: dict[str, Any] = {"player_name": str(player_name)}
+    if player_key not in (None, ""):
+        live_slot["player_key"] = str(player_key)
+    salary = to_float(slot.get("salary"))
+    if salary is not None:
+        live_slot["salary"] = int(round(salary))
+    live_slot["is_live"] = is_live_from_slot(slot)
+    return live_slot
 
 
 def _build_unique_name_to_player_key_from_vip_lineups(vip_lineups: list[dict[str, Any]]) -> dict[str, str]:

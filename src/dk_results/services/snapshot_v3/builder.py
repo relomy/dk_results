@@ -50,9 +50,18 @@ def _build_contest(raw_bundle: dict[str, Any], derived: dict[str, Any], generate
     raw_contest = dict(raw_bundle.get("contest") or {})
     sport = str(raw_contest.get("sport") or raw_bundle.get("sport") or "").lower()
     contest_id = str(raw_contest.get("contest_id") or raw_bundle.get("selected_contest_id") or "")
-    contest_key = f"{sport}:{contest_id}" if sport and contest_id else None
+    contest = _build_contest_fields(raw_bundle, raw_contest, sport, contest_id)
+    _add_ownership_watchlist(contest, raw_bundle)
+    _add_live_metrics(contest, raw_bundle, derived, generated_at)
+    _add_derived_metrics(contest, derived, generated_at)
+    return contest
 
-    contest: dict[str, Any] = {
+
+def _build_contest_fields(
+    raw_bundle: dict[str, Any], raw_contest: dict[str, Any], sport: str, contest_id: str
+) -> dict[str, Any]:
+    contest_key = f"{sport}:{contest_id}" if sport and contest_id else None
+    return {
         "contest_id": contest_id,
         "contest_key": contest_key,
         "name": raw_contest.get("name"),
@@ -70,6 +79,8 @@ def _build_contest(raw_bundle: dict[str, Any], derived: dict[str, Any], generate
         "train_clusters": list(raw_bundle.get("train_clusters") or []),
     }
 
+
+def _add_ownership_watchlist(contest: dict[str, Any], raw_bundle: dict[str, Any]) -> None:
     ownership = dict(raw_bundle.get("ownership") or {})
     watchlist_entries = list(ownership.get("watchlist_entries") or [])
     ownership_watchlist: dict[str, Any] = {
@@ -81,6 +92,10 @@ def _build_contest(raw_bundle: dict[str, Any], derived: dict[str, Any], generate
     if ownership_watchlist["entries"] or "ownership_remaining_total_pct" in ownership_watchlist:
         contest["ownership_watchlist"] = ownership_watchlist
 
+
+def _add_live_metrics(
+    contest: dict[str, Any], raw_bundle: dict[str, Any], derived: dict[str, Any], generated_at: str
+) -> None:
     live_metrics: dict[str, Any] = {}
     cash_line_metric = _cash_line_metric(dict(raw_bundle.get("cash_line") or {}))
     if cash_line_metric is not None:
@@ -94,6 +109,8 @@ def _build_contest(raw_bundle: dict[str, Any], derived: dict[str, Any], generate
         live_metrics["updated_at"] = generated_at
         contest["live_metrics"] = live_metrics
 
+
+def _add_derived_metrics(contest: dict[str, Any], derived: dict[str, Any], generated_at: str) -> None:
     metrics: dict[str, Any] = {}
     distance_to_cash = derived.get("distance_to_cash")
     if isinstance(distance_to_cash, dict) and distance_to_cash.get("per_vip"):
@@ -106,8 +123,6 @@ def _build_contest(raw_bundle: dict[str, Any], derived: dict[str, Any], generate
     if metrics:
         metrics["updated_at"] = generated_at
         contest["metrics"] = metrics
-
-    return contest
 
 
 def build_sport_payload(raw_bundle: dict[str, Any], *, derived: dict[str, Any], generated_at: str) -> dict[str, Any]:

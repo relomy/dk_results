@@ -18,6 +18,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Require dfs-common checkout token
         env:
@@ -53,6 +55,15 @@ jobs:
 
       - name: Ty Check
         run: uv run ty check
+
+      - name: Radon Complexity Floor
+        run: |
+          output=$(uv run radon cc src -n D)
+          if [ -n "$output" ]; then
+            echo "$output"
+            echo "::error::radon found blocks graded D or worse; simplify before merging"
+            exit 1
+          fi
 
       - name: Pytest
         run: uv run pytest
