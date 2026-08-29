@@ -46,3 +46,36 @@
 - **Presence verdict** — a VipPresence result: `present`, `absent`, or `unknown`. `absent` suppresses announcements; `unknown` allows them.
 - **ContestResultsPort** — the seam through which the completion workflow reads one contest's live DraftKings readouts — state, entrants, leaderboard — by `dk_id`.
   _Avoid_: lobby feed (source of new contests); stored contest state (`ContestDatabase.get_contest_state`).
+
+## Snapshot feed to the dashboard
+
+The **snapshot feed** is the committed, scheduled replacement for the hand-run
+`export_fixture … && export_fixture publish && wrangler r2 object put …` recipe.
+Each cycle runs **build → publish → load**: build one multi-sport snapshot
+artifact, derive the latest pointer and day manifest, and load `snapshots/*`,
+`manifest/*`, and `latest.json` into the object store the dashboard reads
+(R2 bucket `dk-dashboard-data`). Entry point: `snapshot_feed.py:main`, an
+externally-scheduled `main()` on the existing Pi scheduler. See ADR-0007.
+
+- **Object store** — the keyed JSON store the feed loads into and the dashboard
+  reads from. Port: `ObjectStore` with `get_json(key) -> dict | None` and
+  `put_json(key, body, content_type="application/json")`, injected into the
+  pipeline. Default adapter is `R2ObjectStore` (boto3 against R2's
+  S3-compatible endpoint); tests substitute a fake in-memory store at this seam.
+  Modules: `feed/object_store.py`, `feed/r2.py`.
+  _Avoid_: `wrangler` (rejected in ADR-0007); the dashboard's HTTP API (a
+  separate read edge — the feed writes object keys, not `/api/*`).
+- **Snapshot artifact** — the schema-3 multi-sport envelope built via the
+  DB-driven `db_main.build_live_snapshot` path, so the database decides which
+  contests are live and per-sport `status`/`error` carries partial failure.
+- **Latest pointer** — `latest.json`, naming the current snapshot key plus the
+  today/yesterday manifest paths. Uploaded **last** each cycle; a failed upload
+  leaves the previous pointer intact so the dashboard never resolves a missing
+  key. Derived by the reused publish step.
+- **Day manifest** — `manifest/<date>.json`, the UTC-day list of that day's
+  snapshots. The producer is stateless: the manifest is read from the object
+  store, appended, and written back each cycle. Snapshot keys are immutable and
+  timestamped; a 30-day bucket lifecycle rule ages `snapshots/` and `manifest/`
+  out (bucket-side, not code).
+  _Avoid_: local snapshot state on the Pi (there is none — the object store is
+  the source of truth).
