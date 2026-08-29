@@ -321,25 +321,36 @@ def _normalize_vip_lineup_row(
     if entry_key in (None, "") and display_name not in (None, ""):
         entry_key = standings_entry_keys.get(str(display_name).strip().lower())
     vip_entry_key = row.get("vip_entry_key") if row.get("vip_entry_key") not in (None, "") else entry_key
-    normalized: dict[str, Any] = {
-        key: str(value)
-        for key, value in {
-            "display_name": display_name,
-            "entry_key": entry_key,
-            "vip_entry_key": vip_entry_key,
-        }.items()
-        if value not in (None, "")
-    }
+    normalized = _normalize_vip_identity(display_name, entry_key, vip_entry_key)
     for key in ("rank", "pts", "pmr"):
         if row.get(key) not in (None, ""):
             normalized[key] = row[key]
-    players_live = [
-        live_slot
-        for slot in _vip_players_source(row)
-        if (live_slot := _normalize_vip_player_slot(slot, sport, unique_name_to_player_key))
-    ]
+    players_live = _normalize_vip_players(row, sport, unique_name_to_player_key)
     if players_live:
         normalized["players_live"] = players_live
+    return normalized
+
+
+def _normalize_vip_players(
+    row: dict[str, Any], sport: str, unique_name_to_player_key: dict[str, str]
+) -> list[dict[str, Any]]:
+    players_live: list[dict[str, Any]] = []
+    for slot in _vip_players_source(row):
+        normalized = _normalize_vip_player_slot(slot, sport, unique_name_to_player_key)
+        if normalized:
+            players_live.append(normalized)
+    return players_live
+
+
+def _normalize_vip_identity(display_name: Any, entry_key: Any, vip_entry_key: Any) -> dict[str, Any]:
+    normalized: dict[str, Any] = {}
+    for key, value in (
+        ("display_name", display_name),
+        ("entry_key", entry_key),
+        ("vip_entry_key", vip_entry_key),
+    ):
+        if value not in (None, ""):
+            normalized[key] = str(value)
     return normalized
 
 

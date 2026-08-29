@@ -61,6 +61,23 @@ def _build_contest_fields(
     raw_bundle: dict[str, Any], raw_contest: dict[str, Any], sport: str, contest_id: str
 ) -> dict[str, Any]:
     contest_key = f"{sport}:{contest_id}" if sport and contest_id else None
+    fields = _base_contest_fields(raw_bundle, raw_contest, sport, contest_id, contest_key)
+    fields.update(
+        {
+            "entry_fee_cents": _money_to_cents(raw_contest.get("entry_fee_cents") or raw_contest.get("entry_fee")),
+            "prize_pool_cents": _money_to_cents(raw_contest.get("prize_pool_cents") or raw_contest.get("prize_pool")),
+        }
+    )
+    return fields
+
+
+def _base_contest_fields(
+    raw_bundle: dict[str, Any],
+    raw_contest: dict[str, Any],
+    sport: str,
+    contest_id: str,
+    contest_key: str | None,
+) -> dict[str, Any]:
     return {
         "contest_id": contest_id,
         "contest_key": contest_key,
@@ -69,8 +86,6 @@ def _build_contest_fields(
         "contest_type": raw_contest.get("contest_type") or "classic",
         "start_time": raw_contest.get("start_time") or raw_contest.get("start_time_utc"),
         "state": raw_contest.get("state"),
-        "entry_fee_cents": _money_to_cents(raw_contest.get("entry_fee_cents") or raw_contest.get("entry_fee")),
-        "prize_pool_cents": _money_to_cents(raw_contest.get("prize_pool_cents") or raw_contest.get("prize_pool")),
         "currency": raw_contest.get("currency") or "USD",
         "max_entries": raw_contest.get("max_entries") or raw_contest.get("entries"),
         "max_entries_per_user": raw_contest.get("max_entries_per_user"),

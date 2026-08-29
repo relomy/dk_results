@@ -485,16 +485,20 @@ class CompletionProcessor:
         assert self._sender is not None
         new_status = contest_data["status"]
         new_completed = contest_data["completed"]
-        sport_cls = sport_choices[sport_name]
-        live_row = self._db.get_live_contest(sport_cls.name, sport_cls.sheet_min_entry_fee, sport_cls.keyword)
-        is_primary_live = bool(live_row and live_row[0] == dk_id)
-        if status != "LIVE" and new_status == "LIVE" and is_primary_live:
+        if self._is_new_primary_live(sport_choices[sport_name], dk_id, status, new_status):
             self._announce_live(store, dk_id, name, start_date, sport_name)
-        is_new_completed = (status not in COMPLETED_STATUSES and new_status in COMPLETED_STATUSES) or (
+        if self._is_new_completed(status, new_status, completed, new_completed):
+            self._announce_completed(store, dk_id, name, start_date, sport_name)
+
+    def _is_new_primary_live(self, sport_cls, dk_id, status, new_status) -> bool:
+        live_row = self._db.get_live_contest(sport_cls.name, sport_cls.sheet_min_entry_fee, sport_cls.keyword)
+        return status != "LIVE" and new_status == "LIVE" and bool(live_row and live_row[0] == dk_id)
+
+    @staticmethod
+    def _is_new_completed(status, new_status, completed, new_completed) -> bool:
+        return (status not in COMPLETED_STATUSES and new_status in COMPLETED_STATUSES) or (
             completed == 0 and new_completed == 1
         )
-        if is_new_completed:
-            self._announce_completed(store, dk_id, name, start_date, sport_name)
 
     def _announce_live(self, store, dk_id, name, start_date, sport_name) -> None:
         logger.info("live transition detected for %s dk_id=%s", sport_name, dk_id)
