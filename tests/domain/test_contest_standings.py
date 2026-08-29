@@ -133,6 +133,19 @@ def test_blank_points_row_does_not_crash():
     assert standings.min_rank == 0
 
 
+def test_invalid_rank_and_points_are_retained_as_unresolved_values():
+    rows = [
+        ["rank", "player_id", "name", "pmr", "pts", "lineup_str"],
+        ["not-a-rank", "111", "UserA", "0", "not-points", "QB Tom Brady"],
+    ]
+
+    standings = parse_contest_standings(NFLSport, _salary_rows(), rows, positions_paid=1)
+
+    assert standings.users[0].rank is None
+    assert standings.users[0].pts is None
+    assert standings.min_rank == 0
+
+
 def test_vip_detection():
     rows = [
         ["rank", "player_id", "name", "pmr", "pts", "lineup_str"],
