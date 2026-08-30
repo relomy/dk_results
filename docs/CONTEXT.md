@@ -17,6 +17,8 @@
   _Avoid_: ContestStandings (parsed salary/standings CSVs, not the lobby row); ContestDatabase (stored SQLite contest rows, not the lobby DTO).
 - **ContestStandings** — the data structure produced by parsing a DraftKings contest's salary and standings CSVs. Owns players, users, VIP list, cash line, and non-cashing stats. Contest metadata (`contest_id`, `name`) stays with callers. Module: `domain/contest_standings.py`.
 - **Remaining salary** — the unspent portion of a user's lineup budget. It is part of the `User` domain state and is distinct from the snapshot's slot-weighted average salary for unfinished players.
+- **Format plan** — the list of `CellFormat(row, col, number_format)` entries a values-builder returns alongside the value grid it already knows the layout of, naming which cells need which `dfs_common.sheets.NumberFormat` (e.g. `CURRENCY`). Self-healing: the write path reasserts it on every write via `SheetClient.write_values_with_format` (`dfs_common.sheets`), rather than depending on formatting set once, by hand, directly in the sheet. First established for the VIP lineup panel's Salary cells (`build_values_for_vip_lineup`, `domain/dfs_sheet_domain.py`); see relomy/dk_results#86 and relomy/dfs-common#9. Extended to the contest standings grid's Salary column (`players_to_values`, `domain/contest_standings.py`); see relomy/dk_results#89.
+  _Avoid_: applying a `NumberFormat` via a second, separate write call — the point of the pattern is a single combined values+format write.
 - **Cashing** — an entry has a positive realized payout. The availability of payout data is a separate fact and does not by itself mean the entry is cashing.
 - **Snapshot artifact** — the canonical schema-3 JSON output produced for downstream consumers. Rollback restores a known-good artifact or producer version; it does not require runtime compatibility with retired schemas.
 - **Optimizer** — the orchestrator that solves for a single sport's optimal lineup. Constructed with a `Sport`, a `dict[str, Player]`, and an injectable `LineupSolver` (default `PulpCbcSolver`); its public interface is `get_optimal_lineup() -> list[SelectedPlayer] | None`, where `SelectedPlayer(player, slot)` is a frozen pairing that never mutates the shared `Player`. It reads the salary cap from `Sport.salary_cap`. Module: `analytics/optimizer.py`.
@@ -34,7 +36,7 @@
 
 ## Contest completion & notifications
 
-- **CompletionProcessor** — the module that advances each tracked contest and announces its milestones: warning, live, completed, soft-finish. Public interface: `CompletionProcessor.run(conn) -> None`. Injected collaborators: `ContestDatabase` (work list + state writes), `ContestResultsPort` (the only external DraftKings edge), a presence oracle (`VipPresence`), and `BonusSenderPort` (Discord); `NotificationStore` is built from the run's `conn` for idempotency. Reads its work list from `ContestDatabase`, not from DraftKings. Owns the suppression policy: an `absent` presence verdict suppresses an announcement, `unknown` allows it. Announcements are gated by an explicit `notifications_enabled` flag (resolved at the CLI edge from `DISCORD_NOTIFICATIONS_ENABLED`), independent of whether a sender is wired: a disabled run still constructs the processor and syncs contest state but short-circuits every send. Module: `completion_processor.py`.
+- **CompletionProcessor** — the module that advances each tracked contest and announces its milestones: warning, live, completed, soft-finish. Public interface: `CompletionProcessor.run(conn) -> None`. Injected collaborators: `ContestDatabase` (work list + state writes), `ContestResultsPort` (the only external DraftKings edge), a presence oracle (`VipPresence`), and `BonusSenderPort` (Discord); `NotificationStore` is built from the run's `conn` for idempotency. Reads its work list from `ContestDatabase`, not from DraftKings. Owns the suppression policy, which differs by milestone: warning/live require a confirmed VIP (`present` or `unknown_capped`); completed/soft-finish keep the original looser policy (only `absent` suppresses). See ADR-0008. Announcements are gated by an explicit `notifications_enabled` flag (resolved at the CLI edge from `DISCORD_NOTIFICATIONS_ENABLED`), independent of whether a sender is wired: a disabled run still constructs the processor and syncs contest state but short-circuits every send. Module: `completion_processor.py`.
 - **Notification event** — the identity of a single announcement about a contest, used to keep announcing idempotent. One per milestone: starting-soon warning, live, completed, soft-finish.
 - **NotificationStore** — persistence that keeps a milestone from being announced twice, and caches VIP presence. Module: `persistence/notification_store.py`.
   _Avoid_: ContestDatabase (owns contest rows, not notifications).
@@ -42,7 +44,40 @@
   _Avoid_: cron interval (schedules the run itself, not the warning).
 - **Soft-finish** — the state where a live contest's scoring is effectively final though DraftKings has not marked it COMPLETED; triggers a VIP-cash summary.
   _Avoid_: completed / CANCELLED (DraftKings' own terminal statuses).
-- **VipPresence** — the oracle answering whether a tracked VIP is entered in a contest, returning a presence verdict. Module: `notifications/vip_presence.py`.
-- **Presence verdict** — a VipPresence result: `present`, `absent`, or `unknown`. `absent` suppresses announcements; `unknown` allows them.
+- **VipPresence** — the oracle answering whether a tracked VIP is entered in a contest, returning a presence verdict. Short-circuits at the first tracked VIP found; never enumerates the full entrant list, so it proves presence/absence but not the complete roster of who's in. Module: `notifications/vip_presence.py`.
+- **Presence verdict** — a VipPresence result: `present`, `absent`, `unknown`, or `unknown_capped`. `unknown_capped` is a structural variant of `unknown` — the entrant-page cap was hit before a conclusive read, because the field is too large to fully scan, not because of a transient failure. Suppression policy differs by milestone (see below): warning and live require a *confirmed* verdict (`present` or `unknown_capped`); completed and soft-finish keep the original looser policy (only `absent` suppresses; any `unknown` allows). See ADR-0008.
 - **ContestResultsPort** — the seam through which the completion workflow reads one contest's live DraftKings readouts — state, entrants, leaderboard — by `dk_id`.
   _Avoid_: lobby feed (source of new contests); stored contest state (`ContestDatabase.get_contest_state`).
+
+## Snapshot feed to the dashboard
+
+The **snapshot feed** is the committed, scheduled replacement for the hand-run
+`export_fixture … && export_fixture publish && wrangler r2 object put …` recipe.
+Each cycle runs **build → publish → load**: build one multi-sport snapshot
+artifact, derive the latest pointer and day manifest, and load `snapshots/*`,
+`manifest/*`, and `latest.json` into the object store the dashboard reads
+(R2 bucket `dk-dashboard-data`). Entry point: `snapshot_feed.py:main`, an
+externally-scheduled `main()` on the existing Pi scheduler. See ADR-0007.
+
+- **Object store** — the keyed JSON store the feed loads into and the dashboard
+  reads from. Port: `ObjectStore` with `get_json(key) -> dict | None` and
+  `put_json(key, body, content_type="application/json")`, injected into the
+  pipeline. Default adapter is `R2ObjectStore` (boto3 against R2's
+  S3-compatible endpoint); tests substitute a fake in-memory store at this seam.
+  Modules: `feed/object_store.py`, `feed/r2.py`.
+  _Avoid_: `wrangler` (rejected in ADR-0007); the dashboard's HTTP API (a
+  separate read edge — the feed writes object keys, not `/api/*`).
+- **Snapshot artifact** — the schema-3 multi-sport envelope built via the
+  DB-driven `db_main.build_live_snapshot` path, so the database decides which
+  contests are live and per-sport `status`/`error` carries partial failure.
+- **Latest pointer** — `latest.json`, naming the current snapshot key plus the
+  today/yesterday manifest paths. Uploaded **last** each cycle; a failed upload
+  leaves the previous pointer intact so the dashboard never resolves a missing
+  key. Derived by the reused publish step.
+- **Day manifest** — `manifest/<date>.json`, the UTC-day list of that day's
+  snapshots. The producer is stateless: the manifest is read from the object
+  store, appended, and written back each cycle. Snapshot keys are immutable and
+  timestamped; a 30-day bucket lifecycle rule ages `snapshots/` and `manifest/`
+  out (bucket-side, not code).
+  _Avoid_: local snapshot state on the Pi (there is none — the object store is
+  the source of truth).

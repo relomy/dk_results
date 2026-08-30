@@ -1,15 +1,21 @@
 """The VIP-presence oracle and its DraftKings read seam.
 
 `VipPresence` answers one question: is a tracked VIP entered in a contest? It
-returns a *presence verdict* — ``present`` / ``absent`` / ``unknown`` — reading
-entrants through a narrow `ContestResultsPort` and caching verdicts through
-`NotificationStore`. It refreshes ``absent`` on the existing policy and returns
-``unknown`` when the entrant-page cap is hit.
+returns a *presence verdict* — ``present`` / ``absent`` / ``unknown`` /
+``unknown_capped`` — reading entrants through a narrow `ContestResultsPort`
+and caching verdicts through `NotificationStore`. It refreshes ``absent`` on
+the existing policy, short-circuiting the moment any tracked VIP is found
+rather than enumerating everyone entered. ``unknown_capped`` is returned
+specifically when the entrant-page cap is hit before a conclusive answer (a
+structural fact about the field size, not a resolved verdict); every other
+inconclusive read (an ambiguous parse, a failed request, no VIPs configured)
+is the plain ``unknown``.
 
-It is a pure verdict provider: no announcement or suppression logic lives here.
-Suppression (``absent`` silences an announcement, ``unknown`` allows it) is the
-processor's job. Per ADR 0001, `ContestResultsPort` is the completion
-workflow's own DraftKings slice, separate from `SportProcessor`'s `DkPort`.
+It is a pure verdict provider: no announcement or suppression logic lives
+here. Suppression is the processor's job, and it applies two different
+policies depending on the milestone — see `CompletionProcessor`. Per ADR
+0001, `ContestResultsPort` is the completion workflow's own DraftKings slice,
+separate from `SportProcessor`'s `DkPort`.
 """
 
 from __future__ import annotations
@@ -29,6 +35,10 @@ logger = logging.getLogger(__name__)
 VIP_PRESENT = "present"
 VIP_ABSENT = "absent"
 VIP_UNKNOWN = "unknown"
+# A structural variant of VIP_UNKNOWN: the entrant-page cap was hit before a
+# conclusive answer, so the field is simply too large to fully scan — distinct
+# from a transient failure, since re-checking later won't resolve it either.
+VIP_UNKNOWN_CAPPED = "unknown_capped"
 
 # Policy knobs (preserved from the original free functions).
 VIP_ABSENT_REFRESH_MINUTES = 10
@@ -158,5 +168,5 @@ class VipPresence:
             logger.warning("VIP presence check failed for dk_id=%s", dk_id, exc_info=True)
             return VIP_UNKNOWN
 
-        logger.info("vip presence page cap hit for dk_id=%s; returning unknown", dk_id)
-        return VIP_UNKNOWN
+        logger.info("vip presence page cap hit for dk_id=%s; returning unknown_capped", dk_id)
+        return VIP_UNKNOWN_CAPPED

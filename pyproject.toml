@@ -21,6 +21,7 @@ dependencies = [
     "python-dotenv>=1.2.2",
     "urllib3>=2.7.0",
     "pydantic>=2.13.4",
+    "boto3>=1.35",
 ]
 
 [dependency-groups]
@@ -28,10 +29,10 @@ dev = [
     "pytest>=9.0.3",
     "pytest-asyncio",
     "pytest-cov",
-    "radon",
     "complexity-ratchet",
     "ruff",
     "ty",
+    "xenon",
 ]
 
 [tool.uv]

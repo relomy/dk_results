@@ -75,6 +75,63 @@ def write_snapshot_payload(path: pathlib.Path, payload: dict[str, Any]) -> None:
     path.write_text(to_stable_json(payload), encoding="utf-8")
 
 
+def build_default_processor(*, write_optimal_lineup: bool = True) -> SportProcessor:
+    """Construct the production SportProcessor with its real ports and config."""
+    return SportProcessor(
+        contest_db=ContestDatabase(str(state.contests_db_path())),
+        dk=DraftKings(),
+        sheet_factory=lambda sport: build_dfs_sheet_service(sport),
+        bonus_sender=_build_bonus_sender(),
+        config=SportProcessorConfig(
+            salary_dir=SALARY_DIR,
+            contest_dir=CONTEST_DIR,
+            cookies_file=COOKIES_FILE,
+            write_optimal_lineup=write_optimal_lineup,
+        ),
+        now=datetime.datetime.now(ZoneInfo("America/New_York")),
+        vips=load_vips(),
+    )
+
+
+def select_live_contests(
+    processor: SportProcessor,
+    sport_names: list[str],
+    choices: Mapping[str, SportType],
+) -> dict[str, int]:
+    """Run each sport through the processor; the database decides which are live.
+
+    A sport with no live contest (or unavailable/unparseable standings) is
+    skipped, so one bad sport degrades that sport only.
+    """
+    selected: dict[str, int] = {}
+    for sport_name in sport_names:
+        try:
+            selected[sport_name] = processor.run(sport_name, choices[sport_name])
+        except (NoLiveContestError, StandingsUnavailableError, StandsParseError):
+            continue
+    return selected
+
+
+def build_live_snapshot(
+    sport_names: list[str],
+    *,
+    standings_limit: int = DEFAULT_STANDINGS_LIMIT,
+    processor: SportProcessor | None = None,
+) -> dict[str, Any] | None:
+    """Select live contests via the DB-driven processor and build a multi-sport
+    snapshot envelope. Returns ``None`` when no contest was selected.
+
+    This is the build step the snapshot feed reuses; it does not reimplement
+    snapshot shaping (``build_snapshot_payload`` owns that).
+    """
+    choices = get_sport_choices()
+    processor = processor if processor is not None else build_default_processor()
+    selected = select_live_contests(processor, sport_names, choices)
+    if not selected:
+        return None
+    return build_snapshot_payload(selected, standings_limit=standings_limit)
+
+
 def main() -> None:
     """
     Use database and update Google Sheet with contest standings from DraftKings.
@@ -112,28 +169,8 @@ def main() -> None:
     args = parser.parse_args()
     configure_logging(level_override="DEBUG" if args.verbose else None)
 
-    processor = SportProcessor(
-        contest_db=ContestDatabase(str(state.contests_db_path())),
-        dk=DraftKings(),
-        sheet_factory=lambda sport: build_dfs_sheet_service(sport),
-        bonus_sender=_build_bonus_sender(),
-        config=SportProcessorConfig(
-            salary_dir=SALARY_DIR,
-            contest_dir=CONTEST_DIR,
-            cookies_file=COOKIES_FILE,
-            write_optimal_lineup=args.nolineups,
-        ),
-        now=datetime.datetime.now(ZoneInfo("America/New_York")),
-        vips=load_vips(),
-    )
-
-    selected_contests: dict[str, int] = {}
-    for sport_name in args.sport:
-        try:
-            contest_id = processor.run(sport_name, choices[sport_name])
-            selected_contests[sport_name] = contest_id
-        except (NoLiveContestError, StandingsUnavailableError, StandsParseError):
-            continue
+    processor = build_default_processor(write_optimal_lineup=args.nolineups)
+    selected_contests = select_live_contests(processor, args.sport, choices)
 
     if args.snapshot_out:
         if not selected_contests:

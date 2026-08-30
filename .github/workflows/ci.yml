@@ -56,14 +56,8 @@ jobs:
       - name: Ty Check
         run: uv run ty check
 
-      - name: Radon Complexity Floor
-        run: |
-          output=$(uv run radon cc src -n D)
-          if [ -n "$output" ]; then
-            echo "$output"
-            echo "::error::radon found blocks graded D or worse; simplify before merging"
-            exit 1
-          fi
+      - name: Complexity Floor (xenon)
+        run: uv run xenon --max-absolute C src
 
       - name: Complexity Ratchet
         run: uv run complexity-ratchet --base origin/main --head HEAD

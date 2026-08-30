@@ -1,0 +1,7 @@
+# VIP confirmation gates warning and live, not completed or soft-finish
+
+The warning ("starting soon") and live ("started") announcements now require a *confirmed* VIP presence verdict — `present`, or `unknown_capped` (the entrant field is too large to fully scan, a structural fact rather than a resolved verdict). A plain `unknown` (ambiguous parse, failed request, no VIPs configured) suppresses, same as `absent`, with no retry: a later independent check (e.g. the next warning-schedule entry) gets its own fresh verdict, but nothing holds a contest in limbo waiting for one to resolve.
+
+Completed and soft-finish keep the original, looser policy (`absent` suppresses, any `unknown` allows) — they were never in scope, and completed's existing dependency on a "live" notification having fired already gives it the same effective silence once warning/live start requiring confirmation.
+
+Rejected alternatives: (1) a "belated" mechanism that holds an unresolved contest and retries on a timer, firing a late live announcement the moment presence resolves — dropped as unneeded complexity once the simpler single-shot-per-check policy covered the actual goal (no VIP confirmed → no noise); (2) always announcing on `unknown_capped` was chosen deliberately over uniformly suppressing all `unknown`, since a page-cap hit is structural (a huge field, not a transient failure) — silently suppressing it would systematically under-notify the largest contests, exactly where a tracked VIP is likeliest to have entered.

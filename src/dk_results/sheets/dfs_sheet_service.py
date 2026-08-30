@@ -3,11 +3,16 @@
 import datetime
 from typing import Any, Sequence
 
+from dfs_common.sheets import NumberFormat
+
 from dk_results.domain.dfs_sheet_domain import (
+    VIP_LINEUP_ROW_WIDTH,
+    CellFormat,
     build_values_for_vip_lineup,
     data_range_for_sport,
     header_range_for_sport,
     lineup_range_for_sport,
+    parse_range,
 )
 
 from .dfs_sheet_repository import DfsSheetRepository
@@ -38,8 +43,23 @@ class DfsSheetService:
     def clear_lineups(self) -> None:
         self.repo.clear_range(lineup_range_for_sport(self.sport))
 
-    def write_players(self, values: Sequence[Sequence[Any]]) -> None:
-        self.repo.write_range(values, self.data_range)
+    def write_players(self, values: Sequence[Sequence[Any]], format_plan: Sequence[CellFormat] = ()) -> None:
+        if not format_plan:
+            self.repo.write_range(values, self.data_range)
+            return
+        origin = parse_range(self.data_range)
+        start_col_index = self._column_letters_to_index(origin.start_col)
+        formats: list[tuple[str, NumberFormat]] = [
+            (
+                f"{self._column_index_to_letters(start_col_index + cell_format.col)}"
+                f"{origin.start_row + cell_format.row}",
+                cell_format.number_format,
+            )
+            for cell_format in format_plan
+        ]
+        end_row = origin.start_row + len(values) - 1
+        cell_range = f"{origin.sheet}!{origin.start_col}{origin.start_row}:{origin.end_col}{end_row}"
+        self.repo.write_range_with_format(values, cell_range, formats)
 
     def write_column(self, column: str, values: Sequence[Sequence[Any]], start_row: int = 2) -> None:
         cell_range = f"{self.sport}!{column}{start_row}:{column}"
@@ -104,13 +124,27 @@ class DfsSheetService:
         self.repo.write_range(optimal_lineup_info, cell_range)
 
     def write_vip_lineups(self, vip_lineups: list[dict[str, Any]]) -> None:
+        if not vip_lineups:
+            return
         vip_lineups.sort(key=lambda x: x["user"].lower())
+        origin = parse_range(lineup_range_for_sport(self.sport))
+        start_col_index = self._column_letters_to_index(origin.start_col)
+
         all_lineup_values: list[list[Any]] = []
+        all_formats: list[tuple[str, NumberFormat]] = []
         for vip_lineup in vip_lineups:
-            values = build_values_for_vip_lineup(vip_lineup, vip_lineup["players"])
-            values.append([])
+            values, format_plan = build_values_for_vip_lineup(vip_lineup, vip_lineup["players"])
+            block_row_offset = len(all_lineup_values)
+            for cell_format in format_plan:
+                col_letters = self._column_index_to_letters(start_col_index + cell_format.col)
+                row_number = origin.start_row + block_row_offset + cell_format.row
+                all_formats.append((f"{col_letters}{row_number}", cell_format.number_format))
+            values.append([None] * VIP_LINEUP_ROW_WIDTH)
             all_lineup_values.extend(values)
-        self.repo.write_range(all_lineup_values, lineup_range_for_sport(self.sport))
+
+        end_row = origin.start_row + len(all_lineup_values) - 1
+        cell_range = f"{origin.sheet}!{origin.start_col}{origin.start_row}:{origin.end_col}{end_row}"
+        self.repo.write_range_with_format(all_lineup_values, cell_range, all_formats)
 
     def get_players(self) -> list[str]:
         self._ensure_loaded()

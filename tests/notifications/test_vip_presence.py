@@ -9,6 +9,7 @@ from dk_results.notifications.vip_presence import (
     VIP_ENTRANT_PAGE_LIMIT,
     VIP_PRESENT,
     VIP_UNKNOWN,
+    VIP_UNKNOWN_CAPPED,
     ContestResultsPort,
     VipPresence,
     _entrant_payload_is_ambiguous,
@@ -110,10 +111,10 @@ def test_ambiguous_payload_is_unknown_and_not_cached(store):
     assert store.get_presence(1) is None
 
 
-def test_page_cap_is_unknown(store):
+def test_page_cap_is_unknown_capped(store):
     port = FakeResultsPort(default=_page("rando"))
     verdict = VipPresence(port, store).verdict(1, "2026-01-01T00:00:00", ["VipGuy"])
-    assert verdict == VIP_UNKNOWN
+    assert verdict == VIP_UNKNOWN_CAPPED
     assert port.entrant_calls == list(range(1, VIP_ENTRANT_PAGE_LIMIT + 1))
 
 

@@ -1,13 +1,15 @@
 import logging
 
 import pytest
+from dfs_common.sheets import NumberFormat
 
 from dk_results.analytics.lineup_solver import PulpCbcSolver
 from dk_results.domain.contest_standings import (
     parse_contest_standings,
     players_to_values,
 )
-from dk_results.domain.sport import NBASport, NFLSport
+from dk_results.domain.dfs_sheet_domain import CellFormat
+from dk_results.domain.sport import GolfSport, NBASport, NFLSport
 
 
 def _salary_rows():
@@ -265,7 +267,7 @@ def test_nba_dual_position_player():
     combo = standings.players["Combo Guard"]
     assert combo.pos == "PG/SG"
     assert combo.standings_pos == "PG/SG"
-    values = players_to_values(standings.players, "NBA")
+    values, _format_plan = players_to_values(standings.players, "NBA")
     combo_row = next(r for r in values if r[1] == "Combo Guard")
     assert combo_row[0] == "PG/SG"
     selected = PulpCbcSolver()._create_decision_variables(standings.players)
@@ -277,7 +279,7 @@ def test_players_to_values_filters_zero_ownership():
     standings = parse_contest_standings(NFLSport, _salary_rows(), _standings_rows(), positions_paid=1)
     standings.players["Tom Brady"].ownership = 0.5
     standings.players["Derrick Henry"].ownership = 0.0
-    values = players_to_values(standings.players, "NFL")
+    values, _format_plan = players_to_values(standings.players, "NFL")
     names = [r[1] for r in values]
     assert "Tom Brady" in names
     assert "Derrick Henry" not in names
@@ -292,9 +294,42 @@ def test_players_to_values_sorted_by_ownership():
         ["3", "333", "UserC", "0", "100", "QB Tom Brady RB Derrick Henry", "", "Tom Brady", "FLEX", "25.00%", "20"],
     ]
     standings = parse_contest_standings(NFLSport, salary, rows, positions_paid=1)
-    values = players_to_values(standings.players, "NFL")
+    values, _format_plan = players_to_values(standings.players, "NFL")
     tom = next(r for r in values if r[1] == "Tom Brady")
     assert tom[0] == "QB"
+
+
+def test_players_to_values_format_plan_tags_salary_column():
+    standings = parse_contest_standings(NFLSport, _salary_rows(), _standings_rows(), positions_paid=1)
+    standings.players["Tom Brady"].ownership = 0.5
+    standings.players["Derrick Henry"].ownership = 0.5
+    values, format_plan = players_to_values(standings.players, "NFL")
+
+    assert len(values) == 2
+    # Player.writeable for non-PGA sports: [pos, name, team, matchup, salary, own, fpts, value]
+    assert format_plan == [
+        CellFormat(row=0, col=4, number_format=NumberFormat.CURRENCY),
+        CellFormat(row=1, col=4, number_format=NumberFormat.CURRENCY),
+    ]
+    for cell_format in format_plan:
+        assert values[cell_format.row][cell_format.col] == values[cell_format.row][4]
+
+
+def test_players_to_values_format_plan_uses_pga_salary_column():
+    salary_rows = [
+        ["Position", "ID", "Name", "ID2", "Roster Position", "Salary", "Game Info", "TeamAbbrev", "AvgPoints"],
+        ["G", "", "Golfer One", "", "G", "9000", "PGA Tour", "PGA", ""],
+    ]
+    standings_rows = [
+        ["rank", "player_id", "name", "pmr", "pts", "lineup_str", "", "Player", "Roster Position", "%Drafted", "FPTS"],
+        ["1", "111", "UserA", "0", "100", "G Golfer One", "", "Golfer One", "G", "50.00%", "80"],
+    ]
+
+    standings = parse_contest_standings(GolfSport, salary_rows, standings_rows, positions_paid=1)
+    values, format_plan = players_to_values(standings.players, "PGA")
+
+    assert values[0][2] == 9000
+    assert format_plan == [CellFormat(row=0, col=2, number_format=NumberFormat.CURRENCY)]
 
 
 class DummyShowdownSport:

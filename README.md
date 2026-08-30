@@ -34,7 +34,39 @@ sheet = build_dfs_sheet_service("NBA")
 
 Scheduling is external to this repo (cron/systemd/etc). Each entry point exposes a
 `main()` and is runnable as a script or module (`db_main.py:main`,
-`find_new_double_ups.py:main`, `update_contests.py:main`, `bot/discord_bot.py:main`).
+`find_new_double_ups.py:main`, `update_contests.py:main`, `bot/discord_bot.py:main`,
+`snapshot_feed.py:main`).
+
+## Snapshot Feed (dashboard publish)
+
+`snapshot_feed.py` is the committed, scheduled replacement for the hand-run
+`export_fixture … && export_fixture publish && wrangler r2 object put …` recipe.
+It builds a multi-sport snapshot, derives the latest pointer and UTC-day
+manifest, and loads `snapshots/*`, `manifest/*`, and `latest.json` into the
+dashboard's object store (Cloudflare R2 bucket `dk-dashboard-data`). Design and
+rationale: `docs/adr/0007-snapshot-etl-to-cloudflare-r2.md`.
+
+```bash
+uv run python snapshot_feed.py
+```
+
+Sports default to every supported sport; the database decides which have live
+contests, and a failure in one sport degrades that sport only. Configuration
+comes from the environment — the bucket name from `R2_BUCKET`, credentials and
+endpoint from `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`. No
+secret is committed.
+
+Behavior notes:
+- Uploads are ordered `snapshots/<name>.json` → `manifest/<date>.json` →
+  `latest.json` (last), so the latest pointer never names an absent snapshot; a
+  failed upload leaves the previous `latest.json` intact.
+- The producer keeps no local state: it stages into an ephemeral temp directory
+  and reads/appends/writes the day manifest through the object store each cycle.
+- A run with no live contests skips the load and leaves the existing pointer
+  unchanged.
+- Snapshot keys are immutable and timestamped; a 30-day R2 lifecycle rule on
+  `snapshots/` and `manifest/` ages old objects out (a bucket-side setting,
+  provisioned out of band — not code here).
 
 ## Export Fixture Snapshot
 
