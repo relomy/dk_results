@@ -65,8 +65,8 @@ jobs:
             exit 1
           fi
 
-      - name: Radon Complexity Ratchet
-        run: uv run python .github/complexity_ratchet.py
+      - name: Complexity Ratchet
+        run: uv run complexity-ratchet --base origin/main --head HEAD
 
       - name: Pytest
         run: uv run pytest

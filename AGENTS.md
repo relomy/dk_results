@@ -9,6 +9,7 @@ updates, and Discord notifications.
 - Source in `src/`, tests in `tests/`.
 - `dfs-common` is a private git dependency; read `docs/TESTING.md` when a `uv`
   command fails while building the venv.
+- Complexity regressions: `uv run complexity-ratchet --base origin/main --worktree`.
 
 ## Further instructions
 

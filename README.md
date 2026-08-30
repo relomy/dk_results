@@ -11,6 +11,7 @@ notifications (see `db_main.py:main`, `update_contests.py:check_contests_for_com
 - Lint: `uv run ruff check .`
 - Types: `uv run ty check`
 - Tests: `uv run pytest`
+- Complexity ratchet: `uv run complexity-ratchet --base origin/main --worktree`
 
 ## Shared Infrastructure
 
