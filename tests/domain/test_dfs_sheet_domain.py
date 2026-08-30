@@ -26,7 +26,7 @@ def test_ranges_for_sport():
     assert lineup_range_for_sport("PGAWeekend") == "PGAWeekend!L3:T999"
 
 
-def test_build_values_for_vip_lineup():
+def _vip_lineup_fixture():
     user = {"user": "VIP", "pmr": 1.2, "rank": 2, "salary": 50000, "pts": 300}
     players = [
         {
@@ -54,14 +54,25 @@ def test_build_values_for_vip_lineup():
             "valueIcon": "ice",
         },
     ]
+    return user, players
 
-    values, format_plan = build_values_for_vip_lineup(user, players)
+
+def test_build_values_for_vip_lineup():
+    user, players = _vip_lineup_fixture()
+
+    values, _format_plan = build_values_for_vip_lineup(user, players)
 
     assert values[0][:4] == ["VIP", None, "PMR", 1.2]
     assert values[1][:3] == ["Pos", "Name", "Own"]
     assert values[2][1] == "Alpha 🔥"
     assert values[3][1] == "Beta ❄️"
     assert values[-1][0] == "rank"
+
+
+def test_build_values_for_vip_lineup_format_plan():
+    user, players = _vip_lineup_fixture()
+
+    values, format_plan = build_values_for_vip_lineup(user, players)
 
     # Rows: 0=user, 1=header, 2=Alpha, 3=Beta, 4=footer ("rank"). Salary is
     # column offset 3 (Pos, Name, Own, Salary) in every one of those rows.

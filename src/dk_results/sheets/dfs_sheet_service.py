@@ -110,6 +110,9 @@ class DfsSheetService:
     def write_vip_lineups(self, vip_lineups: list[dict[str, Any]]) -> None:
         if not vip_lineups:
             return
+        self._write_vip_lineups(vip_lineups)
+
+    def _write_vip_lineups(self, vip_lineups: list[dict[str, Any]]) -> None:
         vip_lineups.sort(key=lambda x: x["user"].lower())
         origin = parse_range(lineup_range_for_sport(self.sport))
         start_col_index = self._column_letters_to_index(origin.start_col)

@@ -26,7 +26,6 @@ class FakeService:
         self.updated = []
         self.cleared = []
         self.gets = []
-        self.batch_updates = []
         self._action = None
         self._range = None
         self._body = None
@@ -48,11 +47,6 @@ class FakeService:
         self._body = body
         return self
 
-    def batchUpdate(self, spreadsheetId=None, body=None):
-        self._action = "batchUpdate"
-        self._body = body
-        return self
-
     def clear(self, spreadsheetId=None, range=None, body=None):
         self._action = "clear"
         self._range = range
@@ -68,9 +62,6 @@ class FakeService:
             self.updated.append((self._range, self._body))
             updated_cells = sum(len(row) for row in (self._body or {}).get("values", []))
             return {"updatedCells": updated_cells}
-        if self._action == "batchUpdate":
-            self.batch_updates.append(self._body)
-            return {}
         if self._action == "clear":
             self.cleared.append(self._range)
             return {"clearedRange": self._range}
