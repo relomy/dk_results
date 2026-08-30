@@ -7,9 +7,12 @@ updates, and Discord notifications.
 
 - Run everything through `uv` (Python `>=3.11,<3.12`); `uv sync` builds the venv.
 - Source in `src/`, tests in `tests/`.
+- Dependency groups: `test` is installed by default; `quality` contains Ruff,
+  Ty, Xenon, and complexity-ratchet.
+- Complexity floor: `uv run --group quality xenon --max-absolute C src`.
 - `dfs-common` is a private git dependency; read `docs/TESTING.md` when a `uv`
   command fails while building the venv.
-- Complexity regressions: `uv run complexity-ratchet --base origin/main --worktree`.
+- Complexity regressions: `uv run --group quality complexity-ratchet --base origin/main --worktree`.
 
 ## Further instructions
 

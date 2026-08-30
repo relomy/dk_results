@@ -45,22 +45,22 @@ jobs:
         uses: astral-sh/setup-uv@v5
 
       - name: Install dependencies
-        run: uv sync --locked
+        run: uv sync --locked --all-groups
 
       - name: Ruff Format Check
-        run: uv run ruff format --check .
+        run: uv run --group quality ruff format --check .
 
       - name: Ruff Check
-        run: uv run ruff check .
+        run: uv run --group quality ruff check .
 
       - name: Ty Check
-        run: uv run ty check
+        run: uv run --group quality ty check
 
       - name: Complexity Floor (xenon)
-        run: uv run xenon --max-absolute C src
+        run: uv run --group quality xenon --max-absolute C src
 
       - name: Complexity Ratchet
-        run: uv run complexity-ratchet --base origin/main --head HEAD
+        run: uv run --group quality complexity-ratchet --base origin/main --head HEAD
 
       - name: Pytest
         run: uv run pytest
