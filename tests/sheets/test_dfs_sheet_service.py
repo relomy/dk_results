@@ -4,6 +4,7 @@ import datetime
 
 from dfs_common.sheets import NumberFormat, SheetClient
 
+from dk_results.domain.dfs_sheet_domain import CellFormat
 from dk_results.sheets.dfs_sheet_repository import DfsSheetRepository
 from dk_results.sheets.dfs_sheet_service import DfsSheetService
 from dk_results.sheets.sheets_service import build_dfs_sheet_service
@@ -14,9 +15,13 @@ class RecordingRepo:
 
     def __init__(self):
         self.write_range_with_format_calls = []
+        self.write_range_calls = []
 
     def write_range_with_format(self, values, cell_range, formats):
         self.write_range_with_format_calls.append((values, cell_range, formats))
+
+    def write_range(self, values, cell_range):
+        self.write_range_calls.append((values, cell_range))
 
 
 class FakeService:
@@ -102,6 +107,52 @@ def test_service_clear_and_write_methods():
     assert service.updated[0][0] == "NBA!A2:H"
     assert service.updated[1][0] == "NBA!F2:F"
     assert service.updated[2][0] == "NBA!F2:J"
+
+
+def test_write_players_without_format_plan_uses_plain_write_range():
+    values_by_range = {
+        "NBA!A1:H1": [["Name"]],
+        "NBA!A2:H": [["Alice"]],
+    }
+    sheet, service = _make_service("NBA", values_by_range=values_by_range)
+
+    sheet.write_players([["A", 8000]])
+
+    assert service.updated[-1][0] == "NBA!A2:H"
+
+
+def test_write_players_with_format_plan_writes_values_with_format():
+    repo = RecordingRepo()
+    sheet = DfsSheetService(repo, "NBA")
+
+    sheet.write_players(
+        [
+            ["PG", "Alpha", "TeamA", "vs. TeamB", 8000, 0.1, 50, 6.25],
+            ["SG", "Beta", "TeamC", "at TeamD", 7000, 0.2, 40, 5.71],
+        ],
+        [
+            CellFormat(row=0, col=4, number_format=NumberFormat.CURRENCY),
+            CellFormat(row=1, col=4, number_format=NumberFormat.CURRENCY),
+        ],
+    )
+
+    assert len(repo.write_range_with_format_calls) == 1
+    values, cell_range, formats = repo.write_range_with_format_calls[0]
+    # data_range_for_sport("NBA") is "NBA!A2:H"; 2 rows -> A2:H3.
+    assert cell_range == "NBA!A2:H3"
+    assert values[0][4] == 8000
+    assert values[1][4] == 7000
+    assert formats == [("E2", NumberFormat.CURRENCY), ("E3", NumberFormat.CURRENCY)]
+
+
+def test_write_players_with_empty_format_plan_uses_plain_write_range():
+    repo = RecordingRepo()
+    sheet = DfsSheetService(repo, "NBA")
+
+    sheet.write_players([], [])
+
+    assert repo.write_range_with_format_calls == []
+    assert repo.write_range_calls == [([], "NBA!A2:H")]
 
 
 def test_service_header_writes():

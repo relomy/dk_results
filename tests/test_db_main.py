@@ -165,7 +165,7 @@ class _FakeSheet:
     def clear_standings(self):
         return None
 
-    def write_players(self, values):
+    def write_players(self, values, format_plan=()):
         self.players = list(values)
 
     def add_contest_details(self, *_args, **_kwargs):

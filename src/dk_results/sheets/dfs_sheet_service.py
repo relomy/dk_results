@@ -7,6 +7,7 @@ from dfs_common.sheets import NumberFormat
 
 from dk_results.domain.dfs_sheet_domain import (
     VIP_LINEUP_ROW_WIDTH,
+    CellFormat,
     build_values_for_vip_lineup,
     data_range_for_sport,
     header_range_for_sport,
@@ -42,8 +43,23 @@ class DfsSheetService:
     def clear_lineups(self) -> None:
         self.repo.clear_range(lineup_range_for_sport(self.sport))
 
-    def write_players(self, values: Sequence[Sequence[Any]]) -> None:
-        self.repo.write_range(values, self.data_range)
+    def write_players(self, values: Sequence[Sequence[Any]], format_plan: Sequence[CellFormat] = ()) -> None:
+        if not format_plan:
+            self.repo.write_range(values, self.data_range)
+            return
+        origin = parse_range(self.data_range)
+        start_col_index = self._column_letters_to_index(origin.start_col)
+        formats: list[tuple[str, NumberFormat]] = [
+            (
+                f"{self._column_index_to_letters(start_col_index + cell_format.col)}"
+                f"{origin.start_row + cell_format.row}",
+                cell_format.number_format,
+            )
+            for cell_format in format_plan
+        ]
+        end_row = origin.start_row + len(values) - 1
+        cell_range = f"{origin.sheet}!{origin.start_col}{origin.start_row}:{origin.end_col}{end_row}"
+        self.repo.write_range_with_format(values, cell_range, formats)
 
     def write_column(self, column: str, values: Sequence[Sequence[Any]], start_row: int = 2) -> None:
         cell_range = f"{self.sport}!{column}{start_row}:{column}"
@@ -110,9 +126,6 @@ class DfsSheetService:
     def write_vip_lineups(self, vip_lineups: list[dict[str, Any]]) -> None:
         if not vip_lineups:
             return
-        self._write_vip_lineups(vip_lineups)
-
-    def _write_vip_lineups(self, vip_lineups: list[dict[str, Any]]) -> None:
         vip_lineups.sort(key=lambda x: x["user"].lower())
         origin = parse_range(lineup_range_for_sport(self.sport))
         start_col_index = self._column_letters_to_index(origin.start_col)
