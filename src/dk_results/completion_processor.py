@@ -287,6 +287,7 @@ class CompletionProcessor:
         self,
         store: NotificationStore,
         *,
+        suppressed: bool,
         kind: str,
         prefix: str,
         sport_name: str,
@@ -295,24 +296,18 @@ class CompletionProcessor:
         dk_id: int,
         log_label: str,
         log_suffix: str = "",
-        require_confirmed_vip: bool = False,
     ) -> bool:
         """Presence-gated send + record for one announcement.
 
         Owns the identical ``suppressed -> send_message -> record_notification``
         dance shared by the warning, live, and completed milestones. The caller keeps
         the ``has_notification`` gate — its wording and elif branches differ per
-        milestone. ``require_confirmed_vip`` selects the stricter warning/live
-        policy (`_presence_blocks_start`) over the default, looser one used by
-        completed (`_presence_absent`). Returns ``True`` when presence suppressed
+        milestone — and also picks which presence policy applies: warning/live
+        pass `_presence_blocks_start`'s stricter verdict, completed passes
+        `_presence_absent`'s looser one. Returns ``True`` when presence suppressed
         the send, so a caller can short-circuit the rest of its loop iteration.
         """
         assert self._sender is not None
-        suppressed = (
-            self._presence_blocks_start(dk_id, start_date)
-            if require_confirmed_vip
-            else self._presence_absent(dk_id, start_date)
-        )
         if suppressed:
             logger.info(
                 "skipping %s notification for %s dk_id=%s%s; vip_presence suppressed",
@@ -376,6 +371,7 @@ class CompletionProcessor:
                     continue
                 self._announce_transition(
                     store,
+                    suppressed=self._presence_blocks_start(dk_id, str(start_date)),
                     kind=warning_key,
                     prefix=f"Contest starting soon ({warning_minutes}m)",
                     sport_name=sport_cls.name,
@@ -384,7 +380,6 @@ class CompletionProcessor:
                     dk_id=dk_id,
                     log_label="warning",
                     log_suffix=f" ({warning_minutes}m)",
-                    require_confirmed_vip=True,
                 )
 
     def _warning_schedule_for(self, sport_name: str) -> list[int]:
@@ -546,6 +541,7 @@ class CompletionProcessor:
             return
         self._announce_transition(
             store,
+            suppressed=self._presence_blocks_start(dk_id, str(start_date)),
             kind="live",
             prefix="Contest started",
             sport_name=sport_name,
@@ -553,7 +549,6 @@ class CompletionProcessor:
             start_date=str(start_date),
             dk_id=dk_id,
             log_label="live",
-            require_confirmed_vip=True,
         )
 
     def _announce_completed(self, store, dk_id, name, start_date, sport_name) -> None:
@@ -568,6 +563,7 @@ class CompletionProcessor:
         else:
             self._announce_transition(
                 store,
+                suppressed=self._presence_absent(dk_id, str(start_date)),
                 kind="completed",
                 prefix="Contest ended",
                 sport_name=sport_name,
