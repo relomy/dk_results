@@ -56,17 +56,13 @@ jobs:
       - name: Ty Check
         run: uv run ty check
 
-      - name: Radon Complexity Floor
-        run: |
-          output=$(uv run radon cc src -n D)
-          if [ -n "$output" ]; then
-            echo "$output"
-            echo "::error::radon found blocks graded D or worse; simplify before merging"
-            exit 1
-          fi
+      - name: Complexity Floor (xenon)
+        run: uv run xenon --max-absolute C src
 
-      - name: Radon Complexity Ratchet
-        run: uv run python .github/complexity_ratchet.py
+      - name: Complexity Ratchet
+        uses: relomy/complexity-ratchet@main
+        with:
+          python-command: "uv run python"
 
       - name: Pytest
         run: uv run pytest
