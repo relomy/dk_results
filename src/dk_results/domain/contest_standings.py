@@ -401,20 +401,39 @@ def parse_contest_standings(
     )
 
 
-# Column offset of "Salary" within a `Player.writeable` row, relative to the
-# row's own start. PGA/GOLF write a shorter row than other sports.
+def _is_pga_like(sport_name: str) -> bool:
+    return sport_name in ("PGA", "GOLF") or "PGA" in sport_name
+
+
+# Column offsets within a `Player.writeable` row, relative to the row's own
+# start. PGA/GOLF write a shorter row than other sports and have no Value
+# column at all: [pos, name, salary, own, fpts] vs.
+# [pos, name, team, matchup, salary, own, fpts, value].
 def _standings_salary_col(sport_name: str) -> int:
-    if sport_name in ("PGA", "GOLF") or "PGA" in sport_name:
-        return 2
-    return 4
+    return 2 if _is_pga_like(sport_name) else 4
+
+
+def _standings_own_col(sport_name: str) -> int:
+    return 3 if _is_pga_like(sport_name) else 5
+
+
+def _standings_pts_col(sport_name: str) -> int:
+    return 4 if _is_pga_like(sport_name) else 6
 
 
 def players_to_values(players: dict[str, Player], sport_name: str) -> tuple[list[list], list[CellFormat]]:
     """Return sheet-ready rows (sorted by ownership, zero-ownership filtered) and their format plan."""
     sorted_players = sorted(players, key=lambda x: players[x].ownership, reverse=True)
     values = [players[p].writeable(sport_name) for p in sorted_players if players[p].ownership > 0]
+    own_col = _standings_own_col(sport_name)
     salary_col = _standings_salary_col(sport_name)
-    format_plan = [
-        CellFormat(row=row, col=salary_col, number_format=NumberFormat.CURRENCY) for row in range(len(values))
-    ]
+    pts_col = _standings_pts_col(sport_name)
+    pga_like = _is_pga_like(sport_name)
+    format_plan = []
+    for row in range(len(values)):
+        format_plan.append(CellFormat(row=row, col=own_col, number_format=NumberFormat.PERCENT))
+        format_plan.append(CellFormat(row=row, col=salary_col, number_format=NumberFormat.CURRENCY))
+        format_plan.append(CellFormat(row=row, col=pts_col, number_format=NumberFormat.DECIMAL(1)))
+        if not pga_like:
+            format_plan.append(CellFormat(row=row, col=pts_col + 1, number_format=NumberFormat.DECIMAL(1)))
     return values, format_plan

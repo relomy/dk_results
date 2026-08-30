@@ -308,11 +308,15 @@ def test_players_to_values_format_plan_tags_salary_column():
     assert len(values) == 2
     # Player.writeable for non-PGA sports: [pos, name, team, matchup, salary, own, fpts, value]
     assert format_plan == [
+        CellFormat(row=0, col=5, number_format=NumberFormat.PERCENT),
         CellFormat(row=0, col=4, number_format=NumberFormat.CURRENCY),
+        CellFormat(row=0, col=6, number_format=NumberFormat.DECIMAL(1)),
+        CellFormat(row=0, col=7, number_format=NumberFormat.DECIMAL(1)),
+        CellFormat(row=1, col=5, number_format=NumberFormat.PERCENT),
         CellFormat(row=1, col=4, number_format=NumberFormat.CURRENCY),
+        CellFormat(row=1, col=6, number_format=NumberFormat.DECIMAL(1)),
+        CellFormat(row=1, col=7, number_format=NumberFormat.DECIMAL(1)),
     ]
-    for cell_format in format_plan:
-        assert values[cell_format.row][cell_format.col] == values[cell_format.row][4]
 
 
 def test_players_to_values_format_plan_uses_pga_salary_column():
@@ -329,7 +333,12 @@ def test_players_to_values_format_plan_uses_pga_salary_column():
     values, format_plan = players_to_values(standings.players, "PGA")
 
     assert values[0][2] == 9000
-    assert format_plan == [CellFormat(row=0, col=2, number_format=NumberFormat.CURRENCY)]
+    # Player.writeable for PGA/GOLF: [pos, name, salary, own, fpts] — no Value column.
+    assert format_plan == [
+        CellFormat(row=0, col=3, number_format=NumberFormat.PERCENT),
+        CellFormat(row=0, col=2, number_format=NumberFormat.CURRENCY),
+        CellFormat(row=0, col=4, number_format=NumberFormat.DECIMAL(1)),
+    ]
 
 
 class DummyShowdownSport:

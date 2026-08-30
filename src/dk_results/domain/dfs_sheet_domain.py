@@ -10,9 +10,13 @@ from .sport import get_lineup_range
 
 START_COL = "A"
 
-# Column offset of "Salary" within a VIP lineup block, relative to the
-# block's own top-left cell (see build_values_for_vip_lineup).
+# Column offsets within a VIP lineup block, relative to the block's own
+# top-left cell (see build_values_for_vip_lineup). Header order is
+# Pos, Name, Own, Salary, Pts, Value, RT Proj, Time, Stats.
+_VIP_LINEUP_OWN_COL = 2
 _VIP_LINEUP_SALARY_COL = 3
+_VIP_LINEUP_PTS_COL = 4
+_VIP_LINEUP_VALUE_COL = 5
 
 _RANGE_RE = re.compile(r"^(?P<sheet>[^!]+)!(?P<start_col>[A-Z]+)(?P<start_row>\d+)(?::(?P<end_col>[A-Z]+)\d*)?$")
 
@@ -85,6 +89,15 @@ def _salary_currency_format(row: int) -> CellFormat:
     return CellFormat(row=row, col=_VIP_LINEUP_SALARY_COL, number_format=NumberFormat.CURRENCY)
 
 
+def _vip_lineup_row_format(row: int) -> list[CellFormat]:
+    return [
+        CellFormat(row=row, col=_VIP_LINEUP_OWN_COL, number_format=NumberFormat.PERCENT),
+        CellFormat(row=row, col=_VIP_LINEUP_SALARY_COL, number_format=NumberFormat.CURRENCY),
+        CellFormat(row=row, col=_VIP_LINEUP_PTS_COL, number_format=NumberFormat.DECIMAL(1)),
+        CellFormat(row=row, col=_VIP_LINEUP_VALUE_COL, number_format=NumberFormat.DECIMAL(1)),
+    ]
+
+
 def build_values_for_vip_lineup(
     user: dict[str, Any], players: list[dict[str, Any]]
 ) -> tuple[list[list[Any]], list[CellFormat]]:
@@ -98,7 +111,7 @@ def build_values_for_vip_lineup(
             name += " 🔥"
         elif value_icon == "ice":
             name += " ❄️"
-        format_plan.append(_salary_currency_format(len(values)))
+        format_plan.extend(_vip_lineup_row_format(len(values)))
         values.append(
             [
                 player.get("pos", ""),
@@ -113,6 +126,7 @@ def build_values_for_vip_lineup(
             ]
         )
     format_plan.append(_salary_currency_format(len(values)))
+    format_plan.append(CellFormat(row=len(values), col=_VIP_LINEUP_PTS_COL, number_format=NumberFormat.DECIMAL(1)))
     values.append(
         [
             "rank",
