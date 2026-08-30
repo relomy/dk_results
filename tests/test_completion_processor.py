@@ -19,7 +19,7 @@ from dk_results.completion_processor import (
     _soft_finish_eligible,
     _soft_finish_event_key,
 )
-from dk_results.notifications.vip_presence import VIP_ABSENT, VIP_PRESENT, VIP_UNKNOWN
+from dk_results.notifications.vip_presence import VIP_ABSENT, VIP_PRESENT, VIP_UNKNOWN, VIP_UNKNOWN_CAPPED
 from dk_results.persistence.contestdatabase import ContestDatabase
 
 CONTESTS_TABLE_SQL = """
@@ -190,7 +190,7 @@ def test_live_milestone_announced_then_silent_on_second_run():
 
     results = FakeContestResults(details={1: _detail(status="LIVE", completed=0)})
     sender = RecordingSender()
-    processor = _make_processor(conn, results=results, sender=sender, presence=FakeVipPresence(VIP_UNKNOWN))
+    processor = _make_processor(conn, results=results, sender=sender, presence=FakeVipPresence(VIP_PRESENT))
 
     processor.run(conn)
     assert [m.split(":")[0] for m in sender.messages] == ["Contest started"]
@@ -304,7 +304,7 @@ def test_warning_announced_once_within_window_then_silent():
     sender = RecordingSender()
     config = _make_config(warning_schedules={"default": [25]})
     processor = _make_processor(
-        conn, results=results, sender=sender, presence=FakeVipPresence(VIP_UNKNOWN), config=config
+        conn, results=results, sender=sender, presence=FakeVipPresence(VIP_PRESENT), config=config
     )
 
     processor.run(conn)
@@ -331,6 +331,36 @@ def test_absent_verdict_suppresses_live_announcement():
 
     assert sender.messages == []
     assert presence.calls  # the policy consulted the oracle
+
+
+def test_unknown_verdict_suppresses_live_announcement():
+    """Warning/live require a *confirmed* VIP: plain ``unknown`` now suppresses."""
+    conn = _conn_with_table()
+    _insert_contest(conn, dk_id=1, name="Contest1", start_date="2024-01-01 00:00:00", status="UPCOMING")
+
+    results = FakeContestResults(details={1: _detail(status="LIVE", completed=0)})
+    sender = RecordingSender()
+    presence = FakeVipPresence(VIP_UNKNOWN)
+    processor = _make_processor(conn, results=results, sender=sender, presence=presence)
+
+    processor.run(conn)
+
+    assert sender.messages == []
+    assert presence.calls
+
+
+def test_unknown_capped_verdict_allows_live_announcement():
+    """A page-cap-limited scan is structural, not a resolved verdict: still announce."""
+    conn = _conn_with_table()
+    _insert_contest(conn, dk_id=1, name="Contest1", start_date="2024-01-01 00:00:00", status="UPCOMING")
+
+    results = FakeContestResults(details={1: _detail(status="LIVE", completed=0)})
+    sender = RecordingSender()
+    processor = _make_processor(conn, results=results, sender=sender, presence=FakeVipPresence(VIP_UNKNOWN_CAPPED))
+
+    processor.run(conn)
+
+    assert any(m.startswith("Contest started") for m in sender.messages)
 
 
 def test_unknown_verdict_allows_soft_finish():
