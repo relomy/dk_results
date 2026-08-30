@@ -60,9 +60,7 @@ jobs:
         run: uv run xenon --max-absolute C src
 
       - name: Complexity Ratchet
-        uses: relomy/complexity-ratchet@main
-        with:
-          python-command: "uv run python"
+        run: uv run complexity-ratchet --base origin/main --head HEAD
 
       - name: Pytest
         run: uv run pytest
