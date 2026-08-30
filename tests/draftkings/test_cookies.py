@@ -1,5 +1,7 @@
 import pickle
+from http.cookiejar import Cookie
 
+import pytest
 from requests.cookies import RequestsCookieJar
 
 from dk_results.draftkings import cookies as cookies_module
@@ -7,36 +9,106 @@ from dk_results.draftkings import cookies as cookies_module
 
 def test_get_rookie_cookies_pi_path(monkeypatch):
     monkeypatch.setenv("DK_PLATFORM", "pi")
-    monkeypatch.setenv("COOKIES_DB_PATH", "/tmp/chrome.db")
+    monkeypatch.setenv("COOKIES_DB_PATH", "/tmp/chromium/Profile 1/Cookies")
 
     captured = {}
 
-    def fake_chromium_based(db_path=None, domains=None):
-        captured["db_path"] = db_path
-        captured["domains"] = domains
-        return [{"name": "a", "value": "1"}]
+    def fake_run(args, **kwargs):
+        captured["args"] = args
+        captured["kwargs"] = kwargs
+        cookie_path = args[args.index("--cookies") + 1]
+        with open(cookie_path, "w", encoding="utf-8") as fp:
+            fp.write("# Netscape HTTP Cookie File\n")
+            fp.write(".draftkings.com\tTRUE\t/\tTRUE\t0\ta\t1\n")
+        return type("Result", (), {"returncode": 0})()
 
-    monkeypatch.setattr(cookies_module, "chromium_based", fake_chromium_based)
-    monkeypatch.setattr(cookies_module, "chrome", lambda domains=None: [])
+    monkeypatch.setattr(cookies_module.subprocess, "run", fake_run)
 
     cookies = cookies_module.get_rookie_cookies()
-    assert cookies == [{"name": "a", "value": "1"}]
-    assert captured["db_path"] == "/tmp/chrome.db"
+    assert cookies == [
+        {
+            "name": "a",
+            "value": "1",
+            "domain": ".draftkings.com",
+            "path": "/",
+            "expires": None,
+            "secure": True,
+        }
+    ]
+    assert captured["args"][:3] == [cookies_module.sys.executable, "-m", "yt_dlp"]
+    assert "chromium:/tmp/chromium/Profile 1" in captured["args"]
 
 
 def test_get_rookie_cookies_fallback(monkeypatch):
     monkeypatch.setenv("DK_PLATFORM", "mac")
     monkeypatch.delenv("COOKIES_DB_PATH", raising=False)
 
-    monkeypatch.setattr(cookies_module, "chromium_based", lambda **_kwargs: [])
-    monkeypatch.setattr(
-        cookies_module,
-        "chrome",
-        lambda domains=None: [{"name": "b", "value": "2"}],
-    )
+    def fake_run(args, **_kwargs):
+        cookie_path = args[args.index("--cookies") + 1]
+        with open(cookie_path, "w", encoding="utf-8") as fp:
+            fp.write("# Netscape HTTP Cookie File\n")
+            fp.write(".example.com\tTRUE\t/\tTRUE\t0\tb\t2\n")
+        return type("Result", (), {"returncode": 0})()
+
+    monkeypatch.setattr(cookies_module.subprocess, "run", fake_run)
 
     cookies = cookies_module.get_rookie_cookies(["example.com"])
-    assert cookies == [{"name": "b", "value": "2"}]
+    assert cookies == [
+        {
+            "name": "b",
+            "value": "2",
+            "domain": ".example.com",
+            "path": "/",
+            "expires": None,
+            "secure": True,
+        }
+    ]
+
+
+@pytest.mark.parametrize(
+    ("stderr", "message"),
+    [
+        ("ERROR: could not find chromium cookies database", "browser cookie database was not found"),
+        ("ERROR: cannot decrypt browser cookies; keyring unavailable", "browser cookies could not be decrypted"),
+    ],
+)
+def test_get_rookie_cookies_reports_actionable_export_failure(monkeypatch, stderr, message):
+    result = type("Result", (), {"returncode": 1, "stderr": stderr})()
+
+    monkeypatch.setattr(cookies_module.subprocess, "run", lambda *args, **kwargs: result)
+
+    with pytest.raises(RuntimeError, match=message):
+        cookies_module.get_rookie_cookies()
+
+
+def test_cookie_to_dict():
+    cookie = Cookie(
+        version=0,
+        name="a",
+        value="1",
+        port=None,
+        port_specified=False,
+        domain=".example.com",
+        domain_specified=True,
+        domain_initial_dot=True,
+        path="/",
+        path_specified=True,
+        secure=True,
+        expires=None,
+        discard=True,
+        comment=None,
+        comment_url=None,
+        rest={},
+        rfc2109=False,
+    )
+    assert cookies_module._cookie_to_dict(cookie) == {
+        "name": "a",
+        "value": "1",
+        "domain": ".example.com",
+        "path": "/",
+        "expires": None,
+        "secure": True,
+    }
 
 
 def test_cookies_to_dict_and_jar():
