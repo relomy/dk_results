@@ -10,8 +10,13 @@ constructed inline. The work list (incomplete / live / next-upcoming contests)
 is read through `ContestDatabase`; the only external DraftKings edge is
 `ContestResultsPort` (per ADR 0001, the completion workflow's own DK slice).
 
-The suppression policy lives here: an ``absent`` presence verdict suppresses an
-announcement, ``unknown`` allows it. `VipPresence` stays a pure verdict
+The suppression policy lives here, and it differs by milestone. Warning and
+live require a *confirmed* VIP: ``present`` announces, and so does
+``unknown_capped`` (the field is too large to fully scan, a structural fact
+rather than a resolved verdict); every other outcome — ``absent`` or a
+plain ``unknown`` — suppresses the send, with no retry. Completed and
+soft-finish keep the original, looser policy: only ``absent`` suppresses,
+and any ``unknown`` allows the send. `VipPresence` stays a pure verdict
 provider.
 """
 
@@ -27,7 +32,13 @@ from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from typing import Any, Protocol
 
 from dk_results.domain.sport import Sport
-from dk_results.notifications.vip_presence import VIP_ABSENT, ContestResultsPort, vip_key
+from dk_results.notifications.vip_presence import (
+    VIP_ABSENT,
+    VIP_PRESENT,
+    VIP_UNKNOWN_CAPPED,
+    ContestResultsPort,
+    vip_key,
+)
 from dk_results.persistence.contestdatabase import ContestDatabase
 from dk_results.persistence.notification_store import NotificationStore
 from dk_results.sport_processor import BonusSenderPort
@@ -204,8 +215,9 @@ class CompletionProcessor:
     Idempotent: every announcement is recorded in `NotificationStore` and never
     sent twice. Contest-state sync runs even without a sender.
 
-    Suppression policy: a VIP-presence verdict of ``absent`` suppresses an
-    announcement; ``unknown`` allows it.
+    Suppression policy: warning and live require a confirmed VIP — see
+    `_presence_blocks_start`. Completed and soft-finish keep the original
+    policy — see `_presence_absent`.
     """
 
     def __init__(
@@ -248,10 +260,28 @@ class CompletionProcessor:
     # ── Suppression policy ──────────────────────────────────────────────────
 
     def _presence_absent(self, dk_id: int, start_date: str) -> bool:
-        """Whether presence is ``absent`` (suppress); ``unknown`` allows the send."""
+        """Whether presence is ``absent`` (suppress); ``unknown`` allows the send.
+
+        The original, looser policy — still used by completed and soft-finish.
+        """
         if self._presence is None:
             return False
         return self._presence.verdict(dk_id, start_date, self._config.vips) == VIP_ABSENT
+
+    def _presence_blocks_start(self, dk_id: int, start_date: str) -> bool:
+        """Stricter gate for warning/live: require a confirmed VIP to announce.
+
+        Only ``present`` and ``unknown_capped`` (a field too large to fully
+        scan — structural, not a resolved verdict) let the send through.
+        ``absent`` and any other ``unknown`` suppress, with no retry: a later,
+        independent check (e.g. the next warning-schedule entry) gets its own
+        fresh verdict, but nothing here holds a contest in limbo waiting for
+        one.
+        """
+        if self._presence is None:
+            return False
+        verdict = self._presence.verdict(dk_id, start_date, self._config.vips)
+        return verdict not in (VIP_PRESENT, VIP_UNKNOWN_CAPPED)
 
     def _announce_transition(
         self,
@@ -265,19 +295,27 @@ class CompletionProcessor:
         dk_id: int,
         log_label: str,
         log_suffix: str = "",
+        require_confirmed_vip: bool = False,
     ) -> bool:
         """Presence-gated send + record for one announcement.
 
-        Owns the identical ``presence_absent -> send_message -> record_notification``
+        Owns the identical ``suppressed -> send_message -> record_notification``
         dance shared by the warning, live, and completed milestones. The caller keeps
         the ``has_notification`` gate — its wording and elif branches differ per
-        milestone. Returns ``True`` when an ``absent`` presence verdict suppressed the
-        send, so a caller can short-circuit the rest of its loop iteration.
+        milestone. ``require_confirmed_vip`` selects the stricter warning/live
+        policy (`_presence_blocks_start`) over the default, looser one used by
+        completed (`_presence_absent`). Returns ``True`` when presence suppressed
+        the send, so a caller can short-circuit the rest of its loop iteration.
         """
         assert self._sender is not None
-        if self._presence_absent(dk_id, start_date):
+        suppressed = (
+            self._presence_blocks_start(dk_id, start_date)
+            if require_confirmed_vip
+            else self._presence_absent(dk_id, start_date)
+        )
+        if suppressed:
             logger.info(
-                "skipping %s notification for %s dk_id=%s%s; vip_presence=absent",
+                "skipping %s notification for %s dk_id=%s%s; vip_presence suppressed",
                 log_label,
                 sport_name,
                 dk_id,
@@ -346,6 +384,7 @@ class CompletionProcessor:
                     dk_id=dk_id,
                     log_label="warning",
                     log_suffix=f" ({warning_minutes}m)",
+                    require_confirmed_vip=True,
                 )
 
     def _warning_schedule_for(self, sport_name: str) -> list[int]:
@@ -514,6 +553,7 @@ class CompletionProcessor:
             start_date=str(start_date),
             dk_id=dk_id,
             log_label="live",
+            require_confirmed_vip=True,
         )
 
     def _announce_completed(self, store, dk_id, name, start_date, sport_name) -> None:
