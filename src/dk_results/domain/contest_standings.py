@@ -5,6 +5,9 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Any, Type
 
+from dfs_common.sheets import NumberFormat
+
+from .dfs_sheet_domain import CellFormat
 from .lineup import Lineup, LockedSlot, normalize_name, parse_lineup_string
 from .player import Player
 from .sport import Sport
@@ -398,7 +401,20 @@ def parse_contest_standings(
     )
 
 
-def players_to_values(players: dict[str, Player], sport_name: str) -> list[list]:
-    """Return sheet-ready rows sorted by ownership, filtering out zero-ownership players."""
+# Column offset of "Salary" within a `Player.writeable` row, relative to the
+# row's own start. PGA/GOLF write a shorter row than other sports.
+def _standings_salary_col(sport_name: str) -> int:
+    if sport_name in ("PGA", "GOLF") or "PGA" in sport_name:
+        return 2
+    return 4
+
+
+def players_to_values(players: dict[str, Player], sport_name: str) -> tuple[list[list], list[CellFormat]]:
+    """Return sheet-ready rows (sorted by ownership, zero-ownership filtered) and their format plan."""
     sorted_players = sorted(players, key=lambda x: players[x].ownership, reverse=True)
-    return [players[p].writeable(sport_name) for p in sorted_players if players[p].ownership > 0]
+    values = [players[p].writeable(sport_name) for p in sorted_players if players[p].ownership > 0]
+    salary_col = _standings_salary_col(sport_name)
+    format_plan = [
+        CellFormat(row=row, col=salary_col, number_format=NumberFormat.CURRENCY) for row in range(len(values))
+    ]
+    return values, format_plan
