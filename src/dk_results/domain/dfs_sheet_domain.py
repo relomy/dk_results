@@ -73,11 +73,23 @@ def lineup_range_for_sport(sport: str) -> str:
     return f"{sport}!{lineup_range}"
 
 
+VIP_LINEUP_HEADER_ROW = ["Pos", "Name", "Own", "Salary", "Pts", "Value", "RT Proj", "Time", "Stats"]
+
+# Width of a VIP lineup block's widest row. Callers that pad separator rows
+# between blocks derive the width from here so it can't drift out of sync
+# with the columns build_values_for_vip_lineup actually writes.
+VIP_LINEUP_ROW_WIDTH = len(VIP_LINEUP_HEADER_ROW)
+
+
+def _salary_currency_format(row: int) -> CellFormat:
+    return CellFormat(row=row, col=_VIP_LINEUP_SALARY_COL, number_format=NumberFormat.CURRENCY)
+
+
 def build_values_for_vip_lineup(
     user: dict[str, Any], players: list[dict[str, Any]]
 ) -> tuple[list[list[Any]], list[CellFormat]]:
     values: list[list[Any]] = [[user["user"], None, "PMR", user["pmr"], None, None, None, None]]
-    values.append(["Pos", "Name", "Own", "Salary", "Pts", "Value", "RT Proj", "Time", "Stats"])
+    values.append(list(VIP_LINEUP_HEADER_ROW))
     format_plan: list[CellFormat] = []
     for player in players:
         name = player.get("name", "") or ""
@@ -86,7 +98,7 @@ def build_values_for_vip_lineup(
             name += " 🔥"
         elif value_icon == "ice":
             name += " ❄️"
-        format_plan.append(CellFormat(row=len(values), col=_VIP_LINEUP_SALARY_COL, number_format=NumberFormat.CURRENCY))
+        format_plan.append(_salary_currency_format(len(values)))
         values.append(
             [
                 player.get("pos", ""),
@@ -100,7 +112,7 @@ def build_values_for_vip_lineup(
                 player.get("stats", ""),
             ]
         )
-    format_plan.append(CellFormat(row=len(values), col=_VIP_LINEUP_SALARY_COL, number_format=NumberFormat.CURRENCY))
+    format_plan.append(_salary_currency_format(len(values)))
     values.append(
         [
             "rank",

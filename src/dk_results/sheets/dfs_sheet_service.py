@@ -6,6 +6,7 @@ from typing import Any, Sequence
 from dfs_common.sheets import NumberFormat
 
 from dk_results.domain.dfs_sheet_domain import (
+    VIP_LINEUP_ROW_WIDTH,
     build_values_for_vip_lineup,
     data_range_for_sport,
     header_range_for_sport,
@@ -14,12 +15,6 @@ from dk_results.domain.dfs_sheet_domain import (
 )
 
 from .dfs_sheet_repository import DfsSheetRepository
-
-# Width of a VIP lineup block's widest row (the "Pos Name Own Salary Pts
-# Value RT Proj Time Stats" header row). The blank row separating blocks is
-# padded to this width so every row in the write stays wide enough for the
-# Salary column's format range to resolve against.
-_VIP_LINEUP_ROW_WIDTH = 9
 
 
 class DfsSheetService:
@@ -128,7 +123,7 @@ class DfsSheetService:
                 col_letters = self._column_index_to_letters(start_col_index + cell_format.col)
                 row_number = origin.start_row + block_row_offset + cell_format.row
                 all_formats.append((f"{col_letters}{row_number}", cell_format.number_format))
-            values.append([None] * _VIP_LINEUP_ROW_WIDTH)
+            values.append([None] * VIP_LINEUP_ROW_WIDTH)
             all_lineup_values.extend(values)
 
         end_row = origin.start_row + len(all_lineup_values) - 1

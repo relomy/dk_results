@@ -2,11 +2,21 @@ from __future__ import annotations
 
 import datetime
 
-from dfs_common.sheets import SheetClient
+from dfs_common.sheets import NumberFormat, SheetClient
 
 from dk_results.sheets.dfs_sheet_repository import DfsSheetRepository
 from dk_results.sheets.dfs_sheet_service import DfsSheetService
 from dk_results.sheets.sheets_service import build_dfs_sheet_service
+
+
+class RecordingRepo:
+    """Records calls to write_range_with_format without exercising SheetClient/Sheets API internals."""
+
+    def __init__(self):
+        self.write_range_with_format_calls = []
+
+    def write_range_with_format(self, values, cell_range, formats):
+        self.write_range_with_format_calls.append((values, cell_range, formats))
 
 
 class FakeService:
@@ -126,9 +136,9 @@ def test_service_header_writes():
     assert "NBA!X25:AC35" in ranges
 
 
-def test_write_vip_lineups_writes_range():
-    sheets_metadata = [{"properties": {"title": "NBA", "sheetId": 7, "gridProperties": {"columnCount": 30}}}]
-    sheet, service = _make_service("NBA", sheets_metadata=sheets_metadata)
+def test_write_vip_lineups_writes_values_with_format():
+    repo = RecordingRepo()
+    sheet = DfsSheetService(repo, "NBA")
 
     sheet.write_vip_lineups(
         [
@@ -140,22 +150,18 @@ def test_write_vip_lineups_writes_range():
         ]
     )
 
-    assert len(service.batch_updates) == 1
-    request = service.batch_updates[0]["requests"][0]["updateCells"]
+    assert len(repo.write_range_with_format_calls) == 1
+    values, cell_range, formats = repo.write_range_with_format_calls[0]
     # Block has no players: user row (3), header row (4), footer row (5),
     # blank separator (6) -> NBA!J3:W6.
-    assert request["range"] == {
-        "sheetId": 7,
-        "startRowIndex": 2,
-        "endRowIndex": 6,
-        "startColumnIndex": 9,
-        "endColumnIndex": 23,
-    }
+    assert cell_range == "NBA!J3:W6"
+    assert len(values) == 4
+    assert formats == [("M5", NumberFormat.CURRENCY)]
 
 
-def test_write_vip_lineups_applies_currency_format_to_salary_cells():
-    sheets_metadata = [{"properties": {"title": "NBA", "sheetId": 7, "gridProperties": {"columnCount": 30}}}]
-    sheet, service = _make_service("NBA", sheets_metadata=sheets_metadata)
+def test_write_vip_lineups_translates_format_plan_to_absolute_ranges():
+    repo = RecordingRepo()
+    sheet = DfsSheetService(repo, "NBA")
 
     sheet.write_vip_lineups(
         [
@@ -172,22 +178,24 @@ def test_write_vip_lineups_applies_currency_format_to_salary_cells():
         ]
     )
 
-    assert len(service.batch_updates) == 1
-    request = service.batch_updates[0]["requests"][0]["updateCells"]
+    assert len(repo.write_range_with_format_calls) == 1
+    values, cell_range, formats = repo.write_range_with_format_calls[0]
 
     # Rows: 0=user(J3), 1=header(J4), 2=Alpha(J5), 3=footer(J6), 4=blank(J7).
     # Salary is column offset 3 from the block's start column (J) -> M.
-    header_salary_cell = request["rows"][1]["values"][3]
-    assert "userEnteredFormat" not in header_salary_cell
+    assert cell_range == "NBA!J3:W7"
+    assert formats == [("M5", NumberFormat.CURRENCY), ("M6", NumberFormat.CURRENCY)]
+    assert values[2][3] == 8000  # Alpha's Salary value
+    assert values[3][3] == 12000  # footer's remaining-salary value
 
-    currency_format = {"numberFormat": {"type": "NUMBER", "pattern": "$#,##0"}}
-    alpha_salary_cell = request["rows"][2]["values"][3]
-    assert alpha_salary_cell["userEnteredValue"] == {"numberValue": 8000}
-    assert alpha_salary_cell["userEnteredFormat"] == currency_format
 
-    footer_salary_cell = request["rows"][3]["values"][3]
-    assert footer_salary_cell["userEnteredValue"] == {"numberValue": 12000}
-    assert footer_salary_cell["userEnteredFormat"] == currency_format
+def test_write_vip_lineups_with_no_lineups_is_a_no_op():
+    repo = RecordingRepo()
+    sheet = DfsSheetService(repo, "NBA")
+
+    sheet.write_vip_lineups([])
+
+    assert repo.write_range_with_format_calls == []
 
 
 def test_add_train_info_expands_range_for_wide_rows():
