@@ -246,7 +246,7 @@ wheels = [
 [[package]]
 name = "dfs-common"
 version = "0.1.2"
-source = { git = "https://github.com/relomy/dfs-common?branch=main#f28f262074153e6d64d9280ed751454126c7cbfa" }
+source = { git = "https://github.com/relomy/dfs-common?branch=main#1fd4189d390decf3706c85c84ed6f1939d634b09" }
 dependencies = [
     { name = "cryptography" },
     { name = "google-api-python-client" },

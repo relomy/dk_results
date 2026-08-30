@@ -3,7 +3,7 @@
 from collections.abc import Sequence
 from typing import Any
 
-from dfs_common.sheets import SheetClient
+from dfs_common.sheets import NumberFormat, SheetClient
 
 
 class DfsSheetRepository:
@@ -15,6 +15,19 @@ class DfsSheetRepository:
 
     def write_range(self, values: Sequence[Sequence[Any]], cell_range: str) -> None:
         self._client.write_values([list(row) for row in values], cell_range, value_input_option="USER_ENTERED")
+
+    def write_range_with_format(
+        self,
+        values: Sequence[Sequence[Any]],
+        cell_range: str,
+        formats: Sequence[tuple[str, NumberFormat]],
+    ) -> None:
+        self._client.write_values_with_format(
+            [list(row) for row in values],
+            cell_range,
+            list(formats),
+            value_input_option="USER_ENTERED",
+        )
 
     def clear_range(self, cell_range: str) -> None:
         self._client.clear_range(cell_range)

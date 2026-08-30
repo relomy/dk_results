@@ -2,11 +2,21 @@ from __future__ import annotations
 
 import datetime
 
-from dfs_common.sheets import SheetClient
+from dfs_common.sheets import NumberFormat, SheetClient
 
 from dk_results.sheets.dfs_sheet_repository import DfsSheetRepository
 from dk_results.sheets.dfs_sheet_service import DfsSheetService
 from dk_results.sheets.sheets_service import build_dfs_sheet_service
+
+
+class RecordingRepo:
+    """Records calls to write_range_with_format without exercising SheetClient/Sheets API internals."""
+
+    def __init__(self):
+        self.write_range_with_format_calls = []
+
+    def write_range_with_format(self, values, cell_range, formats):
+        self.write_range_with_format_calls.append((values, cell_range, formats))
 
 
 class FakeService:
@@ -58,8 +68,8 @@ class FakeService:
         raise AssertionError("Unexpected action")
 
 
-def _make_service(sport, values_by_range=None):
-    service = FakeService(values_by_range=values_by_range)
+def _make_service(sport, values_by_range=None, sheets_metadata=None):
+    service = FakeService(values_by_range=values_by_range, sheets_metadata=sheets_metadata)
     client = SheetClient(spreadsheet_id="sheet-id", service=service)
     repo = DfsSheetRepository(client)
     return DfsSheetService(repo, sport), service
@@ -117,12 +127,9 @@ def test_service_header_writes():
     assert "NBA!X25:AC35" in ranges
 
 
-def test_write_vip_lineups_writes_range():
-    values_by_range = {
-        "NBA!A1:H1": [["Name"]],
-        "NBA!A2:H": [["Alice"]],
-    }
-    sheet, service = _make_service("NBA", values_by_range=values_by_range)
+def test_write_vip_lineups_writes_values_with_format():
+    repo = RecordingRepo()
+    sheet = DfsSheetService(repo, "NBA")
 
     sheet.write_vip_lineups(
         [
@@ -134,7 +141,52 @@ def test_write_vip_lineups_writes_range():
         ]
     )
 
-    assert service.updated[0][0] == "NBA!J3:W999"
+    assert len(repo.write_range_with_format_calls) == 1
+    values, cell_range, formats = repo.write_range_with_format_calls[0]
+    # Block has no players: user row (3), header row (4), footer row (5),
+    # blank separator (6) -> NBA!J3:W6.
+    assert cell_range == "NBA!J3:W6"
+    assert len(values) == 4
+    assert formats == [("M5", NumberFormat.CURRENCY)]
+
+
+def test_write_vip_lineups_translates_format_plan_to_absolute_ranges():
+    repo = RecordingRepo()
+    sheet = DfsSheetService(repo, "NBA")
+
+    sheet.write_vip_lineups(
+        [
+            {
+                "user": "vipA",
+                "pmr": 1,
+                "rank": 1,
+                "salary": 12000,
+                "pts": 100,
+                "players": [
+                    {"pos": "PG", "name": "Alpha", "ownership": 0.1, "salary": 8000, "pts": 50},
+                ],
+            }
+        ]
+    )
+
+    assert len(repo.write_range_with_format_calls) == 1
+    values, cell_range, formats = repo.write_range_with_format_calls[0]
+
+    # Rows: 0=user(J3), 1=header(J4), 2=Alpha(J5), 3=footer(J6), 4=blank(J7).
+    # Salary is column offset 3 from the block's start column (J) -> M.
+    assert cell_range == "NBA!J3:W7"
+    assert formats == [("M5", NumberFormat.CURRENCY), ("M6", NumberFormat.CURRENCY)]
+    assert values[2][3] == 8000  # Alpha's Salary value
+    assert values[3][3] == 12000  # footer's remaining-salary value
+
+
+def test_write_vip_lineups_with_no_lineups_is_a_no_op():
+    repo = RecordingRepo()
+    sheet = DfsSheetService(repo, "NBA")
+
+    sheet.write_vip_lineups([])
+
+    assert repo.write_range_with_format_calls == []
 
 
 def test_add_train_info_expands_range_for_wide_rows():
