@@ -16,6 +16,7 @@ class FakeService:
         self.updated = []
         self.cleared = []
         self.gets = []
+        self.batch_updates = []
         self._action = None
         self._range = None
         self._body = None
@@ -37,6 +38,11 @@ class FakeService:
         self._body = body
         return self
 
+    def batchUpdate(self, spreadsheetId=None, body=None):
+        self._action = "batchUpdate"
+        self._body = body
+        return self
+
     def clear(self, spreadsheetId=None, range=None, body=None):
         self._action = "clear"
         self._range = range
@@ -52,14 +58,17 @@ class FakeService:
             self.updated.append((self._range, self._body))
             updated_cells = sum(len(row) for row in (self._body or {}).get("values", []))
             return {"updatedCells": updated_cells}
+        if self._action == "batchUpdate":
+            self.batch_updates.append(self._body)
+            return {}
         if self._action == "clear":
             self.cleared.append(self._range)
             return {"clearedRange": self._range}
         raise AssertionError("Unexpected action")
 
 
-def _make_service(sport, values_by_range=None):
-    service = FakeService(values_by_range=values_by_range)
+def _make_service(sport, values_by_range=None, sheets_metadata=None):
+    service = FakeService(values_by_range=values_by_range, sheets_metadata=sheets_metadata)
     client = SheetClient(spreadsheet_id="sheet-id", service=service)
     repo = DfsSheetRepository(client)
     return DfsSheetService(repo, sport), service
@@ -118,11 +127,8 @@ def test_service_header_writes():
 
 
 def test_write_vip_lineups_writes_range():
-    values_by_range = {
-        "NBA!A1:H1": [["Name"]],
-        "NBA!A2:H": [["Alice"]],
-    }
-    sheet, service = _make_service("NBA", values_by_range=values_by_range)
+    sheets_metadata = [{"properties": {"title": "NBA", "sheetId": 7, "gridProperties": {"columnCount": 30}}}]
+    sheet, service = _make_service("NBA", sheets_metadata=sheets_metadata)
 
     sheet.write_vip_lineups(
         [
@@ -134,7 +140,54 @@ def test_write_vip_lineups_writes_range():
         ]
     )
 
-    assert service.updated[0][0] == "NBA!J3:W999"
+    assert len(service.batch_updates) == 1
+    request = service.batch_updates[0]["requests"][0]["updateCells"]
+    # Block has no players: user row (3), header row (4), footer row (5),
+    # blank separator (6) -> NBA!J3:W6.
+    assert request["range"] == {
+        "sheetId": 7,
+        "startRowIndex": 2,
+        "endRowIndex": 6,
+        "startColumnIndex": 9,
+        "endColumnIndex": 23,
+    }
+
+
+def test_write_vip_lineups_applies_currency_format_to_salary_cells():
+    sheets_metadata = [{"properties": {"title": "NBA", "sheetId": 7, "gridProperties": {"columnCount": 30}}}]
+    sheet, service = _make_service("NBA", sheets_metadata=sheets_metadata)
+
+    sheet.write_vip_lineups(
+        [
+            {
+                "user": "vipA",
+                "pmr": 1,
+                "rank": 1,
+                "salary": 12000,
+                "pts": 100,
+                "players": [
+                    {"pos": "PG", "name": "Alpha", "ownership": 0.1, "salary": 8000, "pts": 50},
+                ],
+            }
+        ]
+    )
+
+    assert len(service.batch_updates) == 1
+    request = service.batch_updates[0]["requests"][0]["updateCells"]
+
+    # Rows: 0=user(J3), 1=header(J4), 2=Alpha(J5), 3=footer(J6), 4=blank(J7).
+    # Salary is column offset 3 from the block's start column (J) -> M.
+    header_salary_cell = request["rows"][1]["values"][3]
+    assert "userEnteredFormat" not in header_salary_cell
+
+    currency_format = {"numberFormat": {"type": "NUMBER", "pattern": "$#,##0"}}
+    alpha_salary_cell = request["rows"][2]["values"][3]
+    assert alpha_salary_cell["userEnteredValue"] == {"numberValue": 8000}
+    assert alpha_salary_cell["userEnteredFormat"] == currency_format
+
+    footer_salary_cell = request["rows"][3]["values"][3]
+    assert footer_salary_cell["userEnteredValue"] == {"numberValue": 12000}
+    assert footer_salary_cell["userEnteredFormat"] == currency_format
 
 
 def test_add_train_info_expands_range_for_wide_rows():
