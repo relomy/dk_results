@@ -169,7 +169,7 @@ def test_parse_scorecard_basic():
     assert len(players) == 1
     p = players[0]
     assert p.name == "Player A"
-    assert p.pts == "10.5"
+    assert p.pts == 10.5
     assert p.ownership == 0.5
     assert total == 0
 
@@ -179,7 +179,7 @@ def test_parse_scorecard_uses_salary_map():
     players, total = _parse_scorecard(sc, {"Player A": 6000})
     assert players[0].salary == 6000
     assert total == 6000
-    assert players[0].value == f"{20.0 / 6.0:.2f}"
+    assert players[0].value == 20.0 / 6.0
 
 
 def test_parse_scorecard_uses_inline_salary_when_no_map():
@@ -204,6 +204,7 @@ def test_parse_scorecard_no_entries_returns_empty():
 def test_parse_scorecard_invalid_score_value_clears_value():
     sc = _scorecard_response(_scorecard_entry(score="bad", rt_proj="bad"))
     players, _ = _parse_scorecard(sc, {"Player A": 4000})
+    assert players[0].pts == "bad"
     assert players[0].value == ""
     assert players[0].rt_proj == "bad"
 
@@ -264,6 +265,18 @@ def test_fetch_vip_lineups_worker_exception_swallowed():
 
 
 # ── fetch_vip_lineups — leaderboard path ─────────────────────────────────────
+
+
+def test_fetch_vip_lineups_entry_path_lineup_pts_is_numeric():
+    sc = _scorecard_response(_scorecard_entry(score="15", percent_drafted=40))
+    http = _FakeHttp(scorecard=sc)
+    result = fetch_vip_lineups(
+        1,
+        2,
+        http,
+        vip_entries={"Alice": {"entry_key": "ek1", "pmr": "5", "rank": "1", "pts": "300"}},
+    )
+    assert result[0].pts == 300.0
 
 
 def test_fetch_vip_lineups_leaderboard_path_filters_by_vip_set():

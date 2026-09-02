@@ -198,7 +198,7 @@ def test_write_vip_lineups_writes_values_with_format():
     # blank separator (6) -> NBA!J3:W6.
     assert cell_range == "NBA!J3:W6"
     assert len(values) == 4
-    assert formats == [("M5", NumberFormat.CURRENCY)]
+    assert formats == [("M5", NumberFormat.CURRENCY), ("N5", NumberFormat.DECIMAL(1))]
 
 
 def test_write_vip_lineups_translates_format_plan_to_absolute_ranges():
@@ -224,9 +224,17 @@ def test_write_vip_lineups_translates_format_plan_to_absolute_ranges():
     values, cell_range, formats = repo.write_range_with_format_calls[0]
 
     # Rows: 0=user(J3), 1=header(J4), 2=Alpha(J5), 3=footer(J6), 4=blank(J7).
-    # Salary is column offset 3 from the block's start column (J) -> M.
+    # Column offsets from the block's start column (J): Own=2(L), Salary=3(M),
+    # Pts=4(N), Value=5(O). The footer row has no Value cell.
     assert cell_range == "NBA!J3:W7"
-    assert formats == [("M5", NumberFormat.CURRENCY), ("M6", NumberFormat.CURRENCY)]
+    assert formats == [
+        ("L5", NumberFormat.PERCENT),
+        ("M5", NumberFormat.CURRENCY),
+        ("N5", NumberFormat.DECIMAL(1)),
+        ("O5", NumberFormat.DECIMAL(1)),
+        ("M6", NumberFormat.CURRENCY),
+        ("N6", NumberFormat.DECIMAL(1)),
+    ]
     assert values[2][3] == 8000  # Alpha's Salary value
     assert values[3][3] == 12000  # footer's remaining-salary value
 

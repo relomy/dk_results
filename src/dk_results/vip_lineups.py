@@ -32,9 +32,9 @@ class DkHttpPort(Protocol):
 class VipPlayer:
     pos: str
     name: str
-    pts: str
+    pts: float | str
     salary: int | None
-    value: str
+    value: float | str
     ownership: float | str
     rt_proj: str
     pregame_proj: str | float
@@ -62,7 +62,7 @@ class VipPlayer:
 class VipLineup:
     user: str
     rank: str
-    pts: str
+    pts: float | str
     pmr: str
     entry_key: str
     total_salary: int
@@ -145,6 +145,26 @@ def _lookup_salary(player_name: str, player_salary_map: dict[str, int] | None) -
 # ── Scorecard parsing ─────────────────────────────────────────────────────────
 
 
+def _try_float(raw: Any) -> float | None:
+    try:
+        return float(raw)
+    except (TypeError, ValueError):
+        return None
+
+
+def _pts_and_value(pts_raw: Any, salary_val: int | None) -> tuple[float | str, float | str]:
+    pts_val = _try_float(pts_raw)
+    pts: float | str = pts_val if pts_val is not None else pts_raw
+
+    value: float | str = ""
+    if salary_val is not None and pts_val:
+        try:
+            value = pts_val / (salary_val / 1000)
+        except ZeroDivisionError:
+            pass
+    return pts, value
+
+
 def _parse_scorecard(
     scorecard_js: dict[str, Any],
     player_salary_map: dict[str, int] | None,
@@ -174,15 +194,7 @@ def _parse_scorecard(
         if salary_val is not None:
             total_salary += salary_val
 
-        pts_raw = sc.get("score", "") or ""
-        value = ""
-        if salary_val is not None:
-            try:
-                pts_val = float(pts_raw)
-                if pts_val:
-                    value = f"{pts_val / (salary_val / 1000):.2f}"
-            except (TypeError, ValueError, ZeroDivisionError):
-                pass
+        pts, value = _pts_and_value(sc.get("score", "") or "", salary_val)
 
         rt_proj_raw = projection.get("realTimeProjection", "")
         rt_proj = ""
@@ -196,7 +208,7 @@ def _parse_scorecard(
             VipPlayer(
                 pos=sc.get("rosterPosition", "") or "",
                 name=display_name,
-                pts=str(pts_raw),
+                pts=pts,
                 salary=salary_val,
                 value=value,
                 ownership=ownership,
@@ -212,6 +224,11 @@ def _parse_scorecard(
 
 
 # ── Worker ────────────────────────────────────────────────────────────────────
+
+
+def _coerce_pts(pts_raw: Any) -> float | str:
+    pts_val = _try_float(pts_raw)
+    return pts_val if pts_val is not None else str(pts_raw)
 
 
 def _fetch_one(
@@ -235,7 +252,7 @@ def _fetch_one(
     return VipLineup(
         user=user_dict.get("userName", ""),
         rank=str(user_dict.get("rank", "")),
-        pts=str(user_dict.get("fantasyPoints", "") or user_dict.get("pts", "")),
+        pts=_coerce_pts(user_dict.get("fantasyPoints", "") or user_dict.get("pts", "")),
         pmr=str(user_dict.get("timeRemaining", "") or user_dict.get("pmr", "")),
         entry_key=str(entry_key),
         total_salary=total_salary,

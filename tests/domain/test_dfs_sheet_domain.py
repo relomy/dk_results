@@ -74,12 +74,20 @@ def test_build_values_for_vip_lineup_format_plan():
 
     values, format_plan = build_values_for_vip_lineup(user, players)
 
-    # Rows: 0=user, 1=header, 2=Alpha, 3=Beta, 4=footer ("rank"). Salary is
-    # column offset 3 (Pos, Name, Own, Salary) in every one of those rows.
+    # Rows: 0=user, 1=header, 2=Alpha, 3=Beta, 4=footer ("rank"). Column
+    # offsets (Pos, Name, Own, Salary, Pts, Value) apply in every player row;
+    # the footer row has no Value cell, so it only gets Salary and Pts.
     assert format_plan == [
+        CellFormat(row=2, col=2, number_format=NumberFormat.PERCENT),
         CellFormat(row=2, col=3, number_format=NumberFormat.CURRENCY),
+        CellFormat(row=2, col=4, number_format=NumberFormat.DECIMAL(1)),
+        CellFormat(row=2, col=5, number_format=NumberFormat.DECIMAL(1)),
+        CellFormat(row=3, col=2, number_format=NumberFormat.PERCENT),
         CellFormat(row=3, col=3, number_format=NumberFormat.CURRENCY),
+        CellFormat(row=3, col=4, number_format=NumberFormat.DECIMAL(1)),
+        CellFormat(row=3, col=5, number_format=NumberFormat.DECIMAL(1)),
         CellFormat(row=4, col=3, number_format=NumberFormat.CURRENCY),
+        CellFormat(row=4, col=4, number_format=NumberFormat.DECIMAL(1)),
     ]
     assert values[2][3] == 8000
     assert values[3][3] == 7000
