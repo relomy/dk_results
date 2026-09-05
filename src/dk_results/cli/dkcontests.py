@@ -40,6 +40,8 @@ import datetime
 from collections.abc import Mapping
 from typing import Type
 
+from dfs_common import state
+
 from dk_results.domain.contest import Contest
 from dk_results.domain.sport import Sport, get_sport_choices
 from dk_results.lobby.common import valid_date
@@ -48,6 +50,7 @@ from dk_results.lobby.double_ups import get_stats
 from dk_results.lobby.draft_group_filter import filter_draft_groups
 from dk_results.lobby.fetch import get_lobby_response
 from dk_results.lobby.parsing import get_contests_from_response
+from dk_results.persistence.contestdatabase import ContestDatabase
 
 
 def get_contests(sport: str, live: bool = False):
@@ -192,6 +195,29 @@ def print_sql_insert(contest):
     print(f"INSERT INTO contests ({', '.join(fields)}) VALUES ({value_str})")
 
 
+def confirm_insert() -> bool:
+    """Prompt for confirmation before inserting a contest. Defaults to no."""
+    answer = input("Insert this contest into contests.db? [y/N]: ").strip().lower()
+    return answer in ("y", "yes")
+
+
+def maybe_insert_contest(contest: Contest, insert: bool) -> None:
+    """Insert ``contest`` into the contests DB if requested and confirmed."""
+    if not insert or not confirm_insert():
+        return
+    db = ContestDatabase(str(state.contests_db_path()))
+    try:
+        db.create_table()
+        new_ids = db.compare_contests([contest])
+        db.insert_contests([contest])
+        if new_ids:
+            print(f"Inserted contest {contest.id} into contests.db.")
+        else:
+            print(f"Contest {contest.id} already exists in contests.db; no change made.")
+    finally:
+        db.close()
+
+
 def print_stats(contests):
     stats = get_stats(contests, include_largest=True)
 
@@ -265,6 +291,11 @@ def main():
         default=datetime.datetime.today(),
         type=valid_date,
     )
+    parser.add_argument(
+        "--insert",
+        action="store_true",
+        help="After printing the matched contest, prompt to insert it into contests.db",
+    )
     args = parser.parse_args()
     print(args)
 
@@ -309,6 +340,7 @@ def main():
         exit("No contests found.")
 
     print_sql_insert(contest)
+    maybe_insert_contest(contest, args.insert)
 
 
 if __name__ == "__main__":
