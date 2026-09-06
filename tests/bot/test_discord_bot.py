@@ -257,6 +257,27 @@ async def test_on_command_error_other_error(monkeypatch):
     assert ctx.sent == ["Something went wrong running that command."]
 
 
+@pytest.mark.asyncio
+async def test_on_command_error_logs_wrapped_traceback(caplog):
+    """CommandInvokeError should be unwrapped so the real cause's traceback is logged."""
+    ctx = FakeCtx()
+    try:
+        raise ValueError("underlying failure")
+    except ValueError as exc:
+        wrapped = commands.CommandInvokeError(exc)
+
+    with caplog.at_level("ERROR", logger="dk_results.bot.discord_bot"):
+        await discord_bot.on_command_error(_ctx(ctx), wrapped)
+
+    assert ctx.sent == ["Something went wrong running that command."]
+    record = caplog.records[-1]
+    assert "ValueError" in caplog.text
+    assert "underlying failure" in caplog.text
+    assert record.exc_info is not None
+    assert record.exc_info[0] is ValueError
+    assert record.exc_info[1].args == ("underlying failure",)
+
+
 def test_main_requires_token(monkeypatch):
     monkeypatch.setattr(discord_bot, "BOT_TOKEN", None)
     with pytest.raises(RuntimeError):
