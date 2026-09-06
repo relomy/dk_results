@@ -302,6 +302,18 @@ def _add_double_up_stats(bucket_stats: dict[str, Any], contest: Contest, include
         bucket_stats["dubs"][contest.entry_fee] += 1
 
 
+def _mark_bucket_annotations(
+    bucket_stats: dict[str, Any],
+    contest: Contest,
+    featured_draft_group_ids: set[int] | None,
+    selected_contest: Contest | None,
+) -> None:
+    if featured_draft_group_ids is not None and contest.draft_group in featured_draft_group_ids:
+        bucket_stats["featured"] = True
+    if selected_contest is not None and contest.id == selected_contest.id:
+        bucket_stats["selected"] = True
+
+
 def build_contest_stats(
     contests: Sequence[Contest],
     *,
@@ -320,10 +332,7 @@ def build_contest_stats(
         date_stats["count"] += 1
         time_stats["count"] += 1
 
-        if featured_draft_group_ids is not None and contest.draft_group in featured_draft_group_ids:
-            time_stats["featured"] = True
-        if selected_contest is not None and contest.id == selected_contest.id:
-            time_stats["selected"] = True
+        _mark_bucket_annotations(time_stats, contest, featured_draft_group_ids, selected_contest)
 
         if is_double_up_contest(contest):
             _add_double_up_stats(date_stats, contest, include_largest)
@@ -386,6 +395,47 @@ def print_stats(
         print("Breakdown per date:")
         for date, date_stats in sorted(stats.items()):
             _print_date_stats(date, date_stats)
+
+
+def _load_contests_for_args(
+    args: argparse.Namespace,
+    sport_class_choices: Mapping[str, Type[Sport]],
+) -> tuple[list[dict], str, set[int] | None]:
+    featured_draft_group_ids = None
+    if args.sport_class:
+        selected_sport = args.sport_class
+        sport_obj = sport_class_choices[args.sport_class]
+        response = get_lobby_response(sport_obj.get_primary_sport(), live=False)
+        if not isinstance(response, dict):
+            raise SystemExit("Sport-class mode requires getcontests response with DraftGroups.")
+        featured_draft_group_ids = get_featured_draft_group_ids(response["DraftGroups"])
+        draft_groups = set(filter_draft_groups(response["DraftGroups"], sport_obj))
+        response_contests = [
+            contest for contest in get_contests_from_response(response) if contest.get("dg") in draft_groups
+        ]
+    else:
+        selected_sport = args.sport
+        response = get_lobby_response(args.sport, live=bool(args.live))
+        if isinstance(response, dict) and "DraftGroups" in response:
+            featured_draft_group_ids = get_featured_draft_group_ids(response["DraftGroups"])
+        response_contests = get_contests_from_response(response)
+    return response_contests, selected_sport, featured_draft_group_ids
+
+
+def _select_contest_with_diagnostics(
+    contests: Sequence[Contest], args: argparse.Namespace
+) -> tuple[Contest | None, str]:
+    diagnostics = io.StringIO()
+    with contextlib.redirect_stdout(diagnostics):
+        contest = get_largest_contest_with_fallback(
+            contests,
+            args.date,
+            args.entry,
+            args.query,
+            args.exclude,
+            game_type_id=args.game_type_id,
+        )
+    return contest, diagnostics.getvalue()
 
 
 def main():
@@ -453,29 +503,10 @@ def main():
     args = parser.parse_args()
     print(args)
 
-    is_live = bool(args.live)
-
     if args.sport_class and args.live:
         parser.error("--live is only supported with --sport legacy mode.")
 
-    featured_draft_group_ids = None
-    if args.sport_class:
-        selected_sport = args.sport_class
-        sport_obj = sport_class_choices[args.sport_class]
-        response = get_lobby_response(sport_obj.get_primary_sport(), live=False)
-        if not isinstance(response, dict):
-            raise SystemExit("Sport-class mode requires getcontests response with DraftGroups.")
-        featured_draft_group_ids = get_featured_draft_group_ids(response["DraftGroups"])
-        draft_groups = set(filter_draft_groups(response["DraftGroups"], sport_obj))
-        response_contests = [
-            contest for contest in get_contests_from_response(response) if contest.get("dg") in draft_groups
-        ]
-    else:
-        selected_sport = args.sport
-        response = get_lobby_response(args.sport, live=is_live)
-        if isinstance(response, dict) and "DraftGroups" in response:
-            featured_draft_group_ids = get_featured_draft_group_ids(response["DraftGroups"])
-        response_contests = get_contests_from_response(response)
+    response_contests, selected_sport, featured_draft_group_ids = _load_contests_for_args(args, sport_class_choices)
 
     # create list of Contest objects
     contests = [Contest.from_lobby(c, selected_sport) for c in response_contests]
@@ -483,16 +514,7 @@ def main():
 
     # parse contest and return single contest which matches argument criteria,
     # falling back to lower double-up fee tiers if args.entry has no match
-    diagnostics = io.StringIO()
-    with contextlib.redirect_stdout(diagnostics):
-        contest = get_largest_contest_with_fallback(
-            contests,
-            args.date,
-            args.entry,
-            args.query,
-            args.exclude,
-            game_type_id=args.game_type_id,
-        )
+    contest, diagnostics = _select_contest_with_diagnostics(contests, args)
 
     # check if contest is empty
     if not contest:
@@ -501,7 +523,7 @@ def main():
             start_date=args.date.date(),
             featured_draft_group_ids=featured_draft_group_ids,
         )
-        print(diagnostics.getvalue(), end="")
+        print(diagnostics, end="")
         exit("No contests found.")
 
     # Keep the report before the selection diagnostics while deriving its marker
@@ -512,7 +534,7 @@ def main():
         featured_draft_group_ids=featured_draft_group_ids,
         selected_contest=contest,
     )
-    print(diagnostics.getvalue(), end="")
+    print(diagnostics, end="")
 
     print_sql_insert(contest)
     maybe_insert_contest(contest, args.insert)
