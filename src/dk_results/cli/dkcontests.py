@@ -526,6 +526,7 @@ def main():
         print(diagnostics, end="")
         exit("No contests found.")
 
+    assert contest is not None
     # Keep the report before the selection diagnostics while deriving its marker
     # from the exact contest selected below.
     print_stats(
