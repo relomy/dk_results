@@ -297,8 +297,8 @@ wheels = [
 
 [[package]]
 name = "dfs-common"
-version = "0.1.3"
-source = { git = "https://github.com/relomy/dfs-common?tag=v0.1.3#ffad4c9e8084c03be08cb53d4edbbd1e230362a2" }
+version = "0.1.4"
+source = { git = "https://github.com/relomy/dfs-common?tag=v0.1.4#ea3e2df8fe92189fecf5d6c3259976a3fc787959" }
 dependencies = [
     { name = "cryptography" },
     { name = "google-api-python-client" },
@@ -377,7 +377,7 @@ requires-dist = [
     { name = "aiohttp", specifier = ">=3.14.3" },
     { name = "boto3", specifier = ">=1.35" },
     { name = "cryptography", specifier = ">=50.0.0" },
-    { name = "dfs-common", git = "https://github.com/relomy/dfs-common?tag=v0.1.3" },
+    { name = "dfs-common", git = "https://github.com/relomy/dfs-common?tag=v0.1.4" },
     { name = "discord" },
     { name = "dotenv" },
     { name = "google-api-python-client" },
