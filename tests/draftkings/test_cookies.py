@@ -1,11 +1,24 @@
 import os
 import pickle
+import runpy
 from http.cookiejar import Cookie
 
 import pytest
 from requests.cookies import RequestsCookieJar
 
 from dk_results.draftkings import cookies as cookies_module
+
+
+def test_importing_cookies_does_not_load_dotenv(monkeypatch):
+    calls = {"dotenv": 0}
+    monkeypatch.setattr(
+        "dotenv.load_dotenv",
+        lambda *_args, **_kwargs: calls.__setitem__("dotenv", calls["dotenv"] + 1),
+    )
+
+    runpy.run_module("dk_results.draftkings.cookies", run_name="cookies_import_probe")
+
+    assert calls == {"dotenv": 0}
 
 
 def test_get_browser_cookies_pi_path(monkeypatch):

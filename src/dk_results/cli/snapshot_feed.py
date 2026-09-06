@@ -27,13 +27,6 @@ from dk_results.services.snapshot_v3.constants import DEFAULT_STANDINGS_LIMIT
 
 logger = logging.getLogger(__name__)
 
-try:
-    from dotenv import load_dotenv
-except ImportError:  # pragma: no cover
-
-    def load_dotenv(*_args, **_kwargs):
-        return False
-
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="snapshot_feed.py")
@@ -56,7 +49,6 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    load_dotenv()
     load_and_apply_settings()
 
     parser = build_parser()

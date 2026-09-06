@@ -33,12 +33,7 @@ def test_find_new_double_ups_exposes_webhook_sender():
 
 
 def test_init_runtime_keeps_existing_loggers(monkeypatch):
-    calls = {"dotenv": 0, "configure_logging": 0}
-
-    monkeypatch.setattr(
-        "dk_results.cli.find_new_double_ups.load_dotenv",
-        lambda *_a, **_k: calls.__setitem__("dotenv", calls["dotenv"] + 1),
-    )
+    calls = {"configure_logging": 0}
 
     monkeypatch.setattr(
         "dk_results.cli.find_new_double_ups.configure_logging",
@@ -47,7 +42,6 @@ def test_init_runtime_keeps_existing_loggers(monkeypatch):
 
     _init_runtime()
 
-    assert calls["dotenv"] == 1
     assert calls["configure_logging"] == 1
 
 

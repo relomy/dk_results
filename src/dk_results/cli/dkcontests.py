@@ -42,6 +42,7 @@ from typing import Type
 
 from dfs_common import state
 
+from dk_results.config import load_and_apply_settings
 from dk_results.domain.contest import Contest
 from dk_results.domain.sport import Sport, get_sport_choices
 from dk_results.lobby.common import valid_date
@@ -304,6 +305,7 @@ def print_stats(contests):
 
 def main():
     """"""
+    load_and_apply_settings()
 
     supported_sports = [
         "NBA",

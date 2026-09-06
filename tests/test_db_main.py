@@ -384,7 +384,6 @@ def test_process_sport_emits_deterministic_vip_events_on_happy_path(monkeypatch,
 
 def test_main_snapshot_out_writes_opt_in_envelope(monkeypatch, tmp_path):
     out = tmp_path / "snapshot.json"
-    monkeypatch.setattr(db_main, "load_dotenv", lambda: None)
     monkeypatch.setattr(db_main, "load_and_apply_settings", lambda: None)
     monkeypatch.setattr(db_main.state, "contests_db_path", lambda: tmp_path / "contests.db")
     monkeypatch.setattr(db_main, "ContestDatabase", lambda _path: object())
@@ -440,7 +439,6 @@ def test_main_snapshot_out_skips_and_preserves_existing_output_when_no_contests(
     out = tmp_path / "snapshot.json"
     original = '{"schema_version":3,"sports":{"nba":{}}}\n'
     out.write_text(original, encoding="utf-8")
-    monkeypatch.setattr(db_main, "load_dotenv", lambda: None)
     monkeypatch.setattr(db_main, "load_and_apply_settings", lambda: None)
     monkeypatch.setattr(db_main.state, "contests_db_path", lambda: tmp_path / "contests.db")
     monkeypatch.setattr(db_main, "ContestDatabase", lambda _path: object())
@@ -473,7 +471,6 @@ def test_main_snapshot_out_skips_and_preserves_existing_output_when_no_contests(
 
 def test_main_verbose_enables_debug_without_mutating_log_level_env(monkeypatch, tmp_path):
     monkeypatch.setenv("LOG_LEVEL", "INFO")
-    monkeypatch.setattr(db_main, "load_dotenv", lambda: None)
     monkeypatch.setattr(db_main, "load_and_apply_settings", lambda: None)
     monkeypatch.setattr(db_main.state, "contests_db_path", lambda: tmp_path / "contests.db")
     monkeypatch.setattr(db_main, "ContestDatabase", lambda _path: object())
@@ -511,7 +508,6 @@ def test_main_verbose_enables_debug_without_mutating_log_level_env(monkeypatch, 
 
 
 def test_main_verbose_flag_is_boolean(monkeypatch, tmp_path):
-    monkeypatch.setattr(db_main, "load_dotenv", lambda: None)
     monkeypatch.setattr(db_main, "load_and_apply_settings", lambda: None)
     monkeypatch.setattr(db_main.state, "contests_db_path", lambda: tmp_path / "contests.db")
     monkeypatch.setattr(db_main, "ContestDatabase", lambda _path: object())
@@ -554,7 +550,6 @@ def test_main_verbose_flag_is_boolean(monkeypatch, tmp_path):
 
 
 def test_main_verbose_uses_explicit_logging_override(monkeypatch, tmp_path):
-    monkeypatch.setattr(db_main, "load_dotenv", lambda: None)
     monkeypatch.setattr(db_main, "load_and_apply_settings", lambda: None)
     monkeypatch.setattr(db_main.state, "contests_db_path", lambda: tmp_path / "contests.db")
     monkeypatch.setattr(db_main, "ContestDatabase", lambda _path: object())
@@ -590,7 +585,6 @@ def test_main_verbose_uses_explicit_logging_override(monkeypatch, tmp_path):
 
 
 def test_main_loads_vips_once_per_invocation(monkeypatch, tmp_path):
-    monkeypatch.setattr(db_main, "load_dotenv", lambda: None)
     monkeypatch.setattr(db_main, "load_and_apply_settings", lambda: None)
     monkeypatch.setattr(db_main.state, "contests_db_path", lambda: tmp_path / "contests.db")
     monkeypatch.setattr(db_main, "ContestDatabase", lambda _path: object())

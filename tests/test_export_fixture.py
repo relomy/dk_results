@@ -67,7 +67,7 @@ def test_cli_export_fixture_calls_snapshot_v3_envelope_builder(monkeypatch, tmp_
 
 def test_cli_export_fixture_defaults_out_path_when_missing(monkeypatch, tmp_path):
     monkeypatch.chdir(tmp_path)
-    monkeypatch.setattr(export_command, "configure_runtime", lambda: None)
+    monkeypatch.setattr(export_command, "load_and_apply_settings", lambda: None)
     monkeypatch.setattr(
         export_command,
         "build_snapshot_v3_envelope",
@@ -200,7 +200,7 @@ def test_standalone_main_publish_routes_publish_helper(monkeypatch, tmp_path):
 
 
 def test_run_export_bundle_writes_two_sports(monkeypatch, tmp_path):
-    monkeypatch.setattr(export_command, "configure_runtime", lambda: None)
+    monkeypatch.setattr(export_command, "load_and_apply_settings", lambda: None)
 
     def _fake_build_snapshot_v3_envelope(selected_contests, *, standings_limit, generated_at=None):
         assert selected_contests == {"NBA": 123, "GOLF": 456}
@@ -235,7 +235,7 @@ def test_run_export_bundle_writes_two_sports(monkeypatch, tmp_path):
 
 
 def test_run_export_bundle_applies_generated_at_override(monkeypatch, tmp_path):
-    monkeypatch.setattr(export_command, "configure_runtime", lambda: None)
+    monkeypatch.setattr(export_command, "load_and_apply_settings", lambda: None)
     called = {}
 
     def _fake_build_snapshot_v3_envelope(selected_contests, *, standings_limit, generated_at=None):
@@ -265,7 +265,7 @@ def test_run_export_bundle_applies_generated_at_override(monkeypatch, tmp_path):
 
 
 def test_run_export_fixture_applies_generated_at_override(monkeypatch, tmp_path):
-    monkeypatch.setattr(export_command, "configure_runtime", lambda: None)
+    monkeypatch.setattr(export_command, "load_and_apply_settings", lambda: None)
     called = {}
 
     monkeypatch.setattr(
@@ -299,7 +299,7 @@ def test_run_export_fixture_applies_generated_at_override(monkeypatch, tmp_path)
 
 
 def test_run_export_fixture_emits_envelope_and_contract_sections(monkeypatch, tmp_path):
-    monkeypatch.setattr(export_command, "configure_runtime", lambda: None)
+    monkeypatch.setattr(export_command, "load_and_apply_settings", lambda: None)
     monkeypatch.setattr(
         export_command,
         "build_snapshot_v3_envelope",
@@ -381,7 +381,7 @@ def test_run_export_fixture_emits_envelope_and_contract_sections(monkeypatch, tm
 
 
 def test_run_export_bundle_emits_contests_primary_contest_and_players(monkeypatch, tmp_path):
-    monkeypatch.setattr(export_command, "configure_runtime", lambda: None)
+    monkeypatch.setattr(export_command, "load_and_apply_settings", lambda: None)
 
     def _fake_build_snapshot_v3_envelope(_selected_contests, *, standings_limit, generated_at=None):
         return {
@@ -581,7 +581,7 @@ def _fixture_export_v3_envelope(*, vip_lineups=None, standings=None):
 
 
 def test_vip_lineups_support_user_and_players_shape(monkeypatch, tmp_path):
-    monkeypatch.setattr(export_command, "configure_runtime", lambda: None)
+    monkeypatch.setattr(export_command, "load_and_apply_settings", lambda: None)
     monkeypatch.setattr(
         export_command,
         "build_snapshot_v3_envelope",
@@ -620,7 +620,7 @@ def test_vip_lineups_support_user_and_players_shape(monkeypatch, tmp_path):
 
 
 def test_vip_lineups_export_players_live_typed_fields(monkeypatch, tmp_path):
-    monkeypatch.setattr(export_command, "configure_runtime", lambda: None)
+    monkeypatch.setattr(export_command, "load_and_apply_settings", lambda: None)
     monkeypatch.setattr(
         export_command,
         "build_snapshot_v3_envelope",
@@ -680,7 +680,7 @@ def test_vip_lineups_export_players_live_typed_fields(monkeypatch, tmp_path):
 
 
 def test_export_fixture_preserves_missing_vip_entry_key(monkeypatch, tmp_path):
-    monkeypatch.setattr(export_command, "configure_runtime", lambda: None)
+    monkeypatch.setattr(export_command, "load_and_apply_settings", lambda: None)
     monkeypatch.setattr(
         export_command,
         "build_snapshot_v3_envelope",
@@ -704,7 +704,7 @@ def test_export_fixture_preserves_missing_vip_entry_key(monkeypatch, tmp_path):
 
 
 def test_standings_is_cashing_derived_from_payout_presence(monkeypatch, tmp_path):
-    monkeypatch.setattr(export_command, "configure_runtime", lambda: None)
+    monkeypatch.setattr(export_command, "load_and_apply_settings", lambda: None)
     monkeypatch.setattr(
         export_command,
         "build_snapshot_v3_envelope",

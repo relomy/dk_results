@@ -374,6 +374,17 @@ def test_get_draft_group_info_returns_matching_entry():
     assert dkcontests.get_draft_group_info([], 200) is None
 
 
+def test_main_bootstraps_runtime_before_parsing_arguments(monkeypatch):
+    calls = []
+    monkeypatch.setattr(dkcontests, "load_and_apply_settings", lambda: calls.append("bootstrap"))
+    monkeypatch.setattr(sys, "argv", ["dkcontests", "--help"])
+
+    with pytest.raises(SystemExit):
+        dkcontests.main()
+
+    assert calls == ["bootstrap"]
+
+
 def test_main_rejects_live_with_sport_class(monkeypatch):
     monkeypatch.setattr(
         sys,

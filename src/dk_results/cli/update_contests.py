@@ -21,25 +21,13 @@ from dk_results.paths import repo_file
 from dk_results.persistence.contestdatabase import ContestDatabase
 from dk_results.persistence.notification_store import NotificationStore
 
-configure_logging()
 logger = logging.getLogger(__name__)
 
-try:
-    from dotenv import load_dotenv
-except ImportError:  # pragma: no cover
-
-    def load_dotenv(*_args, **_kwargs):
-        return False
-
-
-load_dotenv()
-load_and_apply_settings()
-
 # constants
-DISCORD_NOTIFICATIONS_ENABLED = os.getenv("DISCORD_NOTIFICATIONS_ENABLED", "true")
-SPREADSHEET_ID = os.getenv("SPREADSHEET_ID")
-SHEET_GIDS_FILE = os.getenv("SHEET_GIDS_FILE", str(repo_file("sheet_gids.yaml")))
-CONTEST_WARNING_MINUTES = int(os.getenv("CONTEST_WARNING_MINUTES", "25"))
+DISCORD_NOTIFICATIONS_ENABLED = "true"
+SPREADSHEET_ID: str | None = None
+SHEET_GIDS_FILE = str(repo_file("sheet_gids.yaml"))
+CONTEST_WARNING_MINUTES = 25
 WARNING_SCHEDULE_FILE_ENV = "CONTEST_WARNING_SCHEDULE_FILE"
 DEFAULT_WARNING_SCHEDULE_FILE = str(repo_file("contest_warning_schedules.yaml"))
 _DEFAULT_WARNING_SCHEDULE = [CONTEST_WARNING_MINUTES]
@@ -116,7 +104,7 @@ def _load_sheet_gid_map() -> dict[str, int]:
     return gids
 
 
-SHEET_GID_MAP = _load_sheet_gid_map()
+SHEET_GID_MAP: dict[str, int] = {}
 
 
 def _normalize_warning_schedule(items: Any, *, key: str) -> list[int]:
@@ -165,7 +153,28 @@ def _load_warning_schedule_map() -> dict[str, list[int]]:
     return schedules
 
 
-WARNING_SCHEDULES = _load_warning_schedule_map()
+WARNING_SCHEDULES: dict[str, list[int]] = {}
+
+
+def _init_runtime() -> None:
+    """Initialize settings and configuration-derived values for one run."""
+    global DISCORD_NOTIFICATIONS_ENABLED
+    global SPREADSHEET_ID
+    global SHEET_GIDS_FILE
+    global CONTEST_WARNING_MINUTES
+    global _DEFAULT_WARNING_SCHEDULE
+    global SHEET_GID_MAP
+    global WARNING_SCHEDULES
+
+    load_and_apply_settings()
+    DISCORD_NOTIFICATIONS_ENABLED = os.getenv("DISCORD_NOTIFICATIONS_ENABLED", "true")
+    SPREADSHEET_ID = os.getenv("SPREADSHEET_ID")
+    SHEET_GIDS_FILE = os.getenv("SHEET_GIDS_FILE", str(repo_file("sheet_gids.yaml")))
+    CONTEST_WARNING_MINUTES = int(os.getenv("CONTEST_WARNING_MINUTES", "25"))
+    _DEFAULT_WARNING_SCHEDULE = [CONTEST_WARNING_MINUTES]
+    SHEET_GID_MAP = _load_sheet_gid_map()
+    WARNING_SCHEDULES = _load_warning_schedule_map()
+    configure_logging()
 
 
 def _load_vips() -> list[str]:
@@ -273,9 +282,9 @@ def _build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None):
+    _init_runtime()
     argv_list = list(argv) if argv is not None else []
     _build_parser().parse_args(argv_list)
-    configure_logging()
     try:
         contests.init_schema(state.contests_db_path())
         conn = sqlite3.connect(_contests_db_path())

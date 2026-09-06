@@ -31,14 +31,6 @@ from dk_results.vip_lineups import load_vips
 
 logger = logging.getLogger(__name__)
 
-try:
-    from dotenv import load_dotenv
-except ImportError:  # pragma: no cover
-
-    def load_dotenv(*_args, **_kwargs):
-        return False
-
-
 SportType = type[Sport]
 
 CONTEST_DIR = str(repo_file("contests"))
@@ -136,7 +128,6 @@ def main() -> None:
     """
     Use database and update Google Sheet with contest standings from DraftKings.
     """
-    load_dotenv()
     load_and_apply_settings()
 
     parser = argparse.ArgumentParser()
