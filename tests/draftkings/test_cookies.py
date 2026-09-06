@@ -1,3 +1,4 @@
+import os
 import pickle
 from http.cookiejar import Cookie
 
@@ -7,7 +8,7 @@ from requests.cookies import RequestsCookieJar
 from dk_results.draftkings import cookies as cookies_module
 
 
-def test_get_rookie_cookies_pi_path(monkeypatch):
+def test_get_browser_cookies_pi_path(monkeypatch):
     monkeypatch.setenv("DK_PLATFORM", "pi")
     monkeypatch.setenv("COOKIES_DB_PATH", "/tmp/chromium/Profile 1/Cookies")
 
@@ -24,7 +25,7 @@ def test_get_rookie_cookies_pi_path(monkeypatch):
 
     monkeypatch.setattr(cookies_module.subprocess, "run", fake_run)
 
-    cookies = cookies_module.get_rookie_cookies()
+    cookies = cookies_module.get_browser_cookies()
     assert cookies == [
         {
             "name": "a",
@@ -39,7 +40,7 @@ def test_get_rookie_cookies_pi_path(monkeypatch):
     assert "chromium:/tmp/chromium/Profile 1" in captured["args"]
 
 
-def test_get_rookie_cookies_fallback(monkeypatch):
+def test_get_browser_cookies_fallback(monkeypatch):
     monkeypatch.setenv("DK_PLATFORM", "mac")
     monkeypatch.delenv("COOKIES_DB_PATH", raising=False)
 
@@ -52,7 +53,7 @@ def test_get_rookie_cookies_fallback(monkeypatch):
 
     monkeypatch.setattr(cookies_module.subprocess, "run", fake_run)
 
-    cookies = cookies_module.get_rookie_cookies(["example.com"])
+    cookies = cookies_module.get_browser_cookies(["example.com"])
     assert cookies == [
         {
             "name": "b",
@@ -72,13 +73,13 @@ def test_get_rookie_cookies_fallback(monkeypatch):
         ("ERROR: cannot decrypt browser cookies; keyring unavailable", "browser cookies could not be decrypted"),
     ],
 )
-def test_get_rookie_cookies_reports_actionable_export_failure(monkeypatch, stderr, message):
+def test_get_browser_cookies_reports_actionable_export_failure(monkeypatch, stderr, message):
     result = type("Result", (), {"returncode": 1, "stderr": stderr})()
 
     monkeypatch.setattr(cookies_module.subprocess, "run", lambda *args, **kwargs: result)
 
     with pytest.raises(RuntimeError, match=message):
-        cookies_module.get_rookie_cookies()
+        cookies_module.get_browser_cookies()
 
 
 def test_cookie_to_dict():
@@ -124,6 +125,29 @@ def test_load_cookies_from_pickle_missing(tmp_path):
     assert cookies_module.load_cookies_from_pickle(str(tmp_path / "missing.pkl")) is None
 
 
+def test_load_cookies_from_pickle_stale_is_treated_as_missing(tmp_path):
+    path = tmp_path / "cookies.pkl"
+    with path.open("wb") as f:
+        pickle.dump(RequestsCookieJar(), f)
+
+    old_time = path.stat().st_mtime - 1000
+    os.utime(path, (old_time, old_time))
+
+    assert cookies_module.load_cookies_from_pickle(str(path), max_age_seconds=900) is None
+
+
+def test_load_cookies_from_pickle_within_max_age_is_loaded(tmp_path):
+    jar = RequestsCookieJar()
+    jar.set("a", "1", domain="example.com", path="/")
+    path = tmp_path / "cookies.pkl"
+    with path.open("wb") as f:
+        pickle.dump(jar, f)
+
+    loaded = cookies_module.load_cookies_from_pickle(str(path), max_age_seconds=900)
+    assert loaded is not None
+    assert loaded.get("a") == "1"
+
+
 def test_load_cookies_from_pickle_invalid(tmp_path, monkeypatch):
     path = tmp_path / "cookies.pkl"
     path.write_bytes(b"not-a-pickle")
@@ -160,7 +184,7 @@ def test_get_dk_cookies_uses_pickle(monkeypatch):
         "load_cookies_from_pickle",
         lambda: [{"name": "a", "value": "1", "domain": "example.com", "path": "/"}],
     )
-    monkeypatch.setattr(cookies_module, "get_rookie_cookies", lambda *_args, **_kwargs: [])
+    monkeypatch.setattr(cookies_module, "get_browser_cookies", lambda *_args, **_kwargs: [])
 
     cookie_dict, jar = cookies_module.get_dk_cookies(use_pickle=True)
     assert cookie_dict == {"a": "1"}
@@ -171,7 +195,7 @@ def test_get_dk_cookies_falls_back_and_saves(monkeypatch):
     monkeypatch.setattr(cookies_module, "load_cookies_from_pickle", lambda: None)
     monkeypatch.setattr(
         cookies_module,
-        "get_rookie_cookies",
+        "get_browser_cookies",
         lambda *_args, **_kwargs: [{"name": "a", "value": "1", "domain": "example.com", "path": "/"}],
     )
 

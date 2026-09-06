@@ -4,6 +4,7 @@ import pickle
 import subprocess
 import sys
 import tempfile
+import time
 from collections.abc import Iterable
 from http.cookiejar import Cookie, LoadError, MozillaCookieJar
 from pathlib import Path
@@ -18,7 +19,16 @@ load_dotenv()
 
 logger = logging.getLogger(__name__)
 
-PICKLE_FILE = str(repo_file("pickled_cookies_works.txt"))
+# Dedicated to the get_dk_cookies() TTL cache below (a list[dict] of raw cookie
+# fields) — distinct from the DraftKings.download_contest_rows cookies_dump_file
+# path, which pickles a different shape (a RequestsCookieJar) for debugging and
+# is never read back. Sharing a filename between the two would corrupt this cache.
+PICKLE_FILE = str(repo_file("dk_auth_cookies.pkl"))
+
+# yt-dlp browser-cookie extraction costs ~4s of CPU; caching for this long lets
+# repeated CLI invocations within the window reuse the same cookies instead of
+# re-running it every time.
+DEFAULT_COOKIE_CACHE_SECONDS = 1800.0
 
 
 def _cookie_to_dict(cookie: Cookie) -> dict[str, Any]:
@@ -110,7 +120,7 @@ def _filter_cookies(cookies: Iterable[Cookie], domains: list[str]) -> list[dict[
     ]
 
 
-def get_rookie_cookies(domains: list[str] | None = None) -> list[dict[str, Any]]:
+def get_browser_cookies(domains: list[str] | None = None) -> list[dict[str, Any]]:
     """Get DraftKings cookies from the configured browser using yt-dlp."""
     if domains is None:
         domains = ["draftkings.com"]
@@ -151,17 +161,23 @@ def cookies_to_jar(cookies: Iterable[dict[str, Any]]) -> RequestsCookieJar:
 
 def load_cookies_from_pickle(
     filename: str = PICKLE_FILE,
+    max_age_seconds: float = DEFAULT_COOKIE_CACHE_SECONDS,
 ) -> RequestsCookieJar | None:
-    """Load pickled cookies if file exists."""
+    """Load pickled cookies if file exists and is within max_age_seconds."""
     path = Path(filename)
     if not path.is_absolute():
         path = repo_file(filename)
-    if path.exists():
-        try:
-            with path.open("rb") as f:
-                return pickle.load(f)
-        except Exception as e:
-            logger.warning(f"Failed to load pickled cookies: {e}")
+    if not path.exists():
+        return None
+    age = time.time() - path.stat().st_mtime
+    if age > max_age_seconds:
+        logger.debug("Pickled cookies at %s are stale (%.0fs old); re-extracting", path, age)
+        return None
+    try:
+        with path.open("rb") as f:
+            return pickle.load(f)
+    except Exception as e:
+        logger.warning(f"Failed to load pickled cookies: {e}")
     return None
 
 
@@ -186,7 +202,7 @@ def get_dk_cookies(
         cookies = load_cookies_from_pickle()
 
     if not cookies:
-        cookies = get_rookie_cookies(domains)
+        cookies = get_browser_cookies(domains)
         if use_pickle:
             save_cookies_to_pickle(cookies)
 

@@ -10,14 +10,16 @@ logger = logging.getLogger(__name__)
 
 
 class AuthSession:
-    """Create and hold an authenticated DraftKings requests.Session."""
+    """Create and hold an authenticated DraftKings requests.Session, lazily."""
 
     def __init__(self) -> None:
-        _, cookies = get_dk_cookies()
-        self.session = self.setup_session(cookies)
+        self.session: requests.Session | None = None
 
     def get_session(self) -> requests.Session:
-        """Return the configured requests session."""
+        """Return the configured requests session, extracting cookies on first use."""
+        if self.session is None:
+            _, cookies = get_dk_cookies(use_pickle=True)
+            self.session = self.setup_session(cookies)
         return self.session
 
     def cj_from_pickle(self, filename: str) -> RequestsCookieJar | None:

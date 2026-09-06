@@ -196,8 +196,8 @@ Sample config files are provided to copy/adapt:
 | `CONTEST_WARNING_MINUTES`       | `update_contests.py:CONTEST_WARNING_MINUTES`                                                                                                                 | Default warning minutes used if schedule file missing.            |
 | `CONTEST_WARNING_SCHEDULE_FILE` | `update_contests.py:WARNING_SCHEDULE_FILE_ENV`                                                                                                               | Defaults to `contest_warning_schedules.yaml`.                     |
 | `DISCORD_LOG_FILE`              | `bot/discord_bot.py:DISCORD_LOG_FILE`                                                                                                                        | Optional file path for bot logs.                                  |
-| `DK_PLATFORM`                   | `dk_results/draftkings/cookies.py:get_rookie_cookies`                                                                                                  | Controls cookie source path behavior.                             |
-| `COOKIES_DB_PATH`               | `dk_results/draftkings/cookies.py:get_rookie_cookies`                                                                                                  | Optional Chromium cookie DB path for DK cookies.                  |
+| `DK_PLATFORM`                   | `dk_results/draftkings/cookies.py:get_browser_cookies`                                                                                                  | Controls cookie source path behavior.                             |
+| `COOKIES_DB_PATH`               | `dk_results/draftkings/cookies.py:get_browser_cookies`                                                                                                  | Optional Chromium cookie DB path for DK cookies.                  |
 
 Both `find_new_double_ups.py` and `dk_results/draftkings/cookies.py` call `dotenv.load_dotenv()`
 to load environment defaults (`find_new_double_ups.py:load_dotenv`,

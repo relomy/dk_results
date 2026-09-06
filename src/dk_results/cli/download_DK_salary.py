@@ -10,7 +10,7 @@ from dk_results.draftkings.cookies import get_dk_cookies
 def download_salary_csv(filename, csv_url):
     """Given a filename and CSV URL, request download of CSV file and save to filename."""
     # set cookies based on Chrome session
-    _, cookies = get_dk_cookies()
+    _, cookies = get_dk_cookies(use_pickle=True)
 
     # send GET request
     r = requests.get(csv_url, cookies=cookies)

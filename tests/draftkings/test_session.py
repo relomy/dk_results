@@ -5,20 +5,40 @@ from requests.cookies import RequestsCookieJar
 from dk_results.draftkings import session as session_module
 
 
-def test_auth_session_init_and_get_session(monkeypatch):
+class _FakeSession:
+    def __init__(self):
+        self.cookies = RequestsCookieJar()
+
+
+def test_auth_session_defers_cookie_fetch_until_get_session(monkeypatch):
     jar = RequestsCookieJar()
     jar.set("a", "1", domain="example.com", path="/", expires=1)
+    calls = []
 
-    monkeypatch.setattr(session_module, "get_dk_cookies", lambda: ({}, jar))
+    def fake_get_dk_cookies(**kwargs):
+        calls.append(kwargs)
+        return {}, jar
 
-    class FakeSession:
-        def __init__(self):
-            self.cookies = RequestsCookieJar()
-
-    monkeypatch.setattr(session_module.requests, "Session", lambda: FakeSession())
+    monkeypatch.setattr(session_module, "get_dk_cookies", fake_get_dk_cookies)
+    monkeypatch.setattr(session_module.requests, "Session", _FakeSession)
 
     session = session_module.AuthSession()
-    assert session.get_session() is session.session
+    assert session.session is None, "cookies should not be fetched until get_session() is called"
+
+    session.get_session()
+    assert calls == [{"use_pickle": True}]
+
+
+def test_auth_session_get_session_caches_result(monkeypatch):
+    jar = RequestsCookieJar()
+    monkeypatch.setattr(session_module, "get_dk_cookies", lambda **_kwargs: ({}, jar))
+    monkeypatch.setattr(session_module.requests, "Session", _FakeSession)
+
+    session = session_module.AuthSession()
+    result = session.get_session()
+
+    assert session.session is result
+    assert session.get_session() is result
 
 
 def test_cj_from_pickle_missing(tmp_path):

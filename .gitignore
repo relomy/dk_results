@@ -18,6 +18,7 @@ vips.yaml
 token.json
 client_secret.json
 credentials.json
+dk_auth_cookies.pkl
 Pipfile.lock
 repomix-output*
 
