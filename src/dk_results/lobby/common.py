@@ -12,6 +12,15 @@ def valid_date(date_string: str) -> datetime.datetime:
         raise argparse.ArgumentTypeError(msg) from exc
 
 
+def valid_time(time_string: str) -> datetime.time:
+    """Validate and parse a time string in HH:MM format."""
+    try:
+        return datetime.datetime.strptime(time_string, "%H:%M").time()
+    except ValueError as exc:
+        msg = "Not a valid time: '{0}'.".format(time_string)
+        raise argparse.ArgumentTypeError(msg) from exc
+
+
 def get_salary_date(draft_group: dict) -> datetime.date:
     """Get salary date from a draft-group payload."""
     return datetime.datetime.strptime(draft_group["StartDateEst"].split("T")[0], "%Y-%m-%d").date()

@@ -36,7 +36,9 @@ Response format: {
 """
 
 import argparse
+import contextlib
 import datetime
+import io
 from collections.abc import Mapping, Sequence
 from typing import Any, Type
 
@@ -45,9 +47,9 @@ from dfs_common import state
 from dk_results.config import load_and_apply_settings
 from dk_results.domain.contest import Contest
 from dk_results.domain.sport import Sport, get_sport_choices
-from dk_results.lobby.common import valid_date
+from dk_results.lobby.common import valid_date, valid_time
 from dk_results.lobby.contest_filter import filter_double_ups, is_double_up_contest, largest_by_entries
-from dk_results.lobby.draft_group_filter import filter_draft_groups
+from dk_results.lobby.draft_group_filter import filter_draft_groups, get_featured_draft_group_ids
 from dk_results.lobby.fetch import get_lobby_response
 from dk_results.lobby.parsing import get_contests_from_response
 from dk_results.persistence.contestdatabase import ContestDatabase
@@ -300,7 +302,25 @@ def _add_double_up_stats(bucket_stats: dict[str, Any], contest: Contest, include
         bucket_stats["dubs"][contest.entry_fee] += 1
 
 
-def build_contest_stats(contests: Sequence[Contest], *, include_largest: bool = False) -> dict[str, Any]:
+def _mark_bucket_annotations(
+    bucket_stats: dict[str, Any],
+    contest: Contest,
+    featured_draft_group_ids: set[int] | None,
+    selected_contest: Contest | None,
+) -> None:
+    if featured_draft_group_ids is not None and contest.draft_group in featured_draft_group_ids:
+        bucket_stats["featured"] = True
+    if selected_contest is not None and contest.id == selected_contest.id:
+        bucket_stats["selected"] = True
+
+
+def build_contest_stats(
+    contests: Sequence[Contest],
+    *,
+    include_largest: bool = False,
+    featured_draft_group_ids: set[int] | None = None,
+    selected_contest: Contest | None = None,
+) -> dict[str, Any]:
     """Build date and start-time-bucket contest stats for the dkcontests report."""
     stats: dict[str, Any] = {}
     for contest in contests:
@@ -312,6 +332,8 @@ def build_contest_stats(contests: Sequence[Contest], *, include_largest: bool = 
         date_stats["count"] += 1
         time_stats["count"] += 1
 
+        _mark_bucket_annotations(time_stats, contest, featured_draft_group_ids, selected_contest)
+
         if is_double_up_contest(contest):
             _add_double_up_stats(date_stats, contest, include_largest)
             _add_double_up_stats(time_stats, contest, include_largest)
@@ -320,7 +342,9 @@ def build_contest_stats(contests: Sequence[Contest], *, include_largest: bool = 
 
 
 def _print_start_time_bucket(start_time: str, bucket_stats: dict[str, Any]) -> None:
-    print(f"  {start_time} - {bucket_stats['count']:>3} total contests")
+    featured_label = " [feat]" if bucket_stats.get("featured") else ""
+    selected_label = " [*]" if bucket_stats.get("selected") else ""
+    print(f"  {start_time}{featured_label} - {bucket_stats['count']:>3} total contests{selected_label}")
     if "dubs" not in bucket_stats:
         return
 
@@ -339,13 +363,109 @@ def _print_date_stats(date: str, date_stats: dict[str, Any]) -> None:
         _print_start_time_bucket(start_time, bucket_stats)
 
 
-def print_stats(contests: Sequence[Contest]) -> None:
-    stats = build_contest_stats(contests, include_largest=True)
+def _print_report_scope(scope: str | None) -> None:
+    if scope is not None:
+        print(f"Scope: {scope}")
 
+
+def _filter_contests_by_start_date(contests: Sequence[Contest], start_date: datetime.date | None) -> Sequence[Contest]:
+    if start_date is None:
+        return contests
+    return [contest for contest in contests if contest.start_dt.date() == start_date]
+
+
+def _filter_contests_by_start_time(contests: Sequence[Contest], start_time: datetime.time | None) -> Sequence[Contest]:
+    if start_time is None:
+        return contests
+    displayed_time = start_time.strftime("%H:%M")
+    return [contest for contest in contests if contest.start_dt.strftime("%H:%M") == displayed_time]
+
+
+def print_stats(
+    contests: Sequence[Contest],
+    *,
+    start_date: datetime.date | None = None,
+    featured_draft_group_ids: set[int] | None = None,
+    selected_contest: Contest | None = None,
+    scope: str | None = None,
+) -> None:
+    contests = _filter_contests_by_start_date(contests, start_date)
+    stats = build_contest_stats(
+        contests,
+        include_largest=True,
+        featured_draft_group_ids=featured_draft_group_ids,
+        selected_contest=selected_contest,
+    )
+
+    _print_report_scope(scope)
     if stats:
         print("Breakdown per date:")
         for date, date_stats in sorted(stats.items()):
             _print_date_stats(date, date_stats)
+
+
+def _load_contests_for_args(
+    args: argparse.Namespace,
+    sport_class_choices: Mapping[str, Type[Sport]],
+) -> tuple[list[dict], str, set[int] | None]:
+    featured_draft_group_ids = None
+    if args.sport_class:
+        selected_sport = args.sport_class
+        sport_obj = sport_class_choices[args.sport_class]
+        response = get_lobby_response(sport_obj.get_primary_sport(), live=False)
+        if not isinstance(response, dict):
+            raise SystemExit("Sport-class mode requires getcontests response with DraftGroups.")
+        featured_draft_group_ids = get_featured_draft_group_ids(response["DraftGroups"])
+        draft_groups = set(filter_draft_groups(response["DraftGroups"], sport_obj))
+        response_contests = [
+            contest for contest in get_contests_from_response(response) if contest.get("dg") in draft_groups
+        ]
+    else:
+        selected_sport = args.sport
+        response = get_lobby_response(args.sport, live=bool(args.live))
+        if isinstance(response, dict) and "DraftGroups" in response:
+            featured_draft_group_ids = get_featured_draft_group_ids(response["DraftGroups"])
+        response_contests = get_contests_from_response(response)
+    return response_contests, selected_sport, featured_draft_group_ids
+
+
+def _select_contest_with_diagnostics(
+    contests: Sequence[Contest], args: argparse.Namespace
+) -> tuple[Contest | None, str]:
+    diagnostics = io.StringIO()
+    with contextlib.redirect_stdout(diagnostics):
+        contest = get_largest_contest_with_fallback(
+            contests,
+            args.date,
+            args.entry,
+            args.query,
+            args.exclude,
+            game_type_id=args.game_type_id,
+        )
+    return contest, diagnostics.getvalue()
+
+
+def _format_report_scope(args: argparse.Namespace) -> str:
+    filters = [
+        f"date={args.date.date().isoformat()}",
+        f"time={args.time.strftime('%H:%M') if args.time is not None else 'any'}",
+        f"fee=${args.entry:g}",
+        f"query={args.query!r}" if args.query else "query=any",
+        f"exclude={args.exclude!r}" if args.exclude else "exclude=none",
+        f"game_type={args.game_type_id if args.game_type_id is not None else 'any'}",
+    ]
+    return ", ".join(filters)
+
+
+def _print_selected_contest(contest: Contest) -> None:
+    print("Selected contest:")
+    print(f"  ID: {contest.id}")
+    print(f"  Name: {contest.name}")
+    print(f"  Fee: ${contest.entry_fee:g}")
+    print(f"  Start time: {contest.start_dt:%Y-%m-%d %H:%M}")
+    print(f"  Draft group: {contest.draft_group}")
+    print(f"  Entry count: {contest.entries}")
+    print(f"  Reason: largest matching ${contest.entry_fee:g} double-up")
 
 
 def main():
@@ -404,6 +524,7 @@ def main():
         default=datetime.datetime.today(),
         type=valid_date,
     )
+    parser.add_argument("--time", help="Optional start time - format HH:MM", type=valid_time)
     parser.add_argument(
         "--insert",
         action="store_true",
@@ -411,48 +532,45 @@ def main():
     )
     args = parser.parse_args()
     print(args)
-
-    is_live = bool(args.live)
+    report_scope = _format_report_scope(args)
 
     if args.sport_class and args.live:
         parser.error("--live is only supported with --sport legacy mode.")
 
-    if args.sport_class:
-        selected_sport = args.sport_class
-        sport_obj = sport_class_choices[args.sport_class]
-        response = get_lobby_response(sport_obj.get_primary_sport(), live=False)
-        if not isinstance(response, dict):
-            raise SystemExit("Sport-class mode requires getcontests response with DraftGroups.")
-        draft_groups = set(filter_draft_groups(response["DraftGroups"], sport_obj))
-        response_contests = [
-            contest for contest in get_contests_from_response(response) if contest.get("dg") in draft_groups
-        ]
-    else:
-        selected_sport = args.sport
-        response = get_lobby_response(args.sport, live=is_live)
-        response_contests = get_contests_from_response(response)
+    response_contests, selected_sport, featured_draft_group_ids = _load_contests_for_args(args, sport_class_choices)
 
     # create list of Contest objects
     contests = [Contest.from_lobby(c, selected_sport) for c in response_contests]
-
-    # print stats for contests
-    print_stats(contests)
+    contests = _filter_contests_by_start_time(contests, args.time)
 
     # parse contest and return single contest which matches argument criteria,
     # falling back to lower double-up fee tiers if args.entry has no match
-    contest = get_largest_contest_with_fallback(
-        contests,
-        args.date,
-        args.entry,
-        args.query,
-        args.exclude,
-        game_type_id=args.game_type_id,
-    )
+    contest, diagnostics = _select_contest_with_diagnostics(contests, args)
 
     # check if contest is empty
     if not contest:
+        print_stats(
+            contests,
+            start_date=args.date.date(),
+            featured_draft_group_ids=featured_draft_group_ids,
+            scope=report_scope,
+        )
+        print(diagnostics, end="")
         exit("No contests found.")
 
+    assert contest is not None
+    # Keep the report before the selection diagnostics while deriving its marker
+    # from the exact contest selected below.
+    print_stats(
+        contests,
+        start_date=args.date.date(),
+        featured_draft_group_ids=featured_draft_group_ids,
+        selected_contest=contest,
+        scope=report_scope,
+    )
+    print(diagnostics, end="")
+
+    _print_selected_contest(contest)
     print_sql_insert(contest)
     maybe_insert_contest(contest, args.insert)
 
