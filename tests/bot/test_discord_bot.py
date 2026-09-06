@@ -280,6 +280,7 @@ async def test_on_command_error_logs_wrapped_traceback(caplog):
 
 
 def test_main_requires_token(monkeypatch):
+    monkeypatch.setenv("DISCORD_BOT_TOKEN", "")
     monkeypatch.setattr(discord_bot, "BOT_TOKEN", None)
     with pytest.raises(RuntimeError):
         discord_bot.main()
