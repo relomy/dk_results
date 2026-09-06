@@ -10,12 +10,9 @@ from http.cookiejar import Cookie, LoadError, MozillaCookieJar
 from pathlib import Path
 from typing import Any
 
-from dotenv import load_dotenv
 from requests.cookies import RequestsCookieJar
 
 from dk_results.paths import repo_file
-
-load_dotenv()
 
 logger = logging.getLogger(__name__)
 

@@ -3,11 +3,11 @@ import pathlib
 from datetime import datetime, timedelta
 from typing import Any
 
+from dk_results.config import load_and_apply_settings
 from dk_results.services.json_stable import to_stable_json
 from dk_results.services.snapshot_v3.pipeline import (
     DEFAULT_STANDINGS_LIMIT,
     build_snapshot_v3_envelope,
-    configure_runtime,
     normalize_sport_name,
 )
 from dk_results.services.snapshot_v3.serialize import serialize_payload
@@ -26,7 +26,7 @@ def _default_output_path(snapshot: dict[str, Any], sport: str) -> pathlib.Path:
 def run_export_fixture(args: Any) -> int:
     logging.getLogger("Draftkings").setLevel(logging.INFO)
     logging.getLogger("classes.results").setLevel(logging.INFO)
-    configure_runtime()
+    load_and_apply_settings()
     sport = normalize_sport_name(args.sport)
     contest_id = int(args.contest_id) if args.contest_id is not None else None
     standings_limit = int(args.standings_limit) if args.standings_limit else DEFAULT_STANDINGS_LIMIT
@@ -78,7 +78,7 @@ def _parse_bundle_item(raw_item: str) -> tuple[str, int]:
 def run_export_bundle(args: Any) -> int:
     logging.getLogger("Draftkings").setLevel(logging.INFO)
     logging.getLogger("classes.results").setLevel(logging.INFO)
-    configure_runtime()
+    load_and_apply_settings()
     standings_limit = int(args.standings_limit) if args.standings_limit else DEFAULT_STANDINGS_LIMIT
 
     items = list(getattr(args, "item", []) or [])

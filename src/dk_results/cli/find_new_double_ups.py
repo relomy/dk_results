@@ -8,7 +8,6 @@ from typing import Type
 
 from dfs_common import contests, state
 from dfs_common.discord import WebhookSender
-from dotenv import load_dotenv
 
 from dk_results.config import load_and_apply_settings
 from dk_results.discord_roles import DISCORD_ROLE_MAP
@@ -131,7 +130,6 @@ def process_sport(
 
 def _init_runtime() -> None:
     """Initialize runtime-only side effects for CLI execution."""
-    load_dotenv()
     load_and_apply_settings()
     configure_logging()
 

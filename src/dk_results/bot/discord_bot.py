@@ -15,26 +15,14 @@ from dk_results.logging import configure_logging
 from dk_results.paths import repo_file
 from dk_results.persistence.contestdatabase import ContestDatabase
 
-configure_logging()
 logger = logging.getLogger(__name__)
 
-try:
-    from dotenv import load_dotenv
-except ImportError:  # pragma: no cover
-
-    def load_dotenv(*_args, **_kwargs):
-        return False
-
-
-load_dotenv()
-load_and_apply_settings()
-
 COMMAND_PREFIX = "!"
-BOT_TOKEN = os.getenv("DISCORD_BOT_TOKEN")
+BOT_TOKEN: str | None = None
 START_TIME = time.time()
-SPREADSHEET_ID = os.getenv("SPREADSHEET_ID")
-SHEET_GIDS_FILE = os.getenv("SHEET_GIDS_FILE", str(repo_file("sheet_gids.yaml")))
-DISCORD_LOG_FILE = os.getenv("DISCORD_LOG_FILE")
+SPREADSHEET_ID: str | None = None
+SHEET_GIDS_FILE = str(repo_file("sheet_gids.yaml"))
+DISCORD_LOG_FILE: str | None = None
 
 
 SportType = type[Sport]
@@ -69,7 +57,7 @@ def _load_sheet_gid_map() -> dict[str, int]:
     return gids
 
 
-SHEET_GID_MAP = _load_sheet_gid_map()
+SHEET_GID_MAP: dict[str, int] = {}
 
 SPORT_EMOJI = {
     "CFB": "🏈",
@@ -131,9 +119,6 @@ def _configure_discord_log_file() -> None:
         logger.exception("Failed to initialize Discord bot file logging.")
 
 
-_configure_discord_log_file()
-
-
 def _channel_id_from_env() -> int | None:
     """Return the allowed Discord channel ID, if configured."""
     raw_channel_id = os.getenv("DISCORD_CHANNEL_ID")
@@ -146,11 +131,27 @@ def _channel_id_from_env() -> int | None:
         return None
 
 
-ALLOWED_CHANNEL_ID = _channel_id_from_env()
+ALLOWED_CHANNEL_ID: int | None = None
 
-intents = discord.Intents.default()
-intents.message_content = True
-bot = commands.Bot(command_prefix=COMMAND_PREFIX, intents=intents, help_command=None)
+
+def _init_runtime() -> None:
+    """Initialize configuration-derived values before constructing the bot."""
+    global BOT_TOKEN
+    global SPREADSHEET_ID
+    global SHEET_GIDS_FILE
+    global DISCORD_LOG_FILE
+    global SHEET_GID_MAP
+    global ALLOWED_CHANNEL_ID
+
+    load_and_apply_settings()
+    BOT_TOKEN = os.getenv("DISCORD_BOT_TOKEN")
+    SPREADSHEET_ID = os.getenv("SPREADSHEET_ID")
+    SHEET_GIDS_FILE = os.getenv("SHEET_GIDS_FILE", str(repo_file("sheet_gids.yaml")))
+    DISCORD_LOG_FILE = os.getenv("DISCORD_LOG_FILE")
+    SHEET_GID_MAP = _load_sheet_gid_map()
+    ALLOWED_CHANNEL_ID = _channel_id_from_env()
+    configure_logging()
+    _configure_discord_log_file()
 
 
 def _sport_choices() -> dict[str, SportType]:
@@ -237,7 +238,6 @@ def _system_uptime_seconds() -> float | None:
         return None
 
 
-@bot.check
 async def limit_to_channel(ctx: commands.Context) -> bool:
     """Restrict commands to a single configured channel when set."""
     if ALLOWED_CHANNEL_ID is None:
@@ -246,13 +246,11 @@ async def limit_to_channel(ctx: commands.Context) -> bool:
     return bool(channel and channel.id == ALLOWED_CHANNEL_ID)
 
 
-@bot.event
-async def on_ready() -> None:
+async def on_ready(user: object) -> None:
     """Log the bot connection event."""
-    logger.info("Discord bot logged in as %s", bot.user)
+    logger.info("Discord bot logged in as %s", user)
 
 
-@bot.event
 async def on_command_error(ctx: commands.Context, error: Exception) -> None:
     """Handle command errors and send a generic failure message."""
     if isinstance(error, commands.CheckFailure):
@@ -272,13 +270,11 @@ async def on_command_error(ctx: commands.Context, error: Exception) -> None:
     await ctx.send("Something went wrong running that command.")
 
 
-@bot.command(name="sankayadead")
 async def sankayadead(ctx: commands.Context) -> None:
     """Simple liveness response."""
     await ctx.send("ya man")
 
 
-@bot.command(name="contests")
 async def contests(ctx: commands.Context, sport: str | None = None) -> None:
     """Show one live contest for the requested sport."""
     choices = _sport_choices()
@@ -305,7 +301,6 @@ async def contests(ctx: commands.Context, sport: str | None = None) -> None:
     await ctx.send(_format_contest_row(contest, sport_choice.name, sheet_link))
 
 
-@bot.command(name="live")
 async def live(ctx: commands.Context) -> None:
     """Show all live contests across supported sports."""
     choices = _sport_choices()
@@ -341,7 +336,6 @@ async def live(ctx: commands.Context) -> None:
     await ctx.send("\n".join(lines))
 
 
-@bot.command(name="upcoming")
 async def upcoming(ctx: commands.Context) -> None:
     """Show the next upcoming contest per sport."""
     choices = _sport_choices()
@@ -374,7 +368,6 @@ async def upcoming(ctx: commands.Context) -> None:
     await ctx.send("\n".join(lines))
 
 
-@bot.command(name="health")
 async def health(ctx: commands.Context) -> None:
     """Report bot uptime and host uptime if available."""
     uptime = _format_uptime(time.time() - START_TIME)
@@ -383,7 +376,6 @@ async def health(ctx: commands.Context) -> None:
     await ctx.send(f"alive. bot uptime: {uptime}. host uptime: {sys_uptime}")
 
 
-@bot.command(name="help")
 async def help_command(ctx: commands.Context) -> None:
     """Show a list of available bot commands."""
     choices = _sport_choices()
@@ -399,7 +391,6 @@ async def help_command(ctx: commands.Context) -> None:
     await ctx.send("\n".join(lines))
 
 
-@bot.command(name="sports")
 async def sports(ctx: commands.Context) -> None:
     """List supported sports."""
     choices = _sport_choices()
@@ -407,11 +398,34 @@ async def sports(ctx: commands.Context) -> None:
     await ctx.send(f"Supported sports: {allowed}")
 
 
+def create_bot() -> commands.Bot:
+    """Construct a Discord application after Runtime bootstrap."""
+    intents = discord.Intents.default()
+    intents.message_content = True
+    application = commands.Bot(command_prefix=COMMAND_PREFIX, intents=intents, help_command=None)
+
+    async def handle_ready() -> None:
+        await on_ready(application.user)
+
+    application.add_check(limit_to_channel)
+    application.event(handle_ready)
+    application.event(on_command_error)
+    application.command(name="sankayadead")(sankayadead)
+    application.command(name="contests")(contests)
+    application.command(name="live")(live)
+    application.command(name="upcoming")(upcoming)
+    application.command(name="health")(health)
+    application.command(name="help")(help_command)
+    application.command(name="sports")(sports)
+    return application
+
+
 def main() -> None:
     """Start the Discord bot process."""
+    _init_runtime()
     if not BOT_TOKEN:
         raise RuntimeError("DISCORD_BOT_TOKEN is not set. Set it before starting the Discord bot.")
-    bot.run(BOT_TOKEN)
+    create_bot().run(BOT_TOKEN)
 
 
 if __name__ == "__main__":

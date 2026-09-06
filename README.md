@@ -199,9 +199,9 @@ Sample config files are provided to copy/adapt:
 | `DK_PLATFORM`                   | `dk_results/draftkings/cookies.py:get_browser_cookies`                                                                                                  | Controls cookie source path behavior.                             |
 | `COOKIES_DB_PATH`               | `dk_results/draftkings/cookies.py:get_browser_cookies`                                                                                                  | Optional Chromium cookie DB path for DK cookies.                  |
 
-Both `find_new_double_ups.py` and `dk_results/draftkings/cookies.py` call `dotenv.load_dotenv()`
-to load environment defaults (`find_new_double_ups.py:load_dotenv`,
-`dk_results/draftkings/cookies.py:load_dotenv`).
+Configuration-dependent executables call `dk_results.config.load_and_apply_settings()`
+at startup. It loads the repository `.env` without overriding a non-empty process
+environment value, then applies `config.json` defaults.
 
 Google Sheets access uses the shared `dfs_common` helpers that expect a
 `client_secret.json` service account file located in the repository root. The guard in

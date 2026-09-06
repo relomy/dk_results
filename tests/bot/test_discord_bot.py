@@ -514,7 +514,7 @@ async def test_on_ready_logs(monkeypatch):
         messages.append(msg % args if args else msg)
 
     monkeypatch.setattr(discord_bot.logger, "info", fake_info)
-    await discord_bot.on_ready()
+    await discord_bot.on_ready("bot-user")
     assert any("Discord bot logged in" in msg for msg in messages)
 
 
@@ -600,11 +600,11 @@ async def test_upcoming_returns_without_lines(monkeypatch):
 
 def test_main_runs_bot(monkeypatch):
     captured = {}
-    monkeypatch.setattr(discord_bot, "BOT_TOKEN", "tok")
+    monkeypatch.setenv("DISCORD_BOT_TOKEN", "tok")
 
-    def fake_run(token):
+    def fake_run(_self, token):
         captured["token"] = token
 
-    monkeypatch.setattr(discord_bot.bot, "run", fake_run)
+    monkeypatch.setattr(discord_bot, "create_bot", lambda: type("Bot", (), {"run": fake_run})())
     discord_bot.main()
     assert captured["token"] == "tok"

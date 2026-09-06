@@ -10,7 +10,6 @@ dependencies = [
     "pulp",
     "yt-dlp>=2026.8.19",
     "pyyaml",
-    "dotenv",
     "discord",
     "aiohttp>=3.14.3",
     "dfs-common",
