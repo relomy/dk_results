@@ -163,6 +163,72 @@ def test_get_largest_contest_applies_game_type_id():
     assert largest.id == 12
 
 
+def test_get_largest_contest_reports_candidates_eliminated_by_query(capsys):
+    contests = [
+        Contest.from_lobby({**_contest_payload(1, entries=150, fee=25), "n": "Afternoon Slate"}, "NFL"),
+    ]
+
+    largest = dkcontests.get_largest_contest(
+        contests,
+        datetime.datetime(2023, 11, 14),
+        entry_fee=25,
+        query="Night",
+    )
+
+    assert largest is None
+    out = capsys.readouterr().out
+    assert "matched none of the $25 double-up(s)" in out
+    assert "Afternoon Slate" in out
+
+
+def test_get_available_dub_fees_returns_descending_distinct_fees():
+    date = datetime.datetime(2023, 11, 14)
+    timestamp = "1700000000000"
+    contests = [
+        Contest.from_lobby(_contest_payload(1, fee=25), "NFL"),
+        Contest.from_lobby(_contest_payload(2, fee=10), "NFL"),
+        Contest.from_lobby(_contest_payload(3, fee=10), "NFL"),
+        Contest.from_lobby({**_contest_payload(4, fee=5), "attr": {"IsDoubleUp": False, "IsGuaranteed": True}}, "NFL"),
+    ]
+    assert all(c.start_dt.date() == date.date() for c in contests), "fixture timestamp drifted"
+    del timestamp
+
+    assert dkcontests.get_available_dub_fees(contests, date) == [25, 10]
+
+
+def test_get_largest_contest_with_fallback_drops_to_lower_tier(capsys):
+    contests = [
+        Contest.from_lobby({**_contest_payload(1, entries=150, fee=25), "n": "Afternoon Slate"}, "NFL"),
+        Contest.from_lobby({**_contest_payload(2, entries=300, fee=10), "n": "Thursday Night Slate"}, "NFL"),
+    ]
+
+    largest = dkcontests.get_largest_contest_with_fallback(
+        contests,
+        datetime.datetime(2023, 11, 14),
+        entry_fee=25,
+        query="Night",
+    )
+
+    assert largest is not None
+    assert largest.id == 2
+    assert "falling back to $10" in capsys.readouterr().out
+
+
+def test_get_largest_contest_with_fallback_returns_none_when_no_tier_matches():
+    contests = [
+        Contest.from_lobby({**_contest_payload(1, entries=150, fee=25), "n": "Afternoon Slate"}, "NFL"),
+    ]
+
+    largest = dkcontests.get_largest_contest_with_fallback(
+        contests,
+        datetime.datetime(2023, 11, 14),
+        entry_fee=25,
+        query="Night",
+    )
+
+    assert largest is None
+
+
 def test_get_contests_exits_on_invalid_shape(monkeypatch):
     monkeypatch.setattr(dkcontests, "get_lobby_response", lambda _sport, live=False: {"Other": []})
 

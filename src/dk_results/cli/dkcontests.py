@@ -45,7 +45,7 @@ from dfs_common import state
 from dk_results.domain.contest import Contest
 from dk_results.domain.sport import Sport, get_sport_choices
 from dk_results.lobby.common import valid_date
-from dk_results.lobby.contest_filter import filter_double_ups, largest_by_entries
+from dk_results.lobby.contest_filter import filter_double_ups, is_double_up_contest, largest_by_entries
 from dk_results.lobby.double_ups import get_stats
 from dk_results.lobby.draft_group_filter import filter_draft_groups
 from dk_results.lobby.fetch import get_lobby_response
@@ -143,7 +143,49 @@ def get_largest_contest(
         name_excludes=exclude,
     )
     print("number of contests meeting requirements: {}".format(len(matched)))
+    if not matched and (query is not None or exclude is not None):
+        print_eliminated_candidates(contests, dt, entry_fee, game_type_id)
     return largest_by_entries(matched)
+
+
+def print_eliminated_candidates(contests, dt, entry_fee, game_type_id: int | None) -> None:
+    """Print the double-up(s) at ``entry_fee`` that a query/exclude filter eliminated."""
+    candidates = filter_double_ups(
+        contests,
+        min_entry_fee=entry_fee,
+        max_entry_fee=entry_fee,
+        start_date=dt.date(),
+        game_type_id=game_type_id,
+    )
+    if not candidates:
+        return
+    names = ", ".join(repr(c.name) for c in candidates)
+    print(f"  query/exclude matched none of the ${entry_fee} double-up(s): {names}")
+
+
+def get_available_dub_fees(contests, dt: datetime.datetime) -> list:
+    """Distinct entry fees with at least one single-entry double-up on ``dt``, descending."""
+    fees = {c.entry_fee for c in contests if is_double_up_contest(c) and c.start_dt.date() == dt.date()}
+    return sorted(fees, reverse=True)
+
+
+def get_largest_contest_with_fallback(
+    contests,
+    dt,
+    entry_fee=25,
+    query=None,
+    exclude=None,
+    game_type_id: int | None = None,
+):
+    """Try ``entry_fee``, then fall back to the next lower double-up fee tier present that day."""
+    lower_tiers = [fee for fee in get_available_dub_fees(contests, dt) if fee < entry_fee]
+    for fee in [entry_fee, *lower_tiers]:
+        contest = get_largest_contest(contests, dt, fee, query, exclude, game_type_id=game_type_id)
+        if contest:
+            if fee != entry_fee:
+                print(f"No ${entry_fee} match; falling back to ${fee}.")
+            return contest
+    return None
 
 
 def get_contests_by_entries(contests, entry_fee, limit):
@@ -325,8 +367,9 @@ def main():
     # print stats for contests
     print_stats(contests)
 
-    # parse contest and return single contest which matches argument criteria
-    contest = get_largest_contest(
+    # parse contest and return single contest which matches argument criteria,
+    # falling back to lower double-up fee tiers if args.entry has no match
+    contest = get_largest_contest_with_fallback(
         contests,
         args.date,
         args.entry,
