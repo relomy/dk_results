@@ -92,7 +92,7 @@ fetch is injectable. `load_vips()` and `build_vip_entries()` round out the inter
 |---|---|---|
 | `draftkings/client.py` | `DraftKings`: `get_leaderboard`, `get_contest_detail`, `get_lobby_contests`, `get_entry`, `get_contest_entrants_page`, `download_contest_rows`, `download_salary_csv`, `clone_auth_to` | Deep HTTP client — the concrete **`DkPort` adapter**. |
 | `draftkings/session.py` | `AuthSession`: `get_session`, `setup_session`, `cj_from_pickle` | Authenticated `requests.Session` construction. |
-| `draftkings/cookies.py` | `get_dk_cookies`, `get_rookie_cookies`, `cookies_to_dict/_jar`, `load/save_cookies_to_pickle` | Cookie acquisition/persistence seam under AuthSession. |
+| `draftkings/cookies.py` | `get_dk_cookies`, `get_browser_cookies`, `cookies_to_dict/_jar`, `load/save_cookies_to_pickle` | Cookie acquisition/persistence seam under AuthSession. |
 
 ---
 

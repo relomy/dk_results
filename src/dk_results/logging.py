@@ -8,7 +8,6 @@ import os
 NOISY_LIBRARY_LOGGERS = (
     "googleapiclient.discovery",
     "urllib3",
-    "rookie.browser",
     "charset_normalizer",
     "google_auth_httplib2",
     "dfs_common.sheets",
