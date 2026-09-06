@@ -3,11 +3,13 @@ import runpy
 import sys
 import types
 
+import pytest
 from lobby.double_ups import get_stats
 from lobby.fetch import get_dk_lobby, get_lobby_response, requests_fetch_json
 
 from dk_results.domain.contest import Contest
 from dk_results.domain.sport import Sport
+from dk_results.draftkings import client as dk_client_module
 
 
 def _contest_payload(dk_id: int, *, entries: int = 200, fee: int = 10):
@@ -148,13 +150,37 @@ def test_get_lobby_response_uses_injected_client():
     assert client.calls == [("NFL", True)]
 
 
-def test_get_lobby_response_constructs_default_client(monkeypatch):
-    class FakeDraftKings:
-        def get_lobby_contests(self, sport, live=False):
-            return {"sport": sport, "live": live}
+class _StubResponse:
+    status_code = 200
 
-    monkeypatch.setattr("lobby.fetch.DraftKings", lambda: FakeDraftKings())
+    def __init__(self, payload):
+        self._payload = payload
 
-    result = get_lobby_response("NBA", live=False)
+    def raise_for_status(self):
+        pass
 
-    assert result == {"sport": "NBA", "live": False}
+    def json(self):
+        return self._payload
+
+
+def _forbid_authentication(monkeypatch):
+    """Fail loudly if the lobby path tries to build an authenticated session."""
+
+    def _boom(*_args, **_kwargs):
+        raise AssertionError("lobby reads must not construct AuthSession / extract cookies (ADR-0009)")
+
+    monkeypatch.setattr(dk_client_module, "AuthSession", _boom)
+
+
+@pytest.mark.parametrize("live", [False, True])
+def test_get_lobby_response_default_client_never_authenticates(monkeypatch, live):
+    _forbid_authentication(monkeypatch)
+    payload = {"Contests": [], "DraftGroups": []}
+    monkeypatch.setattr(
+        "requests.sessions.Session.get",
+        lambda self, *args, **kwargs: _StubResponse(payload),
+    )
+
+    result = get_lobby_response("CFB", live=live)
+
+    assert result == payload

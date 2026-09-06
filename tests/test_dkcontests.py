@@ -202,6 +202,51 @@ def test_get_contests_for_sport_class_filters_by_draft_groups(monkeypatch):
     assert [contest["id"] for contest in contests] == [41]
 
 
+def test_get_contests_for_sport_class_uses_anonymous_lobby_path(monkeypatch):
+    """Sport-class mode resolves draft groups without touching auth machinery (ADR-0009)."""
+    from dk_results.draftkings import client as dk_client_module
+
+    def _boom(*_args, **_kwargs):
+        raise AssertionError("sport-class lobby read must not construct AuthSession")
+
+    monkeypatch.setattr(dk_client_module, "AuthSession", _boom)
+
+    response = {
+        "Contests": [
+            {**_contest_payload(41), "dg": 41},
+            {**_contest_payload(42), "dg": 42},
+        ],
+        "DraftGroups": [
+            {
+                "DraftGroupTag": "Featured",
+                "ContestStartTimeSuffix": "(Round 4 TOUR)",
+                "DraftGroupId": 41,
+                "StartDateEst": "2026-02-09T10:45:00.000-05:00",
+                "ContestTypeId": 87,
+                "GameTypeId": 87,
+            },
+        ],
+    }
+
+    class _StubResponse:
+        status_code = 200
+
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return response
+
+    monkeypatch.setattr(
+        "requests.sessions.Session.get",
+        lambda self, *args, **kwargs: _StubResponse(),
+    )
+
+    contests = dkcontests.get_contests_for_sport_class("PGAShowdown")
+
+    assert [contest["id"] for contest in contests] == [41]
+
+
 def test_get_draft_group_info_returns_matching_entry():
     response = {
         "DraftGroups": [

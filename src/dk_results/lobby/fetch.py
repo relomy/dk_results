@@ -61,6 +61,12 @@ def get_lobby_response(
     live: bool = False,
     dk_client: DraftKings | None = None,
 ) -> dict[str, Any] | list[dict[str, Any]]:
-    """Fetch raw lobby response via DraftKings client (used by dkcontests)."""
-    client = dk_client or DraftKings()
+    """Fetch raw lobby response via DraftKings client (used by dkcontests).
+
+    Lobby reads are unauthenticated (ADR-0009): when no client is injected we
+    construct one over a plain ``requests.Session`` so no ``AuthSession`` /
+    ``get_dk_cookies`` (yt-dlp subprocess) work happens. A caller that genuinely
+    needs an authenticated lobby read passes ``dk_client=DraftKings()``.
+    """
+    client = dk_client or DraftKings(session=requests.Session())
     return client.get_lobby_contests(sport, live=live)
