@@ -1,9 +1,8 @@
 from collections.abc import Sequence
-from typing import Any
 
 from dk_results.domain.contest import Contest
 
-from .contest_filter import filter_double_ups, is_double_up_contest
+from .contest_filter import filter_double_ups
 
 
 def get_double_ups(
@@ -21,29 +20,3 @@ def get_double_ups(
         draft_groups=draft_groups,
         min_entries=entries,
     )
-
-
-def get_stats(contests: Sequence[Contest], *, include_largest: bool = False) -> dict[str, Any]:
-    """Build per-date contest stats used by find_new_double_ups and dkcontests."""
-    stats: dict[str, Any] = {}
-    for contest in contests:
-        start_date = contest.start_dt.strftime("%Y-%m-%d")
-        if start_date not in stats:
-            stats[start_date] = {"count": 0}
-        stats[start_date]["count"] += 1
-
-        if is_double_up_contest(contest):
-            if "dubs" not in stats[start_date]:
-                stats[start_date]["dubs"] = {}
-
-            if contest.entry_fee not in stats[start_date]["dubs"]:
-                stats[start_date]["dubs"][contest.entry_fee] = {"count": 0, "largest": 0} if include_largest else 0
-
-            if include_largest:
-                stats[start_date]["dubs"][contest.entry_fee]["count"] += 1
-                if contest.entries > stats[start_date]["dubs"][contest.entry_fee]["largest"]:
-                    stats[start_date]["dubs"][contest.entry_fee]["largest"] = contest.entries
-            else:
-                stats[start_date]["dubs"][contest.entry_fee] += 1
-
-    return stats

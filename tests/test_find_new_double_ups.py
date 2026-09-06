@@ -5,7 +5,6 @@ import sys
 import pytest
 from dfs_common.discord import WebhookSender
 from lobby.common import get_salary_date, is_time_between, valid_date
-from lobby.double_ups import get_stats
 from lobby.draft_group_filter import filter_draft_groups
 from lobby.fetch import get_dk_lobby
 from lobby.formatting import format_discord_messages
@@ -404,12 +403,6 @@ def test_valid_date_rejects_invalid():
         valid_date("bad")
 
 
-def test_get_stats_counts_dubs():
-    contests = [Contest.from_lobby(_contest_payload(1), "NBA")]
-    stats = get_stats(contests)
-    assert stats[contests[0].start_dt.strftime("%Y-%m-%d")]["dubs"][10] == 1
-
-
 def test_get_salary_date():
     date_val = get_salary_date({"StartDateEst": "2024-02-01T12:30:00.000-05:00"})
     assert date_val == datetime.date(2024, 2, 1)
@@ -531,13 +524,6 @@ def test_get_draft_groups_allows_suffixless():
     assert filter_draft_groups(response["DraftGroups"], DummySport) == [1]
 
 
-def test_get_stats_counts_duplicate_dubs():
-    contests = [Contest.from_lobby(_contest_payload(1), "NBA"), Contest.from_lobby(_contest_payload(2), "NBA")]
-    stats = get_stats(contests)
-    date_key = contests[0].start_dt.strftime("%Y-%m-%d")
-    assert stats[date_key]["dubs"][10] == 2
-
-
 def test_is_time_between_standard_range():
     assert is_time_between(datetime.time(9, 0), datetime.time(17, 0), datetime.time(12, 0))
     assert not is_time_between(datetime.time(9, 0), datetime.time(17, 0), datetime.time(8, 0))
@@ -587,19 +573,6 @@ def test_main_executes_with_fakes(monkeypatch, tmp_path):
     monkeypatch.setattr(sys, "argv", ["prog", "-s", "NFL"])
 
     find_mod.main()
-
-
-def test_get_stats_counts_multiple_entry_fees():
-    contest1 = _contest_payload(1)
-    contest2 = _contest_payload(2)
-    contest2["a"] = 25
-    contests = [Contest.from_lobby(contest1, "NBA"), Contest.from_lobby(contest2, "NBA")]
-
-    stats = get_stats(contests)
-    date_key = contests[0].start_dt.strftime("%Y-%m-%d")
-
-    assert stats[date_key]["dubs"][10] == 1
-    assert stats[date_key]["dubs"][25] == 1
 
 
 def test_main_with_webhook_and_quiet(monkeypatch):
