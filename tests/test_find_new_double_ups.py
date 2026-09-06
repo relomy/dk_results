@@ -4,7 +4,7 @@ import sys
 
 import pytest
 from dfs_common.discord import WebhookSender
-from lobby.common import get_salary_date, is_time_between, valid_date
+from lobby.common import get_salary_date, is_time_between, valid_date, valid_time
 from lobby.draft_group_filter import filter_draft_groups
 from lobby.fetch import get_dk_lobby
 from lobby.formatting import format_discord_messages
@@ -401,6 +401,11 @@ def test_build_draft_group_start_map_empty():
 def test_valid_date_rejects_invalid():
     with pytest.raises(argparse.ArgumentTypeError):
         valid_date("bad")
+
+
+def test_valid_time_rejects_invalid():
+    with pytest.raises(argparse.ArgumentTypeError):
+        valid_time("25:00")
 
 
 def test_get_salary_date():

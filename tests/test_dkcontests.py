@@ -188,6 +188,18 @@ def test_print_stats_filters_to_requested_start_date(capsys):
     assert "2023-11-15" not in out
 
 
+def test_filter_contests_by_start_time_uses_displayed_minute():
+    contests = [
+        Contest.from_lobby(_contest_payload(1, start_dt=datetime.datetime(2023, 11, 14, 13, 10)), "NFL"),
+        Contest.from_lobby(_contest_payload(2, start_dt=datetime.datetime(2023, 11, 14, 13, 10, 45)), "NFL"),
+        Contest.from_lobby(_contest_payload(3, start_dt=datetime.datetime(2023, 11, 14, 14, 10)), "NFL"),
+    ]
+
+    filtered = dkcontests._filter_contests_by_start_time(contests, datetime.time(13, 10))
+
+    assert [contest.id for contest in filtered] == [1, 2]
+
+
 def test_print_sql_insert_uses_typed_values(capsys):
     contest = Contest.from_lobby(
         {**_contest_payload(99, entries=22, fee=25), "n": "Weekend PGA TOUR Single Entry"},

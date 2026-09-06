@@ -45,7 +45,7 @@ from dfs_common import state
 from dk_results.config import load_and_apply_settings
 from dk_results.domain.contest import Contest
 from dk_results.domain.sport import Sport, get_sport_choices
-from dk_results.lobby.common import valid_date
+from dk_results.lobby.common import valid_date, valid_time
 from dk_results.lobby.contest_filter import filter_double_ups, is_double_up_contest, largest_by_entries
 from dk_results.lobby.draft_group_filter import filter_draft_groups
 from dk_results.lobby.fetch import get_lobby_response
@@ -345,6 +345,13 @@ def _filter_contests_by_start_date(contests: Sequence[Contest], start_date: date
     return [contest for contest in contests if contest.start_dt.date() == start_date]
 
 
+def _filter_contests_by_start_time(contests: Sequence[Contest], start_time: datetime.time | None) -> Sequence[Contest]:
+    if start_time is None:
+        return contests
+    displayed_time = start_time.strftime("%H:%M")
+    return [contest for contest in contests if contest.start_dt.strftime("%H:%M") == displayed_time]
+
+
 def print_stats(contests: Sequence[Contest], *, start_date: datetime.date | None = None) -> None:
     contests = _filter_contests_by_start_date(contests, start_date)
     stats = build_contest_stats(contests, include_largest=True)
@@ -412,6 +419,11 @@ def main():
         type=valid_date,
     )
     parser.add_argument(
+        "--time",
+        help="Optional start time - format HH:MM",
+        type=valid_time,
+    )
+    parser.add_argument(
         "--insert",
         action="store_true",
         help="After printing the matched contest, prompt to insert it into contests.db",
@@ -441,6 +453,7 @@ def main():
 
     # create list of Contest objects
     contests = [Contest.from_lobby(c, selected_sport) for c in response_contests]
+    contests = _filter_contests_by_start_time(contests, args.time)
 
     # print stats for contests
     print_stats(contests, start_date=args.date.date())
