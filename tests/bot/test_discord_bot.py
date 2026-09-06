@@ -135,6 +135,7 @@ async def test_contests_returns_live_contest(monkeypatch):
 @pytest.mark.asyncio
 async def test_live_lists_all_live_contests(monkeypatch):
     monkeypatch.setattr(discord_bot, "_sport_choices", lambda: {"nba": DummySport, "nfl": DummySportTwo})
+    monkeypatch.setattr(discord_bot, "_sheet_link", lambda _sport: None)
 
     captured = {}
 
