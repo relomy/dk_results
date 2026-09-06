@@ -71,8 +71,8 @@ def _matches(
         return False
     if game_type_id is not None and contest.game_type_id != game_type_id:
         return False
-    if name_contains is not None and name_contains not in contest.name:
+    if name_contains is not None and name_contains.lower() not in contest.name.lower():
         return False
-    if name_excludes is not None and name_excludes in contest.name:
+    if name_excludes is not None and name_excludes.lower() in contest.name.lower():
         return False
     return True

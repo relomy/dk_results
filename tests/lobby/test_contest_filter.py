@@ -184,6 +184,17 @@ def test_name_contains_mismatch_rejected():
     assert filter_double_ups([c], min_entry_fee=25, max_entry_fee=25, name_contains="Main") == []
 
 
+def test_name_contains_case_insensitive():
+    c = _contest(1, name="thursday night showdown")
+    result = filter_double_ups([c], min_entry_fee=25, max_entry_fee=25, name_contains="Night")
+    assert [x.id for x in result] == [1]
+
+
+def test_name_excludes_case_insensitive():
+    c = _contest(1, name="Main EXCLUDED Double Up")
+    assert filter_double_ups([c], min_entry_fee=25, max_entry_fee=25, name_excludes="excluded") == []
+
+
 def test_name_excludes_match_rejected():
     c = _contest(1, name="Main Excluded Double Up")
     assert filter_double_ups([c], min_entry_fee=25, max_entry_fee=25, name_excludes="Excluded") == []
