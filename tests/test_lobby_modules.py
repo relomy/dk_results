@@ -3,6 +3,7 @@ import runpy
 import sys
 import types
 
+import pytest
 from lobby.double_ups import get_stats
 from lobby.fetch import get_dk_lobby, get_lobby_response, requests_fetch_json
 
@@ -148,13 +149,11 @@ def test_get_lobby_response_uses_injected_client():
     assert client.calls == [("NFL", True)]
 
 
-def test_get_lobby_response_constructs_default_client(monkeypatch):
-    class FakeDraftKings:
-        def get_lobby_contests(self, sport, live=False):
-            return {"sport": sport, "live": live}
+@pytest.mark.parametrize("live", [False, True])
+def test_get_lobby_response_default_client_never_authenticates(anonymous_lobby, live):
+    payload = {"Contests": [], "DraftGroups": []}
+    anonymous_lobby(payload)
 
-    monkeypatch.setattr("lobby.fetch.DraftKings", lambda: FakeDraftKings())
+    result = get_lobby_response("CFB", live=live)
 
-    result = get_lobby_response("NBA", live=False)
-
-    assert result == {"sport": "NBA", "live": False}
+    assert result == payload

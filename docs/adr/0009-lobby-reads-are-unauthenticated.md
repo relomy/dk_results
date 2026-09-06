@@ -1,0 +1,5 @@
+# Lobby reads are unauthenticated
+
+All DraftKings lobby and draft-group reads — `getcontests?sport=` (upcoming) and `getlivecontests?sport=` (live) — are anonymous; `get_lobby_response` (`lobby/fetch.py`) constructs no `AuthSession` and passes a plain `requests.Session`. Both endpoints were verified against in-season data returning full `Contests`/`DraftGroups` with no cookies. The pre-`1a41f3b` code authenticated this path and the auth client still lives in the same module, so this records that removing auth here was deliberate: constructing a client for a Lobby feed read must not trigger `get_dk_cookies()` (a `yt_dlp` subprocess, ~4s), which is what regressed `dkcontests.py` latency ~10x (see #102).
+
+Refines ADR-0001: one concrete `DraftKings` adapter still serves the authenticated workflows, but the lobby path uses an unauthenticated session. A future caller that genuinely needs an authenticated lobby read passes an explicit `dk_client=DraftKings()` through the existing injection seam.
