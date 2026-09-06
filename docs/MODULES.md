@@ -146,8 +146,8 @@ A clean pipeline, each stage a small module:
 
 **`cli/` — thin adapters** that parse arguments and wire the deep modules; each
 exposes `main()`. Root-level scripts (`dkcontests.py`, `db_main.py`,
-`find_new_double_ups.py`, `update_contests.py`, `download_DK_salary.py`,
-`draftables.py`, `export_fixture.py`, `generate_sheet_gids.py`) are one-import
+`find_new_double_ups.py`, `update_contests.py`, `draftables.py`,
+`export_fixture.py`, `generate_sheet_gids.py`) are one-import
 `sys.path` shims delegating to their `cli/` counterpart.
 
 - `cli/db_main.py` — snapshot payload build/write (`build_snapshot_payload`, `write_snapshot_payload`).
@@ -155,7 +155,7 @@ exposes `main()`. Root-level scripts (`dkcontests.py`, `db_main.py`,
 - `cli/find_new_double_ups.py` — `process_sport`, upsert, Discord notify.
 - `cli/dkcontests.py` — contest discovery + cron-line generation.
 - `cli/export_fixture.py` — argparse front for `commands/export_fixture.py`.
-- `cli/download_DK_salary.py`, `cli/generate_sheet_gids.py`, `cli/draftables.py`.
+- `cli/generate_sheet_gids.py`, `cli/draftables.py`.
 
 **`commands/export_fixture.py`** — the actual export logic behind the CLI:
 `run_export_fixture`, `run_export_bundle`, `run_publish_snapshot`.
