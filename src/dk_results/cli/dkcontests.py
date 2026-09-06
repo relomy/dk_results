@@ -114,6 +114,7 @@ def get_largest_contest(
     query=None,
     exclude=None,
     game_type_id: int | None = None,
+    label_prefix: str = "",
 ):
     """Return the largest (by entries) double-up contest matching criteria, or None.
 
@@ -131,8 +132,11 @@ def get_largest_contest(
         Substring that must not appear in the contest name.
     game_type_id : int, optional
         DraftKings game type ID constraint.
+    label_prefix : str, optional
+        Prefix printed before each diagnostic line, e.g. to distinguish a fee
+        tier's block during multi-tier fallback.
     """
-    print("contests size: {}".format(len(contests)))
+    print(f"{label_prefix}contests size: {len(contests)}")
     matched = filter_double_ups(
         contests,
         min_entry_fee=entry_fee,
@@ -142,13 +146,19 @@ def get_largest_contest(
         name_contains=query,
         name_excludes=exclude,
     )
-    print("number of contests meeting requirements: {}".format(len(matched)))
+    print(f"{label_prefix}number of contests meeting requirements: {len(matched)}")
     if not matched and (query is not None or exclude is not None):
-        print_eliminated_candidates(contests, dt, entry_fee, game_type_id)
+        print_eliminated_candidates(contests, dt, entry_fee, game_type_id, label_prefix)
     return largest_by_entries(matched)
 
 
-def print_eliminated_candidates(contests, dt, entry_fee, game_type_id: int | None) -> None:
+def print_eliminated_candidates(
+    contests,
+    dt,
+    entry_fee,
+    game_type_id: int | None,
+    label_prefix: str = "",
+) -> None:
     """Print the double-up(s) at ``entry_fee`` that a query/exclude filter eliminated."""
     candidates = filter_double_ups(
         contests,
@@ -160,12 +170,22 @@ def print_eliminated_candidates(contests, dt, entry_fee, game_type_id: int | Non
     if not candidates:
         return
     names = ", ".join(repr(c.name) for c in candidates)
-    print(f"  query/exclude matched none of the ${entry_fee} double-up(s): {names}")
+    print(f"{label_prefix}  query/exclude matched none of the ${entry_fee} double-up(s): {names}")
 
 
-def get_available_dub_fees(contests, dt: datetime.datetime) -> list:
-    """Distinct entry fees with at least one single-entry double-up on ``dt``, descending."""
-    fees = {c.entry_fee for c in contests if is_double_up_contest(c) and c.start_dt.date() == dt.date()}
+def get_available_dub_fees(contests, dt: datetime.datetime, game_type_id: int | None = None) -> list:
+    """Distinct entry fees with at least one single-entry double-up on ``dt``, descending.
+
+    Restricted to ``game_type_id`` when given, so fallback tiers only include
+    fees that could actually satisfy that constraint.
+    """
+    fees = {
+        c.entry_fee
+        for c in contests
+        if is_double_up_contest(c)
+        and c.start_dt.date() == dt.date()
+        and (game_type_id is None or c.game_type_id == game_type_id)
+    }
     return sorted(fees, reverse=True)
 
 
@@ -178,9 +198,13 @@ def get_largest_contest_with_fallback(
     game_type_id: int | None = None,
 ):
     """Try ``entry_fee``, then fall back to the next lower double-up fee tier present that day."""
-    lower_tiers = [fee for fee in get_available_dub_fees(contests, dt) if fee < entry_fee]
-    for fee in [entry_fee, *lower_tiers]:
-        contest = get_largest_contest(contests, dt, fee, query, exclude, game_type_id=game_type_id)
+    lower_tiers = [fee for fee in get_available_dub_fees(contests, dt, game_type_id) if fee < entry_fee]
+    tiers = [entry_fee, *lower_tiers]
+    for fee in tiers:
+        label_prefix = f"[${fee}] " if len(tiers) > 1 else ""
+        contest = get_largest_contest(
+            contests, dt, fee, query, exclude, game_type_id=game_type_id, label_prefix=label_prefix
+        )
         if contest:
             if fee != entry_fee:
                 print(f"No ${entry_fee} match; falling back to ${fee}.")
