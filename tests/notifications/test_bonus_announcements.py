@@ -1,6 +1,8 @@
 import sqlite3
 from dataclasses import dataclass
 
+import pytest
+
 import dk_results.notifications.bonus_announcements as bonus_announcements
 from dk_results.notifications.bonus_announcements import announce_vip_bonuses
 
@@ -20,6 +22,15 @@ def _build_conn() -> sqlite3.Connection:
     conn = sqlite3.connect(":memory:")
     bonus_announcements._SqliteBonusStateStore(conn).create_table()
     return conn
+
+
+@pytest.fixture
+def conn():
+    connection = _build_conn()
+    try:
+        yield connection
+    finally:
+        connection.close()
 
 
 @dataclass
@@ -44,8 +55,7 @@ class _StateStore:
         self.committed = True
 
 
-def test_announce_vip_bonuses_skips_empty_lineups():
-    conn = _build_conn()
+def test_announce_vip_bonuses_skips_empty_lineups(conn):
     sender = _Sender()
     sent = announce_vip_bonuses(
         conn=conn,
@@ -86,8 +96,7 @@ def test_announce_candidate_uses_internal_state_store_seam():
     assert len(sender.messages) == 2
 
 
-def test_announce_vip_bonuses_first_run_insert_and_update():
-    conn = _build_conn()
+def test_announce_vip_bonuses_first_run_insert_and_update(conn):
     sender = _Sender()
     vip_lineups = [
         {
@@ -119,8 +128,7 @@ def test_announce_vip_bonuses_first_run_insert_and_update():
     assert row == (1,)
 
 
-def test_announce_vip_bonuses_increments_one_message_per_count():
-    conn = _build_conn()
+def test_announce_vip_bonuses_increments_one_message_per_count(conn):
     sender = _Sender()
     conn.execute(
         """
@@ -163,8 +171,7 @@ def test_announce_vip_bonuses_increments_one_message_per_count():
     assert row == (3,)
 
 
-def test_announce_vip_bonuses_sorts_and_caps_vip_names():
-    conn = _build_conn()
+def test_announce_vip_bonuses_sorts_and_caps_vip_names(conn):
     sender = _Sender()
     vip_lineups = []
     for vip_name in ["zoe", "amy", "mike", "beth", "carl", "dana"]:
@@ -187,8 +194,7 @@ def test_announce_vip_bonuses_sorts_and_caps_vip_names():
     assert "VIPs: amy, beth, carl, dana, mike +1 more" in sender.messages[0]
 
 
-def test_announce_vip_bonuses_uses_deterministic_canonical_display_name():
-    conn = _build_conn()
+def test_announce_vip_bonuses_uses_deterministic_canonical_display_name(conn):
     sender = _Sender()
     vip_lineups = [
         {
@@ -214,8 +220,7 @@ def test_announce_vip_bonuses_uses_deterministic_canonical_display_name():
     assert "Jose Alvarado (20.3%)" in sender.messages[0]
 
 
-def test_announce_vip_bonuses_nba_binary_points_message():
-    conn = _build_conn()
+def test_announce_vip_bonuses_nba_binary_points_message(conn):
     sender = _Sender()
     vip_lineups = [
         {
@@ -241,8 +246,7 @@ def test_announce_vip_bonuses_nba_binary_points_message():
     assert sender.messages == ["NBA: Nikola Jokic (34.7%) achieved a triple-double (+3 pts) (VIPs: amy)"]
 
 
-def test_announce_vip_bonuses_webhook_failure_does_not_update_db():
-    conn = _build_conn()
+def test_announce_vip_bonuses_webhook_failure_does_not_update_db(conn):
     sender = _Sender()
     sender.raise_error = True
     vip_lineups = [
@@ -271,8 +275,7 @@ def test_announce_vip_bonuses_webhook_failure_does_not_update_db():
     assert row is None
 
 
-def test_announce_vip_bonuses_cas_rowcount_zero_skips_update(monkeypatch):
-    conn = _build_conn()
+def test_announce_vip_bonuses_cas_rowcount_zero_skips_update(monkeypatch, conn):
     sender = _Sender()
     conn.execute(
         """
@@ -313,8 +316,7 @@ def test_announce_vip_bonuses_cas_rowcount_zero_skips_update(monkeypatch):
     assert row == (1,)
 
 
-def test_announce_vip_bonuses_soc_goal_message():
-    conn = _build_conn()
+def test_announce_vip_bonuses_soc_goal_message(conn):
     sender = _Sender()
     vip_lineups = [
         {
@@ -340,8 +342,7 @@ def test_announce_vip_bonuses_soc_goal_message():
     assert sender.messages == ["SOC: Erling Haaland (28.5%) scored a goal (+8 pts) (VIPs: amy)"]
 
 
-def test_announce_vip_bonuses_soc_two_goals_sends_two_messages():
-    conn = _build_conn()
+def test_announce_vip_bonuses_soc_two_goals_sends_two_messages(conn):
     sender = _Sender()
     vip_lineups = [
         {
@@ -370,10 +371,9 @@ def test_announce_vip_bonuses_soc_two_goals_sends_two_messages():
     ]
 
 
-def test_announce_logs_structured_events(caplog):
+def test_announce_logs_structured_events(caplog, conn):
     import logging
 
-    conn = _build_conn()
     sender = _Sender()
     vip_lineups = [
         {

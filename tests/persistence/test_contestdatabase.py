@@ -230,6 +230,7 @@ def test_sync_draft_group_start_dates_handles_invalid_existing_date(contest_db):
 
 def test_get_live_contest_sqlite_error(monkeypatch):
     db = ContestDatabase(":memory:")
+    original_conn = db.conn
 
     class BoomCursor:
         def execute(self, *_args, **_kwargs):
@@ -239,12 +240,16 @@ def test_get_live_contest_sqlite_error(monkeypatch):
         def cursor(self):
             return BoomCursor()
 
-    db.conn = BoomConn()
-    assert db.get_live_contest("NBA") is None
+    try:
+        db.conn = BoomConn()
+        assert db.get_live_contest("NBA") is None
+    finally:
+        original_conn.close()
 
 
 def test_get_live_contests_sqlite_error(monkeypatch):
     db = ContestDatabase(":memory:")
+    original_conn = db.conn
 
     class BoomCursor:
         def execute(self, *_args, **_kwargs):
@@ -254,8 +259,11 @@ def test_get_live_contests_sqlite_error(monkeypatch):
         def cursor(self):
             return BoomCursor()
 
-    db.conn = BoomConn()
-    assert db.get_live_contests() == []
+    try:
+        db.conn = BoomConn()
+        assert db.get_live_contests() == []
+    finally:
+        original_conn.close()
 
 
 def test_get_next_upcoming_contest_returns_row(contest_db):
@@ -294,6 +302,7 @@ def test_get_next_upcoming_contest_any_returns_row(contest_db):
 
 def test_get_next_upcoming_contest_sqlite_error(monkeypatch):
     db = ContestDatabase(":memory:")
+    original_conn = db.conn
 
     class BoomCursor:
         def execute(self, *_args, **_kwargs):
@@ -303,12 +312,16 @@ def test_get_next_upcoming_contest_sqlite_error(monkeypatch):
         def cursor(self):
             return BoomCursor()
 
-    db.conn = BoomConn()
-    assert db.get_next_upcoming_contest("NBA") is None
+    try:
+        db.conn = BoomConn()
+        assert db.get_next_upcoming_contest("NBA") is None
+    finally:
+        original_conn.close()
 
 
 def test_get_next_upcoming_contest_any_sqlite_error(monkeypatch):
     db = ContestDatabase(":memory:")
+    original_conn = db.conn
 
     class BoomCursor:
         def execute(self, *_args, **_kwargs):
@@ -318,8 +331,11 @@ def test_get_next_upcoming_contest_any_sqlite_error(monkeypatch):
         def cursor(self):
             return BoomCursor()
 
-    db.conn = BoomConn()
-    assert db.get_next_upcoming_contest_any("NBA") is None
+    try:
+        db.conn = BoomConn()
+        assert db.get_next_upcoming_contest_any("NBA") is None
+    finally:
+        original_conn.close()
 
 
 def test_get_contest_by_id_returns_row(contest_db):
@@ -395,12 +411,15 @@ def test_get_live_contest_candidates_returns_stable_order(contest_db):
 
 def test_from_connection_shares_the_connection():
     conn = sqlite3.connect(":memory:")
-    db = ContestDatabase.from_connection(conn)
-    assert db.conn is conn
-    db.create_table()
-    # A write through the wrapper is visible on the same connection.
-    _insert_contest(db, dk_id=1, status="LIVE")
-    assert conn.execute("SELECT COUNT(*) FROM contests").fetchone()[0] == 1
+    try:
+        db = ContestDatabase.from_connection(conn)
+        assert db.conn is conn
+        db.create_table()
+        # A write through the wrapper is visible on the same connection.
+        _insert_contest(db, dk_id=1, status="LIVE")
+        assert conn.execute("SELECT COUNT(*) FROM contests").fetchone()[0] == 1
+    finally:
+        conn.close()
 
 
 def test_get_incomplete_contests_returns_started_and_pending(contest_db):

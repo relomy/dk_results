@@ -16,6 +16,15 @@ import yaml
 import dk_results.cli.update_contests as update_contests
 
 
+@pytest.fixture
+def memory_conn():
+    conn = sqlite3.connect(":memory:")
+    try:
+        yield conn
+    finally:
+        conn.close()
+
+
 def test_is_notifications_enabled_false(monkeypatch):
     monkeypatch.setattr(update_contests, "DISCORD_NOTIFICATIONS_ENABLED", "false")
     assert update_contests._is_notifications_enabled() is False
@@ -210,8 +219,8 @@ def test_load_vips_missing_file(tmp_path, monkeypatch):
 # ── Processor assembly ───────────────────────────────────────────────────────
 
 
-def test_build_completion_processor_wires_collaborators(monkeypatch):
-    conn = sqlite3.connect(":memory:")
+def test_build_completion_processor_wires_collaborators(monkeypatch, memory_conn):
+    conn = memory_conn
 
     class FakeSender:
         def send_message(self, message):  # pragma: no cover - not called here
@@ -232,8 +241,8 @@ def test_build_completion_processor_wires_collaborators(monkeypatch):
     assert processor._config.vips == ["FooBar"]
 
 
-def test_build_completion_processor_uses_stub_results_when_client_init_fails(monkeypatch):
-    conn = sqlite3.connect(":memory:")
+def test_build_completion_processor_uses_stub_results_when_client_init_fails(monkeypatch, memory_conn):
+    conn = memory_conn
 
     class FakeSender:
         def send_message(self, message):  # pragma: no cover - not called here
@@ -252,8 +261,8 @@ def test_build_completion_processor_uses_stub_results_when_client_init_fails(mon
     assert processor._presence is None
 
 
-def test_build_completion_processor_injects_enabled_flag(monkeypatch):
-    conn = sqlite3.connect(":memory:")
+def test_build_completion_processor_injects_enabled_flag(monkeypatch, memory_conn):
+    conn = memory_conn
 
     class FakeSender:
         def send_message(self, message):  # pragma: no cover - not called here
@@ -269,10 +278,10 @@ def test_build_completion_processor_injects_enabled_flag(monkeypatch):
     assert processor._presence is not None
 
 
-def test_build_completion_processor_disabled_wires_idle_sender(monkeypatch):
+def test_build_completion_processor_disabled_wires_idle_sender(monkeypatch, memory_conn):
     # A disabled run still constructs the processor with a wired sender, but the
     # explicit gate is off, presence is skipped, and no VIPs are resolved.
-    conn = sqlite3.connect(":memory:")
+    conn = memory_conn
 
     class FakeSender:
         def send_message(self, message):  # pragma: no cover - not called here
@@ -292,8 +301,8 @@ def test_build_completion_processor_disabled_wires_idle_sender(monkeypatch):
     assert processor._config.vips == []
 
 
-def test_check_contests_for_completion_delegates_to_processor(monkeypatch):
-    conn = sqlite3.connect(":memory:")
+def test_check_contests_for_completion_delegates_to_processor(monkeypatch, memory_conn):
+    conn = memory_conn
     ran = {}
 
     class FakeProcessor:

@@ -8,6 +8,9 @@ silent on a second run (idempotency).
 
 import datetime
 import sqlite3
+import sys
+
+import pytest
 
 from dk_results.completion_processor import (
     COMPLETED_STATUSES,
@@ -134,6 +137,22 @@ def _conn_with_table() -> sqlite3.Connection:
     conn.execute(CONTESTS_TABLE_SQL)
     conn.commit()
     return conn
+
+
+@pytest.fixture(autouse=True)
+def _close_test_connections(monkeypatch):
+    open_connections: list[sqlite3.Connection] = []
+    original = _conn_with_table
+
+    def tracked_connection() -> sqlite3.Connection:
+        conn = original()
+        open_connections.append(conn)
+        return conn
+
+    monkeypatch.setattr(sys.modules[__name__], "_conn_with_table", tracked_connection)
+    yield
+    for conn in open_connections:
+        conn.close()
 
 
 def _insert_contest(conn, *, dk_id, name, start_date, status, completed=0, draft_group=1, positions_paid=None):
