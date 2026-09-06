@@ -37,8 +37,8 @@ Response format: {
 
 import argparse
 import datetime
-from collections.abc import Mapping
-from typing import Type
+from collections.abc import Mapping, Sequence
+from typing import Any, Type
 
 from dfs_common import state
 
@@ -46,7 +46,6 @@ from dk_results.domain.contest import Contest
 from dk_results.domain.sport import Sport, get_sport_choices
 from dk_results.lobby.common import valid_date
 from dk_results.lobby.contest_filter import filter_double_ups, is_double_up_contest, largest_by_entries
-from dk_results.lobby.double_ups import get_stats
 from dk_results.lobby.draft_group_filter import filter_draft_groups
 from dk_results.lobby.fetch import get_lobby_response
 from dk_results.lobby.parsing import get_contests_from_response
@@ -284,22 +283,68 @@ def maybe_insert_contest(contest: Contest, insert: bool) -> None:
         db.close()
 
 
-def print_stats(contests):
-    stats = get_stats(contests, include_largest=True)
+def _add_double_up_stats(bucket_stats: dict[str, Any], contest: Contest, include_largest: bool) -> None:
+    if "dubs" not in bucket_stats:
+        bucket_stats["dubs"] = {}
+
+    if contest.entry_fee not in bucket_stats["dubs"]:
+        bucket_stats["dubs"][contest.entry_fee] = {"count": 0, "largest": 0} if include_largest else 0
+
+    if include_largest:
+        bucket_stats["dubs"][contest.entry_fee]["count"] += 1
+        bucket_stats["dubs"][contest.entry_fee]["largest"] = max(
+            bucket_stats["dubs"][contest.entry_fee]["largest"], contest.entries
+        )
+    else:
+        bucket_stats["dubs"][contest.entry_fee] += 1
+
+
+def build_contest_stats(contests: Sequence[Contest], *, include_largest: bool = False) -> dict[str, Any]:
+    """Build date and start-time-bucket contest stats for the dkcontests report."""
+    stats: dict[str, Any] = {}
+    for contest in contests:
+        start_dt = contest.start_dt
+        start_date = start_dt.strftime("%Y-%m-%d")
+        start_time = start_dt.strftime("%H:%M")
+        date_stats = stats.setdefault(start_date, {"count": 0, "by_start_time": {}})
+        time_stats = date_stats["by_start_time"].setdefault(start_time, {"count": 0})
+        date_stats["count"] += 1
+        time_stats["count"] += 1
+
+        if is_double_up_contest(contest):
+            _add_double_up_stats(date_stats, contest, include_largest)
+            _add_double_up_stats(time_stats, contest, include_largest)
+
+    return stats
+
+
+def _print_start_time_bucket(start_time: str, bucket_stats: dict[str, Any]) -> None:
+    print(f"  {start_time} - {bucket_stats['count']:>3} total contests")
+    if "dubs" not in bucket_stats:
+        return
+
+    print("    Single-entry double ups:")
+    for entry_fee, fee_stats in sorted(bucket_stats["dubs"].items()):
+        fee_label = f"${entry_fee:g}"
+        print(
+            f"         {fee_label:>5}: {fee_stats['count']:>3} contest(s) "
+            f"(largest entry count: {fee_stats['largest']:>4})"
+        )
+
+
+def _print_date_stats(date: str, date_stats: dict[str, Any]) -> None:
+    print(f"{date} - {date_stats['count']:>3} total contests")
+    for start_time, bucket_stats in sorted(date_stats["by_start_time"].items()):
+        _print_start_time_bucket(start_time, bucket_stats)
+
+
+def print_stats(contests: Sequence[Contest]) -> None:
+    stats = build_contest_stats(contests, include_largest=True)
 
     if stats:
         print("Breakdown per date:")
-        for date, values in sorted(stats.items()):
-            print(f"{date} - {values['count']} total contests")
-
-            if "dubs" in values:
-                print("Single-entry double ups:")
-                for entry_fee, inner_dict in sorted(values["dubs"].items()):
-                    # inner_dict has 'count' and 'largest' keys
-                    print(
-                        f"     ${entry_fee}: {inner_dict['count']} contest(s) "
-                        f"(largest entry count: {inner_dict['largest']})"
-                    )
+        for date, date_stats in sorted(stats.items()):
+            _print_date_stats(date, date_stats)
 
 
 def main():

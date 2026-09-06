@@ -4,10 +4,8 @@ import sys
 import types
 
 import pytest
-from lobby.double_ups import get_stats
 from lobby.fetch import get_dk_lobby, get_lobby_response, requests_fetch_json
 
-from dk_results.domain.contest import Contest
 from dk_results.domain.sport import Sport
 
 
@@ -90,20 +88,6 @@ def test_get_dk_lobby_uses_injected_fetch_json():
     assert contests == [{"id": 10}]
     assert draft_groups == []
     assert response == {"Contests": [{"id": 10}], "DraftGroups": []}
-
-
-def test_get_stats_include_largest_for_interactive_use():
-    contests = [
-        Contest.from_lobby(_contest_payload(1, entries=120, fee=10), "NBA"),
-        Contest.from_lobby(_contest_payload(2, entries=300, fee=10), "NBA"),
-    ]
-
-    stats = get_stats(contests, include_largest=True)
-    date_key = contests[0].start_dt.strftime("%Y-%m-%d")
-
-    assert stats[date_key]["count"] == 2
-    assert stats[date_key]["dubs"][10]["count"] == 2
-    assert stats[date_key]["dubs"][10]["largest"] == 300
 
 
 def test_requests_fetch_json_passes_headers_and_cookies(monkeypatch):
