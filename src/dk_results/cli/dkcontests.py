@@ -339,7 +339,14 @@ def _print_date_stats(date: str, date_stats: dict[str, Any]) -> None:
         _print_start_time_bucket(start_time, bucket_stats)
 
 
-def print_stats(contests: Sequence[Contest]) -> None:
+def _filter_contests_by_start_date(contests: Sequence[Contest], start_date: datetime.date | None) -> Sequence[Contest]:
+    if start_date is None:
+        return contests
+    return [contest for contest in contests if contest.start_dt.date() == start_date]
+
+
+def print_stats(contests: Sequence[Contest], *, start_date: datetime.date | None = None) -> None:
+    contests = _filter_contests_by_start_date(contests, start_date)
     stats = build_contest_stats(contests, include_largest=True)
 
     if stats:
@@ -436,7 +443,7 @@ def main():
     contests = [Contest.from_lobby(c, selected_sport) for c in response_contests]
 
     # print stats for contests
-    print_stats(contests)
+    print_stats(contests, start_date=args.date.date())
 
     # parse contest and return single contest which matches argument criteria,
     # falling back to lower double-up fee tiers if args.entry has no match

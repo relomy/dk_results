@@ -175,6 +175,19 @@ def test_print_stats_sorts_dates_chronologically(capsys):
     assert lines.index("2023-11-14 -   1 total contests") < lines.index("2023-11-15 -   1 total contests")
 
 
+def test_print_stats_filters_to_requested_start_date(capsys):
+    contests = [
+        Contest.from_lobby(_contest_payload(1, start_dt=datetime.datetime(2023, 11, 14, 13)), "NFL"),
+        Contest.from_lobby(_contest_payload(2, start_dt=datetime.datetime(2023, 11, 15, 13)), "NFL"),
+    ]
+
+    dkcontests.print_stats(contests, start_date=datetime.date(2023, 11, 14))
+
+    out = capsys.readouterr().out
+    assert "2023-11-14 -   1 total contests" in out
+    assert "2023-11-15" not in out
+
+
 def test_print_sql_insert_uses_typed_values(capsys):
     contest = Contest.from_lobby(
         {**_contest_payload(99, entries=22, fee=25), "n": "Weekend PGA TOUR Single Entry"},
@@ -539,7 +552,7 @@ def test_main_passes_sport_class_choices_to_response_filters(monkeypatch):
         "filter_draft_groups",
         lambda _groups, sport_obj: captured.update({"sport_obj": sport_obj}) or [],
     )
-    monkeypatch.setattr(dkcontests, "print_stats", lambda _contests: None)
+    monkeypatch.setattr(dkcontests, "print_stats", lambda _contests, **_kwargs: None)
     monkeypatch.setattr(
         dkcontests,
         "get_largest_contest",
