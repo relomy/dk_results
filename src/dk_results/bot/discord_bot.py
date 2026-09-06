@@ -9,6 +9,7 @@ import yaml
 from dfs_common import state
 from discord.ext import commands
 
+from dk_results.config import load_and_apply_settings
 from dk_results.domain.sport import Sport, get_sport_choices
 from dk_results.logging import configure_logging
 from dk_results.paths import repo_file
@@ -16,6 +17,17 @@ from dk_results.persistence.contestdatabase import ContestDatabase
 
 configure_logging()
 logger = logging.getLogger(__name__)
+
+try:
+    from dotenv import load_dotenv
+except ImportError:  # pragma: no cover
+
+    def load_dotenv(*_args, **_kwargs):
+        return False
+
+
+load_dotenv()
+load_and_apply_settings()
 
 COMMAND_PREFIX = "!"
 BOT_TOKEN = os.getenv("DISCORD_BOT_TOKEN")
@@ -249,7 +261,14 @@ async def on_command_error(ctx: commands.Context, error: Exception) -> None:
     if isinstance(error, commands.CommandNotFound):
         # Ignore unknown commands so the bot only responds to expected prefixes.
         return
-    logger.error("Command error: %s", error)
+    # discord.ext.commands wraps callback exceptions in CommandInvokeError; log
+    # the original exception and its traceback instead of just the wrapper repr.
+    cause = getattr(error, "original", error)
+    logger.error(
+        "Command error: %s",
+        cause,
+        exc_info=(type(cause), cause, getattr(cause, "__traceback__", None)),
+    )
     await ctx.send("Something went wrong running that command.")
 
 
