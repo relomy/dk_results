@@ -363,6 +363,11 @@ def _print_date_stats(date: str, date_stats: dict[str, Any]) -> None:
         _print_start_time_bucket(start_time, bucket_stats)
 
 
+def _print_report_scope(scope: str | None) -> None:
+    if scope is not None:
+        print(f"Scope: {scope}")
+
+
 def _filter_contests_by_start_date(contests: Sequence[Contest], start_date: datetime.date | None) -> Sequence[Contest]:
     if start_date is None:
         return contests
@@ -382,6 +387,7 @@ def print_stats(
     start_date: datetime.date | None = None,
     featured_draft_group_ids: set[int] | None = None,
     selected_contest: Contest | None = None,
+    scope: str | None = None,
 ) -> None:
     contests = _filter_contests_by_start_date(contests, start_date)
     stats = build_contest_stats(
@@ -391,6 +397,7 @@ def print_stats(
         selected_contest=selected_contest,
     )
 
+    _print_report_scope(scope)
     if stats:
         print("Breakdown per date:")
         for date, date_stats in sorted(stats.items()):
@@ -436,6 +443,29 @@ def _select_contest_with_diagnostics(
             game_type_id=args.game_type_id,
         )
     return contest, diagnostics.getvalue()
+
+
+def _format_report_scope(args: argparse.Namespace) -> str:
+    filters = [
+        f"date={args.date.date().isoformat()}",
+        f"time={args.time.strftime('%H:%M') if args.time is not None else 'any'}",
+        f"fee=${args.entry:g}",
+        f"query={args.query!r}" if args.query else "query=any",
+        f"exclude={args.exclude!r}" if args.exclude else "exclude=none",
+        f"game_type={args.game_type_id if args.game_type_id is not None else 'any'}",
+    ]
+    return ", ".join(filters)
+
+
+def _print_selected_contest(contest: Contest) -> None:
+    print("Selected contest:")
+    print(f"  ID: {contest.id}")
+    print(f"  Name: {contest.name}")
+    print(f"  Fee: ${contest.entry_fee:g}")
+    print(f"  Start time: {contest.start_dt:%Y-%m-%d %H:%M}")
+    print(f"  Draft group: {contest.draft_group}")
+    print(f"  Entry count: {contest.entries}")
+    print(f"  Reason: largest matching ${contest.entry_fee:g} double-up")
 
 
 def main():
@@ -502,6 +532,7 @@ def main():
     )
     args = parser.parse_args()
     print(args)
+    report_scope = _format_report_scope(args)
 
     if args.sport_class and args.live:
         parser.error("--live is only supported with --sport legacy mode.")
@@ -522,6 +553,7 @@ def main():
             contests,
             start_date=args.date.date(),
             featured_draft_group_ids=featured_draft_group_ids,
+            scope=report_scope,
         )
         print(diagnostics, end="")
         exit("No contests found.")
@@ -534,9 +566,11 @@ def main():
         start_date=args.date.date(),
         featured_draft_group_ids=featured_draft_group_ids,
         selected_contest=contest,
+        scope=report_scope,
     )
     print(diagnostics, end="")
 
+    _print_selected_contest(contest)
     print_sql_insert(contest)
     maybe_insert_contest(contest, args.insert)
 

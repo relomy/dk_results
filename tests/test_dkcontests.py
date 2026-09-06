@@ -203,6 +203,32 @@ def test_print_stats_omits_featured_marker_without_metadata(capsys):
     assert "[feat]" not in capsys.readouterr().out
 
 
+def test_print_stats_includes_active_scope(capsys):
+    dkcontests.print_stats([], scope="date=2023-11-14, time=13:10, fee=$25, query=any")
+
+    assert capsys.readouterr().out.splitlines() == ["Scope: date=2023-11-14, time=13:10, fee=$25, query=any"]
+
+
+def test_print_selected_contest_shows_selection_details(capsys):
+    contest = Contest.from_lobby(
+        {**_contest_payload(7, entries=230, fee=25, start_dt=datetime.datetime(2023, 11, 14, 13)), "dg": 701},
+        "NFL",
+    )
+
+    dkcontests._print_selected_contest(contest)
+
+    assert capsys.readouterr().out.splitlines() == [
+        "Selected contest:",
+        "  ID: 7",
+        "  Name: Contest 7",
+        "  Fee: $25",
+        "  Start time: 2023-11-14 13:00",
+        "  Draft group: 701",
+        "  Entry count: 230",
+        "  Reason: largest matching $25 double-up",
+    ]
+
+
 def test_filter_contests_by_start_time_uses_displayed_minute():
     contests = [
         Contest.from_lobby(_contest_payload(1, start_dt=datetime.datetime(2023, 11, 14, 13, 10)), "NFL"),
