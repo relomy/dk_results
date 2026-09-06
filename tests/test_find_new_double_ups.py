@@ -5,7 +5,7 @@ import sys
 import pytest
 from dfs_common.discord import WebhookSender
 from lobby.common import get_salary_date, is_time_between, valid_date
-from lobby.draft_group_filter import filter_draft_groups
+from lobby.draft_group_filter import filter_draft_groups, get_featured_draft_group_ids
 from lobby.fetch import get_dk_lobby
 from lobby.formatting import format_discord_messages
 from lobby.parsing import (
@@ -272,6 +272,16 @@ def test_filter_draft_groups_filters():
 
     result = filter_draft_groups(response["DraftGroups"], DummySport)
     assert result == [6]
+
+
+def test_get_featured_draft_group_ids_uses_exact_tag_without_sport_filters():
+    groups = [
+        {"DraftGroupId": 1, "DraftGroupTag": "Featured"},
+        {"DraftGroupId": 2, "DraftGroupTag": "featured"},
+        {"DraftGroupId": 3, "DraftGroupTag": " Featured"},
+    ]
+
+    assert get_featured_draft_group_ids(groups) == {1}
 
 
 def test_filter_draft_groups_nfl_showdown():

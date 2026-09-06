@@ -12,6 +12,11 @@ def _passes_tag(tag: str) -> bool:
     return tag == "Featured"
 
 
+def get_featured_draft_group_ids(groups: list[dict[str, Any]]) -> set[int]:
+    """Return raw draft-group IDs whose tag is exactly ``Featured``."""
+    return {group["DraftGroupId"] for group in groups if _passes_tag(group["DraftGroupTag"])}
+
+
 def _passes_game_type(game_type_id: int, sport: Type[Sport]) -> bool:
     if sport.contest_restraint_game_type_id is None:
         return True

@@ -163,6 +163,58 @@ def test_print_stats_breaks_dates_down_by_sorted_start_time(capsys):
     ]
 
 
+def test_print_stats_marks_featured_and_selected_buckets_independently(capsys):
+    featured = Contest.from_lobby(
+        {**_contest_payload(1, start_dt=datetime.datetime(2023, 11, 14, 13)), "dg": 101}, "NFL"
+    )
+    selected = Contest.from_lobby(
+        {**_contest_payload(2, start_dt=datetime.datetime(2023, 11, 14, 19)), "dg": 202}, "NFL"
+    )
+
+    dkcontests.print_stats(
+        [featured, selected],
+        featured_draft_group_ids={101},
+        selected_contest=selected,
+    )
+
+    lines = capsys.readouterr().out.splitlines()
+    assert "  13:00 [feat] -   1 total contests" in lines
+    assert "  19:00 -   1 total contests [*]" in lines
+
+
+def test_print_stats_marks_a_mixed_featured_bucket_once(capsys):
+    contests = [
+        Contest.from_lobby({**_contest_payload(1, start_dt=datetime.datetime(2023, 11, 14, 13, 10)), "dg": 101}, "NFL"),
+        Contest.from_lobby(
+            {**_contest_payload(2, start_dt=datetime.datetime(2023, 11, 14, 13, 10, 45)), "dg": 202}, "NFL"
+        ),
+    ]
+
+    dkcontests.print_stats(contests, featured_draft_group_ids={101, 303})
+
+    assert capsys.readouterr().out.splitlines().count("  13:10 [feat] -   2 total contests") == 1
+
+
+def test_print_stats_omits_featured_marker_without_metadata(capsys):
+    contest = Contest.from_lobby(_contest_payload(1), "NFL")
+
+    dkcontests.print_stats([contest])
+
+    assert "[feat]" not in capsys.readouterr().out
+
+
+def test_filter_contests_by_start_time_uses_displayed_minute():
+    contests = [
+        Contest.from_lobby(_contest_payload(1, start_dt=datetime.datetime(2023, 11, 14, 13, 10)), "NFL"),
+        Contest.from_lobby(_contest_payload(2, start_dt=datetime.datetime(2023, 11, 14, 13, 10, 45)), "NFL"),
+        Contest.from_lobby(_contest_payload(3, start_dt=datetime.datetime(2023, 11, 14, 14, 10)), "NFL"),
+    ]
+
+    filtered = dkcontests._filter_contests_by_start_time(contests, datetime.time(13, 10))
+
+    assert [contest.id for contest in filtered] == [1, 2]
+
+
 def test_print_stats_sorts_dates_chronologically(capsys):
     contests = [
         Contest.from_lobby(_contest_payload(1, start_dt=datetime.datetime(2023, 11, 15, 19)), "NFL"),
@@ -539,7 +591,7 @@ def test_main_passes_sport_class_choices_to_response_filters(monkeypatch):
         "filter_draft_groups",
         lambda _groups, sport_obj: captured.update({"sport_obj": sport_obj}) or [],
     )
-    monkeypatch.setattr(dkcontests, "print_stats", lambda _contests: None)
+    monkeypatch.setattr(dkcontests, "print_stats", lambda _contests, **_kwargs: None)
     monkeypatch.setattr(
         dkcontests,
         "get_largest_contest",
