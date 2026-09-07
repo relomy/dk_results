@@ -10,7 +10,7 @@ from dfs_common import contests, state
 from dfs_common.discord import WebhookSender
 
 from dk_results.config import load_and_apply_settings
-from dk_results.discord_roles import DISCORD_ROLE_MAP
+from dk_results.discord_announcements import build_double_up_found_announcement
 from dk_results.domain.contest import Contest
 from dk_results.domain.sport import Sport, get_sport_choices
 from dk_results.lobby.double_ups import get_double_ups
@@ -48,12 +48,18 @@ def _upsert_contests(items: list[Contest]) -> None:
     )
 
 
-def send_discord_notification(bot: WebhookSender | None, sport_name: str, message: str) -> None:
-    """Send a notification message to Discord for a specific sport."""
-    if bot is None or sport_name not in DISCORD_ROLE_MAP:
+def send_discord_notification(bot: WebhookSender | None, sport_name: str, contests: list[Contest]) -> None:
+    """Send a new-double-up-found notification to Discord for a specific sport.
+
+    Gated by ``build_double_up_found_announcement``: a sport not in the shared
+    role map gets no announcement at all — intentional, existing behavior.
+    """
+    if bot is None:
         return
-    emoji, role = DISCORD_ROLE_MAP[sport_name]
-    bot.send_message(f"{emoji} {message} {role}")
+    message = build_double_up_found_announcement(sport_name, contests)
+    if message is None:
+        return
+    bot.send_message(message)
 
 
 def set_quiet_verbosity() -> None:
@@ -122,10 +128,9 @@ def process_sport(
     new_contest_ids = db.compare_contests(double_ups)
     if new_contest_ids:
         matching_contests = [c for c in contests if c.id in new_contest_ids]
-        discord_message = format_discord_messages(matching_contests)
-        logger.info(discord_message)
+        logger.info(format_discord_messages(matching_contests))
         _upsert_contests(matching_contests)
-        send_discord_notification(bot, sport_obj.name, discord_message)
+        send_discord_notification(bot, sport_obj.name, matching_contests)
 
 
 def _init_runtime() -> None:

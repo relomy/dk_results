@@ -10,6 +10,9 @@ from dfs_common import state
 from discord.ext import commands
 
 from dk_results.config import load_and_apply_settings
+from dk_results.discord_announcements import relative_time_from_seconds as _shared_relative_time
+from dk_results.discord_announcements import sheet_link as _shared_sheet_link
+from dk_results.discord_announcements import sport_emoji as _shared_sport_emoji
 from dk_results.domain.sport import Sport, get_sport_choices
 from dk_results.logging import configure_logging
 from dk_results.paths import repo_file
@@ -59,38 +62,13 @@ def _load_sheet_gid_map() -> dict[str, int]:
 
 SHEET_GID_MAP: dict[str, int] = {}
 
-SPORT_EMOJI = {
-    "CFB": "🏈",
-    "GOLF": "⛳",
-    "LOL": "🎮",
-    "MLB": "⚾",
-    "MMA": "🥊",
-    "NAS": "🏎️",
-    "NBA": "🏀",
-    "NFL": "🏈",
-    "NFLAfternoon": "🏈",
-    "NFLShowdown": "🏈",
-    "NHL": "🏒",
-    "PGAMain": "⛳",
-    "PGAShowdown": "⛳",
-    "PGAWeekend": "⛳",
-    "SOC": "⚽",
-    "TEN": "🎾",
-    "USFL": "🏈",
-    "XFL": "🏈",
-}
-
 
 def _sheet_link(sheet_title: str) -> str | None:
     """Return a Discord-safe Google Sheets link for a sheet title."""
-    if not SPREADSHEET_ID:
-        logger.debug("SPREADSHEET_ID not set; cannot build sheet link.")
-        return None
-    gid = SHEET_GID_MAP.get(sheet_title)
-    if gid is None:
-        logger.debug("No gid found for sheet title %s.", sheet_title)
-        return None
-    return f"<https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}/edit#gid={gid}>"
+    link = _shared_sheet_link(SPREADSHEET_ID, SHEET_GID_MAP, sheet_title)
+    if link is None:
+        logger.debug("No Discord sheet link available for sheet title %s.", sheet_title)
+    return link
 
 
 def _sport_sheet_title(sport_cls: SportType) -> str:
@@ -100,7 +78,7 @@ def _sport_sheet_title(sport_cls: SportType) -> str:
 
 def _sport_emoji(sport_name: str) -> str:
     """Return an emoji for a sport name, or a default."""
-    return SPORT_EMOJI.get(sport_name, "🏟️")
+    return _shared_sport_emoji(sport_name)
 
 
 def _configure_discord_log_file() -> None:
@@ -212,20 +190,7 @@ def _format_time_until(start_date: str) -> str | None:
     delta = start_dt - now
     if delta.total_seconds() <= 0:
         return None
-    seconds = int(delta.total_seconds())
-    minutes, sec = divmod(seconds, 60)
-    hours, minutes = divmod(minutes, 60)
-    days, hours = divmod(hours, 24)
-    parts = []
-    if days:
-        parts.append(f"{days}d")
-    if hours:
-        parts.append(f"{hours}h")
-    if minutes:
-        parts.append(f"{minutes}m")
-    if not parts:
-        parts.append(f"{sec}s")
-    return f"⏳ {''.join(parts)}"
+    return f"⏳ {_shared_relative_time(int(delta.total_seconds()))}"
 
 
 def _system_uptime_seconds() -> float | None:

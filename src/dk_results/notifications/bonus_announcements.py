@@ -8,6 +8,7 @@ import time
 from dataclasses import dataclass
 from typing import Any, Protocol
 
+from dk_results.discord_announcements import build_bonus_achievement_announcement
 from dk_results.domain.bonus_rules import parse_bonus_counts
 from dk_results.domain.lineup import normalize_name
 
@@ -245,7 +246,8 @@ def _format_message(sport: str, candidate: BonusCandidate, announced_count: int)
         total_points = points * announced_count
         points_text = f"{points_text}, {_format_points(total_points)} total bonus pts"
     action = meta["action"]
-    return f"{sport}: {candidate.display_name} ({ownership}) {action} ({points_text}) (VIPs: {vip_part})"
+    headline = f"{candidate.display_name} ({ownership}) {action} ({points_text}) (VIPs: {vip_part})"
+    return build_bonus_achievement_announcement(sport, headline)
 
 
 def _collect_candidates(sport: str, vip_lineups: list[dict[str, Any]]) -> list[BonusCandidate]:
