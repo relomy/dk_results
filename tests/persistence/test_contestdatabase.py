@@ -11,7 +11,7 @@ from dk_results.persistence.contestdatabase import ContestDatabase, ContestRow, 
 @pytest.fixture
 def contest_db():
     db = ContestDatabase(":memory:")
-    db.create_table()
+    db.ensure_schema()
     try:
         yield db
     finally:
@@ -414,7 +414,7 @@ def test_from_connection_shares_the_connection():
     try:
         db = ContestDatabase.from_connection(conn)
         assert db.conn is conn
-        db.create_table()
+        db.ensure_schema()
         # A write through the wrapper is visible on the same connection.
         _insert_contest(db, dk_id=1, status="LIVE")
         assert conn.execute("SELECT COUNT(*) FROM contests").fetchone()[0] == 1
@@ -622,7 +622,7 @@ def test_get_vip_cash_status_sqlite_error(caplog):
     assert any("get_vip_cash_status" in rec.message for rec in caplog.records)
 
 
-def test_create_table_migrates_preexisting_database_file(tmp_path):
+def test_ensure_schema_migrates_preexisting_database_file(tmp_path):
     """A pre-existing on-disk db file lacking the new cash-line columns
     should be migrated in place, not just a fresh one (ADR-0011)."""
     db_path = str(tmp_path / "contests.db")
@@ -658,7 +658,7 @@ def test_create_table_migrates_preexisting_database_file(tmp_path):
 
     db = ContestDatabase(db_path)
     try:
-        db.create_table()
+        db.ensure_schema()
         db.set_cash_line(1, rank=25, points=142.5)
         assert db.get_cash_line(1) == (25, 142.5)
     finally:

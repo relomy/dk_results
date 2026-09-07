@@ -29,7 +29,7 @@ def test_contests_upsert_writes_shared_db(tmp_path, monkeypatch):
     _upsert_contests([contest])
 
     db = ContestDatabase(str(state.contests_db_path()))
-    db.create_table()
+    db.ensure_schema()
     try:
         row = db.get_live_contest("GOLF", entry_fee=25)
     finally:

@@ -687,7 +687,7 @@ def test_maybe_insert_contest_inserts_when_confirmed(monkeypatch, capsys):
         def __init__(self, db_path):
             calls["db_path"] = db_path
 
-        def create_table(self):
+        def ensure_schema(self):
             calls["created_table"] = True
 
         def compare_contests(self, contests):
@@ -719,7 +719,7 @@ def test_maybe_insert_contest_reports_existing_duplicate(monkeypatch, capsys):
         def __init__(self, _db_path):
             pass
 
-        def create_table(self):
+        def ensure_schema(self):
             pass
 
         def compare_contests(self, _contests):
@@ -774,7 +774,7 @@ def test_main_with_insert_flag_prompts_and_inserts_confirmed_contest(monkeypatch
         def __init__(self, _db_path):
             pass
 
-        def create_table(self):
+        def ensure_schema(self):
             pass
 
         def compare_contests(self, contests):
