@@ -1,6 +1,7 @@
 import datetime
 import logging
 import os
+import sqlite3
 import time
 from pathlib import Path
 
@@ -10,13 +11,15 @@ from dfs_common import state
 from discord.ext import commands
 
 from dk_results.config import load_and_apply_settings
+from dk_results.discord_announcements import build_milestone_announcement as _shared_build_milestone_announcement
 from dk_results.discord_announcements import relative_time_from_seconds as _shared_relative_time
 from dk_results.discord_announcements import sheet_link as _shared_sheet_link
-from dk_results.discord_announcements import sport_emoji as _shared_sport_emoji
 from dk_results.domain.sport import Sport, get_sport_choices
 from dk_results.logging import configure_logging
+from dk_results.notifications.vip_presence import VIP_ABSENT, VIP_PRESENT
 from dk_results.paths import repo_file
 from dk_results.persistence.contestdatabase import ContestDatabase
+from dk_results.persistence.notification_store import NotificationStore
 
 logger = logging.getLogger(__name__)
 
@@ -74,11 +77,6 @@ def _sheet_link(sheet_title: str) -> str | None:
 def _sport_sheet_title(sport_cls: SportType) -> str:
     """Resolve a display sheet title for a Sport subclass."""
     return getattr(sport_cls, "sheet_name", None) or sport_cls.name
-
-
-def _sport_emoji(sport_name: str) -> str:
-    """Return an emoji for a sport name, or a default."""
-    return _shared_sport_emoji(sport_name)
 
 
 def _configure_discord_log_file() -> None:
@@ -143,16 +141,28 @@ def _allowed_sports_label(choices: dict[str, SportType]) -> str:
     return ", ".join(sorted(names))
 
 
-def _format_contest_row(row: tuple, sport_name: str, sheet_link: str | None) -> str:
-    """Format a single contest row for Discord output."""
-    dk_id, name, _, _, start_date = row
-    # Wrap URL in angle brackets to prevent Discord from embedding a preview.
-    url = f"<https://www.draftkings.com/contest/gamecenter/{dk_id}#/>"
-    return f"sport={sport_name}: dk_id={dk_id}, name={name}, start_date={start_date}, url={url}"
-
-
 def _db_path() -> str:
     return str(state.contests_db_path())
+
+
+def _vip_presence_for_contest(dk_id: int) -> str | None:
+    """Return the cached VIP-presence verdict for ``dk_id``, or ``None``.
+
+    Reads the verdict already cached by the completion-tracking pipeline in
+    the `contest_vip_presence` table — no live DraftKings call. Only a
+    confirmed `present`/`absent` verdict is returned; `unknown`,
+    `unknown_capped`, and "never checked" all map to `None` so the caller
+    omits the VIP bullet rather than showing a non-answer.
+    """
+    conn = sqlite3.connect(_db_path())
+    try:
+        cached = NotificationStore(conn).get_presence(dk_id)
+    finally:
+        conn.close()
+    if cached is None:
+        return None
+    status, _checked_at = cached
+    return status if status in (VIP_PRESENT, VIP_ABSENT) else None
 
 
 def _fetch_live_contest(sport_cls: SportType) -> tuple | None:
@@ -262,8 +272,18 @@ async def contests(ctx: commands.Context, sport: str | None = None) -> None:
         await ctx.send(f"No live contest found for {sport_choice.name}.")
         return
 
+    dk_id, name, _, _, start_date = contest
     sheet_link = _sheet_link(_sport_sheet_title(sport_choice))
-    await ctx.send(_format_contest_row(contest, sport_choice.name, sheet_link))
+    message = _shared_build_milestone_announcement(
+        prefix="Live",
+        sport_name=sport_choice.name,
+        contest_name=name,
+        start_date=str(start_date),
+        dk_id=dk_id,
+        sheet_link_url=sheet_link,
+        vip_presence=_vip_presence_for_contest(dk_id),
+    )
+    await ctx.send(message)
 
 
 async def live(ctx: commands.Context) -> None:
@@ -281,24 +301,22 @@ async def live(ctx: commands.Context) -> None:
         await ctx.send("No live contests found.")
         return
 
-    lines = []
+    blocks = []
     for dk_id, name, _, _, start_date, sport in rows:
-        # Wrap URL in angle brackets to prevent Discord from embedding a preview.
-        url = f"<https://www.draftkings.com/contest/gamecenter/{dk_id}#/>"
         sheet_link = _sheet_link(sport)
-        sheet_part = f"📊 Sheet: {sheet_link}" if sheet_link else "📊 Sheet: n/a"
-        lines.append(
-            "\n".join(
-                [
-                    f"{_sport_emoji(sport)} {sport} — {name}",
-                    f"• 🕒 {start_date}",
-                    f"• 🔗 DK: {url}",
-                    f"• {sheet_part}",
-                ]
+        blocks.append(
+            _shared_build_milestone_announcement(
+                prefix="Live",
+                sport_name=sport,
+                contest_name=name,
+                start_date=str(start_date),
+                dk_id=dk_id,
+                sheet_link_url=sheet_link,
+                vip_presence=_vip_presence_for_contest(dk_id),
             )
         )
 
-    await ctx.send("\n".join(lines))
+    await ctx.send("\n\n".join(blocks))
 
 
 async def upcoming(ctx: commands.Context) -> None:

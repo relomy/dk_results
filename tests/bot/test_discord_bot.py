@@ -123,12 +123,40 @@ async def test_contests_returns_live_contest(monkeypatch):
         "_fetch_live_contest",
         lambda sport_cls: (1, "Contest", None, None, "2000-01-01"),
     )
+    monkeypatch.setattr(discord_bot, "_sheet_link", lambda _sport: None)
+    monkeypatch.setattr(discord_bot, "_vip_presence_for_contest", lambda _dk_id: None)
 
     ctx = FakeCtx()
     await discord_bot.contests(_ctx(ctx), "nba")
 
     assert ctx.sent == [
-        "sport=NBA: dk_id=1, name=Contest, start_date=2000-01-01, url=<https://www.draftkings.com/contest/gamecenter/1#/>"
+        "Live: 🏀 NBA — Contest\n"
+        "• 🕒 2000-01-01\n"
+        "• 🔗 DK: [1](<https://www.draftkings.com/contest/gamecenter/1#/>)\n"
+        "• 📊 Sheet: n/a"
+    ]
+
+
+@pytest.mark.asyncio
+async def test_contests_returns_live_contest_with_vip_present(monkeypatch):
+    monkeypatch.setattr(discord_bot, "_sport_choices", lambda: {"nba": DummySport})
+    monkeypatch.setattr(
+        discord_bot,
+        "_fetch_live_contest",
+        lambda sport_cls: (1, "Contest", None, None, "2000-01-01"),
+    )
+    monkeypatch.setattr(discord_bot, "_sheet_link", lambda _sport: None)
+    monkeypatch.setattr(discord_bot, "_vip_presence_for_contest", lambda _dk_id: "present")
+
+    ctx = FakeCtx()
+    await discord_bot.contests(_ctx(ctx), "nba")
+
+    assert ctx.sent == [
+        "Live: 🏀 NBA — Contest\n"
+        "• 🕒 2000-01-01\n"
+        "• 🔗 DK: [1](<https://www.draftkings.com/contest/gamecenter/1#/>)\n"
+        "• 📊 Sheet: n/a\n"
+        "• ⭐ VIP: present"
     ]
 
 
@@ -136,6 +164,7 @@ async def test_contests_returns_live_contest(monkeypatch):
 async def test_live_lists_all_live_contests(monkeypatch):
     monkeypatch.setattr(discord_bot, "_sport_choices", lambda: {"nba": DummySport, "nfl": DummySportTwo})
     monkeypatch.setattr(discord_bot, "_sheet_link", lambda _sport: None)
+    monkeypatch.setattr(discord_bot, "_vip_presence_for_contest", lambda _dk_id: None)
 
     captured = {}
 
@@ -162,14 +191,56 @@ async def test_live_lists_all_live_contests(monkeypatch):
     assert captured["sports"] == ["NBA", "NFL"]
     assert captured.get("closed") is True
     assert ctx.sent == [
-        "🏀 NBA — ContestA\n"
+        "Live: 🏀 NBA — ContestA\n"
         "• 🕒 2000-01-01\n"
-        "• 🔗 DK: <https://www.draftkings.com/contest/gamecenter/1#/>\n"
-        "• 📊 Sheet: n/a\n"
-        "🏈 NFL — ContestB\n"
+        "• 🔗 DK: [1](<https://www.draftkings.com/contest/gamecenter/1#/>)\n"
+        "• 📊 Sheet: n/a\n\n"
+        "Live: 🏈 NFL — ContestB\n"
         "• 🕒 2000-01-02\n"
-        "• 🔗 DK: <https://www.draftkings.com/contest/gamecenter/2#/>\n"
+        "• 🔗 DK: [2](<https://www.draftkings.com/contest/gamecenter/2#/>)\n"
         "• 📊 Sheet: n/a"
+    ]
+
+
+@pytest.mark.asyncio
+async def test_live_shows_vip_presence_per_contest(monkeypatch):
+    monkeypatch.setattr(discord_bot, "_sport_choices", lambda: {"nba": DummySport, "nfl": DummySportTwo})
+    monkeypatch.setattr(discord_bot, "_sheet_link", lambda _sport: None)
+
+    def fake_presence(dk_id):
+        return {1: "present", 2: "absent"}.get(dk_id)
+
+    monkeypatch.setattr(discord_bot, "_vip_presence_for_contest", fake_presence)
+
+    class FakeContestDatabase:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def get_live_contests(self, sports=None, entry_fee=25, keyword="%"):
+            return [
+                (1, "ContestA", None, None, "2000-01-01", "NBA"),
+                (2, "ContestB", None, None, "2000-01-02", "NFL"),
+            ]
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(discord_bot, "ContestDatabase", FakeContestDatabase)
+
+    ctx = FakeCtx()
+    await discord_bot.live(_ctx(ctx))
+
+    assert ctx.sent == [
+        "Live: 🏀 NBA — ContestA\n"
+        "• 🕒 2000-01-01\n"
+        "• 🔗 DK: [1](<https://www.draftkings.com/contest/gamecenter/1#/>)\n"
+        "• 📊 Sheet: n/a\n"
+        "• ⭐ VIP: present\n\n"
+        "Live: 🏈 NFL — ContestB\n"
+        "• 🕒 2000-01-02\n"
+        "• 🔗 DK: [2](<https://www.draftkings.com/contest/gamecenter/2#/>)\n"
+        "• 📊 Sheet: n/a\n"
+        "• ⭐ VIP: absent"
     ]
 
 
@@ -417,10 +488,6 @@ def test_sport_sheet_title_prefers_sheet_name():
     assert discord_bot._sport_sheet_title(DummySportNoSheet) == "NFL"
 
 
-def test_sport_emoji_default():
-    assert discord_bot._sport_emoji("UNKNOWN") == "🏟️"
-
-
 def test_configure_discord_log_file_handles_exception(monkeypatch):
     class BoomHandler:
         def __init__(self, *args, **kwargs):
@@ -472,6 +539,43 @@ def test_fetch_live_contest_closes_db(monkeypatch):
 def test_db_path_uses_dfs_common_state(monkeypatch):
     monkeypatch.setattr(discord_bot.state, "contests_db_path", lambda: "/tmp/contests.db")
     assert discord_bot._db_path() == "/tmp/contests.db"
+
+
+def test_vip_presence_for_contest_present(monkeypatch, tmp_path):
+    db_path = tmp_path / "contests.db"
+    monkeypatch.setattr(discord_bot, "_db_path", lambda: str(db_path))
+    conn = discord_bot.sqlite3.connect(str(db_path))
+    discord_bot.NotificationStore(conn).upsert_presence(1, "present")
+    conn.close()
+
+    assert discord_bot._vip_presence_for_contest(1) == "present"
+
+
+def test_vip_presence_for_contest_absent(monkeypatch, tmp_path):
+    db_path = tmp_path / "contests.db"
+    monkeypatch.setattr(discord_bot, "_db_path", lambda: str(db_path))
+    conn = discord_bot.sqlite3.connect(str(db_path))
+    discord_bot.NotificationStore(conn).upsert_presence(2, "absent")
+    conn.close()
+
+    assert discord_bot._vip_presence_for_contest(2) == "absent"
+
+
+def test_vip_presence_for_contest_unknown_suppressed(monkeypatch, tmp_path):
+    db_path = tmp_path / "contests.db"
+    monkeypatch.setattr(discord_bot, "_db_path", lambda: str(db_path))
+    conn = discord_bot.sqlite3.connect(str(db_path))
+    discord_bot.NotificationStore(conn).upsert_presence(3, "unknown_capped")
+    conn.close()
+
+    assert discord_bot._vip_presence_for_contest(3) is None
+
+
+def test_vip_presence_for_contest_no_cached_row(monkeypatch, tmp_path):
+    db_path = tmp_path / "contests.db"
+    monkeypatch.setattr(discord_bot, "_db_path", lambda: str(db_path))
+
+    assert discord_bot._vip_presence_for_contest(999) is None
 
 
 def test_format_time_until_seconds_only(monkeypatch):
