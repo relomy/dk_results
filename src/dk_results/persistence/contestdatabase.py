@@ -46,6 +46,20 @@ class ContestRow:
         )
 
 
+@dataclass(frozen=True)
+class VipCashStatus:
+    """One tracked VIP's standings row in one contest (ADR-0011).
+
+    Persisted via :meth:`ContestDatabase.replace_vip_cash_status` and read via
+    :meth:`ContestDatabase.get_vip_cash_status`, following the named-shape
+    precedent set by :class:`ContestRow` (ADR-0006).
+    """
+
+    vip_name: Any
+    rank: Any
+    points: Any
+
+
 class ContestDatabase:
     def __init__(self, sqlite3_database: str, logger: logging.Logger | None = None) -> None:
         """
@@ -83,7 +97,8 @@ class ContestDatabase:
 
     def create_table(self) -> None:
         """
-        Create the contests table if it does not exist.
+        Create the contests table if it does not exist, and bring an
+        already-existing table up to date with any columns added since.
         """
         sql = """
         CREATE TABLE IF NOT EXISTS "contests" (
@@ -103,7 +118,38 @@ class ContestDatabase:
         );
         """
         self.conn.execute(sql)
+        self._migrate_cash_line_columns()
+        self._create_vip_cash_status_table()
         self.conn.commit()
+
+    def _migrate_cash_line_columns(self) -> None:
+        """
+        Add the cash-line columns (ADR-0011) to an existing ``contests``
+        table if they aren't already present. ``create_table``'s
+        ``CREATE TABLE IF NOT EXISTS`` only shapes a brand-new table, so an
+        already-deployed database file needs this guarded ``ALTER TABLE``
+        to pick up columns added after it was first created.
+        """
+        cur = self.conn.cursor()
+        cur.execute('PRAGMA table_info("contests")')
+        existing_columns = {row[1] for row in cur.fetchall()}
+        if "cash_line_rank" not in existing_columns:
+            cur.execute('ALTER TABLE "contests" ADD COLUMN "cash_line_rank" INTEGER')
+        if "cash_line_points" not in existing_columns:
+            cur.execute('ALTER TABLE "contests" ADD COLUMN "cash_line_points" REAL')
+
+    def _create_vip_cash_status_table(self) -> None:
+        """Create the vip_cash_status table if it does not exist."""
+        sql = """
+        CREATE TABLE IF NOT EXISTS "vip_cash_status" (
+            "dk_id" INTEGER NOT NULL,
+            "vip_name" TEXT NOT NULL,
+            "rank" INTEGER,
+            "points" REAL,
+            PRIMARY KEY ("dk_id", "vip_name")
+        );
+        """
+        self.conn.execute(sql)
 
     def compare_contests(self, contests: list[Contest]) -> list[int]:
         """
@@ -519,4 +565,63 @@ class ContestDatabase:
             return cur.fetchall()
         except sqlite3.Error as err:
             self.logger.error("sqlite error in get_live_contest_candidates(): %s", err.args[0])
+            return []
+
+    def set_cash_line(self, dk_id: int, rank: int | None, points: float | None) -> None:
+        """
+        Persist the cash line (ADR-0011) for a contest: the rank and score of
+        its last paid position, as computed by the most recent standings poll.
+        """
+        cur = self.conn.cursor()
+        sql = 'UPDATE "contests" SET "cash_line_rank"=?, "cash_line_points"=? WHERE "dk_id"=?'
+        try:
+            cur.execute(sql, (rank, points, dk_id))
+            self.conn.commit()
+        except sqlite3.Error as err:
+            self.logger.error("sqlite error in set_cash_line(): %s", err.args[0])
+
+    def get_cash_line(self, dk_id: int) -> tuple[int | None, float | None] | None:
+        """
+        Fetch the persisted cash line for a contest.
+
+        Returns:
+            tuple[int | None, float | None] | None: (rank, points) if the
+                contest exists, else None. On SQLite error, also None.
+        """
+        cur = self.conn.cursor()
+        try:
+            sql = 'SELECT "cash_line_rank", "cash_line_points" FROM "contests" WHERE "dk_id"=? LIMIT 1'
+            cur.execute(sql, (dk_id,))
+            row = cur.fetchone()
+            return (row[0], row[1]) if row is not None else None
+        except sqlite3.Error as err:
+            self.logger.error("sqlite error in get_cash_line(): %s", err.args[0])
+            return None
+
+    def replace_vip_cash_status(self, dk_id: int, statuses: list[VipCashStatus]) -> None:
+        """
+        Atomically replace the full set of VIP cash-status rows for a
+        contest, matching how ``SportProcessor`` re-parses the whole VIP
+        list on every poll rather than updating it incrementally.
+        """
+        cur = self.conn.cursor()
+        try:
+            cur.execute('DELETE FROM "vip_cash_status" WHERE "dk_id"=?', (dk_id,))
+            cur.executemany(
+                'INSERT INTO "vip_cash_status" ("dk_id", "vip_name", "rank", "points") VALUES (?, ?, ?, ?)',
+                [(dk_id, status.vip_name, status.rank, status.points) for status in statuses],
+            )
+            self.conn.commit()
+        except sqlite3.Error as err:
+            self.logger.error("sqlite error in replace_vip_cash_status(): %s", err.args[0])
+
+    def get_vip_cash_status(self, dk_id: int) -> list[VipCashStatus]:
+        """Fetch the persisted VIP cash-status rows for a contest."""
+        cur = self.conn.cursor()
+        try:
+            sql = 'SELECT "vip_name", "rank", "points" FROM "vip_cash_status" WHERE "dk_id"=? ORDER BY "vip_name"'
+            cur.execute(sql, (dk_id,))
+            return [VipCashStatus(vip_name=row[0], rank=row[1], points=row[2]) for row in cur.fetchall()]
+        except sqlite3.Error as err:
+            self.logger.error("sqlite error in get_vip_cash_status(): %s", err.args[0])
             return []

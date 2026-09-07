@@ -5,7 +5,7 @@ import sqlite3
 import pytest
 
 from dk_results.domain.contest import Contest
-from dk_results.persistence.contestdatabase import ContestDatabase, ContestRow
+from dk_results.persistence.contestdatabase import ContestDatabase, ContestRow, VipCashStatus
 
 
 @pytest.fixture
@@ -477,3 +477,164 @@ def test_update_contest_handles_error(caplog):
     with caplog.at_level(logging.ERROR):
         db.update_contest(1, positions_paid=1, status="LIVE", completed=0)
     assert any("update_contest" in rec.message for rec in caplog.records)
+
+
+def test_set_and_get_cash_line_round_trip(contest_db):
+    _insert_contest(contest_db, dk_id=1)
+
+    contest_db.set_cash_line(1, rank=25, points=142.5)
+
+    assert contest_db.get_cash_line(1) == (25, 142.5)
+
+
+def test_get_cash_line_returns_none_for_missing_contest(contest_db):
+    assert contest_db.get_cash_line(999) is None
+
+
+def test_get_cash_line_sqlite_error(caplog):
+    class BoomCursor:
+        def execute(self, *_a, **_k):
+            raise sqlite3.Error("boom")
+
+    class BoomConn:
+        def cursor(self):
+            return BoomCursor()
+
+    db = ContestDatabase.from_connection(BoomConn())  # type: ignore[arg-type]
+    with caplog.at_level(logging.ERROR):
+        assert db.get_cash_line(1) is None
+    assert any("get_cash_line" in rec.message for rec in caplog.records)
+
+
+def test_set_cash_line_sqlite_error(caplog):
+    class BoomCursor:
+        def execute(self, *_a, **_k):
+            raise sqlite3.Error("boom")
+
+    class BoomConn:
+        def cursor(self):
+            return BoomCursor()
+
+    db = ContestDatabase.from_connection(BoomConn())  # type: ignore[arg-type]
+    with caplog.at_level(logging.ERROR):
+        db.set_cash_line(1, rank=1, points=1.0)
+    assert any("set_cash_line" in rec.message for rec in caplog.records)
+
+
+def test_replace_and_get_vip_cash_status_round_trip(contest_db):
+    _insert_contest(contest_db, dk_id=1)
+
+    contest_db.replace_vip_cash_status(
+        1,
+        [
+            VipCashStatus(vip_name="Alice", rank=10, points=150.0),
+            VipCashStatus(vip_name="Bob", rank=40, points=90.0),
+        ],
+    )
+
+    assert contest_db.get_vip_cash_status(1) == [
+        VipCashStatus(vip_name="Alice", rank=10, points=150.0),
+        VipCashStatus(vip_name="Bob", rank=40, points=90.0),
+    ]
+
+
+def test_replace_vip_cash_status_drops_stale_rows(contest_db):
+    _insert_contest(contest_db, dk_id=1)
+    contest_db.replace_vip_cash_status(
+        1,
+        [
+            VipCashStatus(vip_name="Alice", rank=10, points=150.0),
+            VipCashStatus(vip_name="Bob", rank=40, points=90.0),
+        ],
+    )
+
+    contest_db.replace_vip_cash_status(1, [VipCashStatus(vip_name="Alice", rank=5, points=200.0)])
+
+    assert contest_db.get_vip_cash_status(1) == [VipCashStatus(vip_name="Alice", rank=5, points=200.0)]
+
+
+def test_replace_vip_cash_status_scoped_to_contest(contest_db):
+    _insert_contest(contest_db, dk_id=1)
+    _insert_contest(contest_db, dk_id=2)
+    contest_db.replace_vip_cash_status(1, [VipCashStatus(vip_name="Alice", rank=10, points=150.0)])
+    contest_db.replace_vip_cash_status(2, [VipCashStatus(vip_name="Carol", rank=3, points=210.0)])
+
+    assert contest_db.get_vip_cash_status(1) == [VipCashStatus(vip_name="Alice", rank=10, points=150.0)]
+    assert contest_db.get_vip_cash_status(2) == [VipCashStatus(vip_name="Carol", rank=3, points=210.0)]
+
+
+def test_get_vip_cash_status_returns_empty_for_missing_contest(contest_db):
+    assert contest_db.get_vip_cash_status(999) == []
+
+
+def test_replace_vip_cash_status_sqlite_error(caplog):
+    class BoomCursor:
+        def execute(self, *_a, **_k):
+            raise sqlite3.Error("boom")
+
+    class BoomConn:
+        def cursor(self):
+            return BoomCursor()
+
+    db = ContestDatabase.from_connection(BoomConn())  # type: ignore[arg-type]
+    with caplog.at_level(logging.ERROR):
+        db.replace_vip_cash_status(1, [VipCashStatus(vip_name="Alice", rank=1, points=1.0)])
+    assert any("replace_vip_cash_status" in rec.message for rec in caplog.records)
+
+
+def test_get_vip_cash_status_sqlite_error(caplog):
+    class BoomCursor:
+        def execute(self, *_a, **_k):
+            raise sqlite3.Error("boom")
+
+    class BoomConn:
+        def cursor(self):
+            return BoomCursor()
+
+    db = ContestDatabase.from_connection(BoomConn())  # type: ignore[arg-type]
+    with caplog.at_level(logging.ERROR):
+        assert db.get_vip_cash_status(1) == []
+    assert any("get_vip_cash_status" in rec.message for rec in caplog.records)
+
+
+def test_create_table_migrates_preexisting_database_file(tmp_path):
+    """A pre-existing on-disk db file lacking the new cash-line columns
+    should be migrated in place, not just a fresh one (ADR-0011)."""
+    db_path = str(tmp_path / "contests.db")
+
+    # Simulate a database file created before the cash-line columns existed.
+    legacy_conn = sqlite3.connect(db_path)
+    legacy_conn.execute(
+        """
+        CREATE TABLE "contests" (
+            "dk_id" INTEGER PRIMARY KEY,
+            "sport" varchar(10) NOT NULL,
+            "name"  varchar(50) NOT NULL,
+            "start_date"    datetime NOT NULL,
+            "draft_group"   INTEGER NOT NULL,
+            "total_prizes"  INTEGER NOT NULL,
+            "entries"       INTEGER NOT NULL,
+            "positions_paid"        INTEGER,
+            "entry_fee"     INTEGER NOT NULL,
+            "entry_count"   INTEGER NOT NULL,
+            "max_entry_count"       INTEGER NOT NULL,
+            "completed"     INTEGER NOT NULL DEFAULT 0,
+            "status"        TEXT
+        );
+        """
+    )
+    legacy_conn.execute(
+        "INSERT INTO contests (dk_id, sport, name, start_date, draft_group, total_prizes, entries, "
+        "entry_fee, entry_count, max_entry_count) VALUES (1, 'NBA', 'Contest', '2024-01-01 00:00:00', "
+        "1, 1000, 100, 25, 0, 1)"
+    )
+    legacy_conn.commit()
+    legacy_conn.close()
+
+    db = ContestDatabase(db_path)
+    try:
+        db.create_table()
+        db.set_cash_line(1, rank=25, points=142.5)
+        assert db.get_cash_line(1) == (25, 142.5)
+    finally:
+        db.close()
