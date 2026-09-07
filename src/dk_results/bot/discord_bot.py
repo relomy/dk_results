@@ -286,6 +286,57 @@ async def contests(ctx: commands.Context, sport: str | None = None) -> None:
     await ctx.send(message)
 
 
+def _format_vip_cash_bullets(
+    vip_statuses: list,
+    cash_line: tuple[int | None, float | None] | None,
+) -> list[str]:
+    """Format one bullet per persisted VIP cash-status row, or none if there aren't any."""
+    if not vip_statuses:
+        return []
+    cash_line_rank = cash_line[0] if cash_line else None
+    bullets = []
+    for status in vip_statuses:
+        projected_cashing = cash_line_rank is not None and status.rank is not None and status.rank <= cash_line_rank
+        emoji = "✅" if projected_cashing else "❌"
+        bullets.append(f"• {emoji} {status.vip_name}: rank {status.rank}, {status.points} pts")
+    return bullets
+
+
+def _fetch_live_contests_with_cash_status(
+    contest_db: ContestDatabase, allowed_sports: list[str]
+) -> tuple[list[tuple], dict[int, tuple[int | None, float | None] | None], dict[int, list]]:
+    """Fetch live contest rows plus each one's persisted cash line and VIP statuses."""
+    rows = contest_db.get_live_contests(sports=allowed_sports)
+    cash_lines = {dk_id: contest_db.get_cash_line(dk_id) for dk_id, *_rest in rows}
+    vip_statuses = {dk_id: contest_db.get_vip_cash_status(dk_id) for dk_id, *_rest in rows}
+    return rows, cash_lines, vip_statuses
+
+
+def _format_live_contest_block(
+    dk_id: int,
+    name: str,
+    start_date: str,
+    sport: str,
+    cash_line: tuple[int | None, float | None] | None,
+    vip_statuses: list,
+) -> str:
+    """Format one contest's `!live` block: the shared milestone block plus any VIP cash-status bullets."""
+    sheet_link = _sheet_link(sport)
+    block = _shared_build_milestone_announcement(
+        prefix="Live",
+        sport_name=sport,
+        contest_name=name,
+        start_date=str(start_date),
+        dk_id=dk_id,
+        sheet_link_url=sheet_link,
+        vip_presence=_vip_presence_for_contest(dk_id),
+    )
+    cash_bullets = _format_vip_cash_bullets(vip_statuses, cash_line)
+    if cash_bullets:
+        block = "\n".join([block, *cash_bullets])
+    return block
+
+
 async def live(ctx: commands.Context) -> None:
     """Show all live contests across supported sports."""
     choices = _sport_choices()
@@ -293,7 +344,7 @@ async def live(ctx: commands.Context) -> None:
 
     contest_db = ContestDatabase(_db_path(), logger=logger)
     try:
-        rows = contest_db.get_live_contests(sports=allowed_sports)
+        rows, cash_lines, vip_statuses = _fetch_live_contests_with_cash_status(contest_db, allowed_sports)
     finally:
         contest_db.close()
 
@@ -301,21 +352,10 @@ async def live(ctx: commands.Context) -> None:
         await ctx.send("No live contests found.")
         return
 
-    blocks = []
-    for dk_id, name, _, _, start_date, sport in rows:
-        sheet_link = _sheet_link(sport)
-        blocks.append(
-            _shared_build_milestone_announcement(
-                prefix="Live",
-                sport_name=sport,
-                contest_name=name,
-                start_date=str(start_date),
-                dk_id=dk_id,
-                sheet_link_url=sheet_link,
-                vip_presence=_vip_presence_for_contest(dk_id),
-            )
-        )
-
+    blocks = [
+        _format_live_contest_block(dk_id, name, start_date, sport, cash_lines[dk_id], vip_statuses[dk_id])
+        for dk_id, name, _, _, start_date, sport in rows
+    ]
     await ctx.send("\n\n".join(blocks))
 
 

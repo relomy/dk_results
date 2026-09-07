@@ -114,7 +114,7 @@ def process_sport(
         entries=sport_obj.dub_min_entries,
     )
 
-    db.create_table()
+    db.ensure_schema()
     allowed_ids = set(draft_groups)
     draft_groups_payload = response.get("DraftGroups", []) if isinstance(response, dict) else []
     start_map = build_draft_group_start_map(draft_groups_payload, allowed_ids)

@@ -9,6 +9,7 @@ import pytest
 
 import dk_results.cli.db_main as db_main
 from dk_results.domain.sport import NFLSport
+from dk_results.persistence.contestdatabase import VipCashStatus
 from dk_results.sport_processor import (
     NoLiveContestError,
     SportProcessor,
@@ -105,6 +106,10 @@ def _standings_rows_with_missing_vip_entry() -> list[list[str]]:
 
 
 class _FakeContestDb:
+    def __init__(self):
+        self.cash_lines: dict[int, tuple[int | None, float | None]] = {}
+        self.vip_statuses: dict[int, list] = {}
+
     def get_live_contest(self, *_args, **_kwargs):
         return (
             123,
@@ -114,10 +119,27 @@ class _FakeContestDb:
             "2026-02-14 01:00:00",
         )
 
+    def set_cash_line(self, dk_id, rank, points):
+        self.cash_lines[dk_id] = (rank, points)
+
+    def replace_vip_cash_status(self, dk_id, statuses):
+        self.vip_statuses[dk_id] = statuses
+
 
 class _FakeContestDbNoLive:
     def get_live_contest(self, *_args, **_kwargs):
         return None
+
+
+class _FakeContestDbNoPositionsPaid(_FakeContestDb):
+    def get_live_contest(self, *_args, **_kwargs):
+        return (
+            123,
+            "Test Contest",
+            999,
+            None,
+            "2026-02-14 01:00:00",
+        )
 
 
 class _FakeDraftKings:
@@ -253,6 +275,27 @@ def test_process_sport_parses_player_stats_only_rows_and_skips_blank_users(monke
     # Blank core row should not create phantom users in db_main path.
     assert observed["users"] == 1
     assert contest_id == 123
+
+
+def test_process_sport_persists_cash_line_and_vip_status(tmp_path):
+    db = _FakeContestDb()
+    processor = _make_processor(db, vips=["UserA"], salary_dir=str(tmp_path))
+    contest_id = processor.run("NFL", NFLSport)
+
+    assert contest_id == 123
+    assert db.cash_lines[123] == (1, 120.0)
+    assert db.vip_statuses[123] == [VipCashStatus(vip_name="UserA", rank=1, points=120.0)]
+
+
+def test_process_sport_persists_none_cash_line_when_positions_paid_missing(tmp_path):
+    db = _FakeContestDbNoPositionsPaid()
+    processor = _make_processor(db, vips=["UserA"], salary_dir=str(tmp_path))
+    processor.run("NFL", NFLSport)
+
+    assert db.cash_lines[123] == (None, None)
+    # A VIP rank means nothing without a cash line to compare it against, so no
+    # rows should be persisted until the cash line itself is known.
+    assert db.vip_statuses[123] == []
 
 
 def test_process_sport_handles_no_live_contest(caplog):

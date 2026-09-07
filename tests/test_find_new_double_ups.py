@@ -96,7 +96,7 @@ def test_process_sport_syncs_draft_group_start_dates(monkeypatch):
         def __init__(self):
             self.start_map = None
 
-        def create_table(self):
+        def ensure_schema(self):
             return None
 
         def sync_draft_group_start_dates(self, start_map):
@@ -478,7 +478,7 @@ def test_process_sport_sends_notification(monkeypatch):
         def __init__(self):
             self.inserted = []
 
-        def create_table(self):
+        def ensure_schema(self):
             return None
 
         def sync_draft_group_start_dates(self, _start_map):
@@ -576,7 +576,7 @@ def test_main_executes_with_fakes(monkeypatch, tmp_path):
         def __init__(self, *_a, **_k):
             pass
 
-        def create_table(self):
+        def ensure_schema(self):
             return None
 
         def sync_draft_group_start_dates(self, *_a, **_k):
@@ -615,7 +615,7 @@ def test_main_with_webhook_and_quiet(monkeypatch):
         def __init__(self, *_a, **_k):
             pass
 
-        def create_table(self):
+        def ensure_schema(self):
             return None
 
         def sync_draft_group_start_dates(self, *_a, **_k):
@@ -654,7 +654,7 @@ def test_main_resolves_db_path_once(monkeypatch):
         def __init__(self, *_a, **_k):
             pass
 
-        def create_table(self):
+        def ensure_schema(self):
             return None
 
         def sync_draft_group_start_dates(self, *_a, **_k):

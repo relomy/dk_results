@@ -275,7 +275,7 @@ def maybe_insert_contest(contest: Contest, insert: bool) -> None:
         return
     db = ContestDatabase(str(state.contests_db_path()))
     try:
-        db.create_table()
+        db.ensure_schema()
         new_ids = db.compare_contests([contest])
         db.insert_contests([contest])
         if new_ids:
