@@ -171,6 +171,7 @@ def build_double_up_found_announcement(sport_name: str, contests: Sequence["Cont
         _assemble(
             f"New double-up found: {sport_emoji(sport_name)} {sport_name} — {contest.name}",
             [
+                f"🕒 {contest.start_dt:%Y-%m-%d}",
                 f"💰 Entry: {contest.entry_fee} | Entries: {contest.entries}",
                 f"🔗 DK: [{contest.id}]({_contest_url(contest.id)})",
             ],

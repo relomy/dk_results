@@ -123,11 +123,18 @@ def test_build_bonus_achievement_announcement_has_no_sheet_link_or_entry_fee():
 def test_build_double_up_found_announcement_mapped_sport():
     contest = Contest.from_lobby(_contest_payload(1, entry_fee=5, entries=125), "NBA")
     msg = build_double_up_found_announcement("NBA", [contest])
-    assert msg is not None
-    assert msg.startswith(":basketball: New double-up found: 🏀 NBA — Test Contest\n")
-    assert "• 💰 Entry: 5 | Entries: 125" in msg
-    assert "• 🔗 DK: [1](<https://www.draftkings.com/contest/gamecenter/1#/>)" in msg
-    assert msg.endswith("<@&1034206287153594470>")
+    # The date bullet is derived from the same fixture, matching Contest.start_dt's
+    # own (independently tested) conversion, so this stays an exact-output
+    # assertion of the announcement assembly without hardcoding a timezone-
+    # dependent literal.
+    expected_date = f"{contest.start_dt:%Y-%m-%d}"
+    assert msg == (
+        ":basketball: New double-up found: 🏀 NBA — Test Contest\n"
+        f"• 🕒 {expected_date}\n"
+        "• 💰 Entry: 5 | Entries: 125\n"
+        "• 🔗 DK: [1](<https://www.draftkings.com/contest/gamecenter/1#/>) "
+        "<@&1034206287153594470>"
+    )
 
 
 def test_build_double_up_found_announcement_joins_multiple_contests():
