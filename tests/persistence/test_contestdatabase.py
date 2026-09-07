@@ -576,10 +576,35 @@ def test_replace_vip_cash_status_sqlite_error(caplog):
         def cursor(self):
             return BoomCursor()
 
+        def rollback(self):
+            pass
+
     db = ContestDatabase.from_connection(BoomConn())  # type: ignore[arg-type]
     with caplog.at_level(logging.ERROR):
         db.replace_vip_cash_status(1, [VipCashStatus(vip_name="Alice", rank=1, points=1.0)])
     assert any("replace_vip_cash_status" in rec.message for rec in caplog.records)
+
+
+def test_replace_vip_cash_status_rolls_back_on_error(caplog):
+    class BoomCursor:
+        def execute(self, *_a, **_k):
+            raise sqlite3.Error("boom")
+
+    class BoomConn:
+        def __init__(self):
+            self.rolled_back = False
+
+        def cursor(self):
+            return BoomCursor()
+
+        def rollback(self):
+            self.rolled_back = True
+
+    conn = BoomConn()
+    db = ContestDatabase.from_connection(conn)  # type: ignore[arg-type]
+    with caplog.at_level(logging.ERROR):
+        db.replace_vip_cash_status(1, [VipCashStatus(vip_name="Alice", rank=1, points=1.0)])
+    assert conn.rolled_back is True
 
 
 def test_get_vip_cash_status_sqlite_error(caplog):

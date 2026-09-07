@@ -613,6 +613,7 @@ class ContestDatabase:
             )
             self.conn.commit()
         except sqlite3.Error as err:
+            self.conn.rollback()
             self.logger.error("sqlite error in replace_vip_cash_status(): %s", err.args[0])
 
     def get_vip_cash_status(self, dk_id: int) -> list[VipCashStatus]:
