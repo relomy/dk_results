@@ -31,6 +31,7 @@ from dataclasses import dataclass
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from typing import Any, Protocol
 
+from dk_results import discord_announcements
 from dk_results.domain.sport import Sport
 from dk_results.notifications.vip_presence import (
     VIP_ABSENT,
@@ -79,10 +80,6 @@ class CompletionProcessorConfig:
 
 
 # ── Pure helpers (no config) ─────────────────────────────────────────────────
-
-
-def _contest_url(dk_id: int) -> str:
-    return f"<https://www.draftkings.com/contest/gamecenter/{dk_id}#/>"
 
 
 def _parse_start_date(start_date: Any) -> datetime.datetime | None:
@@ -717,15 +714,33 @@ class CompletionProcessor:
     # ── Presentation ────────────────────────────────────────────────────────
 
     def _sport_emoji(self, sport_name: str) -> str:
-        return self._config.sport_emoji.get(sport_name, "🏟️")
+        return discord_announcements.sport_emoji(sport_name, self._config.sport_emoji)
 
     def _sheet_link(self, sheet_title: str) -> str | None:
-        if not self._config.spreadsheet_id:
+        return discord_announcements.sheet_link(self._config.spreadsheet_id, self._config.sheet_gid_map, sheet_title)
+
+    @staticmethod
+    def _relative_time(start_date: str) -> str | None:
+        start_dt = _parse_start_date(start_date)
+        if not start_dt:
             return None
-        gid = self._config.sheet_gid_map.get(sheet_title)
-        if gid is None:
+        delta = start_dt - datetime.datetime.now(start_dt.tzinfo)
+        if delta.total_seconds() <= 0:
             return None
-        return f"<https://docs.google.com/spreadsheets/d/{self._config.spreadsheet_id}/edit#gid={gid}>"
+        seconds = int(delta.total_seconds())
+        minutes, sec = divmod(seconds, 60)
+        hours, minutes = divmod(minutes, 60)
+        days, hours = divmod(hours, 24)
+        parts = []
+        if days:
+            parts.append(f"{days}d")
+        if hours:
+            parts.append(f"{hours}h")
+        if minutes:
+            parts.append(f"{minutes}m")
+        if not parts:
+            parts.append(f"{sec}s")
+        return "".join(parts)
 
     def _format_contest_announcement(
         self,
@@ -735,36 +750,15 @@ class CompletionProcessor:
         start_date: str,
         dk_id: int,
     ) -> str:
-        url = _contest_url(dk_id)
-        sheet_link = self._sheet_link(sport_name)
-        sheet_part = f"📊 Sheet: [{sport_name}]({sheet_link})" if sheet_link else "📊 Sheet: n/a"
-        relative = None
-        start_dt = _parse_start_date(start_date)
-        if start_dt:
-            delta = start_dt - datetime.datetime.now(start_dt.tzinfo)
-            if delta.total_seconds() > 0:
-                seconds = int(delta.total_seconds())
-                minutes, sec = divmod(seconds, 60)
-                hours, minutes = divmod(minutes, 60)
-                days, hours = divmod(hours, 24)
-                parts = []
-                if days:
-                    parts.append(f"{days}d")
-                if hours:
-                    parts.append(f"{hours}h")
-                if minutes:
-                    parts.append(f"{minutes}m")
-                if not parts:
-                    parts.append(f"{sec}s")
-                relative = "".join(parts)
-        relative_part = f" (⏳ {relative})" if relative else ""
-        return "\n".join(
-            [
-                f"{prefix}: {self._sport_emoji(sport_name)} {sport_name} — {contest_name}",
-                f"• 🕒 {start_date}{relative_part}",
-                f"• 🔗 DK: [{dk_id}]({url})",
-                f"• {sheet_part}",
-            ]
+        return discord_announcements.build_milestone_announcement(
+            prefix=prefix,
+            sport_name=sport_name,
+            contest_name=contest_name,
+            start_date=start_date,
+            dk_id=dk_id,
+            relative_time=self._relative_time(start_date),
+            sheet_link_url=self._sheet_link(sport_name),
+            emoji_map=self._config.sport_emoji,
         )
 
     def _format_soft_finish_announcement(
@@ -779,20 +773,16 @@ class CompletionProcessor:
         vips_cashed: list[str],
         is_update: bool = False,
     ) -> str:
-        vip_text = ", ".join(vips_cashed) if vips_cashed else "none"
-        prefix = "Contest soft-finished (updated)" if is_update else "Contest soft-finished"
-        base = self._format_contest_announcement(
-            prefix,
-            sport_name,
-            contest_name,
-            start_date,
-            dk_id,
-        )
-        return "\n".join(
-            [
-                base,
-                f"• 🏆 Top score: {top_score}",
-                f"• 💵 Cashing score: {cashing_score}",
-                f"• ⭐ VIPs cashed (visible rows): {vip_text}",
-            ]
+        return discord_announcements.build_soft_finish_announcement(
+            sport_name=sport_name,
+            contest_name=contest_name,
+            start_date=start_date,
+            dk_id=dk_id,
+            top_score=top_score,
+            cashing_score=cashing_score,
+            vips_cashed=vips_cashed,
+            is_update=is_update,
+            relative_time=self._relative_time(start_date),
+            sheet_link_url=self._sheet_link(sport_name),
+            emoji_map=self._config.sport_emoji,
         )

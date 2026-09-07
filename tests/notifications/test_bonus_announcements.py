@@ -116,7 +116,7 @@ def test_announce_vip_bonuses_first_run_insert_and_update(conn):
     )
 
     assert sent == 1
-    assert sender.messages[0] == "GOLF: Rory McIlroy (34.7%) recorded an eagle (+8 pts) (VIPs: zeta)"
+    assert sender.messages[0] == "⛳ GOLF — Rory McIlroy (34.7%) recorded an eagle (+8 pts) (VIPs: zeta)"
     row = conn.execute(
         """
         SELECT last_announced_count
@@ -157,8 +157,8 @@ def test_announce_vip_bonuses_increments_one_message_per_count(conn):
 
     assert sent == 2
     assert sender.messages == [
-        "GOLF: Rory McIlroy (34.7%) recorded an eagle (+8 pts, 16 total bonus pts) (VIPs: zeta)",
-        "GOLF: Rory McIlroy (34.7%) recorded an eagle (+8 pts, 24 total bonus pts) (VIPs: zeta)",
+        "⛳ GOLF — Rory McIlroy (34.7%) recorded an eagle (+8 pts, 16 total bonus pts) (VIPs: zeta)",
+        "⛳ GOLF — Rory McIlroy (34.7%) recorded an eagle (+8 pts, 24 total bonus pts) (VIPs: zeta)",
     ]
     row = conn.execute(
         """
@@ -243,7 +243,7 @@ def test_announce_vip_bonuses_nba_binary_points_message(conn):
     )
 
     assert sent == 1
-    assert sender.messages == ["NBA: Nikola Jokic (34.7%) achieved a triple-double (+3 pts) (VIPs: amy)"]
+    assert sender.messages == ["🏀 NBA — Nikola Jokic (34.7%) achieved a triple-double (+3 pts) (VIPs: amy)"]
 
 
 def test_announce_vip_bonuses_webhook_failure_does_not_update_db(conn):
@@ -304,7 +304,9 @@ def test_announce_vip_bonuses_cas_rowcount_zero_skips_update(monkeypatch, conn):
         sender=sender,
     )
     assert sent == 0
-    assert sender.messages == ["GOLF: Rory McIlroy (0.0%) recorded an eagle (+8 pts, 16 total bonus pts) (VIPs: amy)"]
+    assert sender.messages == [
+        "⛳ GOLF — Rory McIlroy (0.0%) recorded an eagle (+8 pts, 16 total bonus pts) (VIPs: amy)"
+    ]
     row = conn.execute(
         """
         SELECT last_announced_count
@@ -339,7 +341,7 @@ def test_announce_vip_bonuses_soc_goal_message(conn):
     )
 
     assert sent == 1
-    assert sender.messages == ["SOC: Erling Haaland (28.5%) scored a goal (+8 pts) (VIPs: amy)"]
+    assert sender.messages == ["⚽ SOC — Erling Haaland (28.5%) scored a goal (+8 pts) (VIPs: amy)"]
 
 
 def test_announce_vip_bonuses_soc_two_goals_sends_two_messages(conn):
@@ -366,8 +368,8 @@ def test_announce_vip_bonuses_soc_two_goals_sends_two_messages(conn):
 
     assert sent == 2
     assert sender.messages == [
-        "SOC: Erling Haaland (28.5%) scored a goal (+8 pts) (VIPs: amy)",
-        "SOC: Erling Haaland (28.5%) scored a goal (+8 pts, 16 total bonus pts) (VIPs: amy)",
+        "⚽ SOC — Erling Haaland (28.5%) scored a goal (+8 pts) (VIPs: amy)",
+        "⚽ SOC — Erling Haaland (28.5%) scored a goal (+8 pts, 16 total bonus pts) (VIPs: amy)",
     ]
 
 

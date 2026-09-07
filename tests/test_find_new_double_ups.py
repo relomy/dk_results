@@ -157,7 +157,8 @@ def _contest_payload(dk_id: int):
 
 
 def test_send_discord_notification_no_bot():
-    send_discord_notification(None, "NBA", "msg")
+    contest = Contest.from_lobby(_contest_payload(1), "NBA")
+    send_discord_notification(None, "NBA", [contest])
 
 
 def test_send_discord_notification_formats_message():
@@ -169,8 +170,27 @@ def test_send_discord_notification_formats_message():
             self.sent.append(message)
 
     bot = FakeBot()
-    send_discord_notification(bot, "NBA", "New contest")
-    assert bot.sent == [":basketball: New contest <@&1034206287153594470>"]
+    contest = Contest.from_lobby(_contest_payload(1), "NBA")
+    send_discord_notification(bot, "NBA", [contest])
+    assert len(bot.sent) == 1
+    assert bot.sent[0].startswith(":basketball: New double-up found: 🏀 NBA — Contest\n")
+    assert bot.sent[0].endswith("<@&1034206287153594470>")
+
+
+def test_send_discord_notification_gates_unmapped_sport():
+    """A sport absent from the role map gets no double-up announcement at all."""
+
+    class FakeBot:
+        def __init__(self):
+            self.sent = []
+
+        def send_message(self, message: str):
+            self.sent.append(message)
+
+    bot = FakeBot()
+    contest = Contest.from_lobby(_contest_payload(1), "MLB")
+    send_discord_notification(bot, "MLB", [contest])
+    assert bot.sent == []
 
 
 def test_get_contests_from_response_list_and_dict():

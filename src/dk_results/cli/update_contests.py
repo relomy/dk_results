@@ -13,6 +13,7 @@ from dfs_common import contests, state
 from dk_results.bot.discord_rest import DiscordRest
 from dk_results.completion_processor import CompletionProcessor, CompletionProcessorConfig
 from dk_results.config import load_and_apply_settings
+from dk_results.discord_announcements import SPORT_EMOJI
 from dk_results.domain.sport import Sport, get_sport_choices
 from dk_results.draftkings import DraftKings
 from dk_results.logging import configure_logging
@@ -31,27 +32,6 @@ CONTEST_WARNING_MINUTES = 25
 WARNING_SCHEDULE_FILE_ENV = "CONTEST_WARNING_SCHEDULE_FILE"
 DEFAULT_WARNING_SCHEDULE_FILE = str(repo_file("contest_warning_schedules.yaml"))
 _DEFAULT_WARNING_SCHEDULE = [CONTEST_WARNING_MINUTES]
-
-SPORT_EMOJI = {
-    "CFB": "🏈",
-    "GOLF": "⛳",
-    "LOL": "🎮",
-    "MLB": "⚾",
-    "MMA": "🥊",
-    "NAS": "🏎️",
-    "NBA": "🏀",
-    "NFL": "🏈",
-    "NFLAfternoon": "🏈",
-    "NFLShowdown": "🏈",
-    "NHL": "🏒",
-    "PGAMain": "⛳",
-    "PGAShowdown": "⛳",
-    "PGAWeekend": "⛳",
-    "SOC": "⚽",
-    "TEN": "🎾",
-    "USFL": "🏈",
-    "XFL": "🏈",
-}
 
 
 def _is_notifications_enabled() -> bool:

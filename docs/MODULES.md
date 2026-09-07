@@ -25,7 +25,7 @@ Root shims (dkcontests.py, db_main.py, …)      thin sys.path adapters → cli.
   Analytics:     optimizer (LP), trainfinder (clustering)
   Snapshot:      services/snapshot_v3, commands/export_fixture, vip_lineups
   Bot:           bot/discord_bot, discord_rest, botinterface
-  Cross-cutting: config, logging, paths, discord_roles
+  Cross-cutting: config, logging, paths, discord_announcements
 ```
 
 The dependency arrows point downward toward pure, dependency-light modules. The
@@ -171,7 +171,7 @@ exposes `main()`. Root-level scripts (`dkcontests.py`, `db_main.py`,
 | `paths.py` | `find_repo_root`, `repo_root`, `repo_file` | Repo-root-relative path resolution. |
 | `persistence/contestdatabase.py` | `ContestDatabase`: `create_table`, `compare_contests`, `insert_contests`, `sync_draft_group_start_dates`, `get_live_contest(s)`, `get_next_upcoming_contest(_any)`, `get_contest_*` | SQLite persistence for contests — deep data-access module, injected into `SportProcessor`. |
 | `notifications/bonus_announcements.py` | `announce_vip_bonuses`, `create_bonus_announcements_table`, `BonusCandidate` | Bonus dedupe (CAS on a counter) + webhook delivery. |
-| `discord_roles.py` | *(constants/roles)* | Discord role mapping. |
+| `discord_announcements.py` | `build_milestone_announcement`, `build_soft_finish_announcement`, `build_bonus_achievement_announcement`, `build_double_up_found_announcement`, `sport_emoji`, `sheet_link`, `DISCORD_ROLE_MAP` | Shared Discord announcement chrome for all 6 push-notification kinds; also owns the double-up-found sport gate. |
 
 ---
 
