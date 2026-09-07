@@ -7,6 +7,8 @@ import pytest
 from bot import discord_bot
 from discord.ext import commands
 
+from dk_results.persistence.contestdatabase import VipCashStatus
+
 os.environ.setdefault("DFS_STATE_DIR", "/tmp")
 
 
@@ -180,6 +182,12 @@ async def test_live_lists_all_live_contests(monkeypatch):
                 (2, "ContestB", None, None, "2000-01-02", "NFL"),
             ]
 
+        def get_cash_line(self, dk_id):
+            return None
+
+        def get_vip_cash_status(self, dk_id):
+            return []
+
         def close(self):
             captured["closed"] = True
 
@@ -222,6 +230,12 @@ async def test_live_shows_vip_presence_per_contest(monkeypatch):
                 (2, "ContestB", None, None, "2000-01-02", "NFL"),
             ]
 
+        def get_cash_line(self, dk_id):
+            return None
+
+        def get_vip_cash_status(self, dk_id):
+            return []
+
         def close(self):
             pass
 
@@ -245,6 +259,55 @@ async def test_live_shows_vip_presence_per_contest(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_live_shows_vip_cash_bullets(monkeypatch):
+    monkeypatch.setattr(discord_bot, "_sport_choices", lambda: {"nba": DummySport})
+    monkeypatch.setattr(discord_bot, "_sheet_link", lambda _sport: None)
+    monkeypatch.setattr(discord_bot, "_vip_presence_for_contest", lambda _dk_id: None)
+
+    class FakeContestDatabase:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def get_live_contests(self, sports=None, entry_fee=25, keyword="%"):
+            return [(1, "ContestA", None, None, "2000-01-01", "NBA")]
+
+        def get_cash_line(self, dk_id):
+            return (5, 100.0)
+
+        def get_vip_cash_status(self, dk_id):
+            return [
+                VipCashStatus(vip_name="VipA", rank=3, points=150.0),
+                VipCashStatus(vip_name="VipB", rank=10, points=50.0),
+            ]
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(discord_bot, "ContestDatabase", FakeContestDatabase)
+
+    ctx = FakeCtx()
+    await discord_bot.live(_ctx(ctx))
+
+    assert ctx.sent == [
+        "Live: 🏀 NBA — ContestA\n"
+        "• 🕒 2000-01-01\n"
+        "• 🔗 DK: [1](<https://www.draftkings.com/contest/gamecenter/1#/>)\n"
+        "• 📊 Sheet: n/a\n"
+        "• ✅ VipA: rank 3, 150.0 pts\n"
+        "• ❌ VipB: rank 10, 50.0 pts"
+    ]
+
+
+def test_format_vip_cash_bullets_empty_returns_no_bullets():
+    assert discord_bot._format_vip_cash_bullets([], (5, 100.0)) == []
+
+
+def test_format_vip_cash_bullets_missing_cash_line_marks_not_cashing():
+    statuses = [VipCashStatus(vip_name="VipA", rank=1, points=200.0)]
+    assert discord_bot._format_vip_cash_bullets(statuses, None) == ["• ❌ VipA: rank 1, 200.0 pts"]
+
+
+@pytest.mark.asyncio
 async def test_live_no_contests(monkeypatch):
     monkeypatch.setattr(discord_bot, "_sport_choices", lambda: {"nba": DummySport, "nfl": DummySportTwo})
 
@@ -253,6 +316,12 @@ async def test_live_no_contests(monkeypatch):
             pass
 
         def get_live_contests(self, sports=None, entry_fee=25, keyword="%"):
+            return []
+
+        def get_cash_line(self, dk_id):
+            return None
+
+        def get_vip_cash_status(self, dk_id):
             return []
 
         def close(self):
