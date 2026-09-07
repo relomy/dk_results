@@ -89,6 +89,55 @@ def test_build_milestone_announcement_no_relative_time_or_sheet_link():
     )
 
 
+def test_build_milestone_announcement_vip_present_appends_bullet():
+    msg = build_milestone_announcement(
+        prefix="Live",
+        sport_name="NBA",
+        contest_name="Test Contest",
+        start_date="2026-01-01 00:00:00",
+        dk_id=123,
+        vip_presence="present",
+    )
+    assert msg == (
+        "Live: 🏀 NBA — Test Contest\n"
+        "• 🕒 2026-01-01 00:00:00\n"
+        "• 🔗 DK: [123](<https://www.draftkings.com/contest/gamecenter/123#/>)\n"
+        "• 📊 Sheet: n/a\n"
+        "• ⭐ VIP: present"
+    )
+
+
+def test_build_milestone_announcement_vip_absent_appends_bullet():
+    msg = build_milestone_announcement(
+        prefix="Live",
+        sport_name="NBA",
+        contest_name="Test Contest",
+        start_date="2026-01-01 00:00:00",
+        dk_id=123,
+        vip_presence="absent",
+    )
+    assert msg.endswith("• ⭐ VIP: absent")
+
+
+def test_build_milestone_announcement_vip_presence_default_unchanged():
+    msg = build_milestone_announcement(
+        prefix="Contest started",
+        sport_name="NBA",
+        contest_name="Test Contest",
+        start_date="2026-01-01 00:00:00",
+        dk_id=123,
+        relative_time="13m",
+        sheet_link_url="<https://docs.google.com/spreadsheets/d/sheet/edit#gid=1>",
+    )
+    assert msg == (
+        "Contest started: 🏀 NBA — Test Contest\n"
+        "• 🕒 2026-01-01 00:00:00 (⏳ 13m)\n"
+        "• 🔗 DK: [123](<https://www.draftkings.com/contest/gamecenter/123#/>)\n"
+        "• 📊 Sheet: [NBA](<https://docs.google.com/spreadsheets/d/sheet/edit#gid=1>)"
+    )
+    assert "VIP" not in msg
+
+
 def test_build_soft_finish_announcement_appends_cash_summary():
     msg = build_soft_finish_announcement(
         sport_name="NBA",

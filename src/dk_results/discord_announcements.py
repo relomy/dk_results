@@ -118,23 +118,30 @@ def build_milestone_announcement(
     relative_time: str | None = None,
     sheet_link_url: str | None = None,
     emoji_map: Mapping[str, str] | None = None,
+    vip_presence: str | None = None,
 ) -> str:
     """Build the shared warning/live/completed announcement text.
 
     ``prefix`` carries the milestone's verbatim wording (e.g. ``"Contest
     started"``); this function only supplies the shared chrome around it.
+
+    ``vip_presence`` is an opt-in bullet: when set (``"present"`` or
+    ``"absent"``), it's appended as a final ``⭐ VIP: ...`` bullet. Left
+    ``None`` (the default), output is byte-for-byte unchanged from before this
+    parameter existed — the four automated announcements that already gate on
+    presence rely on that.
     """
     header = _header(prefix, sport_name, contest_name, emoji_map)
     relative_part = f" (⏳ {relative_time})" if relative_time else ""
     sheet_part = f"📊 Sheet: [{sport_name}]({sheet_link_url})" if sheet_link_url else "📊 Sheet: n/a"
-    return _assemble(
-        header,
-        [
-            f"🕒 {start_date}{relative_part}",
-            f"🔗 DK: [{dk_id}]({_contest_url(dk_id)})",
-            sheet_part,
-        ],
-    )
+    detail_lines = [
+        f"🕒 {start_date}{relative_part}",
+        f"🔗 DK: [{dk_id}]({_contest_url(dk_id)})",
+        sheet_part,
+    ]
+    if vip_presence is not None:
+        detail_lines.append(f"⭐ VIP: {vip_presence}")
+    return _assemble(header, detail_lines)
 
 
 def build_soft_finish_announcement(
