@@ -727,20 +727,7 @@ class CompletionProcessor:
         delta = start_dt - datetime.datetime.now(start_dt.tzinfo)
         if delta.total_seconds() <= 0:
             return None
-        seconds = int(delta.total_seconds())
-        minutes, sec = divmod(seconds, 60)
-        hours, minutes = divmod(minutes, 60)
-        days, hours = divmod(hours, 24)
-        parts = []
-        if days:
-            parts.append(f"{days}d")
-        if hours:
-            parts.append(f"{hours}h")
-        if minutes:
-            parts.append(f"{minutes}m")
-        if not parts:
-            parts.append(f"{sec}s")
-        return "".join(parts)
+        return discord_announcements.relative_time_from_seconds(int(delta.total_seconds()))
 
     def _format_contest_announcement(
         self,

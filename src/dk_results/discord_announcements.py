@@ -78,6 +78,28 @@ def _contest_url(dk_id: int) -> str:
     return f"<https://www.draftkings.com/contest/gamecenter/{dk_id}#/>"
 
 
+def relative_time_from_seconds(seconds_remaining: int) -> str:
+    """Format a non-negative seconds duration into a compact string (e.g. ``"13m"``, ``"1d2h3m"``).
+
+    Callers own parsing the start time, computing ``now``, and deciding whether
+    the duration is non-negative (each does so with its own ``datetime`` import,
+    which their tests monkeypatch independently) — this only formats the result.
+    """
+    minutes, sec = divmod(seconds_remaining, 60)
+    hours, minutes = divmod(minutes, 60)
+    days, hours = divmod(hours, 24)
+    parts = []
+    if days:
+        parts.append(f"{days}d")
+    if hours:
+        parts.append(f"{hours}h")
+    if minutes:
+        parts.append(f"{minutes}m")
+    if not parts:
+        parts.append(f"{sec}s")
+    return "".join(parts)
+
+
 def _header(prefix: str, sport_name: str, contest_name: str, emoji_map: Mapping[str, str] | None = None) -> str:
     return f"{prefix}: {sport_emoji(sport_name, emoji_map)} {sport_name} — {contest_name}"
 

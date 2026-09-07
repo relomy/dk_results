@@ -10,6 +10,7 @@ from dfs_common import state
 from discord.ext import commands
 
 from dk_results.config import load_and_apply_settings
+from dk_results.discord_announcements import relative_time_from_seconds as _shared_relative_time
 from dk_results.discord_announcements import sheet_link as _shared_sheet_link
 from dk_results.discord_announcements import sport_emoji as _shared_sport_emoji
 from dk_results.domain.sport import Sport, get_sport_choices
@@ -189,20 +190,7 @@ def _format_time_until(start_date: str) -> str | None:
     delta = start_dt - now
     if delta.total_seconds() <= 0:
         return None
-    seconds = int(delta.total_seconds())
-    minutes, sec = divmod(seconds, 60)
-    hours, minutes = divmod(minutes, 60)
-    days, hours = divmod(hours, 24)
-    parts = []
-    if days:
-        parts.append(f"{days}d")
-    if hours:
-        parts.append(f"{hours}h")
-    if minutes:
-        parts.append(f"{minutes}m")
-    if not parts:
-        parts.append(f"{sec}s")
-    return f"⏳ {''.join(parts)}"
+    return f"⏳ {_shared_relative_time(int(delta.total_seconds()))}"
 
 
 def _system_uptime_seconds() -> float | None:

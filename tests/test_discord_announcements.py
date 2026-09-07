@@ -10,6 +10,7 @@ from dk_results.discord_announcements import (
     build_double_up_found_announcement,
     build_milestone_announcement,
     build_soft_finish_announcement,
+    relative_time_from_seconds,
     sheet_link,
     sport_emoji,
 )
@@ -38,6 +39,12 @@ def test_sport_emoji_default_and_override():
     assert sport_emoji("NBA") == "🏀"
     assert sport_emoji("NBA", {"NBA": "🎯"}) == "🎯"
     assert sport_emoji("OTHER", {"NBA": "🎯"}) == "🏟️"
+
+
+def test_relative_time_from_seconds_formats_compact_duration():
+    assert relative_time_from_seconds(5) == "5s"
+    assert relative_time_from_seconds(13 * 60) == "13m"
+    assert relative_time_from_seconds(90061) == "1d1h1m"
 
 
 def test_sheet_link_requires_spreadsheet_id_and_gid():
