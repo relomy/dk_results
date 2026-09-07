@@ -12,6 +12,8 @@ Existing milestone wording (`"Contest starting soon (Nm)"`, `"Contest started"`,
 
 The interactive bot commands (`!contests`, `!live`, `!upcoming`) keep their own terser, synchronous-reply format — they are not broadcast announcements — but now pull `sport_emoji`/`sheet_link` from the shared module instead of a second, independently-maintained copy.
 
+`lobby/formatting.py`'s `format_discord_messages` is a named exception, deliberately left outside this consolidation: it is not a Discord announcement at all, it feeds `logger.info(...)` in `cli/find_new_double_ups.py` for local operator visibility, and its output never reaches a Discord subscriber. The subscriber-facing double-up-found message goes entirely through `build_double_up_found_announcement`. Since this spec's problem statement and user stories are about what subscribers read on Discord, an internal log line carries no wording-consistency stake and stays a separate, one-line formatter rather than being folded into `discord_announcements.py`.
+
 Named `discord_announcements.py` rather than a `discord/` package, deliberately deviating from the module name proposed during design: `tests/conftest.py` puts `src/dk_results` directly on `sys.path`, so a same-named `discord` package there would shadow the real, pip-installed `discord.py` library that `bot/discord_bot.py` imports (`import discord`, `from discord.ext import commands`). A flat module avoids the collision without changing the seam.
 
 Out of scope, per the originating spec: `DiscordRest`/`WebhookSender` transport behavior (chunking, retries, bot-token vs. webhook), and the pre-existing duplicate `0009-*` ADR numbering collision (unrelated, not fixed here).
