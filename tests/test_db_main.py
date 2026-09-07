@@ -293,6 +293,9 @@ def test_process_sport_persists_none_cash_line_when_positions_paid_missing(tmp_p
     processor.run("NFL", NFLSport)
 
     assert db.cash_lines[123] == (None, None)
+    # A VIP rank means nothing without a cash line to compare it against, so no
+    # rows should be persisted until the cash line itself is known.
+    assert db.vip_statuses[123] == []
 
 
 def test_process_sport_handles_no_live_contest(caplog):

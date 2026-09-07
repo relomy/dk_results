@@ -216,13 +216,20 @@ class SportProcessor:
         Persist this poll's cash line and VIP cash-status rows (ADR-0011).
 
         ``min_rank`` is 0 until a cashing user is found, so that sentinel (rather
-        than a real rank of 0) is what means "no cash line yet" here.
+        than a real rank of 0) is what means "no cash line yet" here. Until the
+        cash line is known, VIP statuses are cleared rather than persisted: a
+        VIP rank means nothing to render without a cash line to compare it
+        against (spec #138), so `!live` must see no rows and skip its bullets.
         """
         cash_line_rank = results.min_rank or None
         cash_line_points = results.min_cash_pts if cash_line_rank is not None else None
         self._db.set_cash_line(dk_id, cash_line_rank, cash_line_points)
 
-        statuses = [VipCashStatus(vip_name=vip.name, rank=vip.rank, points=vip.pts) for vip in results.vip_list]
+        statuses = (
+            [VipCashStatus(vip_name=vip.name, rank=vip.rank, points=vip.pts) for vip in results.vip_list]
+            if cash_line_rank is not None
+            else []
+        )
         self._db.replace_vip_cash_status(dk_id, statuses)
 
     def _maybe_write_optimal_lineup(
