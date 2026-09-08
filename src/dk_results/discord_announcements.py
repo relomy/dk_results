@@ -100,6 +100,17 @@ def relative_time_from_seconds(seconds_remaining: int) -> str:
     return "".join(parts)
 
 
+def dk_and_sheet_parts(dk_id: int, sport_name: str, sheet_link_url: str | None) -> tuple[str, str]:
+    """Return the (DK, Sheet) detail-line strings, unbulleted.
+
+    Shared by :func:`build_milestone_announcement`'s two-line layout and any
+    caller (e.g. the bot's `!live` command) that wants to lay them out
+    differently, such as joined onto one line.
+    """
+    sheet_part = f"📊 Sheet: [{sport_name}]({sheet_link_url})" if sheet_link_url else "📊 Sheet: n/a"
+    return f"🔗 DK: [{dk_id}]({_contest_url(dk_id)})", sheet_part
+
+
 def _header(prefix: str, sport_name: str, contest_name: str, emoji_map: Mapping[str, str] | None = None) -> str:
     return f"{prefix}: {sport_emoji(sport_name, emoji_map)} {sport_name} — {contest_name}"
 
@@ -133,10 +144,10 @@ def build_milestone_announcement(
     """
     header = _header(prefix, sport_name, contest_name, emoji_map)
     relative_part = f" (⏳ {relative_time})" if relative_time else ""
-    sheet_part = f"📊 Sheet: [{sport_name}]({sheet_link_url})" if sheet_link_url else "📊 Sheet: n/a"
+    dk_part, sheet_part = dk_and_sheet_parts(dk_id, sport_name, sheet_link_url)
     detail_lines = [
         f"🕒 {start_date}{relative_part}",
-        f"🔗 DK: [{dk_id}]({_contest_url(dk_id)})",
+        dk_part,
         sheet_part,
     ]
     if vip_presence is not None:
