@@ -10,6 +10,7 @@ from dk_results.discord_announcements import (
     build_double_up_found_announcement,
     build_milestone_announcement,
     build_soft_finish_announcement,
+    dk_and_sheet_parts,
     relative_time_from_seconds,
     sheet_link,
     sport_emoji,
@@ -45,6 +46,18 @@ def test_relative_time_from_seconds_formats_compact_duration():
     assert relative_time_from_seconds(5) == "5s"
     assert relative_time_from_seconds(13 * 60) == "13m"
     assert relative_time_from_seconds(90061) == "1d1h1m"
+
+
+def test_dk_and_sheet_parts_with_sheet_link():
+    dk_part, sheet_part = dk_and_sheet_parts(1, "NBA", "<https://sheet.example/1>")
+    assert dk_part == "🔗 DK: [1](<https://www.draftkings.com/contest/gamecenter/1#/>)"
+    assert sheet_part == "📊 Sheet: [NBA](<https://sheet.example/1>)"
+
+
+def test_dk_and_sheet_parts_no_sheet_link():
+    dk_part, sheet_part = dk_and_sheet_parts(1, "NBA", None)
+    assert dk_part == "🔗 DK: [1](<https://www.draftkings.com/contest/gamecenter/1#/>)"
+    assert sheet_part == "📊 Sheet: n/a"
 
 
 def test_sheet_link_requires_spreadsheet_id_and_gid():

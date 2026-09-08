@@ -12,8 +12,10 @@ from discord.ext import commands
 
 from dk_results.config import load_and_apply_settings
 from dk_results.discord_announcements import build_milestone_announcement as _shared_build_milestone_announcement
+from dk_results.discord_announcements import dk_and_sheet_parts as _shared_dk_and_sheet_parts
 from dk_results.discord_announcements import relative_time_from_seconds as _shared_relative_time
 from dk_results.discord_announcements import sheet_link as _shared_sheet_link
+from dk_results.discord_announcements import sport_emoji as _shared_sport_emoji
 from dk_results.domain.sport import Sport, get_sport_choices
 from dk_results.logging import configure_logging
 from dk_results.notifications.vip_presence import VIP_ABSENT, VIP_PRESENT
@@ -203,6 +205,19 @@ def _format_time_until(start_date: str) -> str | None:
     return f"⏳ {_shared_relative_time(int(delta.total_seconds()))}"
 
 
+def _format_time_since(start_date: str) -> str | None:
+    """Return a short human string for time elapsed since start_date, or None if not yet started."""
+    try:
+        start_dt = datetime.datetime.fromisoformat(start_date)
+    except (TypeError, ValueError):
+        return None
+    now = datetime.datetime.now(start_dt.tzinfo)
+    delta = now - start_dt
+    if delta.total_seconds() <= 0:
+        return None
+    return f"started {_shared_relative_time(int(delta.total_seconds()))} ago"
+
+
 def _system_uptime_seconds() -> float | None:
     """Return system uptime in seconds if /proc/uptime is available."""
     try:
@@ -286,20 +301,33 @@ async def contests(ctx: commands.Context, sport: str | None = None) -> None:
     await ctx.send(message)
 
 
+def _format_vip_cash_bullet(
+    status,
+    cash_line_rank: int | None,
+    cash_line_points: float | None,
+    cash_part: str,
+) -> str:
+    """Format one VIP's cash-status bullet."""
+    projected_cashing = cash_line_rank is not None and status.rank is not None and status.rank <= cash_line_rank
+    emoji = "🤑" if projected_cashing else "☠️"
+    delta_part = ""
+    if cash_line_points is not None and status.points is not None:
+        delta_part = f" ({status.points - cash_line_points:+.1f} pts)"
+    return f"• {emoji} {status.vip_name}: {status.points} pts{delta_part}, rank {status.rank}{cash_part}"
+
+
 def _format_vip_cash_bullets(
     vip_statuses: list,
     cash_line: tuple[int | None, float | None] | None,
+    positions_paid: int | None,
 ) -> list[str]:
     """Format one bullet per persisted VIP cash-status row, or none if there aren't any."""
     if not vip_statuses:
         return []
     cash_line_rank = cash_line[0] if cash_line else None
-    bullets = []
-    for status in vip_statuses:
-        projected_cashing = cash_line_rank is not None and status.rank is not None and status.rank <= cash_line_rank
-        emoji = "✅" if projected_cashing else "❌"
-        bullets.append(f"• {emoji} {status.vip_name}: rank {status.rank}, {status.points} pts")
-    return bullets
+    cash_line_points = cash_line[1] if cash_line else None
+    cash_part = f" (cash: top {positions_paid})" if positions_paid is not None else ""
+    return [_format_vip_cash_bullet(status, cash_line_rank, cash_line_points, cash_part) for status in vip_statuses]
 
 
 def _fetch_live_contests_with_cash_status(
@@ -319,22 +347,29 @@ def _format_live_contest_block(
     sport: str,
     cash_line: tuple[int | None, float | None] | None,
     vip_statuses: list,
+    positions_paid: int | None,
 ) -> str:
-    """Format one contest's `!live` block: the shared milestone block plus any VIP cash-status bullets."""
+    """Format one contest's `!live` block.
+
+    Deviates from the shared `build_milestone_announcement` chrome
+    (bot-side seam, ADR candidate pending): DK and Sheet links are joined
+    onto one line, and the elapsed-time-since-start is shown alongside the
+    start date. Cash bullets are computed first so the VIP-presence bullet
+    can be suppressed once they're available (contest-level redundancy: a
+    VIP with a cash-status bullet is already known to be present).
+    """
+    cash_bullets = _format_vip_cash_bullets(vip_statuses, cash_line, positions_paid)
     sheet_link = _sheet_link(sport)
-    block = _shared_build_milestone_announcement(
-        prefix="Live",
-        sport_name=sport,
-        contest_name=name,
-        start_date=str(start_date),
-        dk_id=dk_id,
-        sheet_link_url=sheet_link,
-        vip_presence=_vip_presence_for_contest(dk_id),
-    )
-    cash_bullets = _format_vip_cash_bullets(vip_statuses, cash_line)
-    if cash_bullets:
-        block = "\n".join([block, *cash_bullets])
-    return block
+    dk_part, sheet_part = _shared_dk_and_sheet_parts(dk_id, sport, sheet_link)
+    header = f"Live: {_shared_sport_emoji(sport)} {sport} — {name}"
+    elapsed = _format_time_since(str(start_date))
+    time_line = f"🕒 {start_date} ({elapsed})" if elapsed else f"🕒 {start_date}"
+    lines = [header, f"• {time_line}", f"• {dk_part} | {sheet_part}"]
+    if not cash_bullets:
+        presence = _vip_presence_for_contest(dk_id)
+        if presence is not None:
+            lines.append(f"• ⭐ VIP: {presence}")
+    return "\n".join([*lines, *cash_bullets])
 
 
 async def live(ctx: commands.Context) -> None:
@@ -353,8 +388,10 @@ async def live(ctx: commands.Context) -> None:
         return
 
     blocks = [
-        _format_live_contest_block(dk_id, name, start_date, sport, cash_lines[dk_id], vip_statuses[dk_id])
-        for dk_id, name, _, _, start_date, sport in rows
+        _format_live_contest_block(
+            dk_id, name, start_date, sport, cash_lines[dk_id], vip_statuses[dk_id], positions_paid
+        )
+        for dk_id, name, _, positions_paid, start_date, sport in rows
     ]
     await ctx.send("\n\n".join(blocks))
 

@@ -34,6 +34,19 @@ def test_format_time_until_future():
     assert discord_bot._format_time_until(past.isoformat(sep=" ")) is None
 
 
+def test_format_time_since_past():
+    now = datetime.datetime.now().replace(microsecond=0)
+    past = now - datetime.timedelta(hours=2, minutes=13)
+    future = now + datetime.timedelta(minutes=1)
+
+    assert discord_bot._format_time_since(past.isoformat(sep=" ")) == "started 2h13m ago"
+    assert discord_bot._format_time_since(future.isoformat(sep=" ")) is None
+
+
+def test_format_time_since_invalid():
+    assert discord_bot._format_time_since("not-a-date") is None
+
+
 class DummySport:
     name = "NBA"
     sheet_min_entry_fee = 5
@@ -167,6 +180,7 @@ async def test_live_lists_all_live_contests(monkeypatch):
     monkeypatch.setattr(discord_bot, "_sport_choices", lambda: {"nba": DummySport, "nfl": DummySportTwo})
     monkeypatch.setattr(discord_bot, "_sheet_link", lambda _sport: None)
     monkeypatch.setattr(discord_bot, "_vip_presence_for_contest", lambda _dk_id: None)
+    monkeypatch.setattr(discord_bot, "_format_time_since", lambda _start_date: None)
 
     captured = {}
 
@@ -201,12 +215,10 @@ async def test_live_lists_all_live_contests(monkeypatch):
     assert ctx.sent == [
         "Live: 🏀 NBA — ContestA\n"
         "• 🕒 2000-01-01\n"
-        "• 🔗 DK: [1](<https://www.draftkings.com/contest/gamecenter/1#/>)\n"
-        "• 📊 Sheet: n/a\n\n"
+        "• 🔗 DK: [1](<https://www.draftkings.com/contest/gamecenter/1#/>) | 📊 Sheet: n/a\n\n"
         "Live: 🏈 NFL — ContestB\n"
         "• 🕒 2000-01-02\n"
-        "• 🔗 DK: [2](<https://www.draftkings.com/contest/gamecenter/2#/>)\n"
-        "• 📊 Sheet: n/a"
+        "• 🔗 DK: [2](<https://www.draftkings.com/contest/gamecenter/2#/>) | 📊 Sheet: n/a"
     ]
 
 
@@ -214,6 +226,7 @@ async def test_live_lists_all_live_contests(monkeypatch):
 async def test_live_shows_vip_presence_per_contest(monkeypatch):
     monkeypatch.setattr(discord_bot, "_sport_choices", lambda: {"nba": DummySport, "nfl": DummySportTwo})
     monkeypatch.setattr(discord_bot, "_sheet_link", lambda _sport: None)
+    monkeypatch.setattr(discord_bot, "_format_time_since", lambda _start_date: None)
 
     def fake_presence(dk_id):
         return {1: "present", 2: "absent"}.get(dk_id)
@@ -247,13 +260,11 @@ async def test_live_shows_vip_presence_per_contest(monkeypatch):
     assert ctx.sent == [
         "Live: 🏀 NBA — ContestA\n"
         "• 🕒 2000-01-01\n"
-        "• 🔗 DK: [1](<https://www.draftkings.com/contest/gamecenter/1#/>)\n"
-        "• 📊 Sheet: n/a\n"
+        "• 🔗 DK: [1](<https://www.draftkings.com/contest/gamecenter/1#/>) | 📊 Sheet: n/a\n"
         "• ⭐ VIP: present\n\n"
         "Live: 🏈 NFL — ContestB\n"
         "• 🕒 2000-01-02\n"
-        "• 🔗 DK: [2](<https://www.draftkings.com/contest/gamecenter/2#/>)\n"
-        "• 📊 Sheet: n/a\n"
+        "• 🔗 DK: [2](<https://www.draftkings.com/contest/gamecenter/2#/>) | 📊 Sheet: n/a\n"
         "• ⭐ VIP: absent"
     ]
 
@@ -262,14 +273,16 @@ async def test_live_shows_vip_presence_per_contest(monkeypatch):
 async def test_live_shows_vip_cash_bullets(monkeypatch):
     monkeypatch.setattr(discord_bot, "_sport_choices", lambda: {"nba": DummySport})
     monkeypatch.setattr(discord_bot, "_sheet_link", lambda _sport: None)
-    monkeypatch.setattr(discord_bot, "_vip_presence_for_contest", lambda _dk_id: None)
+    monkeypatch.setattr(discord_bot, "_format_time_since", lambda _start_date: None)
+    # Presence stubbed to a real verdict to prove it's suppressed once cash bullets render.
+    monkeypatch.setattr(discord_bot, "_vip_presence_for_contest", lambda _dk_id: "present")
 
     class FakeContestDatabase:
         def __init__(self, *args, **kwargs):
             pass
 
         def get_live_contests(self, sports=None, entry_fee=25, keyword="%"):
-            return [(1, "ContestA", None, None, "2000-01-01", "NBA")]
+            return [(1, "ContestA", None, 20, "2000-01-01", "NBA")]
 
         def get_cash_line(self, dk_id):
             return (5, 100.0)
@@ -291,20 +304,72 @@ async def test_live_shows_vip_cash_bullets(monkeypatch):
     assert ctx.sent == [
         "Live: 🏀 NBA — ContestA\n"
         "• 🕒 2000-01-01\n"
-        "• 🔗 DK: [1](<https://www.draftkings.com/contest/gamecenter/1#/>)\n"
-        "• 📊 Sheet: n/a\n"
-        "• ✅ VipA: rank 3, 150.0 pts\n"
-        "• ❌ VipB: rank 10, 50.0 pts"
+        "• 🔗 DK: [1](<https://www.draftkings.com/contest/gamecenter/1#/>) | 📊 Sheet: n/a\n"
+        "• 🤑 VipA: 150.0 pts (+50.0 pts), rank 3 (cash: top 20)\n"
+        "• ☠️ VipB: 50.0 pts (-50.0 pts), rank 10 (cash: top 20)"
+    ]
+
+
+@pytest.mark.asyncio
+async def test_live_shows_elapsed_time_since_start(monkeypatch):
+    monkeypatch.setattr(discord_bot, "_sport_choices", lambda: {"nba": DummySport})
+    monkeypatch.setattr(discord_bot, "_sheet_link", lambda _sport: None)
+    monkeypatch.setattr(discord_bot, "_vip_presence_for_contest", lambda _dk_id: None)
+    monkeypatch.setattr(discord_bot, "_format_time_since", lambda _start_date: "started 2h13m ago")
+
+    class FakeContestDatabase:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def get_live_contests(self, sports=None, entry_fee=25, keyword="%"):
+            return [(1, "ContestA", None, None, "2000-01-01", "NBA")]
+
+        def get_cash_line(self, dk_id):
+            return None
+
+        def get_vip_cash_status(self, dk_id):
+            return []
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(discord_bot, "ContestDatabase", FakeContestDatabase)
+
+    ctx = FakeCtx()
+    await discord_bot.live(_ctx(ctx))
+
+    assert ctx.sent == [
+        "Live: 🏀 NBA — ContestA\n"
+        "• 🕒 2000-01-01 (started 2h13m ago)\n"
+        "• 🔗 DK: [1](<https://www.draftkings.com/contest/gamecenter/1#/>) | 📊 Sheet: n/a"
     ]
 
 
 def test_format_vip_cash_bullets_empty_returns_no_bullets():
-    assert discord_bot._format_vip_cash_bullets([], (5, 100.0)) == []
+    assert discord_bot._format_vip_cash_bullets([], (5, 100.0), 20) == []
 
 
 def test_format_vip_cash_bullets_missing_cash_line_marks_not_cashing():
     statuses = [VipCashStatus(vip_name="VipA", rank=1, points=200.0)]
-    assert discord_bot._format_vip_cash_bullets(statuses, None) == ["• ❌ VipA: rank 1, 200.0 pts"]
+    assert discord_bot._format_vip_cash_bullets(statuses, None, None) == ["• ☠️ VipA: 200.0 pts, rank 1"]
+
+
+def test_format_vip_cash_bullets_includes_delta_and_cash_context():
+    statuses = [
+        VipCashStatus(vip_name="alice", rank=12, points=163.0),
+        VipCashStatus(vip_name="bob", rank=34, points=142.3),
+    ]
+    bullets = discord_bot._format_vip_cash_bullets(statuses, (20, 150.5), 20)
+    assert bullets == [
+        "• 🤑 alice: 163.0 pts (+12.5 pts), rank 12 (cash: top 20)",
+        "• ☠️ bob: 142.3 pts (-8.2 pts), rank 34 (cash: top 20)",
+    ]
+
+
+def test_format_vip_cash_bullets_omits_cash_context_when_positions_paid_missing():
+    statuses = [VipCashStatus(vip_name="alice", rank=1, points=100.0)]
+    bullets = discord_bot._format_vip_cash_bullets(statuses, (5, 90.0), None)
+    assert bullets == ["• 🤑 alice: 100.0 pts (+10.0 pts), rank 1"]
 
 
 @pytest.mark.asyncio
