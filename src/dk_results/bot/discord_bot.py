@@ -303,11 +303,12 @@ async def contests(ctx: commands.Context, sport: str | None = None) -> None:
 
 def _format_vip_cash_bullet(
     status,
-    cash_line_rank: int | None,
-    cash_line_points: float | None,
+    cash_line: tuple[int | None, float | None] | None,
     cash_part: str,
 ) -> str:
     """Format one VIP's cash-status bullet."""
+    cash_line_rank = cash_line[0] if cash_line else None
+    cash_line_points = cash_line[1] if cash_line else None
     projected_cashing = cash_line_rank is not None and status.rank is not None and status.rank <= cash_line_rank
     emoji = "🤑" if projected_cashing else "☠️"
     delta_part = ""
@@ -324,10 +325,8 @@ def _format_vip_cash_bullets(
     """Format one bullet per persisted VIP cash-status row, or none if there aren't any."""
     if not vip_statuses:
         return []
-    cash_line_rank = cash_line[0] if cash_line else None
-    cash_line_points = cash_line[1] if cash_line else None
     cash_part = f" (cash: top {positions_paid})" if positions_paid is not None else ""
-    return [_format_vip_cash_bullet(status, cash_line_rank, cash_line_points, cash_part) for status in vip_statuses]
+    return [_format_vip_cash_bullet(status, cash_line, cash_part) for status in vip_statuses]
 
 
 def _fetch_live_contests_with_cash_status(
