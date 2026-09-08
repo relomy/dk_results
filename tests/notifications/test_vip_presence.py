@@ -11,12 +11,14 @@ from dk_results.notifications.vip_presence import (
     VIP_UNKNOWN,
     VIP_UNKNOWN_CAPPED,
     ContestResultsPort,
+    StandingsPresencePort,
     VipPresence,
     _entrant_payload_is_ambiguous,
     _parse_entrant_usernames,
     _should_refresh_absent,
     vip_key,
 )
+from dk_results.persistence.contestdatabase import ContestDatabase, VipCashStatus
 from dk_results.persistence.notification_store import NotificationStore
 
 
@@ -44,6 +46,24 @@ class FakeResultsPort:
 
     def get_leaderboard(self, contest_id, timeout=None, session=None):  # pragma: no cover - unused
         return {}
+
+
+class FakeStandingsPort:
+    """Canned `StandingsPresencePort` returning a fixed poll state."""
+
+    def __init__(self, polled_at: datetime.datetime | None = None, statuses: list | None = None) -> None:
+        self._polled_at = polled_at
+        self._statuses = statuses or []
+        self.polled_calls: list[int] = []
+        self.status_calls: list[int] = []
+
+    def get_standings_polled_at(self, dk_id: int) -> datetime.datetime | None:
+        self.polled_calls.append(dk_id)
+        return self._polled_at
+
+    def get_vip_cash_status(self, dk_id: int) -> list:
+        self.status_calls.append(dk_id)
+        return self._statuses
 
 
 @pytest.fixture
@@ -155,6 +175,86 @@ def test_cached_absent_refreshes_when_stale(store):
 
 
 # ── Helper units (absorbed from the old CLI free functions) ─────────────────────
+
+
+# ── Standings-first deepening (ADR-0012) ─────────────────────────────────────
+
+
+def test_contestdatabase_satisfies_standings_presence_port():
+    port: type[StandingsPresencePort] = ContestDatabase
+    for method in ("get_standings_polled_at", "get_vip_cash_status"):
+        assert callable(getattr(port, method))
+
+
+def test_standings_present_short_circuits_and_caches(store):
+    standings = FakeStandingsPort(
+        polled_at=datetime.datetime(2026, 1, 1),
+        statuses=[VipCashStatus(vip_name="VipGuy", rank=5, points=100.0)],
+    )
+    entrants = FakeResultsPort(raises=True)  # would blow up if consulted
+    verdict = VipPresence(entrants, store, standings=standings).verdict(1, "2026-01-01T00:00:00", ["VipGuy"])
+    assert verdict == VIP_PRESENT
+    assert entrants.entrant_calls == []
+    assert store.get_presence(1)[0] == VIP_PRESENT
+
+
+def test_standings_absent_short_circuits_and_is_not_cached(store):
+    standings = FakeStandingsPort(polled_at=datetime.datetime(2026, 1, 1), statuses=[])
+    entrants = FakeResultsPort(raises=True)  # would blow up if consulted
+    verdict = VipPresence(entrants, store, standings=standings).verdict(1, "2026-01-01T00:00:00", ["VipGuy"])
+    assert verdict == VIP_ABSENT
+    assert entrants.entrant_calls == []
+    assert store.get_presence(1) is None
+
+
+def test_standings_not_polled_falls_through_to_entrant_scan(store):
+    standings = FakeStandingsPort(polled_at=None)
+    entrants = FakeResultsPort({1: _page("vipguy")})
+    verdict = VipPresence(entrants, store, standings=standings).verdict(1, "2026-01-01T00:00:00", ["VipGuy"])
+    assert verdict == VIP_PRESENT
+    assert entrants.entrant_calls == [1]
+
+
+def test_verdict_without_standings_port_falls_back_to_entrant_scan(store):
+    entrants = FakeResultsPort({1: _page("vipguy")})
+    verdict = VipPresence(entrants, store).verdict(1, "2026-01-01T00:00:00", ["VipGuy"])
+    assert verdict == VIP_PRESENT
+    assert entrants.entrant_calls == [1]
+
+
+def test_present_vips_returns_matching_names_case_insensitively(store):
+    standings = FakeStandingsPort(
+        polled_at=datetime.datetime(2026, 1, 1),
+        statuses=[
+            VipCashStatus(vip_name="VipGuy", rank=5, points=100.0),
+            VipCashStatus(vip_name="OtherVip", rank=9, points=80.0),
+        ],
+    )
+    entrants = FakeResultsPort(raises=True)  # present_vips never touches entrants
+    result = VipPresence(entrants, store, standings=standings).present_vips(1, ["vipguy", "someoneelse"])
+    assert result == ["VipGuy"]
+    assert entrants.entrant_calls == []
+
+
+def test_present_vips_empty_when_not_polled(store):
+    standings = FakeStandingsPort(polled_at=None)
+    entrants = FakeResultsPort(raises=True)
+    result = VipPresence(entrants, store, standings=standings).present_vips(1, ["VipGuy"])
+    assert result == []
+    assert entrants.entrant_calls == []
+
+
+def test_present_vips_empty_without_standings_port(store):
+    entrants = FakeResultsPort(raises=True)
+    result = VipPresence(entrants, store).present_vips(1, ["VipGuy"])
+    assert result == []
+    assert entrants.entrant_calls == []
+
+
+def test_present_vips_empty_when_no_vip_names(store):
+    standings = FakeStandingsPort(polled_at=datetime.datetime(2026, 1, 1))
+    result = VipPresence(FakeResultsPort(), store, standings=standings).present_vips(1, [])
+    assert result == []
 
 
 def test_vip_key_strips_and_lowercases():

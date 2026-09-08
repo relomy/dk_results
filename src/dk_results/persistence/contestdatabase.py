@@ -147,6 +147,7 @@ class ContestDatabase:
         """
         self.conn.execute(sql)
         self._migrate_cash_line_columns()
+        self._migrate_standings_polled_at_column()
         self._create_vip_cash_status_table()
         self.conn.commit()
 
@@ -165,6 +166,18 @@ class ContestDatabase:
             cur.execute('ALTER TABLE "contests" ADD COLUMN "cash_line_rank" INTEGER')
         if "cash_line_points" not in existing_columns:
             cur.execute('ALTER TABLE "contests" ADD COLUMN "cash_line_points" REAL')
+
+    def _migrate_standings_polled_at_column(self) -> None:
+        """
+        Add the ``standings_polled_at`` column (ADR-0012) to an existing
+        ``contests`` table if it isn't already present, following the same
+        guarded-``ALTER TABLE`` pattern as :meth:`_migrate_cash_line_columns`.
+        """
+        cur = self.conn.cursor()
+        cur.execute('PRAGMA table_info("contests")')
+        existing_columns = {row[1] for row in cur.fetchall()}
+        if "standings_polled_at" not in existing_columns:
+            cur.execute('ALTER TABLE "contests" ADD COLUMN "standings_polled_at" datetime')
 
     def _create_vip_cash_status_table(self) -> None:
         """Create the vip_cash_status table if it does not exist."""
@@ -620,6 +633,33 @@ class ContestDatabase:
         cur.execute(sql, (dk_id,))
         row = cur.fetchone()
         return (row[0], row[1]) if row is not None else None
+
+    @_sqlite_guard()
+    def stamp_standings_polled(self, dk_id: int, polled_at: datetime.datetime) -> None:
+        """
+        Record that the standings poll has run for this contest (ADR-0012).
+
+        Stamped unconditionally alongside ``set_cash_line`` on every
+        successful standings parse, disambiguating "not polled yet" (``None``
+        from :meth:`get_standings_polled_at`) from "polled, nothing found" —
+        a distinction ``get_cash_line``'s ``(None, None)`` can't make, since
+        ``min_rank`` legitimately stays unset early in a contest too.
+        """
+        cur = self.conn.cursor()
+        sql = 'UPDATE "contests" SET "standings_polled_at"=? WHERE "dk_id"=?'
+        cur.execute(sql, (polled_at.isoformat(sep=" "), dk_id))
+        self.conn.commit()
+
+    @_sqlite_guard()
+    def get_standings_polled_at(self, dk_id: int) -> datetime.datetime | None:
+        """Fetch when the standings poll last ran for this contest, if ever."""
+        cur = self.conn.cursor()
+        sql = 'SELECT "standings_polled_at" FROM "contests" WHERE "dk_id"=? LIMIT 1'
+        cur.execute(sql, (dk_id,))
+        row = cur.fetchone()
+        if row is None or row[0] is None:
+            return None
+        return datetime.datetime.fromisoformat(row[0])
 
     @_sqlite_guard(rollback=True)
     def replace_vip_cash_status(self, dk_id: int, statuses: list[VipCashStatus]) -> None:

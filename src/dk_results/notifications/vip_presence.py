@@ -1,11 +1,14 @@
-"""The VIP-presence oracle and its DraftKings read seam.
+"""The VIP-presence oracle and its DraftKings/standings read seams.
 
 `VipPresence` answers one question: is a tracked VIP entered in a contest? It
 returns a *presence verdict* — ``present`` / ``absent`` / ``unknown`` /
-``unknown_capped`` — reading entrants through a narrow `ContestResultsPort`
-and caching verdicts through `NotificationStore`. It refreshes ``absent`` on
-the existing policy, short-circuiting the moment any tracked VIP is found
-rather than enumerating everyone entered. ``unknown_capped`` is returned
+``unknown_capped`` — caching verdicts through `NotificationStore`. Per
+ADR-0012, it consults the standings poll `SportProcessor` already persists
+first (via the narrow `StandingsPresencePort`) and only falls back to
+reading entrants through `ContestResultsPort` when nothing has been polled
+yet for that contest. The entrant-page fallback refreshes ``absent`` on the
+existing policy, short-circuiting the moment any tracked VIP is found rather
+than enumerating everyone entered. ``unknown_capped`` is returned
 specifically when the entrant-page cap is hit before a conclusive answer (a
 structural fact about the field size, not a resolved verdict); every other
 inconclusive read (an ambiguous parse, a failed request, no VIPs configured)
@@ -27,6 +30,7 @@ from typing import Any, Protocol
 
 import requests
 
+from dk_results.persistence.contestdatabase import VipCashStatus
 from dk_results.persistence.notification_store import NotificationStore
 
 logger = logging.getLogger(__name__)
@@ -64,6 +68,13 @@ class ContestResultsPort(Protocol):
         timeout: int | None = None,
         session: requests.Session | None = None,
     ) -> dict[str, Any]: ...
+
+
+class StandingsPresencePort(Protocol):
+    """The standings-poll readouts VIP presence needs, keyed by contest id (ADR-0012)."""
+
+    def get_standings_polled_at(self, dk_id: int) -> datetime.datetime | None: ...
+    def get_vip_cash_status(self, dk_id: int) -> list[VipCashStatus]: ...
 
 
 def vip_key(name: Any) -> str:
@@ -124,17 +135,26 @@ def _should_refresh_absent(checked_at: str, start_date: str) -> bool:
 class VipPresence:
     """Oracle returning a presence verdict for a contest, cached in `NotificationStore`."""
 
-    def __init__(self, results: ContestResultsPort, store: NotificationStore) -> None:
+    def __init__(
+        self,
+        results: ContestResultsPort,
+        store: NotificationStore,
+        standings: StandingsPresencePort | None = None,
+    ) -> None:
         self._results = results
         self._store = store
+        self._standings = standings
 
     def verdict(self, dk_id: int, start_date: str, vip_names: list[str]) -> str:
         """Return ``present`` / ``absent`` / ``unknown`` for ``dk_id``.
 
-        Serves a cached ``present`` immediately and a cached ``absent`` until the
-        refresh policy allows a re-check, then reads entrant pages until a VIP is
-        found (``present``), a page proves the field empty (``absent``), the page
-        cap is hit, a page is ambiguous, or a read fails (``unknown``).
+        Checks the standings poll first (ADR-0012): once a contest has been
+        polled, the standings answer is authoritative in both directions and
+        the entrant-page scan below is skipped entirely. Otherwise, serves a
+        cached ``present`` immediately and a cached ``absent`` until the
+        refresh policy allows a re-check, then reads entrant pages until a VIP
+        is found (``present``), a page proves the field empty (``absent``),
+        the page cap is hit, a page is ambiguous, or a read fails (``unknown``).
         """
         if not vip_names:
             return VIP_UNKNOWN
@@ -143,14 +163,32 @@ class VipPresence:
         if not vip_keys:
             return VIP_UNKNOWN
 
-        cached = self._store.get_presence(dk_id)
-        if cached:
-            cached_status, checked_at = cached
-            if cached_status == VIP_PRESENT:
-                return VIP_PRESENT
-            if cached_status == VIP_ABSENT and not _should_refresh_absent(checked_at, start_date):
-                return VIP_ABSENT
+        standings_verdict = self._standings_verdict(dk_id, vip_keys)
+        if standings_verdict is not None:
+            return standings_verdict
 
+        return self._entrant_scan_verdict(dk_id, start_date, vip_keys)
+
+    def _entrant_scan_verdict(self, dk_id: int, start_date: str, vip_keys: set[str]) -> str:
+        """The pre-ADR-0012 fallback: cached-then-live entrant-page scan."""
+        cached_verdict = self._cached_entrant_verdict(dk_id, start_date)
+        if cached_verdict is not None:
+            return cached_verdict
+        return self._live_entrant_scan(dk_id, vip_keys)
+
+    def _cached_entrant_verdict(self, dk_id: int, start_date: str) -> str | None:
+        """A still-fresh cached verdict from a prior entrant-page scan, if any."""
+        cached = self._store.get_presence(dk_id)
+        if not cached:
+            return None
+        cached_status, checked_at = cached
+        if cached_status == VIP_PRESENT:
+            return VIP_PRESENT
+        if cached_status == VIP_ABSENT and not _should_refresh_absent(checked_at, start_date):
+            return VIP_ABSENT
+        return None
+
+    def _live_entrant_scan(self, dk_id: int, vip_keys: set[str]) -> str:
         try:
             for page_no in range(1, VIP_ENTRANT_PAGE_LIMIT + 1):
                 html = self._results.get_contest_entrants_page(dk_id, page_no)
@@ -170,3 +208,44 @@ class VipPresence:
 
         logger.info("vip presence page cap hit for dk_id=%s; returning unknown_capped", dk_id)
         return VIP_UNKNOWN_CAPPED
+
+    def present_vips(self, dk_id: int, vip_names: list[str]) -> list[str]:
+        """Return the tracked VIP names the standings poll found entered in ``dk_id``.
+
+        Standings-only (ADR-0012): the entrant-page scan short-circuits at the
+        first match by design, so it can never answer "which VIPs," only "at
+        least one." Returns ``[]`` when nothing has been polled yet, or when
+        no standings source is configured.
+        """
+        vip_keys = {vip_key(name) for name in vip_names if vip_key(name)}
+        if not vip_keys:
+            return []
+        return self._matching_vip_names(dk_id, vip_keys) or []
+
+    def _standings_verdict(self, dk_id: int, vip_keys: set[str]) -> str | None:
+        """Return ``present``/``absent`` from the standings poll, or ``None`` if unpolled.
+
+        A standings-derived ``present`` writes through to `NotificationStore`,
+        matching the existing invariant that a cached ``present`` is
+        permanent. A standings-derived ``absent`` is not cached — the
+        entrant-scan's cached ``absent`` carries a refresh timer sized for the
+        cost of re-scanning, which the standings answer has no need of, and
+        caching it anyway would plant a second, timer-less ``absent`` in the
+        same store under an unrelated policy.
+        """
+        matching = self._matching_vip_names(dk_id, vip_keys)
+        if matching is None:
+            return None
+        if matching:
+            self._store.upsert_presence(dk_id, VIP_PRESENT)
+            return VIP_PRESENT
+        return VIP_ABSENT
+
+    def _matching_vip_names(self, dk_id: int, vip_keys: set[str]) -> list[str] | None:
+        """Tracked VIP names the standings poll found, or ``None`` if unpolled/unconfigured."""
+        if self._standings is None:
+            return None
+        if self._standings.get_standings_polled_at(dk_id) is None:
+            return None
+        statuses = self._standings.get_vip_cash_status(dk_id)
+        return [status.vip_name for status in statuses if vip_key(status.vip_name) in vip_keys]

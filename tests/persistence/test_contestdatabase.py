@@ -607,6 +607,82 @@ def test_replace_vip_cash_status_rolls_back_on_error(caplog):
     assert conn.rolled_back is True
 
 
+def test_standings_polled_at_is_none_before_any_poll(contest_db):
+    _insert_contest(contest_db, dk_id=1)
+    assert contest_db.get_standings_polled_at(1) is None
+
+
+def test_stamp_standings_polled_round_trip(contest_db):
+    _insert_contest(contest_db, dk_id=1)
+    contest_db.stamp_standings_polled(1, datetime.datetime(2026, 1, 1, 12, 0, 0))
+    assert contest_db.get_standings_polled_at(1) == datetime.datetime(2026, 1, 1, 12, 0, 0)
+
+
+def test_get_standings_polled_at_returns_none_for_missing_contest(contest_db):
+    assert contest_db.get_standings_polled_at(999) is None
+
+
+def test_get_standings_polled_at_sqlite_error(caplog):
+    db = ContestDatabase(":memory:")
+    db.close()
+    with caplog.at_level(logging.ERROR):
+        assert db.get_standings_polled_at(1) is None
+    assert any("get_standings_polled_at" in rec.message for rec in caplog.records)
+
+
+def test_stamp_standings_polled_sqlite_error(caplog):
+    db = ContestDatabase(":memory:")
+    db.close()
+    with caplog.at_level(logging.ERROR):
+        db.stamp_standings_polled(1, datetime.datetime(2026, 1, 1))
+    assert any("stamp_standings_polled" in rec.message for rec in caplog.records)
+
+
+def test_ensure_schema_migrates_standings_polled_at_column(tmp_path):
+    """A pre-existing on-disk db file lacking standings_polled_at (ADR-0012)
+    should be migrated in place, not just a fresh one."""
+    db_path = str(tmp_path / "contests.db")
+
+    legacy_conn = sqlite3.connect(db_path)
+    legacy_conn.execute(
+        """
+        CREATE TABLE "contests" (
+            "dk_id" INTEGER PRIMARY KEY,
+            "sport" varchar(10) NOT NULL,
+            "name"  varchar(50) NOT NULL,
+            "start_date"    datetime NOT NULL,
+            "draft_group"   INTEGER NOT NULL,
+            "total_prizes"  INTEGER NOT NULL,
+            "entries"       INTEGER NOT NULL,
+            "positions_paid"        INTEGER,
+            "entry_fee"     INTEGER NOT NULL,
+            "entry_count"   INTEGER NOT NULL,
+            "max_entry_count"       INTEGER NOT NULL,
+            "completed"     INTEGER NOT NULL DEFAULT 0,
+            "status"        TEXT,
+            "cash_line_rank" INTEGER,
+            "cash_line_points" REAL
+        );
+        """
+    )
+    legacy_conn.execute(
+        "INSERT INTO contests (dk_id, sport, name, start_date, draft_group, total_prizes, entries, "
+        "entry_fee, entry_count, max_entry_count) VALUES (1, 'NBA', 'Contest', '2024-01-01 00:00:00', "
+        "1, 1000, 100, 25, 0, 1)"
+    )
+    legacy_conn.commit()
+    legacy_conn.close()
+
+    db = ContestDatabase(db_path)
+    try:
+        db.ensure_schema()
+        assert db.get_standings_polled_at(1) is None
+        db.stamp_standings_polled(1, datetime.datetime(2026, 1, 1, 12, 0, 0))
+        assert db.get_standings_polled_at(1) == datetime.datetime(2026, 1, 1, 12, 0, 0)
+    finally:
+        db.close()
+
+
 def test_get_vip_cash_status_sqlite_error(caplog):
     class BoomCursor:
         def execute(self, *_a, **_k):

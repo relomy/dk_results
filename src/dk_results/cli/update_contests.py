@@ -229,7 +229,9 @@ def _build_completion_processor(conn) -> CompletionProcessor:
 
     results = dk_client if dk_client is not None else _UnavailableContestResults()
     presence = (
-        VipPresence(dk_client, NotificationStore(conn)) if (notifications_enabled and dk_client is not None) else None
+        VipPresence(dk_client, NotificationStore(conn), standings=ContestDatabase.from_connection(conn))
+        if (notifications_enabled and dk_client is not None)
+        else None
     )
 
     config = CompletionProcessorConfig(

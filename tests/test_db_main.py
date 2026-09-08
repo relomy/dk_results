@@ -109,6 +109,7 @@ class _FakeContestDb:
     def __init__(self):
         self.cash_lines: dict[int, tuple[int | None, float | None]] = {}
         self.vip_statuses: dict[int, list] = {}
+        self.standings_polled_at: dict[int, object] = {}
 
     def get_live_contest(self, *_args, **_kwargs):
         return (
@@ -124,6 +125,9 @@ class _FakeContestDb:
 
     def replace_vip_cash_status(self, dk_id, statuses):
         self.vip_statuses[dk_id] = statuses
+
+    def stamp_standings_polled(self, dk_id, polled_at):
+        self.standings_polled_at[dk_id] = polled_at
 
 
 class _FakeContestDbNoLive:
@@ -285,6 +289,16 @@ def test_process_sport_persists_cash_line_and_vip_status(tmp_path):
     assert contest_id == 123
     assert db.cash_lines[123] == (1, 120.0)
     assert db.vip_statuses[123] == [VipCashStatus(vip_name="UserA", rank=1, points=120.0)]
+
+
+def test_process_sport_stamps_standings_polled_at(tmp_path):
+    # ADR-0012: stamped unconditionally on every successful standings parse,
+    # using the processor's injected clock, alongside set_cash_line.
+    db = _FakeContestDb()
+    processor = _make_processor(db, vips=["UserA"], salary_dir=str(tmp_path))
+    processor.run("NFL", NFLSport)
+
+    assert db.standings_polled_at[123] == datetime.datetime(2026, 2, 14, 12, 0, 0)
 
 
 def test_process_sport_persists_none_cash_line_when_positions_paid_missing(tmp_path):
