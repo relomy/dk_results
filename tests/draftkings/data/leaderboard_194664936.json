@@ -1,0 +1,193 @@
+{
+  "href": "/scores/v1/contests/194664936/",
+  "contestKey": "194664936",
+  "leader": {
+    "draftGroupId": 152249,
+    "contestKey": "194664936",
+    "entryKey": "5234772200",
+    "lineupId": -1,
+    "userName": "jeremy_rchl",
+    "userKey": "767529",
+    "userEntryCount": 1,
+    "userEntryIndex": 1,
+    "timeRemaining": 0,
+    "timeRemainingUnit": "PMR",
+    "maxTimeRemaining": 480,
+    "timeRemainingOpponent": 0,
+    "rank": 1,
+    "fantasyPoints": 153,
+    "fantasyPointsOpponent": 152.18,
+    "userNameOpponent": "paulsupple",
+    "numberTicketsWon": 0,
+    "ticketsValue": 0,
+    "winningValue": 10,
+    "winnings": [
+      {
+        "value": 10,
+        "description": "Cash"
+      }
+    ],
+    "scoringPrecision": 2
+  },
+  "lastWinningEntry": {
+    "draftGroupId": 152249,
+    "contestKey": "194664936",
+    "entryKey": "5234800223",
+    "lineupId": -1,
+    "userName": "cantfademe",
+    "userKey": "7171851",
+    "userEntryCount": 1,
+    "userEntryIndex": 1,
+    "timeRemaining": 0,
+    "timeRemainingUnit": "PMR",
+    "maxTimeRemaining": 480,
+    "timeRemainingOpponent": 0,
+    "rank": 70,
+    "fantasyPoints": 122.16,
+    "fantasyPointsOpponent": 153,
+    "userNameOpponent": "jeremy_rchl",
+    "numberTicketsWon": 0,
+    "ticketsValue": 0,
+    "winningValue": 4.28,
+    "winnings": [
+      {
+        "value": 4.28,
+        "description": "Cash"
+      }
+    ],
+    "scoringPrecision": 2
+  },
+  "leaderBoard": [
+    {
+      "draftGroupId": 152249,
+      "contestKey": "194664936",
+      "entryKey": "5234772200",
+      "lineupId": -1,
+      "userName": "jeremy_rchl",
+      "userKey": "767529",
+      "userEntryCount": 1,
+      "userEntryIndex": 1,
+      "timeRemaining": 0,
+      "timeRemainingUnit": "PMR",
+      "maxTimeRemaining": 480,
+      "timeRemainingOpponent": 0,
+      "rank": 1,
+      "fantasyPoints": 153,
+      "fantasyPointsOpponent": 152.18,
+      "userNameOpponent": "paulsupple",
+      "numberTicketsWon": 0,
+      "ticketsValue": 0,
+      "winningValue": 10,
+      "winnings": [
+        {
+          "value": 10,
+          "description": "Cash"
+        }
+      ],
+      "scoringPrecision": 2
+    },
+    {
+      "draftGroupId": 152249,
+      "contestKey": "194664936",
+      "entryKey": "5234509032",
+      "lineupId": -1,
+      "userName": "paulsupple",
+      "userKey": "8402457",
+      "userEntryCount": 1,
+      "userEntryIndex": 1,
+      "timeRemaining": 0,
+      "timeRemainingUnit": "PMR",
+      "maxTimeRemaining": 480,
+      "timeRemainingOpponent": 0,
+      "rank": 2,
+      "fantasyPoints": 152.18,
+      "fantasyPointsOpponent": 153,
+      "userNameOpponent": "jeremy_rchl",
+      "numberTicketsWon": 0,
+      "ticketsValue": 0,
+      "winningValue": 10,
+      "winnings": [
+        {
+          "value": 10,
+          "description": "Cash"
+        }
+      ],
+      "scoringPrecision": 2
+    },
+    {
+      "draftGroupId": 152249,
+      "contestKey": "194664936",
+      "entryKey": "5234568707",
+      "lineupId": -1,
+      "userName": "csan37",
+      "userKey": "2019893",
+      "userEntryCount": 1,
+      "userEntryIndex": 1,
+      "timeRemaining": 0,
+      "timeRemainingUnit": "PMR",
+      "maxTimeRemaining": 480,
+      "timeRemainingOpponent": 0,
+      "rank": 3,
+      "fantasyPoints": 149.94,
+      "fantasyPointsOpponent": 153,
+      "userNameOpponent": "jeremy_rchl",
+      "numberTicketsWon": 0,
+      "ticketsValue": 0,
+      "winningValue": 10,
+      "winnings": [
+        {
+          "value": 10,
+          "description": "Cash"
+        }
+      ],
+      "scoringPrecision": 2
+    },
+    {
+      "draftGroupId": 152249,
+      "contestKey": "194664936",
+      "entryKey": "5234526739",
+      "lineupId": -1,
+      "userName": "jw144",
+      "userKey": "138241",
+      "userEntryCount": 1,
+      "userEntryIndex": 1,
+      "timeRemaining": 0,
+      "timeRemainingUnit": "PMR",
+      "maxTimeRemaining": 480,
+      "timeRemainingOpponent": 0,
+      "rank": 84,
+      "fantasyPoints": 122.08,
+      "fantasyPointsOpponent": 153,
+      "userNameOpponent": "jeremy_rchl",
+      "numberTicketsWon": 0,
+      "ticketsValue": 0,
+      "winningValue": 0,
+      "scoringPrecision": 2
+    },
+    {
+      "draftGroupId": 152249,
+      "contestKey": "194664936",
+      "entryKey": "5234509925",
+      "lineupId": -1,
+      "userName": "OhSoChadalicious",
+      "userKey": "12554063",
+      "userEntryCount": 1,
+      "userEntryIndex": 1,
+      "timeRemaining": 0,
+      "timeRemainingUnit": "PMR",
+      "maxTimeRemaining": 480,
+      "timeRemainingOpponent": 0,
+      "rank": 85,
+      "fantasyPoints": 121.76,
+      "fantasyPointsOpponent": 153,
+      "userNameOpponent": "jeremy_rchl",
+      "ticketsValue": 0,
+      "winningValue": 0,
+      "scoringPrecision": 2
+    }
+  ],
+  "leaderBoardUserEntries": {
+    "entryByEntryKey": {},
+    "userRewardTokenMetadataByAwardableTokenId": {}
+  }
+}
