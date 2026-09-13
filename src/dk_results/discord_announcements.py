@@ -28,6 +28,7 @@ DEFAULT_SPORT_EMOJI = "🏟️"
 
 SPORT_EMOJI: dict[str, str] = {
     "CFB": "🏈",
+    "CFBNight": "🏈",
     "GOLF": "⛳",
     "LOL": "🎮",
     "MLB": "⚾",

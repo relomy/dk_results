@@ -230,6 +230,7 @@ class DraftKings:
             "NAS": 24,
             "NBA": 70,
             "CFB": 94,
+            "CFBNight": 94,
             "TEN": 106,
             "LOL": 106,
             "XFL": 134,

@@ -205,6 +205,34 @@ class CFBSport(Sport):
     allow_optimizer = True
 
 
+class CFBNightSport(Sport):
+    """CFB night-slate sport configuration."""
+
+    name = "CFBNight"
+    sheet_name = "CFBNight"
+    lineup_range = "J3:W999"
+
+    # DK's exact suffix text for this slate hasn't been confirmed against a
+    # real lobby listing yet; update once seen (mirrors the NFLAfternoon
+    # pattern below).
+    suffixes = (r"\(Night Only\)",)
+
+    sheet_min_entry_fee = 5
+    dub_min_entry_fee = 2
+    dub_min_entries = 100
+
+    draftkings_sport = "CFB"
+
+    # optimizer — same roster shape as CFBSport (QB, RB, RB, WR, WR, WR,
+    # FLEX, S-FLEX); allow_optimizer stays off (opt-in default) until this
+    # slate's positions are confirmed against a real standings file. See
+    # ADR-0005.
+    positions = ("QB", "RB", "RB", "WR", "WR", "WR", "FLEX", "S-FLEX")
+
+    # flags
+    allow_suffixless_draft_groups = False
+
+
 class GolfSport(Sport):
     """GOLF/PGA sport configuration."""
 

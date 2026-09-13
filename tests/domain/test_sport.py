@@ -71,6 +71,15 @@ def test_get_primary_sport_prefers_draftkings_override_and_falls_back_to_name():
     assert Basketball.get_primary_sport() == "NBA"
 
 
+def test_cfb_night_is_a_cfb_variant_with_narrowed_suffix_matching():
+    from dk_results.domain.sport import CFBNightSport
+
+    assert CFBNightSport.name == "CFBNight"
+    assert CFBNightSport.get_draftkings_sport() == "CFB"
+    assert CFBNightSport.allow_suffixless_draft_groups is False
+    assert CFBNightSport.positions == ("QB", "RB", "RB", "WR", "WR", "WR", "FLEX", "S-FLEX")
+
+
 def test_fixed_sport_configuration_collections_are_tuples():
     from dk_results.domain.sport import CFBSport, GolfSport
 
