@@ -77,6 +77,7 @@ def test_cfb_night_is_a_cfb_variant_with_narrowed_suffix_matching():
     assert CFBNightSport.name == "CFBNight"
     assert CFBNightSport.get_draftkings_sport() == "CFB"
     assert CFBNightSport.allow_suffixless_draft_groups is False
+    assert CFBNightSport.allow_optimizer is True
     assert CFBNightSport.positions == ("QB", "RB", "RB", "WR", "WR", "WR", "FLEX", "S-FLEX")
 
 

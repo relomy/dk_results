@@ -224,10 +224,11 @@ class CFBNightSport(Sport):
     draftkings_sport = "CFB"
 
     # optimizer — same roster shape as CFBSport (QB, RB, RB, WR, WR, WR,
-    # FLEX, S-FLEX); allow_optimizer stays off (opt-in default) until this
-    # slate's positions are confirmed against a real standings file. See
-    # ADR-0005.
+    # FLEX, S-FLEX); reuses CFBSport's already-confirmed layout (same DK CFB
+    # roster construction, just a different lobby suffix/time slot), so the
+    # ADR-0005 opt-in gate is already satisfied.
     positions = ("QB", "RB", "RB", "WR", "WR", "WR", "FLEX", "S-FLEX")
+    allow_optimizer = True
 
     # flags
     allow_suffixless_draft_groups = False
