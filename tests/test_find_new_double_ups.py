@@ -364,6 +364,32 @@ def test_filter_draft_groups_nfl_showdown_super_bowl_suffix():
     assert result == [21]
 
 
+def test_filter_draft_groups_nfl_classic_excludes_showdown():
+    response = {
+        "DraftGroups": [
+            {
+                "DraftGroupTag": "Featured",
+                "ContestStartTimeSuffix": None,
+                "DraftGroupId": 41,
+                "StartDateEst": "2026-09-10T13:00:00.000-05:00",
+                "ContestTypeId": 1,
+                "GameTypeId": 1,
+            },
+            {
+                "DraftGroupTag": "Featured",
+                "ContestStartTimeSuffix": "(ABC @ DEF)",
+                "DraftGroupId": 42,
+                "StartDateEst": "2026-09-10T13:00:00.000-05:00",
+                "ContestTypeId": 1,
+                "GameTypeId": 96,
+            },
+        ]
+    }
+
+    result = filter_draft_groups(response["DraftGroups"], NFLSport)
+    assert result == [41]
+
+
 def test_filter_draft_groups_pga_weekend_strict():
     response = {
         "DraftGroups": [

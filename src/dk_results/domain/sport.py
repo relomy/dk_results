@@ -117,6 +117,15 @@ class NFLSport(Sport):
     sheet_name = "NFL"
     lineup_range = "J3:W999"
 
+    # Classic only — excludes NFLShowdown (96) and other special game types
+    # from the classic NFL draft-group pool. Without this, a Showdown draft
+    # group could be selected as the live "NFL" contest and parsed with
+    # classic QB/RB/WR/TE/FLEX/DST slots against Showdown's CPT/FLEX
+    # layout, producing spurious "Unresolved lineup slot FLEX: <DST>"
+    # errors for entrants who (legitimately, in Showdown) put a team
+    # defense in FLEX.
+    contest_restraint_game_type_id = 1
+
     # optimizer
     positions = ("QB", "RB", "RB", "WR", "WR", "WR", "TE", "FLEX", "DST")
     allow_optimizer = True
