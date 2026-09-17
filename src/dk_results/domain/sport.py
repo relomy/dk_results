@@ -26,9 +26,14 @@ class Sport:
     dub_min_entry_fee: int = 5
     dub_min_entries: int = 125
 
-    suffixes: tuple[str, ...] = ()
+    # Suffix constraint for this sport's draft groups:
+    #   None                -> unconstrained: any suffix, or none, passes
+    #   ()                  -> must be suffixless
+    #   (p1, p2, ...)       -> suffix must match one of these patterns; suffixless rejected
+    #   (None, p1, p2, ...) -> suffixless OR one of these patterns
+    suffixes: tuple[str | None, ...] | None = None
     _compiled_suffix_patterns: tuple[re.Pattern[str], ...] | None = None
-    _suffix_patterns_cache_key: tuple[str, ...] | None = None
+    _suffix_patterns_cache_key: tuple[str | None, ...] | None = None
 
     contest_restraint_day: date | None = None
     contest_restraint_time: time | None = None
@@ -39,7 +44,6 @@ class Sport:
     # confirmed against a real DraftKings salary file (see ADR-0005). An
     # unconfirmed sport stays off rather than risk shipping a wrong lineup.
     allow_optimizer: bool = False
-    allow_suffixless_draft_groups: bool = True
 
     @classmethod
     def get_draftkings_sport(cls) -> str:
@@ -53,10 +57,11 @@ class Sport:
 
     @classmethod
     def get_suffix_patterns(cls) -> tuple[re.Pattern[str], ...]:
-        """Return compiled regex patterns for suffix filtering."""
-        current_key = tuple(cls.suffixes)
+        """Return compiled regex patterns for suffix filtering, excluding the suffixless sentinel."""
+        current_key = cls.suffixes
         if cls._compiled_suffix_patterns is None or cls._suffix_patterns_cache_key != current_key:
-            cls._compiled_suffix_patterns = tuple(re.compile(pattern) for pattern in cls.suffixes)
+            patterns = filter(None, current_key or ())
+            cls._compiled_suffix_patterns = tuple(re.compile(pattern) for pattern in patterns)
             cls._suffix_patterns_cache_key = current_key
         return cls._compiled_suffix_patterns
 
@@ -126,6 +131,12 @@ class NFLSport(Sport):
     # defense in FLEX.
     contest_restraint_game_type_id = 1
 
+    # Suffixless only — excludes the Afternoon/Thu-Mon/Sun-Mon/Early/Turbo
+    # suffixed Classic draft groups from the classic NFL pool. Only
+    # (Afternoon Only) has a dedicated sibling sport (NFLAfternoonSport);
+    # the others are not tracked under any sport yet.
+    suffixes = ()
+
     # optimizer
     positions = ("QB", "RB", "RB", "WR", "WR", "WR", "TE", "FLEX", "DST")
     allow_optimizer = True
@@ -140,6 +151,11 @@ class NFLAfternoonSport(Sport):
 
     suffixes = (r"\(Afternoon Only\)",)
 
+    # Classic only — (Afternoon Only) also appears on Tiers (51) and Snake
+    # (189) draft groups; without this restraint those would be misrouted
+    # into the Afternoon sheet with the wrong lineup shape.
+    contest_restraint_game_type_id = 1
+
     dub_min_entry_fee = 25
     dub_min_entries = 125
 
@@ -147,9 +163,6 @@ class NFLAfternoonSport(Sport):
 
     # optimizer
     positions = ("QB", "RB", "RB", "WR", "WR", "WR", "TE", "FLEX", "DST")
-
-    # flags
-    allow_suffixless_draft_groups = False
 
 
 class NFLShowdownSport(Sport):
@@ -171,14 +184,21 @@ class NFLShowdownSport(Sport):
     positions = ("CPT", "FLEX", "FLEX", "FLEX", "FLEX", "FLEX")
 
     # DK sometimes uses team-vs-team suffixes and sometimes event labels
-    # like "(Super Bowl LX)" for the same showdown game type.
-    suffixes = (r"\(\w{2,3} @ \w{2,3}\)", r"\([A-Za-z0-9 .'-]+\)")
+    # like "(Super Bowl LX)" for the same showdown game type; suffixless is
+    # also allowed.
+    suffixes = (None, r"\(\w{2,3} @ \w{2,3}\)", r"\([A-Za-z0-9 .'-]+\)")
 
-    # contest_restraint_time = time(20, 0)
+    # DraftKings tags one "Featured" Showdown per game window, not just
+    # primetime — a Sunday early (1:00) and late (4:05/4:25) window each get
+    # their own Featured Showdown with an ordinary (TEAM @ TEAM) suffix,
+    # indistinguishable from Thu/Sun/Mon night by suffix or game type alone.
+    # Confirmed via live data pulled 2026-09-17. Regular-season primetime
+    # games kick off ~20:15-20:20 ET, but the Super Bowl kicks off ~18:30 ET
+    # (see test_filter_draft_groups_nfl_showdown_super_bowl_suffix) — a 6:00
+    # PM floor keeps every single-game primetime/marquee window while still
+    # excluding every standard Sunday day window (never later than ~16:25).
+    contest_restraint_time = time(18, 0)
     contest_restraint_game_type_id = 96
-
-    # flags
-    allow_suffixless_draft_groups = True
 
 
 class NBASport(Sport):
