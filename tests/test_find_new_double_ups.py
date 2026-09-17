@@ -632,7 +632,6 @@ def test_get_dk_lobby_uses_requests(monkeypatch):
 def test_get_draft_groups_allows_suffixless():
     class DummySport(Sport):
         name = "TEST"
-        allow_suffixless_draft_groups = True
 
     response = {
         "DraftGroups": [
