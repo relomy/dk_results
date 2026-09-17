@@ -370,6 +370,46 @@ def test_filter_draft_groups_nfl_showdown_super_bowl_suffix():
     assert result == [21]
 
 
+def test_filter_draft_groups_nfl_showdown_excludes_day_window_featured():
+    """DK tags one Featured Showdown per Sunday window, not just primetime.
+
+    Live data (2026-09-17) showed Featured Showdown draft groups at 1:00 PM
+    and 4:25 PM ET on a normal Sunday alongside the Thursday-night one — only
+    the primetime slate should be tracked as NFLShowdown.
+    """
+    response = {
+        "DraftGroups": [
+            {
+                "DraftGroupTag": "Featured",
+                "ContestStartTimeSuffix": "(DET @ BUF)",
+                "DraftGroupId": 153434,
+                "StartDateEst": "2026-09-17T20:15:00.000-05:00",
+                "ContestTypeId": 96,
+                "GameTypeId": 96,
+            },
+            {
+                "DraftGroupTag": "Featured",
+                "ContestStartTimeSuffix": "(MIN @ CHI)",
+                "DraftGroupId": 153436,
+                "StartDateEst": "2026-09-20T13:00:00.000-05:00",
+                "ContestTypeId": 96,
+                "GameTypeId": 96,
+            },
+            {
+                "DraftGroupTag": "Featured",
+                "ContestStartTimeSuffix": "(WAS @ DAL)",
+                "DraftGroupId": 153446,
+                "StartDateEst": "2026-09-20T16:25:00.000-05:00",
+                "ContestTypeId": 96,
+                "GameTypeId": 96,
+            },
+        ]
+    }
+
+    result = filter_draft_groups(response["DraftGroups"], NFLShowdownSport)
+    assert result == [153434]
+
+
 def test_filter_draft_groups_nfl_classic_excludes_showdown():
     response = {
         "DraftGroups": [

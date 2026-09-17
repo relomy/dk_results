@@ -188,7 +188,16 @@ class NFLShowdownSport(Sport):
     # also allowed.
     suffixes = (None, r"\(\w{2,3} @ \w{2,3}\)", r"\([A-Za-z0-9 .'-]+\)")
 
-    # contest_restraint_time = time(20, 0)
+    # DraftKings tags one "Featured" Showdown per game window, not just
+    # primetime — a Sunday early (1:00) and late (4:05/4:25) window each get
+    # their own Featured Showdown with an ordinary (TEAM @ TEAM) suffix,
+    # indistinguishable from Thu/Sun/Mon night by suffix or game type alone.
+    # Confirmed via live data pulled 2026-09-17. Regular-season primetime
+    # games kick off ~20:15-20:20 ET, but the Super Bowl kicks off ~18:30 ET
+    # (see test_filter_draft_groups_nfl_showdown_super_bowl_suffix) — a 6:00
+    # PM floor keeps every single-game primetime/marquee window while still
+    # excluding every standard Sunday day window (never later than ~16:25).
+    contest_restraint_time = time(18, 0)
     contest_restraint_game_type_id = 96
 
 
