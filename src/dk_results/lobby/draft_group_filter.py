@@ -24,12 +24,11 @@ def _passes_game_type(game_type_id: int, sport: Type[Sport]) -> bool:
 
 
 def _passes_suffix(suffix: str | None, sport: Type[Sport]) -> bool:
-    if suffix is None:
-        return sport.allow_suffixless_draft_groups
-    suffix_patterns = sport.get_suffix_patterns()
-    if not suffix_patterns:
+    if sport.suffixes is None:
         return True
-    return any(pattern.search(suffix) for pattern in suffix_patterns)
+    if suffix is None:
+        return not sport.suffixes or None in sport.suffixes
+    return any(pattern.search(suffix) for pattern in sport.get_suffix_patterns())
 
 
 def _passes_time(dt_start: datetime.datetime, sport: Type[Sport]) -> bool:

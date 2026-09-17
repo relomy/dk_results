@@ -24,7 +24,14 @@ from dk_results.cli.find_new_double_ups import (
     set_quiet_verbosity,
 )
 from dk_results.domain.contest import Contest
-from dk_results.domain.sport import NFLShowdownSport, NFLSport, PGAShowdownSport, PGAWeekendSport, Sport
+from dk_results.domain.sport import (
+    NFLAfternoonSport,
+    NFLShowdownSport,
+    NFLSport,
+    PGAShowdownSport,
+    PGAWeekendSport,
+    Sport,
+)
 
 
 def test_find_new_double_ups_exposes_webhook_sender():
@@ -233,7 +240,6 @@ def test_filter_draft_groups_filters():
     class DummySport(Sport):
         name = "TEST"
         suffixes = (r"\(Main\)",)
-        allow_suffixless_draft_groups = False
         contest_restraint_time = datetime.time(18, 0)
         contest_restraint_game_type_id = 99
 
@@ -388,6 +394,69 @@ def test_filter_draft_groups_nfl_classic_excludes_showdown():
 
     result = filter_draft_groups(response["DraftGroups"], NFLSport)
     assert result == [41]
+
+
+def test_filter_draft_groups_nfl_classic_excludes_suffixed_draft_groups():
+    """NFLSport is suffixless-only: real Classic-suffixed groups all get rejected."""
+
+    def _group(draft_group_id, suffix):
+        return {
+            "DraftGroupTag": "Featured",
+            "ContestStartTimeSuffix": suffix,
+            "DraftGroupId": draft_group_id,
+            "StartDateEst": "2026-09-10T13:00:00.000-05:00",
+            "ContestTypeId": 1,
+            "GameTypeId": 1,
+        }
+
+    response = {
+        "DraftGroups": [
+            _group(51, None),
+            _group(52, "(Afternoon Only)"),
+            _group(53, "(Thu-Mon)"),
+            _group(54, "(Sun-Mon)"),
+            _group(55, "(Early Only)"),
+            _group(56, "(Afternoon Turbo)"),
+        ]
+    }
+
+    result = filter_draft_groups(response["DraftGroups"], NFLSport)
+    assert result == [51]
+
+
+def test_filter_draft_groups_nfl_afternoon_classic_only():
+    """NFLAfternoonSport accepts Classic (Afternoon Only) but rejects Tiers/Snake."""
+    response = {
+        "DraftGroups": [
+            {
+                "DraftGroupTag": "Featured",
+                "ContestStartTimeSuffix": "(Afternoon Only)",
+                "DraftGroupId": 61,
+                "StartDateEst": "2026-09-10T13:00:00.000-05:00",
+                "ContestTypeId": 1,
+                "GameTypeId": 1,
+            },
+            {
+                "DraftGroupTag": "Featured",
+                "ContestStartTimeSuffix": "(Afternoon Only)",
+                "DraftGroupId": 62,
+                "StartDateEst": "2026-09-10T13:00:00.000-05:00",
+                "ContestTypeId": 51,
+                "GameTypeId": 51,
+            },
+            {
+                "DraftGroupTag": "Featured",
+                "ContestStartTimeSuffix": "(Afternoon Only)",
+                "DraftGroupId": 63,
+                "StartDateEst": "2026-09-10T13:00:00.000-05:00",
+                "ContestTypeId": 189,
+                "GameTypeId": 189,
+            },
+        ]
+    }
+
+    result = filter_draft_groups(response["DraftGroups"], NFLAfternoonSport)
+    assert result == [61]
 
 
 def test_filter_draft_groups_pga_weekend_strict():
