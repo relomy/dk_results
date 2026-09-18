@@ -536,7 +536,7 @@ def test_main_rejects_live_with_sport_class(monkeypatch):
 
 
 def test_main_passes_sport_class_choices_to_response_filters(monkeypatch):
-    captured = {"sport_obj": None}
+    captured = {"sport_cls": None}
 
     class _DummySport:
         name = "PGAShowdown"
@@ -546,8 +546,8 @@ def test_main_passes_sport_class_choices_to_response_filters(monkeypatch):
         def get_primary_sport():
             return "GOLF"
 
-    def fake_load_sport_class_contests(sport_obj):
-        captured["sport_obj"] = sport_obj
+    def fake_load_sport_class_contests(sport_cls):
+        captured["sport_cls"] = sport_cls
         return SportClassContests([], set())
 
     monkeypatch.setattr(
@@ -575,7 +575,7 @@ def test_main_passes_sport_class_choices_to_response_filters(monkeypatch):
     with pytest.raises(SystemExit):
         dkcontests.main()
 
-    assert captured["sport_obj"] is _DummySport
+    assert captured["sport_cls"] is _DummySport
 
 
 def test_confirm_insert_accepts_y(monkeypatch):
