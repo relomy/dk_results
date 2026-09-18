@@ -300,6 +300,58 @@ def test_filter_draft_groups_filters():
     assert result == [6]
 
 
+def test_filter_draft_groups_no_restraints_accepts_everything():
+    """A sport with no game-type/time/suffix restraints (all default None) passes through."""
+
+    class UnrestrictedSport(Sport):
+        name = "UNRESTRICTED_TEST"
+
+    response = {
+        "DraftGroups": [
+            {
+                "DraftGroupTag": "Featured",
+                "ContestStartTimeSuffix": None,
+                "DraftGroupId": 101,
+                "StartDateEst": "2024-02-01T02:00:00.000-05:00",
+                "ContestTypeId": 1,
+                "GameTypeId": 5,
+            },
+            {
+                "DraftGroupTag": "Featured",
+                "ContestStartTimeSuffix": "(Anything)",
+                "DraftGroupId": 102,
+                "StartDateEst": "2024-02-01T23:00:00.000-05:00",
+                "ContestTypeId": 1,
+                "GameTypeId": 5,
+            },
+        ]
+    }
+
+    result = filter_draft_groups(response["DraftGroups"], UnrestrictedSport)
+    assert result == [101, 102]
+
+
+def test_filter_draft_groups_skips_non_featured_tag_without_suffix():
+    class DummySport(Sport):
+        name = "TEST_TAG_SKIP"
+
+    response = {
+        "DraftGroups": [
+            {
+                "DraftGroupTag": "Other",
+                "ContestStartTimeSuffix": None,
+                "DraftGroupId": 201,
+                "StartDateEst": "2024-02-01T12:00:00.000-05:00",
+                "ContestTypeId": 1,
+                "GameTypeId": 1,
+            },
+        ]
+    }
+
+    result = filter_draft_groups(response["DraftGroups"], DummySport)
+    assert result == []
+
+
 def test_get_featured_draft_group_ids_uses_exact_tag_without_sport_filters():
     groups = [
         {"DraftGroupId": 1, "DraftGroupTag": "Featured"},

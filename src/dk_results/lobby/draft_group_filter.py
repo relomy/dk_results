@@ -66,6 +66,90 @@ def _deduplicate_showdown(
     return result
 
 
+def _normalize_suffix(suffix: str | None) -> str | None:
+    if suffix is None:
+        return None
+    return suffix.strip() or None
+
+
+def _skipped_suffix_label(suffix: str | None) -> str:
+    return suffix if suffix is not None else "<<none>>"
+
+
+def _suffix_skip_reason(suffix: str | None) -> str:
+    return "suffix required" if suffix is None else "suffix mismatch"
+
+
+def _log_group_skip(
+    sport: Type[Sport],
+    dt_start: datetime.datetime,
+    draft_group_id: int,
+    tag: str,
+    suffix: str | None,
+    contest_type_id: int,
+    game_type_id: int,
+    reason: str,
+) -> None:
+    log_draft_group_event(
+        "Skip",
+        sport,
+        dt_start,
+        draft_group_id,
+        tag,
+        suffix,
+        contest_type_id,
+        game_type_id,
+        level=logging.DEBUG,
+        reason=reason,
+    )
+
+
+def _process_draft_group(
+    group: dict[str, Any],
+    sport: Type[Sport],
+    is_nfl_showdown: bool,
+    result: list[int],
+    skipped_suffixes: list[str],
+    showdown_entries: list[tuple[datetime.datetime, int, str, str | None, int, int, datetime.datetime]],
+) -> None:
+    tag = group["DraftGroupTag"]
+    suffix = _normalize_suffix(group["ContestStartTimeSuffix"])
+    draft_group_id = group["DraftGroupId"]
+    contest_type_id = group["ContestTypeId"]
+    game_type_id = group["GameTypeId"]
+
+    if not _passes_tag(tag):
+        if suffix:
+            skipped_suffixes.append(suffix)
+        return
+
+    dt_start = _parse_start_date(group["StartDateEst"])
+
+    if not _passes_game_type(game_type_id, sport):
+        reason = f"game type constraint (!={sport.contest_restraint_game_type_id}, got {game_type_id})"
+        _log_group_skip(sport, dt_start, draft_group_id, tag, suffix, contest_type_id, game_type_id, reason)
+        return
+
+    if not _passes_suffix(suffix, sport):
+        skipped_suffixes.append(_skipped_suffix_label(suffix))
+        reason = _suffix_skip_reason(suffix)
+        _log_group_skip(sport, dt_start, draft_group_id, tag, suffix, contest_type_id, game_type_id, reason)
+        return
+
+    if not _passes_time(dt_start, sport):
+        reason = f"time constraint (<{sport.contest_restraint_time})"
+        _log_group_skip(sport, dt_start, draft_group_id, tag, suffix, contest_type_id, game_type_id, reason)
+        return
+
+    if is_nfl_showdown:
+        start_key = dt_start.replace(second=0, microsecond=0)
+        showdown_entries.append((start_key, draft_group_id, tag, suffix, contest_type_id, game_type_id, dt_start))
+        return
+
+    log_draft_group_event("Append", sport, dt_start, draft_group_id, tag, suffix, contest_type_id, game_type_id)
+    result.append(draft_group_id)
+
+
 def filter_draft_groups(groups: list[dict[str, Any]], sport: Type[Sport]) -> list[int]:
     """Return qualifying draft-group IDs for the given sport."""
     result: list[int] = []
@@ -74,76 +158,7 @@ def filter_draft_groups(groups: list[dict[str, Any]], sport: Type[Sport]) -> lis
     showdown_entries: list[tuple[datetime.datetime, int, str, str | None, int, int, datetime.datetime]] = []
 
     for group in groups:
-        tag = group["DraftGroupTag"]
-        suffix = group["ContestStartTimeSuffix"]
-        draft_group_id = group["DraftGroupId"]
-        start_date_est = group["StartDateEst"]
-        contest_type_id = group["ContestTypeId"]
-        game_type_id = group["GameTypeId"]
-
-        if suffix is not None:
-            suffix = suffix.strip() or None
-
-        if not _passes_tag(tag):
-            if suffix:
-                skipped_suffixes.append(suffix)
-            continue
-
-        dt_start = _parse_start_date(start_date_est)
-
-        if not _passes_game_type(game_type_id, sport):
-            log_draft_group_event(
-                "Skip",
-                sport,
-                dt_start,
-                draft_group_id,
-                tag,
-                suffix,
-                contest_type_id,
-                game_type_id,
-                level=logging.DEBUG,
-                reason=f"game type constraint (!={sport.contest_restraint_game_type_id}, got {game_type_id})",
-            )
-            continue
-
-        if not _passes_suffix(suffix, sport):
-            skipped_suffixes.append(suffix if suffix is not None else "<<none>>")
-            log_draft_group_event(
-                "Skip",
-                sport,
-                dt_start,
-                draft_group_id,
-                tag,
-                suffix,
-                contest_type_id,
-                game_type_id,
-                level=logging.DEBUG,
-                reason="suffix required" if suffix is None else "suffix mismatch",
-            )
-            continue
-
-        if not _passes_time(dt_start, sport):
-            log_draft_group_event(
-                "Skip",
-                sport,
-                dt_start,
-                draft_group_id,
-                tag,
-                suffix,
-                contest_type_id,
-                game_type_id,
-                level=logging.DEBUG,
-                reason=f"time constraint (<{sport.contest_restraint_time})",
-            )
-            continue
-
-        if is_nfl_showdown:
-            start_key = dt_start.replace(second=0, microsecond=0)
-            showdown_entries.append((start_key, draft_group_id, tag, suffix, contest_type_id, game_type_id, dt_start))
-            continue
-
-        log_draft_group_event("Append", sport, dt_start, draft_group_id, tag, suffix, contest_type_id, game_type_id)
-        result.append(draft_group_id)
+        _process_draft_group(group, sport, is_nfl_showdown, result, skipped_suffixes, showdown_entries)
 
     if skipped_suffixes:
         logger.debug("[%4s] Skipped suffixes [%s]", sport.name, ", ".join(skipped_suffixes))
