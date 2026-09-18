@@ -72,6 +72,22 @@ def slug(value: Any) -> str:
     return re.sub(r"[^a-z0-9]+", "-", normalized).strip("-")
 
 
+_LINEUP_SLOT_KEYS = ("players_live", "slots", "lineup", "players")
+
+
+def resolve_lineup_slots(row: dict[str, Any]) -> list[Any] | None:
+    """First list-shaped slot collection on a vip-lineup-like row, by priority.
+
+    Checks the normalized ``players_live`` key snapshot v3 writes, then the
+    raw ``slots``/``lineup``/``players`` shapes seen on ingest.
+    """
+    for key in _LINEUP_SLOT_KEYS:
+        slots = row.get(key)
+        if isinstance(slots, list):
+            return slots
+    return None
+
+
 _LIVE_STATUS_MARKERS = ("in progress", "live", "q1", "q2", "q3", "q4", "ot", "thru", "hole")
 _FINAL_STATUS_MARKERS = ("final", "complete", "completed", "locked", "postponed", "canceled", "cancelled")
 

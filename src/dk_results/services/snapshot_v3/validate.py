@@ -11,6 +11,7 @@ from dk_results.services.snapshot_v3.contracts import (
     validate_single_contest,
     validate_top_swing_players,
 )
+from dk_results.services.snapshot_v3.normalize import resolve_lineup_slots
 
 
 def _is_non_empty_string(value: Any) -> bool:
@@ -230,21 +231,13 @@ def _add_player_keys_from_rows(rows: Any, keys: set[str]) -> None:
             keys.add(str(player_key))
 
 
-def _resolve_vip_lineup_slots(vip_row: dict[str, Any]) -> list[Any] | None:
-    for key in ("players_live", "slots", "lineup", "players"):
-        slots = vip_row.get(key)
-        if isinstance(slots, list):
-            return slots
-    return None
-
-
 def _add_player_keys_from_vip_lineups(vip_lineups: Any, keys: set[str]) -> None:
     if not isinstance(vip_lineups, list):
         return
     for vip_row in vip_lineups:
         if not isinstance(vip_row, dict):
             continue
-        slots = _resolve_vip_lineup_slots(vip_row)
+        slots = resolve_lineup_slots(vip_row)
         if slots is None:
             continue
         _add_player_keys_from_rows(slots, keys)

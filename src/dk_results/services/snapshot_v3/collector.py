@@ -24,6 +24,7 @@ from dk_results.services.snapshot_v3.constants import DEFAULT_STANDINGS_LIMIT
 from dk_results.services.snapshot_v3.normalize import (
     is_live_from_slot,
     normalize_name,
+    resolve_lineup_slots,
     slug,
     to_float,
     to_utc_iso,
@@ -340,7 +341,7 @@ def _normalize_vip_players(
     row: dict[str, Any], sport: str, unique_name_to_player_key: dict[str, str]
 ) -> list[dict[str, Any]]:
     players_live: list[dict[str, Any]] = []
-    for slot in _vip_players_source(row):
+    for slot in resolve_lineup_slots(row) or []:
         normalized = _normalize_vip_player_slot(slot, sport, unique_name_to_player_key)
         if normalized:
             players_live.append(normalized)
@@ -357,14 +358,6 @@ def _normalize_vip_identity(display_name: Any, entry_key: Any, vip_entry_key: An
         if value not in (None, ""):
             normalized[key] = str(value)
     return normalized
-
-
-def _vip_players_source(row: dict[str, Any]) -> list[Any]:
-    for key in ("players_live", "lineup", "players"):
-        value = row.get(key)
-        if isinstance(value, list):
-            return value
-    return []
 
 
 def _normalize_vip_player_slot(

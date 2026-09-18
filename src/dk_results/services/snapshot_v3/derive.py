@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Iterable
 
-from dk_results.services.snapshot_v3.normalize import is_live_from_slot, to_float, to_int
+from dk_results.services.snapshot_v3.normalize import is_live_from_slot, resolve_lineup_slots, to_float, to_int
 
 
 def _sorted_vip_rows(vip_lineups: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -61,17 +61,9 @@ def derive_distance_to_cash(raw_bundle: dict[str, Any]) -> dict[str, Any] | None
     return metric
 
 
-def _resolve_lineup_slots(lineup_row: dict[str, Any]) -> list[Any] | None:
-    for key in ("players_live", "lineup", "players"):
-        slots = lineup_row.get(key)
-        if isinstance(slots, list):
-            return slots
-    return None
-
-
 def _iter_vip_lineup_player_keys(vip_lineups: list[dict[str, Any]]) -> Iterable[str]:
     for lineup_row in vip_lineups:
-        slots = _resolve_lineup_slots(lineup_row)
+        slots = resolve_lineup_slots(lineup_row)
         if slots is None:
             continue
         seen_in_lineup: set[str] = set()
@@ -161,7 +153,7 @@ def derive_threat(raw_bundle: dict[str, Any]) -> dict[str, Any] | None:
 
 
 def _collect_live_slot_salaries(lineup_row: dict[str, Any]) -> list[float]:
-    slots = _resolve_lineup_slots(lineup_row)
+    slots = resolve_lineup_slots(lineup_row)
     if slots is None:
         return []
     salaries: list[float] = []
