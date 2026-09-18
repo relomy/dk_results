@@ -46,6 +46,76 @@ def _cluster_id_from_signature(signature: str) -> str:
     return hashlib.sha1(signature.encode("utf-8")).hexdigest()[:12]
 
 
+def _is_user_cashing(
+    *,
+    is_vip: bool,
+    vip_points: Any,
+    payout_cents: Any,
+    points: Any,
+    cash_points_cutoff: Any,
+) -> bool:
+    if is_vip and isinstance(vip_points, (int, float)) and isinstance(cash_points_cutoff, (int, float)):
+        return float(vip_points) >= float(cash_points_cutoff)
+    if isinstance(payout_cents, int):
+        return payout_cents > 0
+    if isinstance(points, (int, float)) and isinstance(cash_points_cutoff, (int, float)):
+        return float(points) >= float(cash_points_cutoff)
+    return False
+
+
+def _ownership_remaining_total_pct(user: Any) -> float | None:
+    lineupobj = getattr(user, "lineupobj", None)
+    if not lineupobj:
+        return None
+    return remaining_ownership(getattr(lineupobj, "lineup", ()))
+
+
+def _build_standings_row(
+    user: Any,
+    *,
+    cash_points_cutoff: Any,
+    leaderboard_payout_by_entry: dict[str, int],
+    vip_lookup: set[str],
+    vip_points_by_entry: dict[str, Any],
+) -> dict[str, Any]:
+    parsed_rank = _rank_numeric(user.rank)
+    points = to_float(user.pts)
+    entry_key = user.player_id
+    payout_cents = leaderboard_payout_by_entry.get(str(entry_key), None) if entry_key else None
+    is_vip = user.name in vip_lookup
+    vip_points = vip_points_by_entry.get(str(entry_key)) if entry_key else None
+    is_cashing = _is_user_cashing(
+        is_vip=is_vip,
+        vip_points=vip_points,
+        payout_cents=payout_cents,
+        points=points,
+        cash_points_cutoff=cash_points_cutoff,
+    )
+    return {
+        "rank": parsed_rank if parsed_rank is not None else user.rank,
+        "entry_key": entry_key,
+        "username": user.name,
+        "pmr": to_float(user.pmr),
+        "points": points,
+        "payout_cents": payout_cents,
+        "is_cashing": is_cashing,
+        "ownership_remaining_total_pct": _ownership_remaining_total_pct(user),
+        "remaining_salary": user.salary,
+        "is_vip": is_vip,
+    }
+
+
+def _standings_sort_key(item: dict[str, Any]) -> tuple[bool, int, str, str, str]:
+    rank_numeric = _rank_numeric(item["rank"])
+    return (
+        item["rank"] is None,
+        rank_numeric if rank_numeric is not None else 10**9,
+        str(item["rank"] if item["rank"] is not None else ""),
+        str(item["username"] or ""),
+        str(item["entry_key"] or ""),
+    )
+
+
 def build_standings_rows(
     results: ContestStandings,
     *,
@@ -54,51 +124,18 @@ def build_standings_rows(
     vip_points_by_entry: dict[str, Any],
 ) -> list[dict[str, Any]]:
     """Build the sorted per-user standings rows (cashing, ownership, payout)."""
-    standings: list[dict[str, Any]] = []
     cash_points_cutoff = results.min_cash_pts if results.min_rank > 0 else None
-    for user in results.users:
-        parsed_rank = _rank_numeric(user.rank)
-        points = to_float(user.pts)
-        entry_key = user.player_id
-        payout_cents = leaderboard_payout_by_entry.get(str(entry_key), None) if entry_key else None
-        is_vip = user.name in vip_lookup
-        vip_points = vip_points_by_entry.get(str(entry_key)) if entry_key else None
-        if is_vip and isinstance(vip_points, (int, float)) and isinstance(cash_points_cutoff, (int, float)):
-            is_cashing = float(vip_points) >= float(cash_points_cutoff)
-        elif isinstance(payout_cents, int):
-            is_cashing = payout_cents > 0
-        elif isinstance(points, (int, float)) and isinstance(cash_points_cutoff, (int, float)):
-            is_cashing = float(points) >= float(cash_points_cutoff)
-        else:
-            is_cashing = False
-        standings.append(
-            {
-                "rank": parsed_rank if parsed_rank is not None else user.rank,
-                "entry_key": entry_key,
-                "username": user.name,
-                "pmr": to_float(user.pmr),
-                "points": points,
-                "payout_cents": payout_cents,
-                "is_cashing": is_cashing,
-                "ownership_remaining_total_pct": (
-                    remaining_ownership(getattr(getattr(user, "lineupobj", None), "lineup", ()))
-                    if getattr(user, "lineupobj", None)
-                    else None
-                ),
-                "remaining_salary": user.salary,
-                "is_vip": is_vip,
-            }
+    standings = [
+        _build_standings_row(
+            user,
+            cash_points_cutoff=cash_points_cutoff,
+            leaderboard_payout_by_entry=leaderboard_payout_by_entry,
+            vip_lookup=vip_lookup,
+            vip_points_by_entry=vip_points_by_entry,
         )
-
-    standings.sort(
-        key=lambda item: (
-            item["rank"] is None,
-            _rank_numeric(item["rank"]) if _rank_numeric(item["rank"]) is not None else 10**9,
-            str(item["rank"] if item["rank"] is not None else ""),
-            item["username"] or "",
-            str(item["entry_key"] or ""),
-        )
-    )
+        for user in results.users
+    ]
+    standings.sort(key=_standings_sort_key)
     return standings
 
 
