@@ -187,20 +187,20 @@ def test_load_sport_class_contests_filters_by_draft_groups_and_returns_featured_
         lambda _sport, live=False: response,
     )
 
-    contests, featured_draft_group_ids = load_sport_class_contests(_RestrictedSport)
+    result = load_sport_class_contests(_RestrictedSport)
 
-    assert [contest["id"] for contest in contests] == [41]
-    assert featured_draft_group_ids == {41, 42}
+    assert [contest["id"] for contest in result.contests] == [41]
+    assert result.featured_draft_group_ids == {41, 42}
 
 
 def test_load_sport_class_contests_uses_anonymous_lobby_path(anonymous_lobby):
     """Sport-class mode resolves draft groups without touching auth machinery (ADR-0009)."""
     anonymous_lobby(_sport_class_response())
 
-    contests, featured_draft_group_ids = load_sport_class_contests(_RestrictedSport)
+    result = load_sport_class_contests(_RestrictedSport)
 
-    assert [contest["id"] for contest in contests] == [41]
-    assert featured_draft_group_ids == {41, 42}
+    assert [contest["id"] for contest in result.contests] == [41]
+    assert result.featured_draft_group_ids == {41, 42}
 
 
 def test_load_sport_class_contests_exits_on_invalid_shape(monkeypatch):

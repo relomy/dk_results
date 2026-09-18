@@ -1,4 +1,5 @@
 from collections.abc import Callable, Mapping
+from dataclasses import dataclass
 from typing import Any, Type
 
 import requests
@@ -72,19 +73,26 @@ def get_lobby_response(
     return client.get_lobby_contests(sport, live=live)
 
 
-def load_sport_class_contests(sport_obj: Type[Sport]) -> tuple[list[dict[str, Any]], set[int]]:
+@dataclass(frozen=True)
+class SportClassContests:
+    """A sport class's qualifying lobby contests, alongside its featured draft groups."""
+
+    contests: list[dict[str, Any]]
+    featured_draft_group_ids: set[int]
+
+
+def load_sport_class_contests(sport_cls: Type[Sport]) -> SportClassContests:
     """Fetch, qualify, and filter a sport class's upcoming lobby contests.
 
     Sport-class mode always reads the anonymous, non-live getcontests lobby
     (ADR-0009): fetch it, resolve the sport's qualifying draft groups
     (``filter_draft_groups``) and its featured draft groups, then narrow the
-    lobby's contests down to the qualifying ones. Returns
-    ``(contests, featured_draft_group_ids)``.
+    lobby's contests down to the qualifying ones.
     """
-    response = get_lobby_response(sport_obj.get_primary_sport(), live=False)
+    response = get_lobby_response(sport_cls.get_primary_sport(), live=False)
     if not isinstance(response, dict) or "DraftGroups" not in response:
         raise SystemExit("Sport-class mode requires getcontests response with DraftGroups.")
     featured_draft_group_ids = get_featured_draft_group_ids(response["DraftGroups"])
-    draft_groups = set(filter_draft_groups(response["DraftGroups"], sport_obj))
+    draft_groups = set(filter_draft_groups(response["DraftGroups"], sport_cls))
     contests = [contest for contest in get_contests_from_response(response) if contest.get("dg") in draft_groups]
-    return contests, featured_draft_group_ids
+    return SportClassContests(contests, featured_draft_group_ids)

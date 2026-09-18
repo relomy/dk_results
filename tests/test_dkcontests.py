@@ -6,6 +6,7 @@ from pydantic import ValidationError
 
 import dk_results.cli.dkcontests as dkcontests
 from dk_results.domain.contest import Contest
+from dk_results.lobby.fetch import SportClassContests
 
 
 def _contest_payload(
@@ -545,6 +546,10 @@ def test_main_passes_sport_class_choices_to_response_filters(monkeypatch):
         def get_primary_sport():
             return "GOLF"
 
+    def fake_load_sport_class_contests(sport_obj):
+        captured["sport_obj"] = sport_obj
+        return SportClassContests([], set())
+
     monkeypatch.setattr(
         dkcontests,
         "get_sport_class_choices",
@@ -553,7 +558,7 @@ def test_main_passes_sport_class_choices_to_response_filters(monkeypatch):
     monkeypatch.setattr(
         dkcontests,
         "load_sport_class_contests",
-        lambda sport_obj: (captured.update({"sport_obj": sport_obj}) or [], set()),
+        fake_load_sport_class_contests,
     )
     monkeypatch.setattr(dkcontests, "print_stats", lambda _contests, **_kwargs: None)
     monkeypatch.setattr(

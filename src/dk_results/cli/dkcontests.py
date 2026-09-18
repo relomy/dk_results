@@ -396,7 +396,9 @@ def _load_contests_for_args(
     if args.sport_class:
         selected_sport = args.sport_class
         sport_obj = sport_class_choices[args.sport_class]
-        response_contests, featured_draft_group_ids = load_sport_class_contests(sport_obj)
+        sport_class_contests = load_sport_class_contests(sport_obj)
+        response_contests = sport_class_contests.contests
+        featured_draft_group_ids = sport_class_contests.featured_draft_group_ids
     else:
         selected_sport = args.sport
         response = get_lobby_response(args.sport, live=bool(args.live))
