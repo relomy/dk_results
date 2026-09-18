@@ -4,9 +4,9 @@ import sys
 import types
 
 import pytest
-from lobby.fetch import get_dk_lobby, get_lobby_response, requests_fetch_json
 
 from dk_results.domain.sport import Sport
+from dk_results.lobby.fetch import get_dk_lobby, get_lobby_response, requests_fetch_json
 
 
 def _contest_payload(dk_id: int, *, entries: int = 200, fee: int = 10):
@@ -103,7 +103,7 @@ def test_requests_fetch_json_passes_headers_and_cookies(monkeypatch):
         captured["cookies"] = cookies
         return FakeResponse()
 
-    monkeypatch.setattr("lobby.fetch.requests.get", fake_get)
+    monkeypatch.setattr("dk_results.lobby.fetch.requests.get", fake_get)
 
     result = requests_fetch_json(
         "https://www.example.com/lobby",

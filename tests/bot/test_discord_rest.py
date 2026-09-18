@@ -1,4 +1,4 @@
-from bot.discord_rest import DiscordRest
+from dk_results.bot.discord_rest import DiscordRest
 
 
 def test_send_message_posts(monkeypatch):
@@ -9,7 +9,7 @@ def test_send_message_posts(monkeypatch):
         captured["json"] = json
         captured["headers"] = headers
 
-    monkeypatch.setattr("bot.discord_rest.requests.post", fake_post)
+    monkeypatch.setattr("dk_results.bot.discord_rest.requests.post", fake_post)
 
     client = DiscordRest("tok", 123)
     client.send_message("hello")
