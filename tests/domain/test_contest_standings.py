@@ -375,6 +375,121 @@ def test_showdown_non_cashing_and_vip():
     assert "Captain" in standings.non_cashing_players
 
 
+def _showdown_salary_with_dst():
+    # Trimmed from a real DKSalaries_NFLShowdown export: a skill player plus a
+    # DST, each present twice (once priced for CPT, once for FLEX), which is
+    # how DraftKings lists every showdown-eligible player.
+    return [
+        [
+            "Position",
+            "Name + ID",
+            "Name",
+            "ID",
+            "Roster Position",
+            "Salary",
+            "Game Info",
+            "TeamAbbrev",
+            "AvgPointsPerGame",
+        ],
+        ["QB", "Josh Allen (1)", "Josh Allen", "1", "CPT", "17100", "Final", "BUF", "38.7"],
+        ["QB", "Josh Allen (2)", "Josh Allen", "2", "FLEX", "11400", "Final", "BUF", "38.7"],
+        ["DST", "Lions (3)", "Lions", "3", "CPT", "5100", "Final", "DET", "10"],
+        ["DST", "Lions (4)", "Lions", "4", "FLEX", "3400", "Final", "DET", "10"],
+    ]
+
+
+def _showdown_standings_with_trailing_space():
+    # Trimmed from the real contest-standings-195677858.csv: DraftKings ends
+    # the Lineup field with a trailing space after its last slot.
+    return [
+        ["Rank", "EntryId", "EntryName", "TimeRemaining", "Points", "Lineup"],
+        ["1", "1", "dlmurray24", "0", "158.1", "CPT Josh Allen FLEX Lions "],
+    ]
+
+
+def test_showdown_resolves_dst_in_last_flex_slot_with_trailing_space():
+    standings = parse_contest_standings(
+        DummyShowdownSport,
+        _showdown_salary_with_dst(),
+        _showdown_standings_with_trailing_space(),
+        positions_paid=1,
+    )
+
+    user = standings.users[0]
+    assert [slot.pos for slot in user.lineupobj.lineup] == ["CPT", "FLEX"]
+    assert [slot.name for slot in user.lineupobj.lineup] == ["Josh Allen", "Lions"]
+
+
+def test_showdown_resolves_dst_in_captain_slot():
+    standings_rows = [
+        ["Rank", "EntryId", "EntryName", "TimeRemaining", "Points", "Lineup"],
+        ["1", "1", "dlmurray24", "0", "158.1", "CPT Lions FLEX Josh Allen "],
+    ]
+
+    standings = parse_contest_standings(
+        DummyShowdownSport,
+        _showdown_salary_with_dst(),
+        standings_rows,
+        positions_paid=1,
+    )
+
+    user = standings.users[0]
+    assert [slot.pos for slot in user.lineupobj.lineup] == ["CPT", "FLEX"]
+    assert [slot.name for slot in user.lineupobj.lineup] == ["Lions", "Josh Allen"]
+
+
+def test_showdown_resolves_multi_word_name_in_trailing_space_last_slot():
+    # The trailing-space bug isn't specific to short, single-word DST names —
+    # confirm a multi-word player name in the last slot survives the same way.
+    salary_rows = [
+        *_showdown_salary_with_dst(),
+        ["WR", "Amon-Ra St. Brown (5)", "Amon-Ra St. Brown", "5", "CPT", "15600", "Final", "DET", "28.7"],
+        ["WR", "Amon-Ra St. Brown (6)", "Amon-Ra St. Brown", "6", "FLEX", "10400", "Final", "DET", "28.7"],
+    ]
+    standings_rows = [
+        ["Rank", "EntryId", "EntryName", "TimeRemaining", "Points", "Lineup"],
+        ["1", "1", "dlmurray24", "0", "158.1", "CPT Josh Allen FLEX Amon-Ra St. Brown "],
+    ]
+
+    standings = parse_contest_standings(
+        DummyShowdownSport,
+        salary_rows,
+        standings_rows,
+        positions_paid=1,
+    )
+
+    user = standings.users[0]
+    assert [slot.pos for slot in user.lineupobj.lineup] == ["CPT", "FLEX"]
+    assert [slot.name for slot in user.lineupobj.lineup] == ["Josh Allen", "Amon-Ra St. Brown"]
+
+
+def test_classic_nfl_resolves_trailing_space_on_last_dst_slot():
+    # The trailing-space bug applies to any sport's last roster slot, not
+    # just Showdown's FLEX/CPT — classic NFL's last slot is DST.
+    salary_rows = [
+        *_salary_rows(),
+        ["DST", "", "Bears", "", "DST", "3000", "CHI@GB", "CHI", ""],
+    ]
+    standings_rows = [
+        ["rank", "player_id", "name", "pmr", "pts", "lineup_str"],
+        [
+            "1",
+            "111",
+            "CashUser",
+            "0",
+            "150",
+            "QB Tom Brady RB Derrick Henry RB Derrick Henry WR Justin Jefferson "
+            "WR Justin Jefferson WR Justin Jefferson TE Travis Kelce FLEX Travis Kelce DST Bears ",
+        ],
+    ]
+
+    standings = parse_contest_standings(NFLSport, salary_rows, standings_rows, positions_paid=1)
+
+    user = standings.users[0]
+    assert user.lineupobj.lineup[-1].pos == "DST"
+    assert user.lineupobj.lineup[-1].name == "Bears"
+
+
 def test_contest_standings_is_frozen():
     standings = parse_contest_standings(NFLSport, _salary_rows(), _standings_rows(), positions_paid=1)
     with pytest.raises(Exception):
