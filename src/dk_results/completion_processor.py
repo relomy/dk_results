@@ -173,6 +173,33 @@ def _canonical_vips(vips_cashed: list[str]) -> list[str]:
     return sorted(unique.values(), key=lambda vip: vip.lower())
 
 
+def _resolve_soft_finish_scores(leaderboard_payload: dict[str, Any]) -> tuple[str, str] | None:
+    leader = leaderboard_payload.get("leader", {})
+    last_winning = leaderboard_payload.get("lastWinningEntry", {})
+    top_score = _canonical_score_text(leader.get("fantasyPoints"))
+    cashing_score = _canonical_score_text(last_winning.get("fantasyPoints"))
+    if top_score is None or cashing_score is None:
+        return None
+    return top_score, cashing_score
+
+
+def _resolve_cashed_vips(leaderboard_payload: dict[str, Any], vip_keys: set[str]) -> list[str]:
+    cashed_lookup: dict[str, str] = {}
+    for row in leaderboard_payload.get("leaderBoard", []):
+        if not isinstance(row, dict):
+            continue
+        username_raw = row.get("userName")
+        username = str(username_raw).strip() if username_raw is not None else ""
+        key = vip_key(username)
+        if not key or key not in vip_keys:
+            continue
+        if _leaderboard_cash_value(row) <= 0:
+            continue
+        if key not in cashed_lookup:
+            cashed_lookup[key] = username
+    return _canonical_vips(list(cashed_lookup.values()))
+
+
 def _soft_finish_event_key(
     *,
     sport_name: str,
@@ -323,6 +350,45 @@ class CompletionProcessor:
 
     # ── Warnings ────────────────────────────────────────────────────────────
 
+    def _log_schedule_once(
+        self, sport_name: str, schedule: list[int], schedule_key: str, logged_schedules: set[str]
+    ) -> None:
+        if schedule_key in logged_schedules:
+            return
+        source = "sport" if schedule_key in self._config.warning_schedules else "default"
+        logger.debug("warning schedule for %s: %s (source=%s)", sport_name, schedule, source)
+        logged_schedules.add(schedule_key)
+
+    def _maybe_announce_warning(
+        self,
+        store: NotificationStore,
+        sport_cls: type[Sport],
+        dk_id: int,
+        name: str,
+        start_date: str,
+        start_dt: datetime.datetime,
+        now: datetime.datetime,
+        warning_minutes: int,
+    ) -> None:
+        if not (now < start_dt <= now + datetime.timedelta(minutes=warning_minutes)):
+            return
+        warning_key = f"warning:{warning_minutes}"
+        if store.has_notification(dk_id, warning_key):
+            logger.debug("warning already sent for %s dk_id=%s (%sm)", sport_cls.name, dk_id, warning_minutes)
+            return
+        self._announce_transition(
+            store,
+            suppressed=self._presence_blocks_start(dk_id, str(start_date)),
+            kind=warning_key,
+            prefix=f"Contest starting soon ({warning_minutes}m)",
+            sport_name=sport_cls.name,
+            contest_name=name,
+            start_date=str(start_date),
+            dk_id=dk_id,
+            log_label="warning",
+            log_suffix=f" ({warning_minutes}m)",
+        )
+
     def _run_warnings(self, store: NotificationStore) -> None:
         assert self._sender is not None
         logged_schedules: set[str] = set()
@@ -344,40 +410,9 @@ class CompletionProcessor:
             # This script runs every 10 minutes via cron, so warnings use windows
             # rather than requiring an exact timestamp match.
             schedule = self._warning_schedule_for(sport_cls.name)
-            schedule_key = sport_cls.name.lower()
-            if schedule_key not in logged_schedules:
-                source = "sport" if schedule_key in self._config.warning_schedules else "default"
-                logger.debug(
-                    "warning schedule for %s: %s (source=%s)",
-                    sport_cls.name,
-                    schedule,
-                    source,
-                )
-                logged_schedules.add(schedule_key)
+            self._log_schedule_once(sport_cls.name, schedule, sport_cls.name.lower(), logged_schedules)
             for warning_minutes in schedule:
-                if not (now < start_dt <= now + datetime.timedelta(minutes=warning_minutes)):
-                    continue
-                warning_key = f"warning:{warning_minutes}"
-                if store.has_notification(dk_id, warning_key):
-                    logger.debug(
-                        "warning already sent for %s dk_id=%s (%sm)",
-                        sport_cls.name,
-                        dk_id,
-                        warning_minutes,
-                    )
-                    continue
-                self._announce_transition(
-                    store,
-                    suppressed=self._presence_blocks_start(dk_id, str(start_date)),
-                    kind=warning_key,
-                    prefix=f"Contest starting soon ({warning_minutes}m)",
-                    sport_name=sport_cls.name,
-                    contest_name=name,
-                    start_date=str(start_date),
-                    dk_id=dk_id,
-                    log_label="warning",
-                    log_suffix=f" ({warning_minutes}m)",
-                )
+                self._maybe_announce_warning(store, sport_cls, dk_id, name, start_date, start_dt, now, warning_minutes)
 
     def _warning_schedule_for(self, sport_name: str) -> list[int]:
         """Return the warning schedule for a sport, falling back to the default."""
@@ -661,30 +696,13 @@ class CompletionProcessor:
         if not _soft_finish_eligible(leaderboard_payload):
             return
 
-        leader = leaderboard_payload.get("leader", {})
-        last_winning = leaderboard_payload.get("lastWinningEntry", {})
-        top_score_raw = leader.get("fantasyPoints")
-        cashing_score_raw = last_winning.get("fantasyPoints")
-        top_score = _canonical_score_text(top_score_raw)
-        cashing_score = _canonical_score_text(cashing_score_raw)
-        if top_score is None or cashing_score is None:
+        scores = _resolve_soft_finish_scores(leaderboard_payload)
+        if scores is None:
             return
+        top_score, cashing_score = scores
 
         vip_keys = {vip_key(name) for name in self._config.vips if vip_key(name)}
-        cashed_lookup: dict[str, str] = {}
-        for row in leaderboard_payload.get("leaderBoard", []):
-            if not isinstance(row, dict):
-                continue
-            username_raw = row.get("userName")
-            username = str(username_raw).strip() if username_raw is not None else ""
-            key = vip_key(username)
-            if not key or key not in vip_keys:
-                continue
-            if _leaderboard_cash_value(row) <= 0:
-                continue
-            if key not in cashed_lookup:
-                cashed_lookup[key] = username
-        vips_cashed = _canonical_vips(list(cashed_lookup.values()))
+        vips_cashed = _resolve_cashed_vips(leaderboard_payload, vip_keys)
 
         event_key = _soft_finish_event_key(
             sport_name=sport_name,
