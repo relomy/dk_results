@@ -496,63 +496,6 @@ def test_get_contests_exits_on_invalid_shape(monkeypatch):
         dkcontests.get_contests("NFL", live=False)
 
 
-def test_get_contests_for_sport_class_filters_by_draft_groups(monkeypatch):
-    response = {
-        "Contests": [
-            {**_contest_payload(41), "dg": 41},
-            {**_contest_payload(42), "dg": 42},
-        ],
-        "DraftGroups": [
-            {
-                "DraftGroupTag": "Featured",
-                "ContestStartTimeSuffix": "(Round 4 TOUR)",
-                "DraftGroupId": 41,
-                "StartDateEst": "2026-02-09T10:45:00.000-05:00",
-                "ContestTypeId": 87,
-                "GameTypeId": 87,
-            },
-            {
-                "DraftGroupTag": "Featured",
-                "ContestStartTimeSuffix": "(Late Round 4 TOUR)",
-                "DraftGroupId": 42,
-                "StartDateEst": "2026-02-09T12:24:00.000-05:00",
-                "ContestTypeId": 154,
-                "GameTypeId": 154,
-            },
-        ],
-    }
-    monkeypatch.setattr(dkcontests, "get_lobby_response", lambda _sport, live=False: response)
-
-    contests = dkcontests.get_contests_for_sport_class("PGAShowdown")
-
-    assert [contest["id"] for contest in contests] == [41]
-
-
-def test_get_contests_for_sport_class_uses_anonymous_lobby_path(anonymous_lobby):
-    """Sport-class mode resolves draft groups without touching auth machinery (ADR-0009)."""
-    response = {
-        "Contests": [
-            {**_contest_payload(41), "dg": 41},
-            {**_contest_payload(42), "dg": 42},
-        ],
-        "DraftGroups": [
-            {
-                "DraftGroupTag": "Featured",
-                "ContestStartTimeSuffix": "(Round 4 TOUR)",
-                "DraftGroupId": 41,
-                "StartDateEst": "2026-02-09T10:45:00.000-05:00",
-                "ContestTypeId": 87,
-                "GameTypeId": 87,
-            },
-        ],
-    }
-    anonymous_lobby(response)
-
-    contests = dkcontests.get_contests_for_sport_class("PGAShowdown")
-
-    assert [contest["id"] for contest in contests] == [41]
-
-
 def test_get_draft_group_info_returns_matching_entry():
     response = {
         "DraftGroups": [
@@ -592,7 +535,7 @@ def test_main_rejects_live_with_sport_class(monkeypatch):
 
 
 def test_main_passes_sport_class_choices_to_response_filters(monkeypatch):
-    captured = {"sport": None, "sport_obj": None}
+    captured = {"sport_obj": None}
 
     class _DummySport:
         name = "PGAShowdown"
@@ -609,13 +552,8 @@ def test_main_passes_sport_class_choices_to_response_filters(monkeypatch):
     )
     monkeypatch.setattr(
         dkcontests,
-        "get_lobby_response",
-        lambda sport, live=False: captured.update({"sport": sport}) or {"Contests": [], "DraftGroups": []},
-    )
-    monkeypatch.setattr(
-        dkcontests,
-        "filter_draft_groups",
-        lambda _groups, sport_obj: captured.update({"sport_obj": sport_obj}) or [],
+        "load_sport_class_contests",
+        lambda sport_obj: (captured.update({"sport_obj": sport_obj}) or [], set()),
     )
     monkeypatch.setattr(dkcontests, "print_stats", lambda _contests, **_kwargs: None)
     monkeypatch.setattr(
@@ -632,7 +570,6 @@ def test_main_passes_sport_class_choices_to_response_filters(monkeypatch):
     with pytest.raises(SystemExit):
         dkcontests.main()
 
-    assert captured["sport"] == "GOLF"
     assert captured["sport_obj"] is _DummySport
 
 
