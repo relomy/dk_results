@@ -6,7 +6,12 @@ import types
 import pytest
 
 from dk_results.domain.sport import Sport
-from dk_results.lobby.fetch import get_dk_lobby, get_lobby_response, requests_fetch_json
+from dk_results.lobby.fetch import (
+    get_dk_lobby,
+    get_lobby_response,
+    load_sport_class_contests,
+    requests_fetch_json,
+)
 
 
 def _contest_payload(dk_id: int, *, entries: int = 200, fee: int = 10):
@@ -141,3 +146,68 @@ def test_get_lobby_response_default_client_never_authenticates(anonymous_lobby, 
     result = get_lobby_response("CFB", live=live)
 
     assert result == payload
+
+
+class _RestrictedSport(Sport):
+    name = "NFL"
+    contest_restraint_game_type_id = 87
+
+
+def _sport_class_response():
+    return {
+        "Contests": [
+            {**_contest_payload(41), "dg": 41},
+            {**_contest_payload(42), "dg": 42},
+        ],
+        "DraftGroups": [
+            {
+                "DraftGroupTag": "Featured",
+                "ContestStartTimeSuffix": None,
+                "DraftGroupId": 41,
+                "StartDateEst": "2026-02-09T10:45:00.000-05:00",
+                "ContestTypeId": 87,
+                "GameTypeId": 87,
+            },
+            {
+                "DraftGroupTag": "Featured",
+                "ContestStartTimeSuffix": None,
+                "DraftGroupId": 42,
+                "StartDateEst": "2026-02-09T12:24:00.000-05:00",
+                "ContestTypeId": 154,
+                "GameTypeId": 154,
+            },
+        ],
+    }
+
+
+def test_load_sport_class_contests_filters_by_draft_groups_and_returns_featured_ids(monkeypatch):
+    response = _sport_class_response()
+    monkeypatch.setattr(
+        "dk_results.lobby.fetch.get_lobby_response",
+        lambda _sport, live=False: response,
+    )
+
+    result = load_sport_class_contests(_RestrictedSport)
+
+    assert [contest["id"] for contest in result.contests] == [41]
+    assert result.featured_draft_group_ids == {41, 42}
+
+
+def test_load_sport_class_contests_uses_anonymous_lobby_path(anonymous_lobby):
+    """Sport-class mode resolves draft groups without touching auth machinery (ADR-0009)."""
+    anonymous_lobby(_sport_class_response())
+
+    result = load_sport_class_contests(_RestrictedSport)
+
+    assert [contest["id"] for contest in result.contests] == [41]
+    assert result.featured_draft_group_ids == {41, 42}
+
+
+def test_load_sport_class_contests_exits_on_invalid_shape(monkeypatch):
+    monkeypatch.setattr(
+        "dk_results.lobby.fetch.get_lobby_response",
+        lambda _sport, live=False: {"Other": []},
+    )
+
+    with pytest.raises(SystemExit):
+        load_sport_class_contests(_RestrictedSport)

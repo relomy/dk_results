@@ -49,8 +49,8 @@ from dk_results.domain.contest import Contest
 from dk_results.domain.sport import Sport, get_sport_choices
 from dk_results.lobby.common import valid_date, valid_time
 from dk_results.lobby.contest_filter import filter_double_ups, is_double_up_contest, largest_by_entries
-from dk_results.lobby.draft_group_filter import filter_draft_groups, get_featured_draft_group_ids
-from dk_results.lobby.fetch import get_lobby_response
+from dk_results.lobby.draft_group_filter import get_featured_draft_group_ids
+from dk_results.lobby.fetch import get_lobby_response, load_sport_class_contests
 from dk_results.lobby.parsing import get_contests_from_response
 from dk_results.persistence.contestdatabase import ContestDatabase
 
@@ -79,22 +79,6 @@ def format_sport_class_game_type_help(
         for name, game_type_id in constrained:
             lines.append(f"  {name}: {game_type_id}")
     return "\n".join(lines)
-
-
-def get_contests_for_sport_class(
-    sport_class: str,
-    choices: Mapping[str, Type[Sport]] | None = None,
-) -> list[dict]:
-    choices = choices or get_sport_class_choices()
-    if sport_class not in choices:
-        raise ValueError(f"Unknown sport class: {sport_class}")
-    sport_obj = choices[sport_class]
-    response = get_lobby_response(sport_obj.get_primary_sport(), live=False)
-    if not isinstance(response, dict):
-        raise SystemExit("Sport-class mode requires getcontests response with DraftGroups.")
-    contests = get_contests_from_response(response)
-    draft_groups = set(filter_draft_groups(response["DraftGroups"], sport_obj))
-    return [contest for contest in contests if contest.get("dg") in draft_groups]
 
 
 def get_draft_group_info(
@@ -412,14 +396,9 @@ def _load_contests_for_args(
     if args.sport_class:
         selected_sport = args.sport_class
         sport_obj = sport_class_choices[args.sport_class]
-        response = get_lobby_response(sport_obj.get_primary_sport(), live=False)
-        if not isinstance(response, dict):
-            raise SystemExit("Sport-class mode requires getcontests response with DraftGroups.")
-        featured_draft_group_ids = get_featured_draft_group_ids(response["DraftGroups"])
-        draft_groups = set(filter_draft_groups(response["DraftGroups"], sport_obj))
-        response_contests = [
-            contest for contest in get_contests_from_response(response) if contest.get("dg") in draft_groups
-        ]
+        sport_class_contests = load_sport_class_contests(sport_obj)
+        response_contests = sport_class_contests.contests
+        featured_draft_group_ids = sport_class_contests.featured_draft_group_ids
     else:
         selected_sport = args.sport
         response = get_lobby_response(args.sport, live=bool(args.live))

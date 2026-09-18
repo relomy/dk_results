@@ -1,4 +1,5 @@
 from collections.abc import Callable, Mapping
+from dataclasses import dataclass
 from typing import Any, Type
 
 import requests
@@ -6,7 +7,7 @@ from requests.cookies import RequestsCookieJar
 
 from dk_results.domain.sport import Sport
 from dk_results.draftkings import DraftKings
-from dk_results.lobby.draft_group_filter import filter_draft_groups
+from dk_results.lobby.draft_group_filter import filter_draft_groups, get_featured_draft_group_ids
 from dk_results.lobby.parsing import get_contests_from_response
 
 LOBBY_URL_TEMPLATE = "https://www.draftkings.com/lobby/getcontests?sport={sport}"
@@ -70,3 +71,28 @@ def get_lobby_response(
     """
     client = dk_client or DraftKings(session=requests.Session())
     return client.get_lobby_contests(sport, live=live)
+
+
+@dataclass(frozen=True)
+class SportClassContests:
+    """A sport class's qualifying lobby contests, alongside its featured draft groups."""
+
+    contests: list[dict[str, Any]]
+    featured_draft_group_ids: set[int]
+
+
+def load_sport_class_contests(sport_cls: Type[Sport]) -> SportClassContests:
+    """Fetch, qualify, and filter a sport class's upcoming lobby contests.
+
+    Sport-class mode always reads the anonymous, non-live getcontests lobby
+    (ADR-0009): fetch it, resolve the sport's qualifying draft groups
+    (``filter_draft_groups``) and its featured draft groups, then narrow the
+    lobby's contests down to the qualifying ones.
+    """
+    response = get_lobby_response(sport_cls.get_primary_sport(), live=False)
+    if not isinstance(response, dict) or "DraftGroups" not in response:
+        raise SystemExit("Sport-class mode requires getcontests response with DraftGroups.")
+    featured_draft_group_ids = get_featured_draft_group_ids(response["DraftGroups"])
+    draft_groups = set(filter_draft_groups(response["DraftGroups"], sport_cls))
+    contests = [contest for contest in get_contests_from_response(response) if contest.get("dg") in draft_groups]
+    return SportClassContests(contests, featured_draft_group_ids)
