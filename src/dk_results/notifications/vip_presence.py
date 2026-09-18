@@ -121,6 +121,18 @@ def _should_refresh_absent(checked_at: str, start_date: str) -> bool:
     return False
 
 
+def _resolve_cached_verdict(cached: tuple[str, str] | None, start_date: str) -> str | None:
+    """Return a cache-derived verdict, or ``None`` when a live check is still needed."""
+    if not cached:
+        return None
+    cached_status, checked_at = cached
+    if cached_status == VIP_PRESENT:
+        return VIP_PRESENT
+    if cached_status == VIP_ABSENT and not _should_refresh_absent(checked_at, start_date):
+        return VIP_ABSENT
+    return None
+
+
 class VipPresence:
     """Oracle returning a presence verdict for a contest, cached in `NotificationStore`."""
 
@@ -136,21 +148,17 @@ class VipPresence:
         found (``present``), a page proves the field empty (``absent``), the page
         cap is hit, a page is ambiguous, or a read fails (``unknown``).
         """
-        if not vip_names:
-            return VIP_UNKNOWN
-
         vip_keys = {vip_key(name) for name in vip_names if vip_key(name)}
         if not vip_keys:
             return VIP_UNKNOWN
 
-        cached = self._store.get_presence(dk_id)
-        if cached:
-            cached_status, checked_at = cached
-            if cached_status == VIP_PRESENT:
-                return VIP_PRESENT
-            if cached_status == VIP_ABSENT and not _should_refresh_absent(checked_at, start_date):
-                return VIP_ABSENT
+        cached_verdict = _resolve_cached_verdict(self._store.get_presence(dk_id), start_date)
+        if cached_verdict is not None:
+            return cached_verdict
 
+        return self._scan_entrant_pages(dk_id, vip_keys)
+
+    def _scan_entrant_pages(self, dk_id: int, vip_keys: set[str]) -> str:
         try:
             for page_no in range(1, VIP_ENTRANT_PAGE_LIMIT + 1):
                 html = self._results.get_contest_entrants_page(dk_id, page_no)
