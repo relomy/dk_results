@@ -142,6 +142,17 @@ class _FakeContestDbNoPositionsPaid(_FakeContestDb):
         )
 
 
+class _FakeContestDbNoDraftGroup(_FakeContestDb):
+    def get_live_contest(self, *_args, **_kwargs):
+        return (
+            123,
+            "Test Contest",
+            None,
+            1,
+            "2026-02-14 01:00:00",
+        )
+
+
 class _FakeDraftKings:
     def download_salary_csv(self, _sport: str, _draft_group: int, filename: str) -> None:
         path = Path(filename)
@@ -238,6 +249,7 @@ def _make_processor(
     sheet=None,
     nolineups: bool = False,
     salary_dir: str = "",
+    bonus_sender=None,
 ) -> SportProcessor:
     if dk is None:
         dk = _FakeDraftKings()
@@ -247,7 +259,7 @@ def _make_processor(
         contest_db=db,
         dk=dk,
         sheet_factory=lambda _sport: sheet,
-        bonus_sender=None,
+        bonus_sender=bonus_sender,
         config=SportProcessorConfig(
             salary_dir=salary_dir,
             contest_dir=".",
@@ -423,6 +435,58 @@ def test_process_sport_emits_deterministic_vip_events_on_happy_path(monkeypatch,
     assert fetch_fields["attempted"] == "true"
     assert sheet_fields["written"] == "true"
     assert sheet_fields["lineups"] == "1"
+
+
+def test_process_sport_no_draft_group_skips_vip_fetch(tmp_path, caplog):
+    # draft_group is None, so the processor never calls download_salary_csv to
+    # write the file; pre-seed it so standings parsing can still proceed.
+    (tmp_path / "DKSalaries_NFL_Saturday.csv").write_text(_salary_csv_text(), encoding="utf-8")
+    processor = _make_processor(_FakeContestDbNoDraftGroup(), vips=["UserA"], salary_dir=str(tmp_path))
+    with caplog.at_level(logging.INFO):
+        contest_id = processor.run("NFL", NFLSport)
+
+    assert contest_id == 123
+    fetch = _event_messages(caplog, "vip_fetch")
+    sheet_write = _event_messages(caplog, "vip_sheet_write")
+    assert len(fetch) == 1
+    assert len(sheet_write) == 1
+
+    fetch_fields = _parse_event_fields(fetch[0])
+    sheet_fields = _parse_event_fields(sheet_write[0])
+    assert fetch_fields["attempted"] == "false"
+    assert fetch_fields["reason"] == "no_draft_group"
+    assert sheet_fields["written"] == "false"
+    assert sheet_fields["reason"] == "no_draft_group"
+
+
+def test_process_sport_announces_bonuses_when_bonus_sender_configured(monkeypatch, tmp_path):
+    monkeypatch.setattr(
+        "dk_results.sport_processor.fetch_vip_lineups",
+        lambda *_a, **_kw: [_FakeVipLineup()],
+    )
+    monkeypatch.setattr(
+        "dk_results.sport_processor.state.contests_db_path",
+        lambda: tmp_path / "contests.db",
+    )
+    captured: dict = {}
+
+    def _fake_announce(**kwargs):
+        captured.update(kwargs)
+        return 0
+
+    monkeypatch.setattr("dk_results.sport_processor.announce_vip_bonuses", _fake_announce)
+
+    bonus_sender = object()
+    processor = _make_processor(
+        _FakeContestDb(), vips=["UserA"], salary_dir=str(tmp_path), bonus_sender=bonus_sender
+    )
+    contest_id = processor.run("NFL", NFLSport)
+
+    assert contest_id == 123
+    assert captured["sport"] == "NFL"
+    assert captured["contest_id"] == 123
+    assert captured["sender"] is bonus_sender
+    assert captured["vip_lineups"] == [_FakeVipLineup().to_dict()]
 
 
 def test_main_snapshot_out_writes_opt_in_envelope(monkeypatch, tmp_path):
