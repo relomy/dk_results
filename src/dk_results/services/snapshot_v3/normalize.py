@@ -72,15 +72,36 @@ def slug(value: Any) -> str:
     return re.sub(r"[^a-z0-9]+", "-", normalized).strip("-")
 
 
+_LIVE_STATUS_MARKERS = ("in progress", "live", "q1", "q2", "q3", "q4", "ot", "thru", "hole")
+_FINAL_STATUS_MARKERS = ("final", "complete", "completed", "locked", "postponed", "canceled", "cancelled")
+
+
+def _minutes_remaining_says_live(slot: dict[str, Any]) -> bool | None:
+    for key in ("time_remaining_minutes", "timeRemaining", "timeStatus", "time_remaining_display"):
+        minutes = to_float(slot.get(key))
+        if minutes is not None:
+            return minutes > 0
+    return None
+
+
+def _status_text_says_live(status_text: str) -> bool | None:
+    if any(marker in status_text for marker in _FINAL_STATUS_MARKERS):
+        return False
+    if any(marker in status_text for marker in _LIVE_STATUS_MARKERS):
+        return True
+    if ":" in status_text:
+        return True
+    return None
+
+
 def is_live_from_slot(slot: dict[str, Any]) -> bool:
     raw_is_live = slot.get("is_live")
     if isinstance(raw_is_live, bool):
         return raw_is_live
 
-    for key in ("time_remaining_minutes", "timeRemaining", "timeStatus", "time_remaining_display"):
-        minutes = to_float(slot.get(key))
-        if minutes is not None:
-            return minutes > 0
+    by_minutes = _minutes_remaining_says_live(slot)
+    if by_minutes is not None:
+        return by_minutes
 
     text_candidates = [
         slot.get("timeStatus"),
@@ -89,16 +110,11 @@ def is_live_from_slot(slot: dict[str, Any]) -> bool:
         slot.get("game_status"),
         slot.get("status"),
     ]
-    live_markers = ("in progress", "live", "q1", "q2", "q3", "q4", "ot", "thru", "hole")
-    final_markers = ("final", "complete", "completed", "locked", "postponed", "canceled", "cancelled")
     for raw_text in text_candidates:
         status_text = str(raw_text or "").strip().lower()
         if not status_text or status_text in {"-", "--"}:
             continue
-        if any(marker in status_text for marker in final_markers):
-            return False
-        if any(marker in status_text for marker in live_markers):
-            return True
-        if ":" in status_text:
-            return True
+        by_text = _status_text_says_live(status_text)
+        if by_text is not None:
+            return by_text
     return False
