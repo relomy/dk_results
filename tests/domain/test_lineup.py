@@ -1,6 +1,6 @@
 import pytest
 
-from dk_results.domain.lineup import Lineup, LineupParseError, LockedSlot, parse_lineup_string
+from dk_results.domain.lineup import Lineup, LineupParseError, LockedSlot, normalize_name, parse_lineup_string
 from dk_results.domain.player import Player
 
 
@@ -44,3 +44,18 @@ def test_parse_lineup_string_does_not_return_partial_lineup_for_unknown_player()
             {"John Doe": Player("John Doe", "RB", "RB", 5000, "", "")},
             "RB John Doe WR Unknown Player",
         )
+
+
+def test_parse_lineup_string_strips_trailing_space_on_last_slot():
+    # DraftKings' standings CSV always ends the Lineup field with a trailing
+    # space, which lands on the last slot's player name after tokenizing.
+    players = {"Lions": Player("Lions", "DST", "DST", 3400, "Final", "DET")}
+
+    lineup = parse_lineup_string(DummySport, players, "FLEX Lions ")
+
+    assert lineup[0].pos == "FLEX"
+    assert lineup[0].name == "Lions"
+
+
+def test_normalize_name_strips_surrounding_whitespace():
+    assert normalize_name(" Lions ") == "Lions"
