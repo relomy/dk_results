@@ -61,7 +61,7 @@ jobs:
         run: uv run --group quality ty check
 
       - name: Complexity Floor (xenon)
-        run: uv run --group quality xenon --max-absolute C src
+        run: uv run --group quality xenon --max-absolute B src
 
       - name: Complexity Ratchet
         run: uv run --group quality complexity-ratchet --base origin/main --head HEAD

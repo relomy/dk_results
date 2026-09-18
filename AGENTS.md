@@ -9,7 +9,7 @@ updates, and Discord notifications.
 - Source in `src/`, tests in `tests/`.
 - Dependency groups: `test` is installed by default; `quality` contains Ruff,
   Ty, Xenon, and complexity-ratchet.
-- Complexity floor: `uv run --group quality xenon --max-absolute C src`.
+- Complexity floor: `uv run --group quality xenon --max-absolute B src`.
 - `dfs-common` is a private git dependency; read `docs/TESTING.md` when a `uv`
   command fails while building the venv.
 - Complexity regressions: `uv run --group quality complexity-ratchet --base origin/main --worktree`.

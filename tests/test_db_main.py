@@ -477,9 +477,7 @@ def test_process_sport_announces_bonuses_when_bonus_sender_configured(monkeypatc
     monkeypatch.setattr("dk_results.sport_processor.announce_vip_bonuses", _fake_announce)
 
     bonus_sender = object()
-    processor = _make_processor(
-        _FakeContestDb(), vips=["UserA"], salary_dir=str(tmp_path), bonus_sender=bonus_sender
-    )
+    processor = _make_processor(_FakeContestDb(), vips=["UserA"], salary_dir=str(tmp_path), bonus_sender=bonus_sender)
     contest_id = processor.run("NFL", NFLSport)
 
     assert contest_id == 123
