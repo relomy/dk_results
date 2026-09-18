@@ -221,6 +221,18 @@ def _soft_finish_event_key(
     return f"soft_finish:{digest}"
 
 
+@dataclass(frozen=True)
+class _UpcomingContest:
+    """The one upcoming-contest row a sport's warning schedule is evaluated against."""
+
+    sport_cls: type[Sport]
+    dk_id: int
+    name: str
+    start_date: str
+    start_dt: datetime.datetime
+    now: datetime.datetime
+
+
 # ── Module ───────────────────────────────────────────────────────────────────
 
 
@@ -362,29 +374,26 @@ class CompletionProcessor:
     def _maybe_announce_warning(
         self,
         store: NotificationStore,
-        sport_cls: type[Sport],
-        dk_id: int,
-        name: str,
-        start_date: str,
-        start_dt: datetime.datetime,
-        now: datetime.datetime,
+        contest: _UpcomingContest,
         warning_minutes: int,
     ) -> None:
-        if not (now < start_dt <= now + datetime.timedelta(minutes=warning_minutes)):
+        if not (contest.now < contest.start_dt <= contest.now + datetime.timedelta(minutes=warning_minutes)):
             return
         warning_key = f"warning:{warning_minutes}"
-        if store.has_notification(dk_id, warning_key):
-            logger.debug("warning already sent for %s dk_id=%s (%sm)", sport_cls.name, dk_id, warning_minutes)
+        if store.has_notification(contest.dk_id, warning_key):
+            logger.debug(
+                "warning already sent for %s dk_id=%s (%sm)", contest.sport_cls.name, contest.dk_id, warning_minutes
+            )
             return
         self._announce_transition(
             store,
-            suppressed=self._presence_blocks_start(dk_id, str(start_date)),
+            suppressed=self._presence_blocks_start(contest.dk_id, str(contest.start_date)),
             kind=warning_key,
             prefix=f"Contest starting soon ({warning_minutes}m)",
-            sport_name=sport_cls.name,
-            contest_name=name,
-            start_date=str(start_date),
-            dk_id=dk_id,
+            sport_name=contest.sport_cls.name,
+            contest_name=contest.name,
+            start_date=str(contest.start_date),
+            dk_id=contest.dk_id,
             log_label="warning",
             log_suffix=f" ({warning_minutes}m)",
         )
@@ -409,10 +418,13 @@ class CompletionProcessor:
             now = datetime.datetime.now(start_dt.tzinfo)
             # This script runs every 10 minutes via cron, so warnings use windows
             # rather than requiring an exact timestamp match.
+            contest = _UpcomingContest(
+                sport_cls=sport_cls, dk_id=dk_id, name=name, start_date=start_date, start_dt=start_dt, now=now
+            )
             schedule = self._warning_schedule_for(sport_cls.name)
             self._log_schedule_once(sport_cls.name, schedule, sport_cls.name.lower(), logged_schedules)
             for warning_minutes in schedule:
-                self._maybe_announce_warning(store, sport_cls, dk_id, name, start_date, start_dt, now, warning_minutes)
+                self._maybe_announce_warning(store, contest, warning_minutes)
 
     def _warning_schedule_for(self, sport_name: str) -> list[int]:
         """Return the warning schedule for a sport, falling back to the default."""

@@ -1,5 +1,6 @@
 import datetime
 import logging
+from dataclasses import dataclass, field
 from typing import Any, Type
 
 from dk_results.domain.sport import Sport
@@ -104,13 +105,20 @@ def _log_group_skip(
     )
 
 
+@dataclass
+class _DraftGroupAccumulator:
+    result: list[int] = field(default_factory=list)
+    skipped_suffixes: list[str] = field(default_factory=list)
+    showdown_entries: list[tuple[datetime.datetime, int, str, str | None, int, int, datetime.datetime]] = field(
+        default_factory=list
+    )
+
+
 def _process_draft_group(
     group: dict[str, Any],
     sport: Type[Sport],
     is_nfl_showdown: bool,
-    result: list[int],
-    skipped_suffixes: list[str],
-    showdown_entries: list[tuple[datetime.datetime, int, str, str | None, int, int, datetime.datetime]],
+    acc: _DraftGroupAccumulator,
 ) -> None:
     tag = group["DraftGroupTag"]
     suffix = _normalize_suffix(group["ContestStartTimeSuffix"])
@@ -120,7 +128,7 @@ def _process_draft_group(
 
     if not _passes_tag(tag):
         if suffix:
-            skipped_suffixes.append(suffix)
+            acc.skipped_suffixes.append(suffix)
         return
 
     dt_start = _parse_start_date(group["StartDateEst"])
@@ -131,7 +139,7 @@ def _process_draft_group(
         return
 
     if not _passes_suffix(suffix, sport):
-        skipped_suffixes.append(_skipped_suffix_label(suffix))
+        acc.skipped_suffixes.append(_skipped_suffix_label(suffix))
         reason = _suffix_skip_reason(suffix)
         _log_group_skip(sport, dt_start, draft_group_id, tag, suffix, contest_type_id, game_type_id, reason)
         return
@@ -143,27 +151,25 @@ def _process_draft_group(
 
     if is_nfl_showdown:
         start_key = dt_start.replace(second=0, microsecond=0)
-        showdown_entries.append((start_key, draft_group_id, tag, suffix, contest_type_id, game_type_id, dt_start))
+        acc.showdown_entries.append((start_key, draft_group_id, tag, suffix, contest_type_id, game_type_id, dt_start))
         return
 
     log_draft_group_event("Append", sport, dt_start, draft_group_id, tag, suffix, contest_type_id, game_type_id)
-    result.append(draft_group_id)
+    acc.result.append(draft_group_id)
 
 
 def filter_draft_groups(groups: list[dict[str, Any]], sport: Type[Sport]) -> list[int]:
     """Return qualifying draft-group IDs for the given sport."""
-    result: list[int] = []
-    skipped_suffixes: list[str] = []
     is_nfl_showdown = sport.name == "NFLShowdown"
-    showdown_entries: list[tuple[datetime.datetime, int, str, str | None, int, int, datetime.datetime]] = []
+    acc = _DraftGroupAccumulator()
 
     for group in groups:
-        _process_draft_group(group, sport, is_nfl_showdown, result, skipped_suffixes, showdown_entries)
+        _process_draft_group(group, sport, is_nfl_showdown, acc)
 
-    if skipped_suffixes:
-        logger.debug("[%4s] Skipped suffixes [%s]", sport.name, ", ".join(skipped_suffixes))
+    if acc.skipped_suffixes:
+        logger.debug("[%4s] Skipped suffixes [%s]", sport.name, ", ".join(acc.skipped_suffixes))
 
-    if is_nfl_showdown and showdown_entries:
-        result.extend(_deduplicate_showdown(showdown_entries, sport))
+    if is_nfl_showdown and acc.showdown_entries:
+        acc.result.extend(_deduplicate_showdown(acc.showdown_entries, sport))
 
-    return result
+    return acc.result
