@@ -13,7 +13,7 @@ from dk_results.config import load_and_apply_settings
 from dk_results.discord_announcements import build_double_up_found_announcement
 from dk_results.domain.contest import Contest
 from dk_results.domain.sport import Sport, get_sport_choices
-from dk_results.lobby.double_ups import get_double_ups
+from dk_results.lobby.contest_filter import filter_double_ups
 from dk_results.lobby.fetch import DEFAULT_HEADERS, LOBBY_URL_TEMPLATE, get_dk_lobby, requests_fetch_json
 from dk_results.lobby.formatting import format_discord_messages
 from dk_results.lobby.parsing import build_draft_group_start_map
@@ -107,11 +107,12 @@ def process_sport(
     )
 
     contests = [Contest.from_lobby(c, sport_obj.name) for c in response_contests]
-    double_ups = get_double_ups(
+    double_ups = filter_double_ups(
         contests,
-        draft_groups,
         min_entry_fee=sport_obj.dub_min_entry_fee,
-        entries=sport_obj.dub_min_entries,
+        max_entry_fee=50,
+        draft_groups=draft_groups,
+        min_entries=sport_obj.dub_min_entries,
     )
 
     db.ensure_schema()
