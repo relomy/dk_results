@@ -250,55 +250,78 @@ def _format_message(sport: str, candidate: BonusCandidate, announced_count: int)
     return build_bonus_achievement_announcement(sport, headline)
 
 
+def _parse_player_ownership(player: dict[str, Any]) -> float:
+    try:
+        ownership = float(player.get("ownership", 0))
+    except (TypeError, ValueError):
+        ownership = 0.0
+    return max(0.0, min(1.0, ownership))
+
+
+def _merge_bonus_candidate(
+    grouped: dict[tuple[str, str], dict[str, Any]],
+    key: tuple[str, str],
+    *,
+    display_name: str,
+    normalized_name: str,
+    count: int,
+    ownership: float,
+    vip_name: str,
+) -> None:
+    if key not in grouped:
+        grouped[key] = {"display_names": set(), "count": count, "max_ownership": ownership, "vips": set()}
+    grouped[key]["display_names"].add(display_name or normalized_name)
+    grouped[key]["count"] = max(grouped[key]["count"], count)
+    grouped[key]["max_ownership"] = max(grouped[key]["max_ownership"], ownership)
+    if vip_name:
+        grouped[key]["vips"].add(vip_name)
+
+
+def _collect_player_bonuses(
+    sport: str, vip_name: str, player: dict[str, Any], grouped: dict[tuple[str, str], dict[str, Any]]
+) -> None:
+    display_name = str(player.get("name", "")).strip()
+    normalized_name = normalize_name(display_name)
+    if not normalized_name:
+        return
+    ownership = _parse_player_ownership(player)
+    bonus_counts = parse_bonus_counts(sport, str(player.get("stats", "")))
+    for bonus_code, count in bonus_counts.items():
+        if count <= 0:
+            continue
+        _merge_bonus_candidate(
+            grouped,
+            (normalized_name, bonus_code),
+            display_name=display_name,
+            normalized_name=normalized_name,
+            count=count,
+            ownership=ownership,
+            vip_name=vip_name,
+        )
+
+
+def _build_bonus_candidate(normalized_name: str, bonus_code: str, data: dict[str, Any]) -> BonusCandidate:
+    canonical_display_name = sorted(data["display_names"], key=str.lower)[0]
+    return BonusCandidate(
+        display_name=canonical_display_name,
+        normalized_player_name=normalized_name,
+        bonus_code=bonus_code,
+        new_count=int(data["count"]),
+        max_ownership=float(data["max_ownership"]),
+        vip_users=sorted(data["vips"], key=str.lower),
+    )
+
+
 def _collect_candidates(sport: str, vip_lineups: list[dict[str, Any]]) -> list[BonusCandidate]:
     grouped: dict[tuple[str, str], dict[str, Any]] = {}
     for vip_lineup in vip_lineups:
         vip_name = str(vip_lineup.get("user", "")).strip()
-        players = vip_lineup.get("players", [])
-        for player in players:
-            display_name = str(player.get("name", "")).strip()
-            normalized_name = normalize_name(display_name)
-            if not normalized_name:
-                continue
-            raw_ownership = player.get("ownership", 0)
-            try:
-                ownership = float(raw_ownership)
-            except (TypeError, ValueError):
-                ownership = 0.0
-            ownership = max(0.0, min(1.0, ownership))
-            bonus_counts = parse_bonus_counts(sport, str(player.get("stats", "")))
-            if not bonus_counts:
-                continue
-            for bonus_code, count in bonus_counts.items():
-                if count <= 0:
-                    continue
-                key = (normalized_name, bonus_code)
-                if key not in grouped:
-                    grouped[key] = {
-                        "display_names": set(),
-                        "count": count,
-                        "max_ownership": ownership,
-                        "vips": set(),
-                    }
-                grouped[key]["display_names"].add(display_name or normalized_name)
-                grouped[key]["count"] = max(grouped[key]["count"], count)
-                grouped[key]["max_ownership"] = max(grouped[key]["max_ownership"], ownership)
-                if vip_name:
-                    grouped[key]["vips"].add(vip_name)
-    candidates: list[BonusCandidate] = []
-    for (normalized_name, bonus_code), data in sorted(grouped.items()):
-        canonical_display_name = sorted(data["display_names"], key=str.lower)[0]
-        candidates.append(
-            BonusCandidate(
-                display_name=canonical_display_name,
-                normalized_player_name=normalized_name,
-                bonus_code=bonus_code,
-                new_count=int(data["count"]),
-                max_ownership=float(data["max_ownership"]),
-                vip_users=sorted(list(data["vips"]), key=str.lower),
-            )
-        )
-    return candidates
+        for player in vip_lineup.get("players", []):
+            _collect_player_bonuses(sport, vip_name, player, grouped)
+    return [
+        _build_bonus_candidate(normalized_name, bonus_code, data)
+        for (normalized_name, bonus_code), data in sorted(grouped.items())
+    ]
 
 
 def _announce_candidate(
