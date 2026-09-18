@@ -104,22 +104,27 @@ def _normalize_warning_schedule(items: Any, *, key: str) -> list[int]:
     return sorted(normalized)
 
 
-def _load_warning_schedule_map() -> dict[str, list[int]]:
-    """Load per-sport warning schedules from YAML."""
+def _resolve_warning_schedule_path() -> Path:
     schedule_path = os.getenv(WARNING_SCHEDULE_FILE_ENV, DEFAULT_WARNING_SCHEDULE_FILE)
     path = Path(schedule_path)
     if not path.is_absolute():
         path = repo_file(schedule_path)
-    if not path.is_file():
-        return {"default": _DEFAULT_WARNING_SCHEDULE}
+    return path
+
+
+def _read_warning_schedule_data(path: Path) -> dict[str, Any] | None:
     try:
         data = yaml.safe_load(path.read_text()) or {}
     except Exception:
         logger.warning("Failed to load warning schedules from %s", path)
-        return {"default": _DEFAULT_WARNING_SCHEDULE}
+        return None
     if not isinstance(data, dict):
         logger.warning("Warning schedule file at %s did not contain a dict.", path)
-        return {"default": _DEFAULT_WARNING_SCHEDULE}
+        return None
+    return data
+
+
+def _build_warning_schedules(data: dict[str, Any]) -> dict[str, list[int]]:
     schedules: dict[str, list[int]] = {}
     for key, value in data.items():
         if not isinstance(key, str) or not key:
@@ -128,8 +133,19 @@ def _load_warning_schedule_map() -> dict[str, list[int]]:
         normalized = _normalize_warning_schedule(value, key=key)
         if normalized:
             schedules[key.lower()] = normalized
-    if "default" not in schedules:
-        schedules["default"] = _DEFAULT_WARNING_SCHEDULE
+    return schedules
+
+
+def _load_warning_schedule_map() -> dict[str, list[int]]:
+    """Load per-sport warning schedules from YAML."""
+    path = _resolve_warning_schedule_path()
+    if not path.is_file():
+        return {"default": _DEFAULT_WARNING_SCHEDULE}
+    data = _read_warning_schedule_data(path)
+    if data is None:
+        return {"default": _DEFAULT_WARNING_SCHEDULE}
+    schedules = _build_warning_schedules(data)
+    schedules.setdefault("default", _DEFAULT_WARNING_SCHEDULE)
     return schedules
 
 

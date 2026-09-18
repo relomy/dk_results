@@ -400,3 +400,70 @@ def test_announce_logs_structured_events(caplog, conn):
     assert not any("Completed VIP bonus" in m for m in messages)
     candidates_msgs = [m for m in messages if "vip_bonus_candidates" in m]
     assert not any("{'EAG" in m or "{'BIR" in m for m in candidates_msgs)
+
+
+# ── _collect_candidates ──────────────────────────────────────────────────────
+
+
+def test_collect_candidates_empty_lineups_returns_empty():
+    assert bonus_announcements._collect_candidates("GOLF", []) == []
+
+
+def test_collect_candidates_skips_player_with_blank_name():
+    vip_lineups = [{"user": "amy", "players": [{"name": "  ", "stats": "1 EAG"}]}]
+    assert bonus_announcements._collect_candidates("GOLF", vip_lineups) == []
+
+
+def test_collect_candidates_skips_player_with_no_bonus_counts():
+    vip_lineups = [{"user": "amy", "players": [{"name": "Rory McIlroy", "stats": "22 PAR"}]}]
+    assert bonus_announcements._collect_candidates("GOLF", vip_lineups) == []
+
+
+def test_collect_candidates_skips_non_positive_bonus_counts(monkeypatch):
+    monkeypatch.setattr(bonus_announcements, "parse_bonus_counts", lambda sport, stats: {"EAG": 0})
+    vip_lineups = [{"user": "amy", "players": [{"name": "Rory McIlroy", "stats": "0 EAG"}]}]
+    assert bonus_announcements._collect_candidates("GOLF", vip_lineups) == []
+
+
+def test_collect_candidates_invalid_ownership_defaults_to_zero():
+    vip_lineups = [{"user": "amy", "players": [{"name": "Rory McIlroy", "stats": "1 EAG", "ownership": "bad"}]}]
+    candidates = bonus_announcements._collect_candidates("GOLF", vip_lineups)
+    assert len(candidates) == 1
+    assert candidates[0].max_ownership == 0.0
+
+
+def test_collect_candidates_ownership_clamped_to_valid_range():
+    vip_lineups = [
+        {"user": "amy", "players": [{"name": "Rory McIlroy", "stats": "1 EAG", "ownership": 5.0}]},
+        {"user": "beth", "players": [{"name": "Rory McIlroy", "stats": "1 EAG", "ownership": -3.0}]},
+    ]
+    candidates = bonus_announcements._collect_candidates("GOLF", vip_lineups)
+    assert len(candidates) == 1
+    assert candidates[0].max_ownership == 1.0
+
+
+def test_collect_candidates_merges_across_lineups_taking_max_count_and_ownership():
+    vip_lineups = [
+        {"user": "amy", "players": [{"name": "Rory McIlroy", "stats": "1 EAG", "ownership": 0.1}]},
+        {"user": "beth", "players": [{"name": "Rory McIlroy", "stats": "3 EAG", "ownership": 0.4}]},
+    ]
+    candidates = bonus_announcements._collect_candidates("GOLF", vip_lineups)
+    assert len(candidates) == 1
+    candidate = candidates[0]
+    assert candidate.new_count == 3
+    assert candidate.max_ownership == 0.4
+    assert candidate.vip_users == ["amy", "beth"]
+
+
+def test_collect_candidates_blank_vip_name_not_recorded():
+    vip_lineups = [{"user": "  ", "players": [{"name": "Rory McIlroy", "stats": "1 EAG"}]}]
+    candidates = bonus_announcements._collect_candidates("GOLF", vip_lineups)
+    assert len(candidates) == 1
+    assert candidates[0].vip_users == []
+
+
+def test_collect_candidates_multiple_bonus_codes_produce_separate_candidates():
+    vip_lineups = [{"user": "amy", "players": [{"name": "Rory McIlroy", "stats": "2 EAG, 1 BOFR"}]}]
+    candidates = bonus_announcements._collect_candidates("GOLF", vip_lineups)
+    codes = {candidate.bonus_code for candidate in candidates}
+    assert codes == {"EAG", "BOFR"}

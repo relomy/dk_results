@@ -165,6 +165,58 @@ def _pts_and_value(pts_raw: Any, salary_val: int | None) -> tuple[float | str, f
     return pts, value
 
 
+def _resolve_ownership(sc: dict[str, Any]) -> float | str:
+    percent = sc.get("percentDrafted")
+    return float(percent) / 100 if percent not in (None, "") else ""
+
+
+def _resolve_scorecard_salary(
+    display_name: str, sc: dict[str, Any], player_salary_map: dict[str, int] | None
+) -> int | None:
+    salary_val = _lookup_salary(display_name, player_salary_map)
+    if salary_val is not None:
+        return salary_val
+    salary_raw = sc.get("salary")
+    if salary_raw in (None, ""):
+        return None
+    try:
+        return int(float(salary_raw))
+    except (TypeError, ValueError):
+        return None
+
+
+def _resolve_rt_proj(projection: dict[str, Any]) -> str:
+    rt_proj_raw = projection.get("realTimeProjection", "")
+    if rt_proj_raw in (None, ""):
+        return ""
+    try:
+        return f"{float(rt_proj_raw):.2f}"
+    except (TypeError, ValueError):
+        return str(rt_proj_raw)
+
+
+def _build_vip_player(sc: dict[str, Any], player_salary_map: dict[str, int] | None) -> tuple[VipPlayer, int | None]:
+    projection = sc.get("projection", {}) or {}
+    display_name = sc.get("displayName", "") or "LOCKED 🔒"
+    salary_val = _resolve_scorecard_salary(display_name, sc, player_salary_map)
+    pts, value = _pts_and_value(sc.get("score", "") or "", salary_val)
+
+    player = VipPlayer(
+        pos=sc.get("rosterPosition", "") or "",
+        name=display_name,
+        pts=pts,
+        salary=salary_val,
+        value=value,
+        ownership=_resolve_ownership(sc),
+        rt_proj=_resolve_rt_proj(projection),
+        pregame_proj=projection.get("pregameProjection", ""),
+        time_status=str(sc.get("timeRemaining", "") or ""),
+        value_icon=projection.get("valueIcon", "") or "",
+        stats=sc.get("statsDescription", "") or "",
+    )
+    return player, salary_val
+
+
 def _parse_scorecard(
     scorecard_js: dict[str, Any],
     player_salary_map: dict[str, int] | None,
@@ -174,51 +226,14 @@ def _parse_scorecard(
         return [], 0
     roster = entries[0].get("roster", {})
     scorecards = roster.get("scorecards", [])
+
     players: list[VipPlayer] = []
     total_salary = 0
-
     for sc in scorecards:
-        projection = sc.get("projection", {}) or {}
-        percent = sc.get("percentDrafted")
-        ownership: float | str = float(percent) / 100 if percent not in (None, "") else ""
-        display_name = sc.get("displayName", "") or "LOCKED 🔒"
-
-        salary_val = _lookup_salary(display_name, player_salary_map)
-        if salary_val is None:
-            salary_raw = sc.get("salary")
-            if salary_raw not in (None, ""):
-                try:
-                    salary_val = int(float(salary_raw))
-                except (TypeError, ValueError):
-                    pass
+        player, salary_val = _build_vip_player(sc, player_salary_map)
+        players.append(player)
         if salary_val is not None:
             total_salary += salary_val
-
-        pts, value = _pts_and_value(sc.get("score", "") or "", salary_val)
-
-        rt_proj_raw = projection.get("realTimeProjection", "")
-        rt_proj = ""
-        if rt_proj_raw not in (None, ""):
-            try:
-                rt_proj = f"{float(rt_proj_raw):.2f}"
-            except (TypeError, ValueError):
-                rt_proj = str(rt_proj_raw)
-
-        players.append(
-            VipPlayer(
-                pos=sc.get("rosterPosition", "") or "",
-                name=display_name,
-                pts=pts,
-                salary=salary_val,
-                value=value,
-                ownership=ownership,
-                rt_proj=rt_proj,
-                pregame_proj=projection.get("pregameProjection", ""),
-                time_status=str(sc.get("timeRemaining", "") or ""),
-                value_icon=projection.get("valueIcon", "") or "",
-                stats=sc.get("statsDescription", "") or "",
-            )
-        )
 
     return players, total_salary
 
@@ -263,56 +278,50 @@ def _fetch_one(
 # ── Public interface ──────────────────────────────────────────────────────────
 
 
-def fetch_vip_lineups(
-    contest_id: int,
-    draft_group: int,
-    http: DkHttpPort,
-    *,
-    vips: list[str] | None = None,
-    vip_entries: dict[str, dict[str, Any]] | None = None,
-    player_salary_map: dict[str, int] | None = None,
-    timeout: int | None = None,
-    max_workers: int = 8,
-) -> list[VipLineup]:
-    """
-    Fetch VIP lineups concurrently and return typed VipLineup objects.
-
-    Provide vip_entries (name -> {entry_key, pmr, rank, pts}) when entry keys are
-    already known from standings. Otherwise provide vips (list of usernames) and
-    the leaderboard is queried and filtered.
-    """
-    users_to_fetch: list[dict[str, Any]] = []
-
-    if vip_entries:
-        for vip_name, entry_data in vip_entries.items():
-            if isinstance(entry_data, dict):
-                entry_key = entry_data.get("entry_key") or entry_data.get("entryKey")
-                pmr = entry_data.get("pmr", "")
-                rank = entry_data.get("rank", "")
-                pts = entry_data.get("pts", "")
-            else:
-                entry_key = entry_data
-                pmr = rank = pts = ""
-            if not entry_key:
-                continue
-            users_to_fetch.append(
-                {
-                    "userName": vip_name,
-                    "entryKey": entry_key,
-                    "timeRemaining": pmr,
-                    "rank": rank,
-                    "fantasyPoints": pts,
-                }
-            )
+def _user_from_vip_entry(vip_name: str, entry_data: Any) -> dict[str, Any] | None:
+    if isinstance(entry_data, dict):
+        entry_key = entry_data.get("entry_key") or entry_data.get("entryKey")
+        pmr = entry_data.get("pmr", "")
+        rank = entry_data.get("rank", "")
+        pts = entry_data.get("pts", "")
     else:
-        lb = http.get_leaderboard(contest_id, timeout=timeout)
-        vip_set = set(vips or [])
-        users_to_fetch = [u for u in lb.get("leaderBoard", []) if u.get("userName") in vip_set]
+        entry_key = entry_data
+        pmr = rank = pts = ""
+    if not entry_key:
+        return None
+    return {
+        "userName": vip_name,
+        "entryKey": entry_key,
+        "timeRemaining": pmr,
+        "rank": rank,
+        "fantasyPoints": pts,
+    }
 
-    if not users_to_fetch:
-        logger.debug("No VIP entries found to fetch.")
-        return []
 
+def _resolve_users_to_fetch(
+    contest_id: int,
+    http: DkHttpPort,
+    vips: list[str] | None,
+    vip_entries: dict[str, dict[str, Any]] | None,
+    timeout: int | None,
+) -> list[dict[str, Any]]:
+    if vip_entries:
+        users = (_user_from_vip_entry(name, data) for name, data in vip_entries.items())
+        return [u for u in users if u is not None]
+
+    lb = http.get_leaderboard(contest_id, timeout=timeout)
+    vip_set = set(vips or [])
+    return [u for u in lb.get("leaderBoard", []) if u.get("userName") in vip_set]
+
+
+def _run_vip_fetches(
+    http: DkHttpPort,
+    users_to_fetch: list[dict[str, Any]],
+    draft_group: int,
+    player_salary_map: dict[str, int] | None,
+    timeout: int | None,
+    max_workers: int,
+) -> tuple[list[VipLineup], int, int]:
     n_workers = min(max_workers, len(users_to_fetch)) or 1
     lineups: list[VipLineup] = []
     missing_roster = 0
@@ -337,6 +346,36 @@ def fetch_vip_lineups(
                     logger.error("Failed fetching lineup for %s: %s", user, e)
                 except Exception:
                     pass
+
+    return lineups, missing_roster, failures
+
+
+def fetch_vip_lineups(
+    contest_id: int,
+    draft_group: int,
+    http: DkHttpPort,
+    *,
+    vips: list[str] | None = None,
+    vip_entries: dict[str, dict[str, Any]] | None = None,
+    player_salary_map: dict[str, int] | None = None,
+    timeout: int | None = None,
+    max_workers: int = 8,
+) -> list[VipLineup]:
+    """
+    Fetch VIP lineups concurrently and return typed VipLineup objects.
+
+    Provide vip_entries (name -> {entry_key, pmr, rank, pts}) when entry keys are
+    already known from standings. Otherwise provide vips (list of usernames) and
+    the leaderboard is queried and filtered.
+    """
+    users_to_fetch = _resolve_users_to_fetch(contest_id, http, vips, vip_entries, timeout)
+    if not users_to_fetch:
+        logger.debug("No VIP entries found to fetch.")
+        return []
+
+    lineups, missing_roster, failures = _run_vip_fetches(
+        http, users_to_fetch, draft_group, player_salary_map, timeout, max_workers
+    )
 
     logger.info(
         "vip_lineups_fetch contest_id=%s draft_group=%s requested=%d found=%d missing_roster=%d failures=%d",

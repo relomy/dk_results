@@ -11,6 +11,7 @@ from dk_results.services.snapshot_v3.contracts import (
     validate_single_contest,
     validate_top_swing_players,
 )
+from dk_results.services.snapshot_v3.normalize import resolve_lineup_slots
 
 
 def _is_non_empty_string(value: Any) -> bool:
@@ -134,7 +135,7 @@ def _validate_primary_contest(sport: str, primary: Any) -> list[str]:
     return violations
 
 
-def _validate_section_rows(sport: str, contest: dict[str, Any]) -> list[str]:
+def _validate_list_sections(sport: str, contest: dict[str, Any]) -> list[str]:
     violations: list[str] = []
     for section in ("standings", "vip_lineups", "train_clusters"):
         rows = contest.get(section)
@@ -146,26 +147,51 @@ def _validate_section_rows(sport: str, contest: dict[str, Any]) -> list[str]:
         for index, row in enumerate(rows):
             if not isinstance(row, dict):
                 violations.append(f"sports.{sport}.contests[0].{section}[{index}] must be an object")
-    for section in ("ownership_watchlist", "live_metrics", "metrics"):
-        value = contest.get(section)
-        if value is not None and not isinstance(value, dict):
-            violations.append(f"sports.{sport}.contests[0].{section} has invalid type")
-    live_metrics = contest.get("live_metrics")
-    if isinstance(live_metrics, dict):
-        if "updated_at" in live_metrics and not _is_valid_timestamp(live_metrics.get("updated_at")):
-            violations.append(f"sports.{sport}.contests[0].live_metrics.updated_at must be a valid ISO timestamp")
-        cash_line = live_metrics.get("cash_line")
-        if cash_line is not None and not isinstance(cash_line, dict):
-            violations.append(f"sports.{sport}.contests[0].live_metrics.cash_line has invalid type")
-    metrics = contest.get("metrics")
-    if isinstance(metrics, dict):
-        if "updated_at" in metrics and not _is_valid_timestamp(metrics.get("updated_at")):
-            violations.append(f"sports.{sport}.contests[0].metrics.updated_at must be a valid ISO timestamp")
-        for section in ("distance_to_cash", "threat"):
-            value = metrics.get(section)
-            if value is not None and not isinstance(value, dict):
-                violations.append(f"sports.{sport}.contests[0].metrics.{section} has invalid type")
     return violations
+
+
+def _validate_dict_sections(sport: str, contest: dict[str, Any]) -> list[str]:
+    return [
+        f"sports.{sport}.contests[0].{section} has invalid type"
+        for section in ("ownership_watchlist", "live_metrics", "metrics")
+        if contest.get(section) is not None and not isinstance(contest.get(section), dict)
+    ]
+
+
+def _validate_live_metrics_section(sport: str, contest: dict[str, Any]) -> list[str]:
+    live_metrics = contest.get("live_metrics")
+    if not isinstance(live_metrics, dict):
+        return []
+    violations: list[str] = []
+    if "updated_at" in live_metrics and not _is_valid_timestamp(live_metrics.get("updated_at")):
+        violations.append(f"sports.{sport}.contests[0].live_metrics.updated_at must be a valid ISO timestamp")
+    cash_line = live_metrics.get("cash_line")
+    if cash_line is not None and not isinstance(cash_line, dict):
+        violations.append(f"sports.{sport}.contests[0].live_metrics.cash_line has invalid type")
+    return violations
+
+
+def _validate_metrics_section(sport: str, contest: dict[str, Any]) -> list[str]:
+    metrics = contest.get("metrics")
+    if not isinstance(metrics, dict):
+        return []
+    violations: list[str] = []
+    if "updated_at" in metrics and not _is_valid_timestamp(metrics.get("updated_at")):
+        violations.append(f"sports.{sport}.contests[0].metrics.updated_at must be a valid ISO timestamp")
+    for section in ("distance_to_cash", "threat"):
+        value = metrics.get(section)
+        if value is not None and not isinstance(value, dict):
+            violations.append(f"sports.{sport}.contests[0].metrics.{section} has invalid type")
+    return violations
+
+
+def _validate_section_rows(sport: str, contest: dict[str, Any]) -> list[str]:
+    return [
+        *_validate_list_sections(sport, contest),
+        *_validate_dict_sections(sport, contest),
+        *_validate_live_metrics_section(sport, contest),
+        *_validate_metrics_section(sport, contest),
+    ]
 
 
 def _validate_contest_id_coherence(sport: str, contest: dict[str, Any]) -> list[str]:
@@ -194,79 +220,70 @@ def _validate_contest_id_coherence(sport: str, contest: dict[str, Any]) -> list[
     return violations
 
 
+def _add_player_keys_from_rows(rows: Any, keys: set[str]) -> None:
+    if not isinstance(rows, list):
+        return
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        player_key = row.get("player_key")
+        if _is_non_empty_string(player_key):
+            keys.add(str(player_key))
+
+
+def _add_player_keys_from_vip_lineups(vip_lineups: Any, keys: set[str]) -> None:
+    if not isinstance(vip_lineups, list):
+        return
+    for vip_row in vip_lineups:
+        if not isinstance(vip_row, dict):
+            continue
+        slots = resolve_lineup_slots(vip_row)
+        if slots is None:
+            continue
+        _add_player_keys_from_rows(slots, keys)
+
+
 def _collect_known_player_keys(sport_payload: dict[str, Any], contest: dict[str, Any]) -> set[str]:
     keys: set[str] = set()
-
-    sport_players = sport_payload.get("players")
-    if isinstance(sport_players, list):
-        for row in sport_players:
-            if not isinstance(row, dict):
-                continue
-            player_key = row.get("player_key")
-            if _is_non_empty_string(player_key):
-                keys.add(str(player_key))
-
-    players = contest.get("players")
-    if isinstance(players, list):
-        for row in players:
-            if not isinstance(row, dict):
-                continue
-            player_key = row.get("player_key")
-            if _is_non_empty_string(player_key):
-                keys.add(str(player_key))
-
-    vip_lineups = contest.get("vip_lineups")
-    if isinstance(vip_lineups, list):
-        for vip_row in vip_lineups:
-            if not isinstance(vip_row, dict):
-                continue
-            slots = vip_row.get("players_live")
-            if not isinstance(slots, list):
-                slots = vip_row.get("slots")
-            if not isinstance(slots, list):
-                slots = vip_row.get("lineup")
-            if not isinstance(slots, list):
-                slots = vip_row.get("players")
-            if not isinstance(slots, list):
-                continue
-            for slot in slots:
-                if not isinstance(slot, dict):
-                    continue
-                player_key = slot.get("player_key")
-                if _is_non_empty_string(player_key):
-                    keys.add(str(player_key))
-
+    _add_player_keys_from_rows(sport_payload.get("players"), keys)
+    _add_player_keys_from_rows(contest.get("players"), keys)
+    _add_player_keys_from_vip_lineups(contest.get("vip_lineups"), keys)
     return keys
 
 
-def _validate_train_cluster_references(sport: str, contest: dict[str, Any]) -> list[str]:
-    violations: list[str] = []
+def _validate_cluster_sample_entries(sport: str, cluster_index: int, cluster: dict[str, Any]) -> list[str]:
+    cluster_entry_keys = {
+        str(entry_key) for entry_key in list(cluster.get("entry_keys") or []) if entry_key not in (None, "")
+    }
+    sample_entries = cluster.get("sample_entries")
+    if not isinstance(sample_entries, list):
+        return []
 
+    violations: list[str] = []
+    for sample_index, sample in enumerate(sample_entries):
+        if not isinstance(sample, dict):
+            continue
+        sample_key = sample.get("entry_key")
+        if sample_key in (None, ""):
+            continue
+        if str(sample_key) not in cluster_entry_keys:
+            violations.append(
+                f"sports.{sport}.contests[0].train_clusters[{cluster_index}].sample_entries[{sample_index}]."
+                f"entry_key must match train_clusters[{cluster_index}].entry_keys"
+            )
+    return violations
+
+
+def _validate_train_cluster_references(sport: str, contest: dict[str, Any]) -> list[str]:
     train_clusters = contest.get("train_clusters")
     if not isinstance(train_clusters, list):
-        return violations
+        return []
 
+    violations: list[str] = []
     for cluster_index, cluster in enumerate(train_clusters):
         if not isinstance(cluster, dict):
             continue
-        cluster_entry_keys = {
-            str(entry_key) for entry_key in list(cluster.get("entry_keys") or []) if entry_key not in (None, "")
-        }
-        sample_entries = cluster.get("sample_entries")
-        if not isinstance(sample_entries, list):
-            continue
-        for sample_index, sample in enumerate(sample_entries):
-            if not isinstance(sample, dict):
-                continue
-            sample_key = sample.get("entry_key")
-            if sample_key in (None, ""):
-                continue
-            if str(sample_key) not in cluster_entry_keys:
-                violations.append(
-                    f"sports.{sport}.contests[0].train_clusters[{cluster_index}].sample_entries[{sample_index}]."
-                    f"entry_key must match train_clusters[{cluster_index}].entry_keys"
-                )
-
+        violations.extend(_validate_cluster_sample_entries(sport, cluster_index, cluster))
     return violations
 
 

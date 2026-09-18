@@ -1,6 +1,11 @@
 from copy import deepcopy
 
-from dk_results.services.snapshot_v3.validate import validate_v3_envelope
+from dk_results.services.snapshot_v3.validate import (
+    _collect_known_player_keys,
+    _validate_section_rows,
+    _validate_train_cluster_references,
+    validate_v3_envelope,
+)
 
 
 def _valid_envelope() -> dict:
@@ -182,3 +187,145 @@ def test_validate_v3_envelope_detects_train_sample_entry_not_in_cluster_entries(
         "sports.nba.contests[0].train_clusters[0].sample_entries[0].entry_key must match "
         "train_clusters[0].entry_keys" in violations
     )
+
+
+def _valid_contest() -> dict:
+    return deepcopy(_valid_envelope()["sports"]["nba"]["contests"][0])
+
+
+# ── _validate_section_rows ───────────────────────────────────────────────────
+
+
+def test_validate_section_rows_accepts_valid_contest() -> None:
+    assert _validate_section_rows("nba", _valid_contest()) == []
+
+
+def test_validate_section_rows_rejects_non_list_standings() -> None:
+    contest = _valid_contest()
+    contest["standings"] = "not-a-list"
+    assert "sports.nba.contests[0].standings has invalid type" in _validate_section_rows("nba", contest)
+
+
+def test_validate_section_rows_rejects_non_dict_row_in_section() -> None:
+    contest = _valid_contest()
+    contest["vip_lineups"] = ["not-a-dict"]
+    assert "sports.nba.contests[0].vip_lineups[0] must be an object" in _validate_section_rows("nba", contest)
+
+
+def test_validate_section_rows_rejects_non_dict_ownership_watchlist() -> None:
+    contest = _valid_contest()
+    contest["ownership_watchlist"] = "bad"
+    assert "sports.nba.contests[0].ownership_watchlist has invalid type" in _validate_section_rows("nba", contest)
+
+
+def test_validate_section_rows_rejects_non_dict_live_metrics() -> None:
+    contest = _valid_contest()
+    contest["live_metrics"] = "bad"
+    assert "sports.nba.contests[0].live_metrics has invalid type" in _validate_section_rows("nba", contest)
+
+
+def test_validate_section_rows_rejects_invalid_live_metrics_updated_at() -> None:
+    contest = _valid_contest()
+    contest["live_metrics"] = {"updated_at": "not-a-timestamp"}
+    violations = _validate_section_rows("nba", contest)
+    assert "sports.nba.contests[0].live_metrics.updated_at must be a valid ISO timestamp" in violations
+
+
+def test_validate_section_rows_rejects_invalid_live_metrics_cash_line_type() -> None:
+    contest = _valid_contest()
+    contest["live_metrics"] = {"cash_line": "bad"}
+    violations = _validate_section_rows("nba", contest)
+    assert "sports.nba.contests[0].live_metrics.cash_line has invalid type" in violations
+
+
+def test_validate_section_rows_rejects_invalid_metrics_updated_at() -> None:
+    contest = _valid_contest()
+    contest["metrics"]["updated_at"] = "not-a-timestamp"
+    violations = _validate_section_rows("nba", contest)
+    assert "sports.nba.contests[0].metrics.updated_at must be a valid ISO timestamp" in violations
+
+
+def test_validate_section_rows_rejects_invalid_metrics_distance_to_cash_type() -> None:
+    contest = _valid_contest()
+    contest["metrics"]["distance_to_cash"] = "bad"
+    violations = _validate_section_rows("nba", contest)
+    assert "sports.nba.contests[0].metrics.distance_to_cash has invalid type" in violations
+
+
+def test_validate_section_rows_rejects_invalid_metrics_threat_type() -> None:
+    contest = _valid_contest()
+    contest["metrics"]["threat"] = "bad"
+    violations = _validate_section_rows("nba", contest)
+    assert "sports.nba.contests[0].metrics.threat has invalid type" in violations
+
+
+# ── _collect_known_player_keys ───────────────────────────────────────────────
+
+
+def test_collect_known_player_keys_from_sport_players() -> None:
+    keys = _collect_known_player_keys({"players": [{"player_key": "nba:1"}]}, {})
+    assert keys == {"nba:1"}
+
+
+def test_collect_known_player_keys_from_contest_players() -> None:
+    keys = _collect_known_player_keys({}, {"players": [{"player_key": "nba:2"}]})
+    assert keys == {"nba:2"}
+
+
+def test_collect_known_player_keys_from_vip_lineups_players_live() -> None:
+    contest = {"vip_lineups": [{"players_live": [{"player_key": "nba:3"}]}]}
+    assert _collect_known_player_keys({}, contest) == {"nba:3"}
+
+
+def test_collect_known_player_keys_from_vip_lineups_slots_fallback() -> None:
+    contest = {"vip_lineups": [{"slots": [{"player_key": "nba:4"}]}]}
+    assert _collect_known_player_keys({}, contest) == {"nba:4"}
+
+
+def test_collect_known_player_keys_from_vip_lineups_lineup_fallback() -> None:
+    contest = {"vip_lineups": [{"lineup": [{"player_key": "nba:5"}]}]}
+    assert _collect_known_player_keys({}, contest) == {"nba:5"}
+
+
+def test_collect_known_player_keys_from_vip_lineups_players_fallback() -> None:
+    contest = {"vip_lineups": [{"players": [{"player_key": "nba:6"}]}]}
+    assert _collect_known_player_keys({}, contest) == {"nba:6"}
+
+
+def test_collect_known_player_keys_ignores_non_list_and_non_dict_rows() -> None:
+    contest = {
+        "players": "not-a-list",
+        "vip_lineups": ["not-a-dict", {"players_live": "not-a-list", "slots": "also-not-a-list"}],
+    }
+    assert _collect_known_player_keys({"players": "not-a-list"}, contest) == set()
+
+
+# ── _validate_train_cluster_references ───────────────────────────────────────
+
+
+def test_validate_train_cluster_references_non_list_train_clusters_is_noop() -> None:
+    assert _validate_train_cluster_references("nba", {"train_clusters": "not-a-list"}) == []
+
+
+def test_validate_train_cluster_references_skips_non_dict_cluster() -> None:
+    assert _validate_train_cluster_references("nba", {"train_clusters": ["not-a-dict"]}) == []
+
+
+def test_validate_train_cluster_references_skips_non_list_sample_entries() -> None:
+    contest = {"train_clusters": [{"entry_keys": ["e1"], "sample_entries": "not-a-list"}]}
+    assert _validate_train_cluster_references("nba", contest) == []
+
+
+def test_validate_train_cluster_references_skips_non_dict_sample() -> None:
+    contest = {"train_clusters": [{"entry_keys": ["e1"], "sample_entries": ["not-a-dict"]}]}
+    assert _validate_train_cluster_references("nba", contest) == []
+
+
+def test_validate_train_cluster_references_skips_blank_sample_key() -> None:
+    contest = {"train_clusters": [{"entry_keys": ["e1"], "sample_entries": [{"entry_key": ""}, {"entry_key": None}]}]}
+    assert _validate_train_cluster_references("nba", contest) == []
+
+
+def test_validate_train_cluster_references_accepts_matching_sample_key() -> None:
+    contest = {"train_clusters": [{"entry_keys": ["e1"], "sample_entries": [{"entry_key": "e1"}]}]}
+    assert _validate_train_cluster_references("nba", contest) == []

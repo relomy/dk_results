@@ -44,6 +44,31 @@ def test_is_live_from_slot_handles_numeric_and_text_status() -> None:
     assert is_live_from_slot({"timeStatus": "Final"}) is False
 
 
+def test_is_live_from_slot_bool_is_live_short_circuits() -> None:
+    assert is_live_from_slot({"is_live": True, "timeStatus": "Final"}) is True
+    assert is_live_from_slot({"is_live": False, "timeStatus": "In Progress"}) is False
+
+
+def test_is_live_from_slot_zero_minutes_is_not_live() -> None:
+    assert is_live_from_slot({"timeRemaining": 0}) is False
+
+
+def test_is_live_from_slot_skips_dash_placeholder_then_checks_next_candidate() -> None:
+    assert is_live_from_slot({"timeStatus": "--", "game_status": "Q2"}) is True
+
+
+def test_is_live_from_slot_colon_time_format_is_live() -> None:
+    assert is_live_from_slot({"status": "2:15"}) is True
+
+
+def test_is_live_from_slot_unknown_text_defaults_to_not_live() -> None:
+    assert is_live_from_slot({"status": "scheduled"}) is False
+
+
+def test_is_live_from_slot_empty_slot_defaults_to_not_live() -> None:
+    assert is_live_from_slot({}) is False
+
+
 def test_pipeline_exports_default_standings_limit() -> None:
     assert isinstance(pipeline.DEFAULT_STANDINGS_LIMIT, int)
     assert pipeline.DEFAULT_STANDINGS_LIMIT > 0

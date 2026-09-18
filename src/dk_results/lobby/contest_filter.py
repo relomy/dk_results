@@ -59,20 +59,16 @@ def _matches(
     name_contains: str | None,
     name_excludes: str | None,
 ) -> bool:
-    if not is_double_up_contest(contest):
-        return False
-    if not (min_entry_fee <= contest.entry_fee <= max_entry_fee):
-        return False
-    if start_date is not None and contest.start_dt.date() != start_date:
-        return False
-    if draft_group_set is not None and contest.draft_group not in draft_group_set:
-        return False
-    if contest.entries < min_entries:
-        return False
-    if game_type_id is not None and contest.game_type_id != game_type_id:
-        return False
-    if name_contains is not None and name_contains.lower() not in contest.name.lower():
-        return False
-    if name_excludes is not None and name_excludes.lower() in contest.name.lower():
-        return False
-    return True
+    name_lower = contest.name.lower()
+    return all(
+        (
+            is_double_up_contest(contest),
+            min_entry_fee <= contest.entry_fee <= max_entry_fee,
+            start_date is None or contest.start_dt.date() == start_date,
+            draft_group_set is None or contest.draft_group in draft_group_set,
+            contest.entries >= min_entries,
+            game_type_id is None or contest.game_type_id == game_type_id,
+            name_contains is None or name_contains.lower() in name_lower,
+            name_excludes is None or name_excludes.lower() not in name_lower,
+        )
+    )

@@ -2,7 +2,7 @@
 
 import logging
 from collections.abc import Iterable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Type
 
 from dfs_common.sheets import NumberFormat
@@ -27,6 +27,21 @@ class ContestStandings:
     non_cashing_players: dict[str, int]
 
 
+def _coerce_positions_paid_str(value: str) -> int | None:
+    value = value.strip()
+    if not value:
+        return None
+    try:
+        return int(value)
+    except ValueError:
+        pass
+    try:
+        float_value = float(value)
+    except ValueError:
+        return None
+    return int(float_value) if float_value.is_integer() else None
+
+
 def _coerce_positions_paid(positions_paid: Any) -> int | None:
     if positions_paid is None:
         return None
@@ -37,18 +52,72 @@ def _coerce_positions_paid(positions_paid: Any) -> int | None:
     if isinstance(positions_paid, float):
         return int(positions_paid) if positions_paid.is_integer() else None
     if isinstance(positions_paid, str):
-        value = positions_paid.strip()
-        if not value:
-            return None
-        try:
-            return int(value)
-        except ValueError:
-            try:
-                float_value = float(value)
-            except ValueError:
-                return None
-            return int(float_value) if float_value.is_integer() else None
+        return _coerce_positions_paid_str(positions_paid)
     return None
+
+
+_SALARY_REQUIRED_COLUMNS = {
+    "position": ("position",),
+    "name": ("name",),
+    "roster position": ("roster position", "roster pos"),
+    "salary": ("salary",),
+    "game info": ("game info",),
+    "team": ("teamabbrev", "team"),
+}
+
+
+@dataclass(frozen=True)
+class _SalaryColumnIndexes:
+    position: int
+    name: int
+    roster_position: int
+    salary: int
+    game_info: int
+    team: int
+
+    @property
+    def max_index(self) -> int:
+        return max(self.position, self.name, self.roster_position, self.salary, self.game_info, self.team)
+
+
+def _resolve_salary_column_indexes(header: list[str]) -> _SalaryColumnIndexes:
+    header_indexes = {str(column).removeprefix("\ufeff").strip().lower(): index for index, column in enumerate(header)}
+    missing_columns = [
+        label
+        for label, aliases in _SALARY_REQUIRED_COLUMNS.items()
+        if not any(alias in header_indexes for alias in aliases)
+    ]
+    if missing_columns:
+        raise ValueError(f"Salary CSV is missing required columns: {', '.join(missing_columns)}")
+
+    def index_for(*aliases: str) -> int:
+        return next(header_indexes[alias] for alias in aliases if alias in header_indexes)
+
+    return _SalaryColumnIndexes(
+        position=index_for("position"),
+        name=index_for("name"),
+        roster_position=index_for("roster position", "roster pos"),
+        salary=index_for("salary"),
+        game_info=index_for("game info"),
+        team=index_for("teamabbrev", "team"),
+    )
+
+
+def _parse_salary_row(row: list[str], row_number: int, indexes: _SalaryColumnIndexes) -> tuple[str, Player] | None:
+    if not row or all(not str(value).strip() for value in row):
+        return None
+    if len(row) <= indexes.max_index:
+        raise ValueError(
+            f"Salary CSV row {row_number} has {len(row)} columns; expected at least {indexes.max_index + 1}"
+        )
+
+    pos = row[indexes.position]
+    name = normalize_name(row[indexes.name])
+    roster_pos = row[indexes.roster_position]
+    salary = row[indexes.salary]
+    game_info = row[indexes.game_info]
+    team_abbv = row[indexes.team]
+    return name, Player(name, pos, roster_pos, salary, game_info, team_abbv)
 
 
 def _parse_salary_rows(rows: Iterable[list[str]]) -> dict[str, Player]:
@@ -58,55 +127,14 @@ def _parse_salary_rows(rows: Iterable[list[str]]) -> dict[str, Player]:
     if not header:
         return players
 
-    header_indexes = {str(column).removeprefix("\ufeff").strip().lower(): index for index, column in enumerate(header)}
-    required_columns = {
-        "position": ("position",),
-        "name": ("name",),
-        "roster position": ("roster position", "roster pos"),
-        "salary": ("salary",),
-        "game info": ("game info",),
-        "team": ("teamabbrev", "team"),
-    }
-    missing_columns = [
-        label for label, aliases in required_columns.items() if not any(alias in header_indexes for alias in aliases)
-    ]
-    if missing_columns:
-        raise ValueError(f"Salary CSV is missing required columns: {', '.join(missing_columns)}")
-
-    def index_for(*aliases: str) -> int:
-        return next(header_indexes[alias] for alias in aliases if alias in header_indexes)
-
-    position_index = index_for("position")
-    name_index = index_for("name")
-    roster_position_index = index_for("roster position", "roster pos")
-    salary_index = index_for("salary")
-    game_info_index = index_for("game info")
-    team_index = index_for("teamabbrev", "team")
-    max_required_index = max(
-        position_index,
-        name_index,
-        roster_position_index,
-        salary_index,
-        game_info_index,
-        team_index,
-    )
+    indexes = _resolve_salary_column_indexes(header)
 
     for row_number, row in enumerate(rows_iter, start=2):
-        if not row or all(not str(value).strip() for value in row):
+        parsed = _parse_salary_row(row, row_number, indexes)
+        if parsed is None:
             continue
-        if len(row) <= max_required_index:
-            raise ValueError(
-                f"Salary CSV row {row_number} has {len(row)} columns; expected at least {max_required_index + 1}"
-            )
-
-        pos = row[position_index]
-        name = row[name_index]
-        roster_pos = row[roster_position_index]
-        salary = row[salary_index]
-        game_info = row[game_info_index]
-        team_abbv = row[team_index]
-        name = normalize_name(name)
-        players[name] = Player(name, pos, roster_pos, salary, game_info, team_abbv)
+        name, player = parsed
+        players[name] = player
     return players
 
 
@@ -258,6 +286,72 @@ def _update_cash_stats(
     return min_rank, min_cash_pts, non_cashing_total_pmr + float(pmr), 1
 
 
+@dataclass
+class _StandingsAccumulator:
+    sport: Sport | Type[Sport]
+    players: dict[str, Player]
+    vips: list[str]
+    positions_paid: int | None
+    users: list[User] = field(default_factory=list)
+    vip_list: list[User] = field(default_factory=list)
+    min_rank: int = 0
+    min_cash_pts: float = 1000.0
+    non_cashing_players: dict[str, int] = field(default_factory=dict)
+    non_cashing_users: int = 0
+    non_cashing_total_pmr: float = 0.0
+    showdown_captains: dict[str, int] = field(default_factory=dict)
+    aggregated_player_stats: dict[str, dict[str, Any]] = field(default_factory=dict)
+
+    def process_row(self, row: list[str]) -> None:
+        if not row or len(row) < 6:
+            return
+        if all(str(col).strip() == "" for col in row[:6]):
+            _accumulate_player_stats(row, self.aggregated_player_stats)
+            return
+
+        user, parsed_rank, parsed_points = _parse_standing_user(self.sport, self.players, row)
+        self.users.append(user)
+        if user.name in self.vips:
+            self.vip_list.append(user)
+
+        self.min_rank, self.min_cash_pts, self.non_cashing_total_pmr, added_non_cashing = _update_cash_stats(
+            self.positions_paid,
+            parsed_rank,
+            parsed_points,
+            row[3],
+            self.sport,
+            self.players,
+            row[5],
+            self.non_cashing_players,
+            self.showdown_captains,
+            self.min_rank,
+            self.min_cash_pts,
+            self.non_cashing_total_pmr,
+        )
+        self.non_cashing_users += added_non_cashing
+
+        _accumulate_player_stats(row, self.aggregated_player_stats)
+
+
+def _log_top_showdown_captains(
+    sport: Sport | Type[Sport],
+    users: list[User],
+    showdown_captains: dict[str, int],
+    logger: logging.Logger,
+) -> None:
+    if sport.name != "NFLShowdown":
+        return
+    sorted_captains = dict(sorted(showdown_captains.items(), key=lambda item: item[1], reverse=True))
+    top_ten_cpts = list(sorted_captains)[:10]
+    logger.debug("Top 10 captains:")
+    for cpt in top_ten_cpts:
+        num_users = len(users)
+        percent = float(showdown_captains[cpt] / num_users) * 100
+        message = "{}: {:0.2f}% [{}/{}]".format(cpt, percent, showdown_captains[cpt], num_users)
+        logger.debug(message)
+        print(message)
+
+
 def _parse_standings_rows(
     sport: Sport | Type[Sport],
     players: dict[str, Player],
@@ -269,83 +363,33 @@ def _parse_standings_rows(
     standings_iter = iter(standings)
     next(standings_iter, None)
 
-    showdown_captains: dict[str, int] = {}
-    aggregated_player_stats: dict[str, dict[str, Any]] = {}
-
-    users: list[User] = []
-    vip_list: list[User] = []
-    min_rank = 0
-    min_cash_pts = 1000.0
-    non_cashing_players: dict[str, int] = {}
-    non_cashing_users = 0
-    non_cashing_total_pmr = 0.0
-
+    acc = _StandingsAccumulator(sport=sport, players=players, vips=vips, positions_paid=positions_paid)
     for row in standings_iter:
-        if not row:
-            continue
-        if len(row) < 6:
-            continue
-        core_blank = all(str(col).strip() == "" for col in row[:6])
-        if core_blank:
-            _accumulate_player_stats(row, aggregated_player_stats)
-            continue
+        acc.process_row(row)
 
-        user, parsed_rank, parsed_points = _parse_standing_user(sport, players, row)
-        users.append(user)
-
-        if user.name in vips:
-            vip_list.append(user)
-
-        min_rank, min_cash_pts, non_cashing_total_pmr, added_non_cashing = _update_cash_stats(
-            positions_paid,
-            parsed_rank,
-            parsed_points,
-            row[3],
-            sport,
-            players,
-            row[5],
-            non_cashing_players,
-            showdown_captains,
-            min_rank,
-            min_cash_pts,
-            non_cashing_total_pmr,
-        )
-        non_cashing_users += added_non_cashing
-
-        _accumulate_player_stats(row, aggregated_player_stats)
-
-    _apply_aggregated_player_stats(sport, players, aggregated_player_stats, logger)
+    _apply_aggregated_player_stats(sport, players, acc.aggregated_player_stats, logger)
 
     non_cashing_avg_pmr = 0.0
-    if non_cashing_users > 0 and non_cashing_total_pmr > 0:
-        non_cashing_avg_pmr = non_cashing_total_pmr / non_cashing_users
+    if acc.non_cashing_users > 0 and acc.non_cashing_total_pmr > 0:
+        non_cashing_avg_pmr = acc.non_cashing_total_pmr / acc.non_cashing_users
 
     logger.debug(
         "non_cashing users=%d total_pmr=%.2f avg_pmr=%.2f",
-        non_cashing_users,
-        non_cashing_total_pmr,
+        acc.non_cashing_users,
+        acc.non_cashing_total_pmr,
         non_cashing_avg_pmr,
     )
 
-    if sport.name == "NFLShowdown":
-        sorted_captains = dict(sorted(showdown_captains.items(), key=lambda item: item[1], reverse=True))
-        top_ten_cpts = list(sorted_captains)[:10]
-        logger.debug("Top 10 captains:")
-        for cpt in top_ten_cpts:
-            num_users = len(users)
-            percent = float(showdown_captains[cpt] / num_users) * 100
-            message = "{}: {:0.2f}% [{}/{}]".format(cpt, percent, showdown_captains[cpt], num_users)
-            logger.debug(message)
-            print(message)
+    _log_top_showdown_captains(sport, acc.users, acc.showdown_captains, logger)
 
     return (
-        users,
-        vip_list,
-        min_rank,
-        min_cash_pts,
-        non_cashing_users,
+        acc.users,
+        acc.vip_list,
+        acc.min_rank,
+        acc.min_cash_pts,
+        acc.non_cashing_users,
         non_cashing_avg_pmr,
-        non_cashing_players,
+        acc.non_cashing_players,
     )
 
 

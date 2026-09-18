@@ -150,6 +150,34 @@ def _build_latest_payload(
     }
 
 
+def _count_contest_states(contests: list[Any], state_counts: dict[str, int]) -> None:
+    for contest in contests:
+        state_raw = str((contest or {}).get("state") or "").strip().lower()
+        state = state_raw if state_raw in {"upcoming", "live", "completed", "cancelled"} else "unknown"
+        state_counts[state] = state_counts.get(state, 0) + 1
+
+
+def _resolve_sport_status(sport_payload: dict[str, Any]) -> str:
+    status_raw = str(sport_payload.get("status") or "").strip().lower()
+    if status_raw in _VALID_SPORT_STATUS:
+        return status_raw
+    return "error" if sport_payload.get("error") else "ok"
+
+
+def _build_sport_status(sport: str, sport_payload: dict[str, Any], payload: dict[str, Any]) -> dict[str, Any]:
+    sport_status: dict[str, Any] = {
+        "status": _resolve_sport_status(sport_payload),
+        "updated_at": _coerce_iso(
+            sport_payload.get("updated_at") or payload.get("generated_at"),
+            f"sports.{sport}.updated_at",
+        ),
+    }
+    error_value = sport_payload.get("error")
+    if error_value not in (None, ""):
+        sport_status["error"] = str(error_value)
+    return sport_status
+
+
 def _build_manifest_entry(
     payload: dict[str, Any],
     snapshot_rel_path: str,
@@ -165,25 +193,8 @@ def _build_manifest_entry(
         sport_payload = sports.get(sport) or {}
         contests = sport_payload.get("contests") or []
         contest_counts_by_sport[sport] = len(contests)
-
-        for contest in contests:
-            state_raw = str((contest or {}).get("state") or "").strip().lower()
-            state = state_raw if state_raw in {"upcoming", "live", "completed", "cancelled"} else "unknown"
-            state_counts[state] = state_counts.get(state, 0) + 1
-
-        status_raw = str(sport_payload.get("status") or "").strip().lower()
-        status = status_raw if status_raw in _VALID_SPORT_STATUS else ("error" if sport_payload.get("error") else "ok")
-        sport_status: dict[str, Any] = {
-            "status": status,
-            "updated_at": _coerce_iso(
-                sport_payload.get("updated_at") or payload.get("generated_at"),
-                f"sports.{sport}.updated_at",
-            ),
-        }
-        error_value = sport_payload.get("error")
-        if error_value not in (None, ""):
-            sport_status["error"] = str(error_value)
-        sports_status[sport] = sport_status
+        _count_contest_states(contests, state_counts)
+        sports_status[sport] = _build_sport_status(sport, sport_payload, payload)
 
     return {
         "snapshot_at": _coerce_iso(payload.get("snapshot_at"), "snapshot_at"),

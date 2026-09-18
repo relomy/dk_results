@@ -44,6 +44,56 @@ def test_distance_to_cash_emits_rows_only_when_points_delta_available() -> None:
     }
 
 
+def test_distance_to_cash_missing_cash_line_returns_none() -> None:
+    raw = {
+        "vip_lineups": [
+            {"vip_entry_key": "v1", "entry_key": "e1", "display_name": "Vip 1", "rank": 55, "pts": 251.5},
+        ],
+    }
+
+    assert derive_distance_to_cash(raw) is None
+
+
+def test_distance_to_cash_empty_vip_lineups_returns_none() -> None:
+    raw = {"cash_line": {"points": 250.0, "rank": 60}, "vip_lineups": []}
+
+    assert derive_distance_to_cash(raw) is None
+
+
+def test_distance_to_cash_omits_rank_delta_when_rank_cutoff_missing() -> None:
+    raw = {
+        "cash_line": {"points": 250.0},
+        "vip_lineups": [
+            {"vip_entry_key": "v1", "entry_key": "e1", "display_name": "Vip 1", "rank": 55, "pts": 251.5},
+        ],
+    }
+
+    metric = derive_distance_to_cash(raw)
+
+    assert "rank_delta" not in metric["per_vip"][0]
+
+
+def test_threat_falls_back_to_top_remaining_players_when_non_cashing_missing() -> None:
+    raw = {
+        "ownership": {
+            "top_remaining_players": [
+                {"player_key": "nba:1", "player_name": "Player A", "ownership_remaining_pct": 80.0},
+            ]
+        },
+        "vip_lineups": [],
+    }
+
+    threat = derive_threat(raw)
+
+    assert [row["player_name"] for row in threat["top_swing_players"]] == ["Player A"]
+
+
+def test_threat_returns_none_when_no_top_source_list_present() -> None:
+    raw = {"ownership": {}, "vip_lineups": []}
+
+    assert derive_threat(raw) is None
+
+
 def test_threat_uses_player_level_source_only() -> None:
     raw = {
         "ownership": {
@@ -182,6 +232,27 @@ def test_avg_salary_per_player_remaining_supports_raw_vip_players_shape() -> Non
     avg_salary = derive_avg_salary_per_player_remaining(raw)
 
     assert avg_salary == 9800.0
+
+
+def test_avg_salary_per_player_remaining_prefers_players_live_key() -> None:
+    raw = {
+        "vip_lineups": [
+            {
+                "players_live": [{"salary": 10000, "is_live": True}],
+                "lineup": [{"salary": 1, "is_live": True}],
+            },
+        ]
+    }
+
+    avg_salary = derive_avg_salary_per_player_remaining(raw)
+
+    assert avg_salary == 10000.0
+
+
+def test_avg_salary_per_player_remaining_no_live_slots_returns_none() -> None:
+    raw = {"vip_lineups": [{"lineup": [{"salary": 5000, "is_live": False}]}]}
+
+    assert derive_avg_salary_per_player_remaining(raw) is None
 
 
 def test_threat_sort_is_deterministic_for_ties() -> None:

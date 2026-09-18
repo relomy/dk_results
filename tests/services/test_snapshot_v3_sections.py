@@ -80,6 +80,69 @@ def test_build_standings_rows_payout_cents_drives_cashing_over_points() -> None:
     assert rows[0]["is_cashing"] is True
 
 
+def test_build_standings_rows_vip_points_drive_cashing_over_cutoff() -> None:
+    results = _results(
+        min_rank=1,
+        min_cash_pts=100.0,
+        users=[_user(rank="5", pts="10", pmr="0", player_id="e1", name="vip-user")],
+    )
+
+    rows = sections.build_standings_rows(
+        results,
+        leaderboard_payout_by_entry={},
+        vip_lookup={"vip-user"},
+        vip_points_by_entry={"e1": 150.0},
+    )
+
+    assert rows[0]["is_vip"] is True
+    assert rows[0]["is_cashing"] is True  # 150 vip points >= 100 cutoff, despite pts=10
+
+
+def test_build_standings_rows_vip_points_below_cutoff_not_cashing() -> None:
+    results = _results(
+        min_rank=1,
+        min_cash_pts=100.0,
+        users=[_user(rank="5", pts="200", pmr="0", player_id="e1", name="vip-user")],
+    )
+
+    rows = sections.build_standings_rows(
+        results,
+        leaderboard_payout_by_entry={},
+        vip_lookup={"vip-user"},
+        vip_points_by_entry={"e1": 50.0},
+    )
+
+    assert rows[0]["is_cashing"] is False  # vip points (50) below cutoff wins over pts (200)
+
+
+def test_build_standings_rows_no_signal_defaults_to_not_cashing() -> None:
+    # No payout, no points cutoff (min_rank == 0), not a VIP: falls through to False.
+    results = _results(users=[_user(rank="5", pts="200", pmr="0", player_id="e1", name="plain")])
+
+    rows = sections.build_standings_rows(
+        results,
+        leaderboard_payout_by_entry={},
+        vip_lookup=set(),
+        vip_points_by_entry={},
+    )
+
+    assert rows[0]["is_cashing"] is False
+
+
+def test_build_standings_rows_computes_ownership_remaining_from_lineupobj() -> None:
+    lineupobj = SimpleNamespace(lineup=[SimpleNamespace(game_info="Live", ownership=0.2)])
+    results = _results(users=[_user(rank="1", pts="100", pmr="0", player_id="e1", name="u1", lineupobj=lineupobj)])
+
+    rows = sections.build_standings_rows(
+        results,
+        leaderboard_payout_by_entry={},
+        vip_lookup=set(),
+        vip_points_by_entry={},
+    )
+
+    assert rows[0]["ownership_remaining_total_pct"] == 20.0
+
+
 def test_build_players_sorts_by_position_then_name_then_salary() -> None:
     results = _results(
         players={

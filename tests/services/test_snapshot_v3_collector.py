@@ -1,15 +1,19 @@
+import datetime
 from types import SimpleNamespace
+from zoneinfo import ZoneInfo
 
 from dk_results.persistence.contestdatabase import ContestRow
 from dk_results.services.snapshot_v3 import collector
 from dk_results.services.snapshot_v3.collector import (
     _apply_truncation,
+    _build_unique_name_to_player_key_from_vip_lineups,
     _build_vip_points_by_entry,
     _compute_ownership_remaining_total,
     _fetch_leaderboard_payouts,
     _leaderboard_row_payout_cents,
     _select_contest,
     collect_raw_bundle,
+    collect_snapshot,
 )
 from dk_results.services.snapshot_v3.derive import derive_threat
 
@@ -85,6 +89,40 @@ def test_leaderboard_payout_parser_sums_cash_winnings_and_ignores_non_cash() -> 
 
 def test_leaderboard_payout_parser_prefers_scalar_winning_value() -> None:
     assert _leaderboard_row_payout_cents({"winningValue": "3.25", "winnings": [{"winningValue": "99.00"}]}) == 325
+
+
+def test_leaderboard_payout_parser_falls_back_to_payout_field() -> None:
+    assert _leaderboard_row_payout_cents({"payout": "2.50"}) == 250
+
+
+def test_leaderboard_payout_parser_falls_back_to_cash_field() -> None:
+    assert _leaderboard_row_payout_cents({"cash": "1.00"}) == 100
+
+
+def test_leaderboard_payout_parser_returns_none_when_no_cash_found() -> None:
+    assert _leaderboard_row_payout_cents({"winnings": [{"payoutType": "TICKET", "winningValue": "5.00"}]}) is None
+    assert _leaderboard_row_payout_cents({}) is None
+
+
+# --- _build_unique_name_to_player_key_from_vip_lineups --------------------------
+
+
+def test_build_unique_name_to_player_key_maps_single_source() -> None:
+    vip_lineups = [{"players_live": [{"player_name": "Player A", "player_key": "nba:1"}]}]
+    assert _build_unique_name_to_player_key_from_vip_lineups(vip_lineups) == {"player a": "nba:1"}
+
+
+def test_build_unique_name_to_player_key_drops_ambiguous_name() -> None:
+    vip_lineups = [
+        {"players_live": [{"player_name": "Player A", "player_key": "nba:1"}]},
+        {"players_live": [{"player_name": "Player A", "player_key": "nba:2"}]},
+    ]
+    assert _build_unique_name_to_player_key_from_vip_lineups(vip_lineups) == {}
+
+
+def test_build_unique_name_to_player_key_skips_non_list_players_live() -> None:
+    vip_lineups = [{"players_live": "not-a-list"}, "not-a-dict"]
+    assert _build_unique_name_to_player_key_from_vip_lineups(vip_lineups) == {}
 
 
 def test_collect_raw_bundle_returns_expected_raw_shape(monkeypatch) -> None:
@@ -411,6 +449,27 @@ def test_select_contest_primary_live_selects_live_contest() -> None:
     assert resolved.dk_id == 55
 
 
+def test_select_contest_raises_without_db_for_primary_live() -> None:
+    sport_cls = collector._sport_choices()["NBA"]
+    try:
+        _select_contest(sport_cls=sport_cls, contest_db=None, contest_id=None, dk=_FakeDK())
+    except RuntimeError as exc:
+        assert "unavailable" in str(exc).lower()
+    else:
+        raise AssertionError("expected RuntimeError")
+
+
+def test_select_contest_raises_when_no_contest_found() -> None:
+    sport_cls = collector._sport_choices()["NBA"]
+    db = _FakeContestDB(by_id=None, live=None)
+    try:
+        _select_contest(sport_cls=sport_cls, contest_db=db, contest_id=None, dk=_FakeDK())
+    except RuntimeError as exc:
+        assert "no contest found" in str(exc).lower()
+    else:
+        raise AssertionError("expected RuntimeError")
+
+
 # --- orchestrator through the injectable seam ------------------------------------
 
 
@@ -479,3 +538,74 @@ def test_collect_source_snapshot_raises_when_standings_unavailable(monkeypatch, 
         assert "standings unavailable" in str(exc).lower()
     else:
         raise AssertionError("expected RuntimeError for unavailable standings")
+
+
+def test_collect_source_snapshot_no_draft_group_skips_salary_and_vip_fetch(monkeypatch, tmp_path) -> None:
+    monkeypatch.setattr(collector, "SALARY_DIR", str(tmp_path))
+    monkeypatch.setattr(collector, "load_vips", lambda: [])
+
+    results = SimpleNamespace(
+        vip_list=[],
+        players={},
+        users=[],
+        non_cashing_users=0,
+        non_cashing_avg_pmr=None,
+        min_rank=0,
+        min_cash_pts=0.0,
+        non_cashing_players={},
+    )
+    monkeypatch.setattr(collector, "parse_contest_standings", lambda *a, **k: results)
+
+    def _boom_fetch(*_args, **_kwargs):
+        raise AssertionError("fetch_vip_lineups must not be called without a draft group")
+
+    monkeypatch.setattr(collector, "fetch_vip_lineups", _boom_fetch)
+
+    row = ContestRow(
+        dk_id=321,
+        name="Contest",
+        draft_group=None,
+        positions_paid=10,
+        start_date="2026-01-04",
+        entry_fee=5,
+        entries=100,
+    )
+    db = _FakeContestDB(by_id=row)
+    dk = _FakeDK(standings_rows=[["header"], ["row"]], leaderboard={})
+
+    now_et = datetime.datetime.now(ZoneInfo("America/New_York"))
+    salary_path = tmp_path / f"DKSalaries_NBA_{now_et:%A}.csv"
+    salary_path.write_text(
+        "Position,Name+ID,Name,ID,Roster Position,Salary,Game Info,TeamAbbrev,AvgPointsPerGame\n",
+        encoding="utf-8",
+    )
+
+    raw = collector._collect_source_snapshot(sport="NBA", contest_id=321, dk=dk, contest_db=db)
+
+    assert raw["contest"]["draft_group"] is None
+    assert raw["vip_lineups"] == []
+    assert dk.salary_path is None  # download_salary_csv was never called
+
+
+def test_collect_snapshot_called_directly_returns_collected_snapshot(monkeypatch) -> None:
+    raw = {
+        "sport": "nba",
+        "contest": {"contest_id": 321},
+        "selection": {"selected_contest_id": 321, "reason": {"mode": "explicit_id"}},
+        "candidates": [],
+        "cash_line": {},
+        "vip_lineups": [],
+        "players": [],
+        "ownership": {},
+        "standings": [],
+        "train_clusters": [],
+        "truncation": {},
+    }
+    monkeypatch.setattr(collector, "_collect_source_snapshot", lambda **_kwargs: raw)
+
+    snapshot = collect_snapshot(sport="nba", contest_id=321)
+
+    assert snapshot.bundle["sport"] == "nba"
+    assert snapshot.bundle["selected_contest_id"] == 321
+    assert snapshot.bundle["selection_reason"] == {"mode": "explicit_id"}
+    assert snapshot.bundle["standings"] == []

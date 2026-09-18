@@ -142,6 +142,50 @@ class DraftKings:
         r.raise_for_status()
         return r.text
 
+    def _write_standings_csv_to_disk(self, cdir: str, contest_id: int, content: bytes) -> None:
+        os.makedirs(cdir, exist_ok=True)
+        csv_path = os.path.join(cdir, f"contest-standings-{contest_id}.csv")
+        try:
+            with open(csv_path, "wb") as fp:
+                fp.write(content)
+            self.logger.debug("wrote standings CSV to %s", csv_path)
+        except Exception:
+            self.logger.warning("Failed to write standings CSV to disk.", exc_info=True)
+
+    def _dump_session_cookies(self, cdf: str) -> None:
+        try:
+            with open(cdf, "wb") as fp:
+                pickle.dump(self.session.cookies, fp)
+        except Exception:
+            self.logger.debug("Skipping cookies dump; non-fatal.", exc_info=True)
+
+    def _parse_plain_csv_response(
+        self, r: requests.Response, contest_id: int, cdir: Optional[str], cdf: Optional[str]
+    ) -> list[list[str]]:
+        if cdir:
+            self._write_standings_csv_to_disk(cdir, contest_id, r.content)
+        if cdf:
+            self._dump_session_cookies(cdf)
+        csvfile = r.content.decode("utf-8-sig")
+        return list(csv.reader(csvfile.splitlines(), delimiter=","))
+
+    def _extract_csv_from_zip(self, content: bytes, cdir: str) -> list[list[str]] | None:
+        try:
+            zip_obj = zipfile.ZipFile(io.BytesIO(content))
+        except zipfile.BadZipFile:
+            self.logger.error("Response was neither CSV nor valid ZIP.")
+            return None
+
+        os.makedirs(cdir, exist_ok=True)
+        for name in zip_obj.namelist():
+            path = zip_obj.extract(name, cdir)
+            self.logger.debug("standings_extract path=%s", os.path.basename(path))
+            with zip_obj.open(name) as csvfile:
+                lines = io.TextIOWrapper(csvfile, encoding="utf-8-sig", newline="")
+                return list(csv.reader(lines, delimiter=","))
+
+        return None
+
     def download_contest_rows(
         self,
         contest_id: int,
@@ -177,42 +221,10 @@ class DraftKings:
             self.logger.warning("Unexpected HTML for contest standings; cannot parse.")
             return None
 
-        # Plain CSV
         if ctype == "text/csv":
-            if cdir:
-                os.makedirs(cdir, exist_ok=True)
-                csv_path = os.path.join(cdir, f"contest-standings-{contest_id}.csv")
-                try:
-                    with open(csv_path, "wb") as fp:
-                        fp.write(r.content)
-                    self.logger.debug("wrote standings CSV to %s", csv_path)
-                except Exception:
-                    self.logger.warning("Failed to write standings CSV to disk.", exc_info=True)
-            if cdf:
-                try:
-                    with open(cdf, "wb") as fp:
-                        pickle.dump(self.session.cookies, fp)
-                except Exception:
-                    self.logger.debug("Skipping cookies dump; non-fatal.", exc_info=True)
-            csvfile = r.content.decode("utf-8-sig")
-            return list(csv.reader(csvfile.splitlines(), delimiter=","))
+            return self._parse_plain_csv_response(r, contest_id, cdir, cdf)
 
-        # ZIP containing CSV
-        try:
-            zip_obj = zipfile.ZipFile(io.BytesIO(r.content))
-        except zipfile.BadZipFile:
-            self.logger.error("Response was neither CSV nor valid ZIP.")
-            return None
-
-        os.makedirs(cdir, exist_ok=True)
-        for name in zip_obj.namelist():
-            path = zip_obj.extract(name, cdir)
-            self.logger.debug("standings_extract path=%s", os.path.basename(path))
-            with zip_obj.open(name) as csvfile:
-                lines = io.TextIOWrapper(csvfile, encoding="utf-8-sig", newline="")
-                return list(csv.reader(lines, delimiter=","))
-
-        return None
+        return self._extract_csv_from_zip(r.content, cdir)
 
     def download_salary_csv(self, sport: str, draft_group: int, filename: str) -> None:
         """Given a filename and CSV URL, request download of CSV file and save to filename."""

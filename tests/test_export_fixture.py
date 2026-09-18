@@ -1,4 +1,5 @@
 import json
+import pathlib
 from argparse import Namespace
 
 import commands.export_fixture as export_command
@@ -549,6 +550,88 @@ def test_run_publish_snapshot_deduplicates_manifest_by_path(tmp_path):
     assert entry["path"] == "snapshots/live-1.json"
     assert entry["snapshot_at"] == "2026-02-15T01:35:00Z"
     assert entry["state_counts"] == {"completed": 1}
+
+
+# ── _build_manifest_entry ────────────────────────────────────────────────────
+
+
+def _write_snapshot_file(tmp_path, name: str = "snap.json") -> pathlib.Path:
+    path = tmp_path / name
+    path.write_text("{}", encoding="utf-8")
+    return path
+
+
+def test_build_manifest_entry_bucket_unknown_and_missing_state(tmp_path):
+    snapshot_path = _write_snapshot_file(tmp_path)
+    payload = {
+        "snapshot_at": "2026-02-15T01:30:00Z",
+        "sports": {
+            "nba": {
+                "status": "ok",
+                "updated_at": "2026-02-15T01:30:00Z",
+                "contests": [{"state": "postponed"}, {}, None],
+            }
+        },
+    }
+    entry = export_command._build_manifest_entry(payload, "snapshots/live-1.json", snapshot_path)
+    assert entry["contest_counts_by_sport"] == {"nba": 3}
+    assert entry["state_counts"] == {"unknown": 3}
+
+
+def test_build_manifest_entry_empty_contests_list(tmp_path):
+    snapshot_path = _write_snapshot_file(tmp_path)
+    payload = {
+        "snapshot_at": "2026-02-15T01:30:00Z",
+        "sports": {"nba": {"status": "ok", "updated_at": "2026-02-15T01:30:00Z", "contests": []}},
+    }
+    entry = export_command._build_manifest_entry(payload, "snapshots/live-1.json", snapshot_path)
+    assert entry["contest_counts_by_sport"] == {"nba": 0}
+    assert entry["state_counts"] == {}
+
+
+def test_build_manifest_entry_missing_status_with_error_flag(tmp_path):
+    snapshot_path = _write_snapshot_file(tmp_path)
+    payload = {
+        "snapshot_at": "2026-02-15T01:30:00Z",
+        "generated_at": "2026-02-15T01:30:05Z",
+        "sports": {"nba": {"error": "boom", "contests": []}},
+    }
+    entry = export_command._build_manifest_entry(payload, "snapshots/live-1.json", snapshot_path)
+    assert entry["sports_status"]["nba"]["status"] == "error"
+    assert entry["sports_status"]["nba"]["error"] == "boom"
+    assert entry["sports_status"]["nba"]["updated_at"] == "2026-02-15T01:30:05Z"
+
+
+def test_build_manifest_entry_missing_status_without_error_defaults_to_ok(tmp_path):
+    snapshot_path = _write_snapshot_file(tmp_path)
+    payload = {
+        "snapshot_at": "2026-02-15T01:30:00Z",
+        "generated_at": "2026-02-15T01:30:05Z",
+        "sports": {"nba": {"contests": []}},
+    }
+    entry = export_command._build_manifest_entry(payload, "snapshots/live-1.json", snapshot_path)
+    assert entry["sports_status"]["nba"]["status"] == "ok"
+    assert "error" not in entry["sports_status"]["nba"]
+
+
+def test_build_manifest_entry_invalid_status_string_falls_back_to_ok(tmp_path):
+    snapshot_path = _write_snapshot_file(tmp_path)
+    payload = {
+        "snapshot_at": "2026-02-15T01:30:00Z",
+        "sports": {"nba": {"status": "bogus", "updated_at": "2026-02-15T01:30:00Z", "contests": []}},
+    }
+    entry = export_command._build_manifest_entry(payload, "snapshots/live-1.json", snapshot_path)
+    assert entry["sports_status"]["nba"]["status"] == "ok"
+
+
+def test_build_manifest_entry_preserves_explicit_stale_status(tmp_path):
+    snapshot_path = _write_snapshot_file(tmp_path)
+    payload = {
+        "snapshot_at": "2026-02-15T01:30:00Z",
+        "sports": {"nba": {"status": "stale", "updated_at": "2026-02-15T01:30:00Z", "contests": []}},
+    }
+    entry = export_command._build_manifest_entry(payload, "snapshots/live-1.json", snapshot_path)
+    assert entry["sports_status"]["nba"]["status"] == "stale"
 
 
 def _fixture_export_v3_envelope(*, vip_lineups=None, standings=None):

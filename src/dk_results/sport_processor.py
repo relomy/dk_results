@@ -297,68 +297,36 @@ class SportProcessor:
             logger.info("min_cash_pts sport=%s pts=%d", sport_name, results.min_cash_pts)
             sheet.add_min_cash(results.min_cash_pts)
 
-    def _write_vip_lineups(
+    def _log_vip_skip(
+        self, sport_name: str, dk_id: int, requested_vips: int, fetch_reason: str, sheet_reason: str
+    ) -> None:
+        self._log_vip_fetch(
+            sport=sport_name,
+            contest_id=dk_id,
+            requested=requested_vips,
+            fetched=0,
+            missing_roster=requested_vips,
+            failures=0,
+            attempted=False,
+            reason=fetch_reason,
+        )
+        self._log_vip_sheet_write(
+            sport=sport_name,
+            contest_id=dk_id,
+            lineups=0,
+            written=False,
+            elapsed_ms=0,
+            reason=sheet_reason,
+        )
+
+    def _fetch_vip_lineups_for_sheet(
         self,
-        sheet: SheetPort,
         results: ContestStandings,
         sport_name: str,
         dk_id: int,
-        draft_group: int | None,
-    ) -> None:
-        self._log_vip_detection(
-            sport=sport_name,
-            contest_id=dk_id,
-            requested=len(self._vips),
-            found=len(results.vip_list),
-            attempted=True,
-            reason="empty_vip_set" if not self._vips else "not_applicable",
-        )
-
-        requested_vips = len(results.vip_list)
-
-        if not self._vips:
-            self._log_vip_fetch(
-                sport=sport_name,
-                contest_id=dk_id,
-                requested=0,
-                fetched=0,
-                missing_roster=0,
-                failures=0,
-                attempted=False,
-                reason="empty_vip_set",
-            )
-            self._log_vip_sheet_write(
-                sport=sport_name,
-                contest_id=dk_id,
-                lineups=0,
-                written=False,
-                elapsed_ms=0,
-                reason="empty_vip_lineups",
-            )
-            return
-
-        if draft_group is None:
-            logger.warning("No draft group found for sport, cannot pull VIP lineups from API.")
-            self._log_vip_fetch(
-                sport=sport_name,
-                contest_id=dk_id,
-                requested=requested_vips,
-                fetched=0,
-                missing_roster=requested_vips,
-                failures=0,
-                attempted=False,
-                reason="no_draft_group",
-            )
-            self._log_vip_sheet_write(
-                sport=sport_name,
-                contest_id=dk_id,
-                lineups=0,
-                written=False,
-                elapsed_ms=0,
-                reason="no_draft_group",
-            )
-            return
-
+        draft_group: int,
+        requested_vips: int,
+    ) -> tuple[list[dict[str, Any]], str]:
         vip_entries = build_vip_entries(results.vip_list)
         fetch_requested = len(vip_entries) if vip_entries else requested_vips
         player_salary_map: dict[str, int] = {n: p.salary for n, p in results.players.items()}
@@ -393,33 +361,75 @@ class SportProcessor:
             attempted=True,
             reason=fetch_reason,
         )
+        return vip_lineups, fetch_reason
+
+    def _announce_vip_bonuses_for_sport(self, sport_name: str, dk_id: int, vip_lineups: list[dict[str, Any]]) -> None:
+        if not self._bonus_sender:
+            return
+        try:
+            with sqlite3.connect(str(state.contests_db_path())) as conn:
+                announce_vip_bonuses(
+                    conn=conn,
+                    sport=sport_name,
+                    contest_id=dk_id,
+                    vip_lineups=vip_lineups,
+                    sender=self._bonus_sender,
+                    logger=logger,
+                )
+        except sqlite3.Error as err:
+            logger.error("Failed bonus announcement DB flow for %s (%s): %s", sport_name, dk_id, err)
+
+    def _write_vip_lineups_to_sheet(
+        self, sheet: SheetPort, sport_name: str, dk_id: int, vip_lineups: list[dict[str, Any]]
+    ) -> None:
+        started = time.perf_counter()
+        sheet.clear_lineups()
+        sheet.write_vip_lineups(vip_lineups)
+        elapsed_ms = int((time.perf_counter() - started) * 1000)
+        self._log_vip_sheet_write(
+            sport=sport_name,
+            contest_id=dk_id,
+            lineups=len(vip_lineups),
+            written=True,
+            elapsed_ms=elapsed_ms,
+            reason="not_applicable",
+        )
+        self._announce_vip_bonuses_for_sport(sport_name, dk_id, vip_lineups)
+
+    def _write_vip_lineups(
+        self,
+        sheet: SheetPort,
+        results: ContestStandings,
+        sport_name: str,
+        dk_id: int,
+        draft_group: int | None,
+    ) -> None:
+        self._log_vip_detection(
+            sport=sport_name,
+            contest_id=dk_id,
+            requested=len(self._vips),
+            found=len(results.vip_list),
+            attempted=True,
+            reason="empty_vip_set" if not self._vips else "not_applicable",
+        )
+
+        requested_vips = len(results.vip_list)
+
+        if not self._vips:
+            self._log_vip_skip(sport_name, dk_id, 0, "empty_vip_set", "empty_vip_lineups")
+            return
+
+        if draft_group is None:
+            logger.warning("No draft group found for sport, cannot pull VIP lineups from API.")
+            self._log_vip_skip(sport_name, dk_id, requested_vips, "no_draft_group", "no_draft_group")
+            return
+
+        vip_lineups, fetch_reason = self._fetch_vip_lineups_for_sheet(
+            results, sport_name, dk_id, draft_group, requested_vips
+        )
 
         if vip_lineups:
-            started = time.perf_counter()
-            sheet.clear_lineups()
-            sheet.write_vip_lineups(vip_lineups)
-            elapsed_ms = int((time.perf_counter() - started) * 1000)
-            self._log_vip_sheet_write(
-                sport=sport_name,
-                contest_id=dk_id,
-                lineups=len(vip_lineups),
-                written=True,
-                elapsed_ms=elapsed_ms,
-                reason="not_applicable",
-            )
-            if self._bonus_sender:
-                try:
-                    with sqlite3.connect(str(state.contests_db_path())) as conn:
-                        announce_vip_bonuses(
-                            conn=conn,
-                            sport=sport_name,
-                            contest_id=dk_id,
-                            vip_lineups=vip_lineups,
-                            sender=self._bonus_sender,
-                            logger=logger,
-                        )
-                except sqlite3.Error as err:
-                    logger.error("Failed bonus announcement DB flow for %s (%s): %s", sport_name, dk_id, err)
+            self._write_vip_lineups_to_sheet(sheet, sport_name, dk_id, vip_lineups)
         else:
             self._log_vip_sheet_write(
                 sport=sport_name,
