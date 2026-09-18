@@ -2,9 +2,8 @@ import json
 import pathlib
 from argparse import Namespace
 
-import commands.export_fixture as export_command
-
 import dk_results.cli.export_fixture as export_fixture
+import dk_results.commands.export_fixture as export_command
 from dk_results.services.json_stable import to_stable_json
 
 

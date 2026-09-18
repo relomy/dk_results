@@ -4,9 +4,9 @@ import types
 from typing import cast
 
 import pytest
-from bot import discord_bot
 from discord.ext import commands
 
+from dk_results.bot import discord_bot
 from dk_results.persistence.contestdatabase import VipCashStatus
 
 os.environ.setdefault("DFS_STATE_DIR", "/tmp")

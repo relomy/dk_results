@@ -4,15 +4,6 @@ import sys
 
 import pytest
 from dfs_common.discord import WebhookSender
-from lobby.common import get_salary_date, is_time_between, valid_date
-from lobby.draft_group_filter import filter_draft_groups, get_featured_draft_group_ids
-from lobby.fetch import get_dk_lobby
-from lobby.formatting import format_discord_messages
-from lobby.parsing import (
-    build_draft_group_start_map,
-    get_contests_from_response,
-    log_draft_group_event,
-)
 from requests.cookies import RequestsCookieJar
 
 import dk_results.cli.find_new_double_ups as find_mod
@@ -31,6 +22,15 @@ from dk_results.domain.sport import (
     PGAShowdownSport,
     PGAWeekendSport,
     Sport,
+)
+from dk_results.lobby.common import get_salary_date, is_time_between, valid_date
+from dk_results.lobby.draft_group_filter import filter_draft_groups, get_featured_draft_group_ids
+from dk_results.lobby.fetch import get_dk_lobby
+from dk_results.lobby.formatting import format_discord_messages
+from dk_results.lobby.parsing import (
+    build_draft_group_start_map,
+    get_contests_from_response,
+    log_draft_group_event,
 )
 
 
@@ -216,7 +216,7 @@ def test_log_draft_group_event_includes_reason(monkeypatch):
     def fake_log(level, msg, *args):
         captured.append(msg % args)
 
-    monkeypatch.setattr("lobby.parsing.logger.log", fake_log)
+    monkeypatch.setattr("dk_results.lobby.parsing.logger.log", fake_log)
 
     class DummySport(Sport):
         name = "TEST"
@@ -713,7 +713,7 @@ def test_get_dk_lobby_uses_requests(monkeypatch):
         def json(self):
             return {"Contests": [], "DraftGroups": []}
 
-    monkeypatch.setattr("lobby.fetch.requests.get", lambda *_a, **_k: FakeResp())
+    monkeypatch.setattr("dk_results.lobby.fetch.requests.get", lambda *_a, **_k: FakeResp())
 
     contests, draft_groups, resp = get_dk_lobby(DummySport, "http://example")
     assert contests == []
