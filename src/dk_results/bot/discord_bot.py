@@ -1,16 +1,14 @@
 import datetime
 import logging
-import os
 import sqlite3
 import time
 from pathlib import Path
 
 import discord  # noqa: E402
-import yaml
 from dfs_common import state
 from discord.ext import commands
 
-from dk_results.config import load_and_apply_settings
+from dk_results.config import load_runtime_settings
 from dk_results.discord_announcements import build_milestone_announcement as _shared_build_milestone_announcement
 from dk_results.discord_announcements import dk_and_sheet_parts as _shared_dk_and_sheet_parts
 from dk_results.discord_announcements import relative_time_from_seconds as _shared_relative_time
@@ -34,35 +32,6 @@ DISCORD_LOG_FILE: str | None = None
 
 
 SportType = type[Sport]
-
-
-def _load_sheet_gid_map() -> dict[str, int]:
-    """Load a sheet title -> gid map from the configured YAML file."""
-    if not SHEET_GIDS_FILE:
-        logger.info("SHEET_GIDS_FILE not set; sheet links disabled.")
-        return {}
-    path = Path(SHEET_GIDS_FILE)
-    if not path.is_absolute():
-        path = repo_file(SHEET_GIDS_FILE)
-    if not path.is_file():
-        logger.info("Sheet gid map not found at %s; sheet links disabled.", path)
-        return {}
-    try:
-        data = yaml.safe_load(path.read_text()) or {}
-    except Exception:
-        logger.warning("Failed to load sheet gid map from %s", path)
-        return {}
-    if not isinstance(data, dict):
-        logger.warning("Sheet gid map at %s did not contain a dict.", path)
-        return {}
-    gids: dict[str, int] = {}
-    for key, value in data.items():
-        if isinstance(key, str) and isinstance(value, int):
-            gids[key] = value
-        else:
-            logger.debug("Skipping invalid gid entry %r -> %r", key, value)
-    logger.info("Loaded %d sheet gid entries from %s", len(gids), path)
-    return gids
 
 
 SHEET_GID_MAP: dict[str, int] = {}
@@ -97,23 +66,17 @@ def _configure_discord_log_file() -> None:
         logger.exception("Failed to initialize Discord bot file logging.")
 
 
-def _channel_id_from_env() -> int | None:
-    """Return the allowed Discord channel ID, if configured."""
-    raw_channel_id = os.getenv("DISCORD_CHANNEL_ID")
-    if not raw_channel_id:
-        return None
-    try:
-        return int(raw_channel_id)
-    except ValueError:
-        logger.warning("DISCORD_CHANNEL_ID is not a valid integer: %s", raw_channel_id)
-        return None
-
-
 ALLOWED_CHANNEL_ID: int | None = None
 
 
 def _init_runtime() -> None:
-    """Initialize configuration-derived values before constructing the bot."""
+    """Initialize configuration-derived values before constructing the bot.
+
+    Resolves one `RuntimeSettings` (`dk_results.config`) and assigns it onto
+    this module's globals, rather than each duplicating its own env parsing
+    and YAML loading — see `update_contests.py`'s `RuntimeSettings` use for
+    the same shape's other consumer.
+    """
     global BOT_TOKEN
     global SPREADSHEET_ID
     global SHEET_GIDS_FILE
@@ -121,13 +84,13 @@ def _init_runtime() -> None:
     global SHEET_GID_MAP
     global ALLOWED_CHANNEL_ID
 
-    load_and_apply_settings()
-    BOT_TOKEN = os.getenv("DISCORD_BOT_TOKEN")
-    SPREADSHEET_ID = os.getenv("SPREADSHEET_ID")
-    SHEET_GIDS_FILE = os.getenv("SHEET_GIDS_FILE", str(repo_file("sheet_gids.yaml")))
-    DISCORD_LOG_FILE = os.getenv("DISCORD_LOG_FILE")
-    SHEET_GID_MAP = _load_sheet_gid_map()
-    ALLOWED_CHANNEL_ID = _channel_id_from_env()
+    settings = load_runtime_settings()
+    BOT_TOKEN = settings.bot_token
+    SPREADSHEET_ID = settings.spreadsheet_id
+    SHEET_GIDS_FILE = settings.sheet_gids_file
+    DISCORD_LOG_FILE = settings.discord_log_file
+    SHEET_GID_MAP = settings.sheet_gid_map
+    ALLOWED_CHANNEL_ID = settings.allowed_channel_id
     configure_logging()
     _configure_discord_log_file()
 

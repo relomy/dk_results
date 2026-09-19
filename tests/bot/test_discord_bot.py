@@ -7,6 +7,7 @@ import pytest
 from discord.ext import commands
 
 from dk_results.bot import discord_bot
+from dk_results.config import RuntimeSettings
 from dk_results.persistence.contestdatabase import VipCashStatus
 
 os.environ.setdefault("DFS_STATE_DIR", "/tmp")
@@ -415,23 +416,6 @@ async def test_limit_to_channel_blocks_other_channels(monkeypatch):
     assert await discord_bot.limit_to_channel(_ctx(ctx)) is False
 
 
-def test_channel_id_from_env_valid(monkeypatch):
-    monkeypatch.setenv("DISCORD_CHANNEL_ID", "12345")
-    assert discord_bot._channel_id_from_env() == 12345
-
-
-def test_channel_id_from_env_invalid(monkeypatch, caplog):
-    captured = []
-    monkeypatch.setattr(
-        discord_bot.logger,
-        "warning",
-        lambda message, *args: captured.append(message % args if args else message),
-    )
-    monkeypatch.setenv("DISCORD_CHANNEL_ID", "abc")
-    assert discord_bot._channel_id_from_env() is None
-    assert any("not a valid integer" in msg for msg in captured)
-
-
 @pytest.mark.asyncio
 async def test_contests_no_contest_found(monkeypatch):
     monkeypatch.setattr(discord_bot, "_sport_choices", lambda: {"nba": DummySport})
@@ -550,46 +534,32 @@ async def test_upcoming_lists_next_per_sport(monkeypatch):
     ]
 
 
-def test_load_sheet_gid_map_requires_env(monkeypatch):
-    monkeypatch.setattr(discord_bot, "SHEET_GIDS_FILE", "")
-    assert discord_bot._load_sheet_gid_map() == {}
-
-
-def test_load_sheet_gid_map_missing_file(tmp_path, monkeypatch):
-    monkeypatch.setattr(discord_bot, "SHEET_GIDS_FILE", str(tmp_path / "missing.yaml"))
-    assert discord_bot._load_sheet_gid_map() == {}
-
-
-def test_load_sheet_gid_map_invalid_yaml(tmp_path, monkeypatch):
-    path = tmp_path / "gids.yaml"
-    path.write_text("bad")
-    monkeypatch.setattr(discord_bot, "SHEET_GIDS_FILE", str(path))
-
-    def boom(_text):
-        raise RuntimeError("boom")
-
-    monkeypatch.setattr(discord_bot.yaml, "safe_load", boom)
-    assert discord_bot._load_sheet_gid_map() == {}
-
-
-def test_load_sheet_gid_map_non_dict(tmp_path, monkeypatch):
-    path = tmp_path / "gids.yaml"
-    path.write_text("- 1")
-    monkeypatch.setattr(discord_bot, "SHEET_GIDS_FILE", str(path))
-    monkeypatch.setattr(discord_bot.yaml, "safe_load", lambda _text: ["not-dict"])
-    assert discord_bot._load_sheet_gid_map() == {}
-
-
-def test_load_sheet_gid_map_filters_invalid_entries(tmp_path, monkeypatch):
-    path = tmp_path / "gids.yaml"
-    path.write_text("ignored")
-    monkeypatch.setattr(discord_bot, "SHEET_GIDS_FILE", str(path))
-    monkeypatch.setattr(
-        discord_bot.yaml,
-        "safe_load",
-        lambda _text: {"NBA": 10, 1: "bad", "NFL": "oops"},
+def test_init_runtime_threads_runtime_settings_onto_globals(monkeypatch):
+    settings = RuntimeSettings(
+        spreadsheet_id="sheet",
+        dfs_state_dir=None,
+        sheet_gids_file="gids.yaml",
+        discord_notifications_enabled=True,
+        contest_warning_minutes=25,
+        warning_schedule_file="schedules.yaml",
+        bot_token="tok",
+        discord_log_file="/tmp/discord.log",
+        allowed_channel_id=456,
+        sheet_gid_map={"NBA": 10},
+        warning_schedules={"default": [25]},
+        default_warning_schedule=[25],
     )
-    assert discord_bot._load_sheet_gid_map() == {"NBA": 10}
+    monkeypatch.setattr(discord_bot, "load_runtime_settings", lambda: settings)
+    monkeypatch.setattr(discord_bot, "_configure_discord_log_file", lambda: None)
+
+    discord_bot._init_runtime()
+
+    assert discord_bot.BOT_TOKEN == "tok"
+    assert discord_bot.SPREADSHEET_ID == "sheet"
+    assert discord_bot.SHEET_GIDS_FILE == "gids.yaml"
+    assert discord_bot.DISCORD_LOG_FILE == "/tmp/discord.log"
+    assert discord_bot.SHEET_GID_MAP == {"NBA": 10}
+    assert discord_bot.ALLOWED_CHANNEL_ID == 456
 
 
 def test_sheet_link_requires_spreadsheet_id(monkeypatch):

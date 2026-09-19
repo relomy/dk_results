@@ -3,7 +3,6 @@ import logging
 import os
 import sqlite3
 from collections.abc import Mapping
-from pathlib import Path
 from typing import Any
 
 import requests
@@ -12,7 +11,7 @@ from dfs_common import contests, state
 
 from dk_results.bot.discord_rest import DiscordRest
 from dk_results.completion_processor import CompletionProcessor, CompletionProcessorConfig
-from dk_results.config import load_and_apply_settings
+from dk_results.config import RuntimeSettings, load_runtime_settings
 from dk_results.discord_announcements import SPORT_EMOJI
 from dk_results.domain.sport import Sport, get_sport_choices
 from dk_results.draftkings import DraftKings
@@ -24,19 +23,6 @@ from dk_results.persistence.notification_store import NotificationStore
 
 logger = logging.getLogger(__name__)
 
-# constants
-DISCORD_NOTIFICATIONS_ENABLED = "true"
-SPREADSHEET_ID: str | None = None
-SHEET_GIDS_FILE = str(repo_file("sheet_gids.yaml"))
-CONTEST_WARNING_MINUTES = 25
-WARNING_SCHEDULE_FILE_ENV = "CONTEST_WARNING_SCHEDULE_FILE"
-DEFAULT_WARNING_SCHEDULE_FILE = str(repo_file("contest_warning_schedules.yaml"))
-_DEFAULT_WARNING_SCHEDULE = [CONTEST_WARNING_MINUTES]
-
-
-def _is_notifications_enabled() -> bool:
-    return DISCORD_NOTIFICATIONS_ENABLED.strip().lower() not in {"0", "false", "no"}
-
 
 def _sport_choices() -> Mapping[str, type[Sport]]:
     return get_sport_choices()
@@ -46,8 +32,8 @@ def _build_discord_sender() -> DiscordRest | None:
     """Build the Discord sender from credentials alone.
 
     Whether notifications are *enabled* is a separate, explicit decision
-    (`_is_notifications_enabled`) injected into the processor; a sender may be
-    wired yet held idle by a disabled run.
+    (`RuntimeSettings.discord_notifications_enabled`) injected into the
+    processor; a sender may be wired yet held idle by a disabled run.
     """
     token = os.getenv("DISCORD_BOT_TOKEN")
     channel_id_raw = os.getenv("DISCORD_CHANNEL_ID")
@@ -60,117 +46,6 @@ def _build_discord_sender() -> DiscordRest | None:
         logger.warning("DISCORD_CHANNEL_ID is not a valid integer: %s", channel_id_raw)
         return None
     return DiscordRest(token, channel_id)
-
-
-def _load_sheet_gid_map() -> dict[str, int]:
-    if not SHEET_GIDS_FILE:
-        return {}
-    path = Path(SHEET_GIDS_FILE)
-    if not path.is_absolute():
-        path = repo_file(SHEET_GIDS_FILE)
-    if not path.is_file():
-        return {}
-    try:
-        data = yaml.safe_load(path.read_text()) or {}
-    except Exception:
-        logger.warning("Failed to load sheet gid map from %s", path)
-        return {}
-    if not isinstance(data, dict):
-        return {}
-    gids: dict[str, int] = {}
-    for key, value in data.items():
-        if isinstance(key, str) and isinstance(value, int):
-            gids[key] = value
-    return gids
-
-
-SHEET_GID_MAP: dict[str, int] = {}
-
-
-def _normalize_warning_schedule(items: Any, *, key: str) -> list[int]:
-    """Normalize a schedule list, logging and dropping invalid entries."""
-    if not isinstance(items, list):
-        logger.warning("Invalid warning schedule for %s; expected list.", key)
-        return []
-    normalized: set[int] = set()
-    invalid = 0
-    for item in items:
-        if isinstance(item, int) and item > 0:
-            normalized.add(item)
-        else:
-            invalid += 1
-    if invalid:
-        logger.warning("Dropped %d invalid warning schedule entries for %s.", invalid, key)
-    return sorted(normalized)
-
-
-def _resolve_warning_schedule_path() -> Path:
-    schedule_path = os.getenv(WARNING_SCHEDULE_FILE_ENV, DEFAULT_WARNING_SCHEDULE_FILE)
-    path = Path(schedule_path)
-    if not path.is_absolute():
-        path = repo_file(schedule_path)
-    return path
-
-
-def _read_warning_schedule_data(path: Path) -> dict[str, Any] | None:
-    try:
-        data = yaml.safe_load(path.read_text()) or {}
-    except Exception:
-        logger.warning("Failed to load warning schedules from %s", path)
-        return None
-    if not isinstance(data, dict):
-        logger.warning("Warning schedule file at %s did not contain a dict.", path)
-        return None
-    return data
-
-
-def _build_warning_schedules(data: dict[str, Any]) -> dict[str, list[int]]:
-    schedules: dict[str, list[int]] = {}
-    for key, value in data.items():
-        if not isinstance(key, str) or not key:
-            logger.warning("Ignoring invalid warning schedule key: %s", key)
-            continue
-        normalized = _normalize_warning_schedule(value, key=key)
-        if normalized:
-            schedules[key.lower()] = normalized
-    return schedules
-
-
-def _load_warning_schedule_map() -> dict[str, list[int]]:
-    """Load per-sport warning schedules from YAML."""
-    path = _resolve_warning_schedule_path()
-    if not path.is_file():
-        return {"default": _DEFAULT_WARNING_SCHEDULE}
-    data = _read_warning_schedule_data(path)
-    if data is None:
-        return {"default": _DEFAULT_WARNING_SCHEDULE}
-    schedules = _build_warning_schedules(data)
-    schedules.setdefault("default", _DEFAULT_WARNING_SCHEDULE)
-    return schedules
-
-
-WARNING_SCHEDULES: dict[str, list[int]] = {}
-
-
-def _init_runtime() -> None:
-    """Initialize settings and configuration-derived values for one run."""
-    global DISCORD_NOTIFICATIONS_ENABLED
-    global SPREADSHEET_ID
-    global SHEET_GIDS_FILE
-    global CONTEST_WARNING_MINUTES
-    global _DEFAULT_WARNING_SCHEDULE
-    global SHEET_GID_MAP
-    global WARNING_SCHEDULES
-
-    load_and_apply_settings()
-    DISCORD_NOTIFICATIONS_ENABLED = os.getenv("DISCORD_NOTIFICATIONS_ENABLED", "true")
-    SPREADSHEET_ID = os.getenv("SPREADSHEET_ID")
-    SHEET_GIDS_FILE = os.getenv("SHEET_GIDS_FILE", str(repo_file("sheet_gids.yaml")))
-    CONTEST_WARNING_MINUTES = int(os.getenv("CONTEST_WARNING_MINUTES", "25"))
-    _DEFAULT_WARNING_SCHEDULE = [CONTEST_WARNING_MINUTES]
-    SHEET_GID_MAP = _load_sheet_gid_map()
-    WARNING_SCHEDULES = _load_warning_schedule_map()
-    configure_logging()
 
 
 def _load_vips() -> list[str]:
@@ -225,9 +100,9 @@ class _UnavailableContestResults:
         raise RuntimeError("DraftKings client unavailable")
 
 
-def _build_completion_processor(conn) -> CompletionProcessor:
+def _build_completion_processor(conn, settings: RuntimeSettings) -> CompletionProcessor:
     """Wire the completion workflow's collaborators for one run."""
-    notifications_enabled = _is_notifications_enabled()
+    notifications_enabled = settings.discord_notifications_enabled
     sender = _build_discord_sender()
     # Presence and VIP suppression only matter for announcements, which the
     # explicit `notifications_enabled` gate authorizes — resolve them by that
@@ -250,11 +125,11 @@ def _build_completion_processor(conn) -> CompletionProcessor:
 
     config = CompletionProcessorConfig(
         sport_choices=_sport_choices(),
-        warning_schedules=WARNING_SCHEDULES,
-        default_warning_schedule=_DEFAULT_WARNING_SCHEDULE,
+        warning_schedules=settings.warning_schedules,
+        default_warning_schedule=settings.default_warning_schedule,
         sport_emoji=SPORT_EMOJI,
-        spreadsheet_id=SPREADSHEET_ID,
-        sheet_gid_map=SHEET_GID_MAP,
+        spreadsheet_id=settings.spreadsheet_id,
+        sheet_gid_map=settings.sheet_gid_map,
         vips=vips,
         notifications_enabled=notifications_enabled,
     )
@@ -268,9 +143,9 @@ def _build_completion_processor(conn) -> CompletionProcessor:
     )
 
 
-def check_contests_for_completion(conn) -> None:
+def check_contests_for_completion(conn, settings: RuntimeSettings) -> None:
     """Advance each contest's completion state and announce its milestones."""
-    _build_completion_processor(conn).run(conn)
+    _build_completion_processor(conn, settings).run(conn)
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -278,13 +153,14 @@ def _build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None):
-    _init_runtime()
+    settings = load_runtime_settings()
+    configure_logging()
     argv_list = list(argv) if argv is not None else []
     _build_parser().parse_args(argv_list)
     try:
         contests.init_schema(state.contests_db_path())
         conn = sqlite3.connect(_contests_db_path())
-        check_contests_for_completion(conn)
+        check_contests_for_completion(conn, settings)
     except sqlite3.Error as sql_error:
         logger.error(f"SQLite error: {sql_error}")
     except Exception as e:
