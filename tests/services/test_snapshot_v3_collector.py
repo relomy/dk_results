@@ -1,7 +1,5 @@
 import datetime
-import json
 import logging
-from pathlib import Path
 from types import SimpleNamespace
 from zoneinfo import ZoneInfo
 
@@ -20,6 +18,7 @@ from dk_results.services.snapshot_v3.collector import (
     collect_snapshot,
 )
 from dk_results.services.snapshot_v3.derive import derive_threat
+from tests.domain.draftables_payloads import cfb_payload, golf_payload
 
 
 class _FakeDK:
@@ -627,12 +626,6 @@ def test_collect_snapshot_called_directly_returns_collected_snapshot(monkeypatch
 
 # --- players[].matchup from draftables through the injectable seam ----------------
 
-_DRAFTABLES_FIXTURES = Path(__file__).resolve().parents[1] / "domain" / "fixtures"
-
-
-def _draftables_payload(name: str) -> dict:
-    return json.loads((_DRAFTABLES_FIXTURES / name).read_text(encoding="utf-8"))
-
 
 def _salary_player(name, team, game_info, draftable_id):
     """A Player as the salary CSV + standings parse would leave it (sheet matchup_info included)."""
@@ -674,7 +667,7 @@ def _by_name(rows: list[dict]) -> dict[str, dict]:
 
 
 def test_players_get_opponent_from_draftables_before_during_and_after_their_game(monkeypatch, tmp_path) -> None:
-    dk = _FakeDK(draftables=_draftables_payload("draftables_cfb.json"))
+    dk = _FakeDK(draftables=cfb_payload())
     players = [
         _salary_player("Kamario Taylor", "MSST", "Final", "44324334"),
         _salary_player("Keelon Russell", "BAMA", "Final", "44324318"),
@@ -694,7 +687,7 @@ def test_players_get_opponent_from_draftables_before_during_and_after_their_game
 
 
 def test_golf_players_have_no_matchup(monkeypatch, tmp_path) -> None:
-    dk = _FakeDK(draftables=_draftables_payload("draftables_golf.json"))
+    dk = _FakeDK(draftables=golf_payload())
     players = [
         _salary_player("Benjamin James", "Golf", "Bank of Utah Championship", "44384982"),
         _salary_player("Jackson Koivun", "Golf", "In-Progress", "44384983"),
@@ -707,7 +700,7 @@ def test_golf_players_have_no_matchup(monkeypatch, tmp_path) -> None:
 
 
 def test_player_missing_from_draftables_has_no_matchup(monkeypatch, tmp_path) -> None:
-    dk = _FakeDK(draftables=_draftables_payload("draftables_cfb.json"))
+    dk = _FakeDK(draftables=cfb_payload())
     players = [
         _salary_player("Kamario Taylor", "MSST", "Final", "44324334"),
         _salary_player("Not In Payload", "MSST", "Final", "99999999"),
@@ -722,7 +715,7 @@ def test_player_missing_from_draftables_has_no_matchup(monkeypatch, tmp_path) ->
 
 
 def test_player_on_neither_competition_team_has_no_matchup(monkeypatch, tmp_path) -> None:
-    payload = _draftables_payload("draftables_cfb.json")
+    payload = cfb_payload()
     payload["draftables"][2]["teamAbbreviation"] = "UGA"  # 44324334
     dk = _FakeDK(draftables=payload)
     players = [_salary_player("Kamario Taylor", "UGA", "Final", "44324334")]
