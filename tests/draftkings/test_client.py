@@ -341,18 +341,31 @@ def test_get_draftables_reads_draft_group_without_authenticating(anonymous_lobby
     payload = {"draftables": [], "competitions": []}
     anonymous_lobby(payload)
     seen = {}
-    real_get = Session.get
+    stubbed_get = Session.get
 
     def _recording_get(self, url, *args, **kwargs):
         seen["url"] = url
-        return real_get(self, url, *args, **kwargs)
+        seen["session"] = self
+        seen["cookies"] = self.cookies.get_dict()
+        seen["headers"] = dict(self.headers)
+        seen["kwargs"] = kwargs
+        return stubbed_get(self, url, *args, **kwargs)
+
+    authed = Session()
+    authed.cookies.set("auth", "secret", domain="draftkings.com", path="/")
+    authed.headers["Authorization"] = "Bearer secret"
 
     with pytest.MonkeyPatch.context() as mp:
         mp.setattr(Session, "get", _recording_get)
-        dk = DraftKings(session=Session())
+        dk = DraftKings(session=authed)
         assert dk.get_draftables(154161) == payload
 
     assert seen["url"] == "https://api.draftkings.com/draftgroups/v1/draftgroups/154161/draftables"
+    assert seen["session"] is not authed
+    assert seen["cookies"] == {}
+    assert "Authorization" not in seen["headers"]
+    assert "cookies" not in seen["kwargs"]
+    assert "headers" not in seen["kwargs"]
 
 
 def test_download_contest_rows_writes_cookie_dump(tmp_path):

@@ -111,11 +111,13 @@ class DraftKings:
     def get_draftables(self, draft_group: int, timeout: Optional[int] = None) -> dict[str, Any]:
         """
         Fetch the draftables JSON for a draft group (players and Competitions).
-        The endpoint needs no authentication (ADR-0009).
+        The endpoint is anonymous (ADR-0009), so the GET goes through a fresh
+        plain Session and never carries this client's auth cookies or headers.
         """
         to = timeout or self.timeout_sec
         url = f"https://api.draftkings.com/draftgroups/v1/draftgroups/{draft_group}/draftables"
-        r = self.session.get(url, timeout=to)
+        with requests.Session() as anonymous:
+            r = anonymous.get(url, timeout=to)
         r.raise_for_status()
         return r.json()
 
