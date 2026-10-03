@@ -345,10 +345,10 @@ def test_get_draftables_reads_draft_group_without_authenticating(anonymous_lobby
 
     def _recording_get(self, url, *args, **kwargs):
         seen["url"] = url
-        seen["session"] = self
+        seen["is_client_session"] = self is authed
         seen["cookies"] = self.cookies.get_dict()
-        seen["headers"] = dict(self.headers)
-        seen["kwargs"] = kwargs
+        seen["has_authorization"] = "Authorization" in self.headers
+        seen["extra_kwargs"] = set(kwargs)
         return stubbed_get(self, url, *args, **kwargs)
 
     authed = Session()
@@ -360,12 +360,13 @@ def test_get_draftables_reads_draft_group_without_authenticating(anonymous_lobby
         dk = DraftKings(session=authed)
         assert dk.get_draftables(154161) == payload
 
-    assert seen["url"] == "https://api.draftkings.com/draftgroups/v1/draftgroups/154161/draftables"
-    assert seen["session"] is not authed
-    assert seen["cookies"] == {}
-    assert "Authorization" not in seen["headers"]
-    assert "cookies" not in seen["kwargs"]
-    assert "headers" not in seen["kwargs"]
+    assert seen == {
+        "url": "https://api.draftkings.com/draftgroups/v1/draftgroups/154161/draftables",
+        "is_client_session": False,
+        "cookies": {},
+        "has_authorization": False,
+        "extra_kwargs": {"timeout"},
+    }
 
 
 def test_download_contest_rows_writes_cookie_dump(tmp_path):
