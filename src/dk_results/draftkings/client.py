@@ -108,6 +108,17 @@ class DraftKings:
         r.raise_for_status()
         return r.json()
 
+    def get_draftables(self, draft_group: int, timeout: Optional[int] = None) -> dict[str, Any]:
+        """
+        Fetch the draftables JSON for a draft group (players and Competitions).
+        The endpoint needs no authentication (ADR-0009).
+        """
+        to = timeout or self.timeout_sec
+        url = f"https://api.draftkings.com/draftgroups/v1/draftgroups/{draft_group}/draftables"
+        r = self.session.get(url, timeout=to)
+        r.raise_for_status()
+        return r.json()
+
     def get_entry(
         self,
         draft_group: int,

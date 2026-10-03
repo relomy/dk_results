@@ -337,6 +337,24 @@ def test_get_lobby_contests_live_uses_url():
     assert "getlivecontests" in called["url"]
 
 
+def test_get_draftables_reads_draft_group_without_authenticating(anonymous_lobby):
+    payload = {"draftables": [], "competitions": []}
+    anonymous_lobby(payload)
+    seen = {}
+    real_get = Session.get
+
+    def _recording_get(self, url, *args, **kwargs):
+        seen["url"] = url
+        return real_get(self, url, *args, **kwargs)
+
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(Session, "get", _recording_get)
+        dk = DraftKings(session=Session())
+        assert dk.get_draftables(154161) == payload
+
+    assert seen["url"] == "https://api.draftkings.com/draftgroups/v1/draftgroups/154161/draftables"
+
+
 def test_download_contest_rows_writes_cookie_dump(tmp_path):
     csv_bytes = b"col1,col2\n1,2\n"
     response = _Response(headers={"Content-Type": "text/csv"}, content=csv_bytes)
