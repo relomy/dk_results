@@ -15,6 +15,7 @@ from typing import Any
 from dk_results.analytics.contest_metrics import remaining_ownership
 from dk_results.analytics.trainfinder import TrainFinder
 from dk_results.domain.contest_standings import ContestStandings
+from dk_results.domain.player import Player
 from dk_results.services.snapshot_v3.normalize import to_float
 
 SALARY_LIMIT = 40000
@@ -140,7 +141,7 @@ def build_standings_rows(
     return standings
 
 
-def _player_row(player: Any, matchups: Mapping[str, str | None] | None) -> dict[str, Any]:
+def _player_row(player: Player, matchups: Mapping[str, str | None] | None) -> dict[str, Any]:
     row: dict[str, Any] = {
         "name": player.name,
         "position": player.pos,
