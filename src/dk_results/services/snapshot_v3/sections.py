@@ -9,6 +9,7 @@ and each section can be unit-tested in isolation.
 from __future__ import annotations
 
 import hashlib
+from collections.abc import Mapping
 from typing import Any
 
 from dk_results.analytics.contest_metrics import remaining_ownership
@@ -139,24 +140,33 @@ def build_standings_rows(
     return standings
 
 
-def build_players(results: ContestStandings) -> list[dict[str, Any]]:
-    """Build the sorted player rows for the snapshot."""
+def build_players(
+    results: ContestStandings, *, matchups: Mapping[str, str | None] | None = None
+) -> list[dict[str, Any]]:
+    """Build the sorted player rows for the snapshot.
+
+    ``matchups`` maps draftable ID to Matchup (from draftables). ``matchup`` is
+    present only when a player's Matchup is known; it is never filled from
+    ``game_status``.
+    """
+    matchups = matchups or {}
     players: list[dict[str, Any]] = []
     for player in results.players.values():
-        players.append(
-            {
-                "name": player.name,
-                "position": player.pos,
-                "roster_positions": list(player.roster_pos),
-                "salary": player.salary,
-                "team": player.team_abbv,
-                "game_status": player.game_info,
-                "matchup": player.matchup_info,
-                "ownership_pct": float(player.ownership) * 100,
-                "fantasy_points": player.fpts,
-                "value": player.value,
-            }
-        )
+        row: dict[str, Any] = {
+            "name": player.name,
+            "position": player.pos,
+            "roster_positions": list(player.roster_pos),
+            "salary": player.salary,
+            "team": player.team_abbv,
+            "game_status": player.game_info,
+            "ownership_pct": float(player.ownership) * 100,
+            "fantasy_points": player.fpts,
+            "value": player.value,
+        }
+        matchup = matchups.get(player.draftable_id or "")
+        if matchup:
+            row["matchup"] = matchup
+        players.append(row)
     players.sort(
         key=lambda item: (
             item["position"] or "",
