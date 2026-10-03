@@ -79,6 +79,7 @@ fetch is injectable. `load_vips()` and `build_vip_entries()` round out the inter
 | `domain/contest_standings.py` | `parse_contest_standings(salary_rows, standings_rows, …) -> ContestStandings`; `players_to_values` | Deep pure parser (canonical in CONTEXT.md). Contest metadata stays with callers. |
 | `domain/lineup.py` | `parse_lineup_string`, `Lineup`, `LockedSlot`, `normalize_name`, `LineupParseError` | Parsing + value object; validates roster slots. |
 | `domain/player.py` | `Player` | Athlete value object, per-sport aware. |
+| `domain/draftables.py` | `Draftables.from_payload`, `matchups_by_draftable_id` | Draftables adapter: draftable ID → `Matchup` from the draftables payload; pure, no I/O. |
 | `domain/user.py` | `User` | DK user value object. |
 | `domain/contest.py` | `Contest` (from JSON) + `get_dt_from_timestamp` | Contest value object. |
 | `domain/bonus_rules.py` | `parse_bonus_counts(sport, stats_description)` | Pure per-sport parsing rules (golf/nba/mlb/soc). |
@@ -90,7 +91,7 @@ fetch is injectable. `load_vips()` and `build_vip_entries()` round out the inter
 
 | Module | Interface | Role |
 |---|---|---|
-| `draftkings/client.py` | `DraftKings`: `get_leaderboard`, `get_contest_detail`, `get_lobby_contests`, `get_entry`, `get_contest_entrants_page`, `download_contest_rows`, `download_salary_csv`, `clone_auth_to` | Deep HTTP client — the concrete **`DkPort` adapter**. |
+| `draftkings/client.py` | `DraftKings`: `get_leaderboard`, `get_contest_detail`, `get_lobby_contests`, `get_draftables`, `get_entry`, `get_contest_entrants_page`, `download_contest_rows`, `download_salary_csv`, `clone_auth_to` | Deep HTTP client — the concrete **`DkPort` adapter**. |
 | `draftkings/session.py` | `AuthSession`: `get_session`, `setup_session`, `cj_from_pickle` | Authenticated `requests.Session` construction. |
 | `draftkings/cookies.py` | `get_dk_cookies`, `get_browser_cookies`, `cookies_to_dict/_jar`, `load/save_cookies_to_pickle` | Cookie acquisition/persistence seam under AuthSession. |
 
