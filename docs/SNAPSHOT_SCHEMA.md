@@ -66,6 +66,50 @@ status (golf) because it does not depend on per-player status.
 The Google Sheet's non-cashing block is produced separately and is unaffected
 by this metric.
 
+## `contest.metrics.threat`: field remaining and VIP-vs-field leverage
+
+`threat` is emitted when **any** of its parts is present: `top_swing_players`,
+the field-remaining fields, or `vip_vs_field_leverage`. A sport with no top
+swing players (for example MLB) still gets `threat` when field remaining is
+available. Terms (Field remaining, Uniqueness delta) are defined in
+`docs/CONTEXT.md`.
+
+### Field remaining
+
+| Field | Type | Meaning |
+|---|---|---|
+| `leverage_semantics` | string | Always `"positive=unique"`: a positive uniqueness delta means the VIP is more unique than the field. |
+| `field_remaining_scope` | string | Always `"contest_field"`: the number covers every standings row in the contest, not the tracked VIPs. |
+| `field_remaining_source` | string | Always `"contest_standings_mean"`. |
+| `field_remaining_pct` | number | Mean ownership remaining (percentage points, two decimals) over the **full, pre-truncation** standings, not the truncated `standings` list and not the watchlist. Ownership remaining uses the shared Game status classifier. |
+| `field_remaining_is_partial` | boolean | True exactly when a standings row was left out of the mean because its lineup could not be resolved. Always emitted next to `field_remaining_pct`. |
+
+Present for any live primary contest, whether or not any tracked VIP is
+entered. The five fields are emitted together or not at all. They are omitted
+when:
+
+- the sport has no Game status (golf), or
+- no standings row had a resolvable lineup, so there is no mean.
+
+### `vip_vs_field_leverage[]`
+
+One row per tracked VIP:
+
+| Field | Type | Meaning |
+|---|---|---|
+| `vip_entry_key` | string | The VIP's tracking key. |
+| `entry_key` | string | The VIP's contest entry key. |
+| `display_name` | string | The VIP's display name. |
+| `vip_remaining_pct` | number | Ownership remaining on the VIP's own standings row, matched to the VIP by `entry_key`. |
+| `field_remaining_pct` | number | The same value as the `threat` field of that name. |
+| `uniqueness_delta_pct` | number | `field_remaining_pct - vip_remaining_pct`, in percentage points. Positive means the VIP is more unique than the field. |
+
+`vip_remaining_pct` is read from the full, pre-truncation standings, so a VIP
+ranked below the standings limit still gets a row. A VIP with no matching
+standings row (or one with no resolvable lineup) is omitted from the list,
+never emitted with nulls. The list is absent when no tracked VIP is entered, when no
+VIP matches, or whenever the field-remaining fields are omitted (golf).
+
 ## `contest.metrics.ownership_summary`
 
 | Field | Type | Meaning |

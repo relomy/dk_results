@@ -9,6 +9,9 @@ from dk_results.domain.contest_standings import NON_CASHING_TALLY_SPORTS
 from dk_results.services.snapshot_v3.normalize import resolve_lineup_slots, to_float, to_int
 
 TOP_REMAINING_PLAYERS_LIMIT = 10
+LEVERAGE_SEMANTICS = "positive=unique"
+FIELD_REMAINING_SCOPE = "contest_field"
+FIELD_REMAINING_SOURCE = "contest_standings_mean"
 
 
 def _sorted_vip_rows(vip_lineups: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -131,13 +134,13 @@ def _threat_sort_key(row: dict[str, Any]) -> tuple[bool, float, str]:
     )
 
 
-def derive_threat(raw_bundle: dict[str, Any]) -> dict[str, Any] | None:
+def _derive_top_swing_players(raw_bundle: dict[str, Any]) -> list[dict[str, Any]]:
     ownership = dict(raw_bundle.get("ownership") or {})
     vip_lineups = [row for row in list(raw_bundle.get("vip_lineups") or []) if isinstance(row, dict)]
 
     top_source = _resolve_threat_top_source(ownership)
     if top_source is None:
-        return None
+        return []
 
     vip_counts = _count_vip_lineup_players(vip_lineups)
 
@@ -147,13 +150,24 @@ def derive_threat(raw_bundle: dict[str, Any]) -> dict[str, Any] | None:
         for row in top_source
         if (threat_row := _build_threat_row(row, vip_counts, seen_player_keys)) is not None
     ]
-
-    if not top_swing_players:
-        return None
-
     top_swing_players.sort(key=_threat_sort_key)
+    return top_swing_players
 
-    return {"top_swing_players": top_swing_players}
+
+def derive_threat(raw_bundle: dict[str, Any]) -> dict[str, Any] | None:
+    """Combine top swing players, field remaining and VIP leverage; None when all are absent."""
+
+    threat: dict[str, Any] = {}
+    top_swing_players = _derive_top_swing_players(raw_bundle)
+    if top_swing_players:
+        threat["top_swing_players"] = top_swing_players
+    field_remaining = derive_field_remaining(raw_bundle)
+    if field_remaining is not None:
+        threat.update(field_remaining)
+        leverage = derive_vip_vs_field_leverage(raw_bundle, field_remaining["field_remaining_pct"])
+        if leverage:
+            threat["vip_vs_field_leverage"] = leverage
+    return threat or None
 
 
 def bundle_has_game_status(raw_bundle: dict[str, Any]) -> bool:
@@ -165,6 +179,76 @@ def bundle_has_game_status(raw_bundle: dict[str, Any]) -> bool:
 
     players = [row for row in list(raw_bundle.get("players") or []) if isinstance(row, dict)]
     return sport_has_game_status(row.get("game_status") for row in players)
+
+
+def derive_field_remaining(raw_bundle: dict[str, Any]) -> dict[str, Any] | None:
+    """Return the contest-field remaining threat fields, or None when they are omitted.
+
+    The collector computes the mean over the full, pre-truncation standings.
+    Omitted for a sport with no Game status, or when no row had a resolvable lineup.
+    """
+
+    ownership = dict(raw_bundle.get("ownership") or {})
+    field_remaining_pct = to_float(ownership.get("field_remaining_pct"))
+    if field_remaining_pct is None or not bundle_has_game_status(raw_bundle):
+        return None
+    return {
+        "leverage_semantics": LEVERAGE_SEMANTICS,
+        "field_remaining_scope": FIELD_REMAINING_SCOPE,
+        "field_remaining_source": FIELD_REMAINING_SOURCE,
+        "field_remaining_pct": round(field_remaining_pct, 2),
+        "field_remaining_is_partial": ownership.get("field_remaining_is_partial") is True,
+    }
+
+
+def _vip_remaining_by_entry(ownership: dict[str, Any]) -> dict[str, float]:
+    raw = ownership.get("vip_remaining_by_entry_key")
+    remaining_by_entry: dict[str, float] = {}
+    for entry_key, value in (raw if isinstance(raw, dict) else {}).items():
+        remaining = to_float(value)
+        if remaining is not None:
+            remaining_by_entry[str(entry_key)] = remaining
+    return remaining_by_entry
+
+
+def _build_leverage_row(
+    vip_row: dict[str, Any], remaining_by_entry: dict[str, float], field_remaining_pct: float
+) -> dict[str, Any] | None:
+    entry_key = vip_row.get("entry_key")
+    if (
+        entry_key in (None, "")
+        or vip_row.get("vip_entry_key") in (None, "")
+        or vip_row.get("display_name") in (None, "")
+    ):
+        return None
+    vip_remaining = remaining_by_entry.get(str(entry_key))
+    if vip_remaining is None:
+        return None
+    vip_remaining_pct = round(vip_remaining, 2)
+    return {
+        "vip_entry_key": vip_row["vip_entry_key"],
+        "entry_key": entry_key,
+        "display_name": vip_row["display_name"],
+        "vip_remaining_pct": vip_remaining_pct,
+        "field_remaining_pct": field_remaining_pct,
+        "uniqueness_delta_pct": round(field_remaining_pct - vip_remaining_pct, 2),
+    }
+
+
+def derive_vip_vs_field_leverage(raw_bundle: dict[str, Any], field_remaining_pct: float) -> list[dict[str, Any]]:
+    """One row per tracked VIP matched to a standings row by entry key; unmatched VIPs are left out.
+
+    The collector keys VIP remaining by entry key from the full, pre-truncation
+    standings, so a VIP ranked below the standings limit is still matched.
+    """
+
+    vip_lineups = [row for row in list(raw_bundle.get("vip_lineups") or []) if isinstance(row, dict)]
+    remaining_by_entry = _vip_remaining_by_entry(dict(raw_bundle.get("ownership") or {}))
+    return [
+        row
+        for vip_row in _sorted_vip_rows(vip_lineups)
+        if (row := _build_leverage_row(vip_row, remaining_by_entry, field_remaining_pct)) is not None
+    ]
 
 
 def derive_avg_salary_per_player_remaining(raw_bundle: dict[str, Any]) -> float | None:

@@ -608,6 +608,29 @@ def _compute_ownership_remaining_total(full_standings: list[dict[str, Any]]) -> 
     return sum(ownership_values) / len(ownership_values)
 
 
+def _compute_field_remaining(full_standings: list[dict[str, Any]]) -> tuple[float | None, bool]:
+    """Return the contest-field remaining mean and whether any row was left out of it.
+
+    Runs over the full, pre-truncation standings. A row is left out when its lineup
+    could not be resolved, so it carries no remaining-ownership total.
+    """
+    is_partial = any(row["ownership_remaining_total_pct"] is None for row in full_standings)
+    return _compute_ownership_remaining_total(full_standings), is_partial
+
+
+def _compute_vip_remaining_by_entry_key(full_standings: list[dict[str, Any]]) -> dict[str, float]:
+    """Map entry key to ownership remaining for every VIP standings row.
+
+    Built from the full, pre-truncation standings, so a VIP ranked below the
+    standings limit still has a value.
+    """
+    return {
+        str(row["entry_key"]): row["ownership_remaining_total_pct"]
+        for row in full_standings
+        if row["is_vip"] and row["entry_key"] not in (None, "") and row["ownership_remaining_total_pct"] is not None
+    }
+
+
 def _apply_truncation(
     full_standings: list[dict[str, Any]],
     standings_limit: int,
@@ -636,6 +659,8 @@ def _assemble_source_bundle(
     vip_lineups: list[Any],
     players: list[dict[str, Any]],
     ownership_remaining_total: float | None,
+    field_remaining: tuple[float | None, bool],
+    vip_remaining_by_entry_key: dict[str, float],
     avg_salary_per_player_remaining: Any,
     non_cashing_user_count: Any,
     non_cashing_avg_pmr: Any,
@@ -682,6 +707,9 @@ def _assemble_source_bundle(
         "players": players,
         "ownership": {
             "ownership_remaining_total_pct": ownership_remaining_total,
+            "field_remaining_pct": field_remaining[0],
+            "field_remaining_is_partial": field_remaining[1],
+            "vip_remaining_by_entry_key": vip_remaining_by_entry_key,
             "avg_salary_per_player_remaining": avg_salary_per_player_remaining,
             "non_cashing_user_count": non_cashing_user_count,
             "non_cashing_avg_pmr": non_cashing_avg_pmr,
@@ -757,6 +785,8 @@ def _build_source_metrics(
     return {
         "players": sections.build_players(results, matchups=matchups),
         "ownership_remaining_total": _compute_ownership_remaining_total(full_standings),
+        "field_remaining": _compute_field_remaining(full_standings),
+        "vip_remaining_by_entry_key": _compute_vip_remaining_by_entry_key(full_standings),
         "avg_salary_per_player_remaining": average_remaining_salary(results.users),
         "top_remaining_players": sections.build_top_remaining_players(results),
         "watchlist_entries": sections.build_watchlist(full_standings),
@@ -836,6 +866,8 @@ def _collect_source_snapshot(
             vip_lineups=vip_lineups,
             players=metrics["players"],
             ownership_remaining_total=metrics["ownership_remaining_total"],
+            field_remaining=metrics["field_remaining"],
+            vip_remaining_by_entry_key=metrics["vip_remaining_by_entry_key"],
             avg_salary_per_player_remaining=metrics["avg_salary_per_player_remaining"],
             non_cashing_user_count=results.non_cashing_users,
             non_cashing_avg_pmr=results.non_cashing_avg_pmr,

@@ -140,7 +140,7 @@ def _add_derived_metrics(contest: dict[str, Any], derived: dict[str, Any], gener
         metrics["ownership_summary"] = ownership_summary
 
     threat = derived.get("threat")
-    if isinstance(threat, dict) and threat.get("top_swing_players"):
+    if isinstance(threat, dict) and threat:
         metrics["threat"] = threat
 
     if metrics:
