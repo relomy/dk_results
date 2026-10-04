@@ -29,6 +29,28 @@ are omitted, never null; a field that may be null is required and typed
 nullable (today only `contest.max_entries_per_user`). Sections not yet modelled
 field by field accept any JSON object.
 
+### Constraints the models enforce
+
+Beyond field types, the models reject an envelope (and fail the build) when:
+
+- a string the contract names (identity keys, `player_key`, `player_name`,
+  VIP slot `slot`) is empty;
+- a player name has leading or trailing whitespace. This covers every emitted
+  player name: VIP `players_live[].player_name`, `players[].name`,
+  `metrics.non_cashing.top_remaining_players[].player_name` and
+  `metrics.threat.top_swing_players[].player_name`. (`players[]` is still a
+  loose section, so only its `name` is checked);
+- `metrics.non_cashing.users_not_cashing` is below 1;
+- `metrics.distance_to_cash.per_vip` or `metrics.ownership_summary.per_vip` is
+  empty (the metric is omitted instead);
+- `metrics.non_cashing.top_remaining_players` has more than 10 rows;
+- `contest.positions_paid` is below 1;
+- `metrics.non_cashing.users_not_cashing` exceeds `max_entries` minus
+  `positions_paid` (see below);
+- a `cash_line` has neither cutoff, or lacks the cutoff its `cutoff_type`
+  names;
+- the `threat` field-remaining fields are not emitted together.
+
 ### Compatibility gate
 
 CI compares the PR's committed schema with its base branch's
@@ -97,6 +119,48 @@ the guard for that.
   count/average PMR remain available. Remaining salary (a user's cap minus
   revealed salaries) and train detection retain their separate meanings.
 
+## `contest.positions_paid`
+
+| | |
+|---|---|
+| Type | integer, at least 1, optional |
+| Location | `sports.<sport>.contests[0]` |
+| Meaning | The number of paid positions: the last rank DraftKings pays. |
+
+Omitted when DraftKings reports no payout positions. It bounds the non-cashing
+count (see `contest.metrics.non_cashing`).
+
+## `contest.live_metrics.cash_line`
+
+| Field | Type | Meaning |
+|---|---|---|
+| `cutoff_type` | string | `rank`, `points` or `unknown`. |
+| `rank_cutoff` | integer, optional | The last paid rank seen in the standings. |
+| `points_cutoff` | number, optional | The points total at the cash line. |
+
+A cutoff the producer could not determine is **omitted, never null**. A cash
+line with neither cutoff is not emitted, and `cutoff_type` `rank` or `points`
+always comes with its own cutoff.
+
+## `contest.metrics.distance_to_cash`
+
+| Field | Type | Meaning |
+|---|---|---|
+| `per_vip` | array | One row per tracked VIP with known points, ordered by `vip_entry_key`. Never empty: with no row the whole metric is omitted. |
+| `cutoff_points` | number, optional | The cash line's points total. |
+
+Each `per_vip` row:
+
+| Field | Type | Meaning |
+|---|---|---|
+| `vip_entry_key` | string, optional | The VIP's tracking key. |
+| `entry_key` | string, optional | The VIP's standings entry key. |
+| `display_name` | string, optional | The VIP's display name. |
+| `points_delta` | number | The VIP's points minus the cash line's points; positive means inside the money. |
+| `rank_delta` | integer, optional | The cash line's rank cutoff minus the VIP's rank; omitted when either is unknown. |
+
+An identity key the VIP lacks is **omitted from the row, never null**.
+
 ## `contest.live_metrics.avg_salary_per_player_remaining`
 
 | | |
@@ -126,6 +190,12 @@ absent, not an empty list. For a tallied sport it is a list and may be empty
 when every held player is finished. It is omitted for any pool without Game status,
 even when the sport normally tallies it. Snapshot rows exclude all finished statuses
 using the shared classifier; the Google Sheet's separate tally is unchanged.
+
+`users_not_cashing` can never exceed the entries beyond the paid positions:
+`max_entries` minus `contest.positions_paid`. The envelope carries no separate
+entry count, so `max_entries` (never below the real entry count) stands in for
+it, which only loosens the bound. The check is skipped when `positions_paid` is
+absent.
 
 The whole metric is omitted when no entry is below the cash line or the
 non-cashing figures are unavailable. It is emitted for sports with no Game
@@ -199,7 +269,7 @@ Player names on every emitted row have no leading or trailing whitespace.
 
 Each `contest.vip_lineups[]` row may include `players_live`, the lineup's
 slots in DraftKings roster order. Every row carries `slot`, the roster
-position. A revealed player also carries its existing `player_name`,
+position (never empty). A revealed player also carries its existing `player_name`,
 `player_key` when resolvable, optional `salary`, and `is_live` fields.
 
 A player DraftKings has not revealed is represented as a locked slot:
