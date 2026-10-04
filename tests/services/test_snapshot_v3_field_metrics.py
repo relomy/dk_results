@@ -84,7 +84,8 @@ class TestAverageSalaryRemaining:
 
     def test_ignores_vip_slot_salaries(self) -> None:
         bundle = _bundle(avg_salary_per_player_remaining=6000.0)
-        bundle["vip_lineups"] = [{"vip_entry_key": "v1", "entry_key": "e1", "lineup": [{"salary": 1, "is_live": True}]}]
+        slot = {"slot": "PG", "player_name": "A", "salary": 1, "is_live": True}
+        bundle["vip_lineups"] = [{"vip_entry_key": "v1", "entry_key": "e1", "players_live": [slot]}]
 
         assert _contest(bundle)["live_metrics"]["avg_salary_per_player_remaining"] == 6000.0
 
