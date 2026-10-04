@@ -17,6 +17,15 @@ After changing the snapshot contract models
 schema with `uv run python export_snapshot_schema.py`; a test fails while
 `contract/snapshot.schema.json` is stale.
 
+CI also gates that schema against the PR's base branch and fails on a breaking
+change unless the PR is labeled `breaking-change` and logs it (see
+`docs/SNAPSHOT_SCHEMA.md`, "Compatibility gate"). To run the gate locally:
+
+```bash
+git show origin/main:contract/snapshot.schema.json > /tmp/base.schema.json
+uv run python check_snapshot_schema_compat.py --base /tmp/base.schema.json
+```
+
 ## Golden envelopes
 
 `contract/goldens/<scenario>.json` are complete snapshot envelopes built by the

@@ -9,14 +9,16 @@ metrics are added here as they ship.
 
 ## Machine-readable contract
 
-The authority on the envelope's shape is the pydantic models in
+The authority on the envelope's shape is the exported JSON Schema committed at
+**`contract/snapshot.schema.json`** (a stable path consumers may pull at a
+pinned commit). This document explains meaning, units and omission rules;
+where the two disagree on shape, the schema wins.
+
+The schema is generated from the pydantic models in
 `src/dk_results/services/snapshot_v3/models/` (one module per contest section).
 The feed validates every envelope against them before the hand-written
-validator runs; a failure stops the build and nothing is uploaded.
-
-Their JSON Schema is committed at **`contract/snapshot.schema.json`** (a stable
-path consumers may pull at a pinned commit). It is generated, never edited by
-hand; after changing the models, regenerate and commit it:
+validator runs; a failure stops the build and nothing is uploaded. The schema
+is never edited by hand; after changing the models, regenerate and commit it:
 
 ```bash
 uv run python export_snapshot_schema.py
@@ -26,6 +28,43 @@ A test fails when the committed file is stale. In the models, optional fields
 are omitted, never null; a field that may be null is required and typed
 nullable (today only `contest.max_entries_per_user`). Sections not yet modelled
 field by field accept any JSON object.
+
+### Compatibility gate
+
+CI compares the PR's committed schema with its base branch's
+(`check_snapshot_schema_compat.py`, using only this repository's files) and
+fails on a breaking change, naming each one by path and kind:
+
+- `field_removed`: a declared field is gone. A rename is reported as the old
+  name removed (the new name is an addition).
+- `type_changed` / `type_narrowed`: a declared value's JSON type changed, or
+  it accepts less than before (null dropped from a nullable field, a free
+  string becoming an enum).
+- `became_required`: a declared optional field is now required.
+- `enum_value_removed`: an enum (or `const`) lost a value.
+
+Not breaking: additions (a new field, required or optional, a new section, a
+new enum value), title and description edits, a required field becoming
+optional, and **declaring what was left open**. A loose section (one that
+"accepts any JSON object") is a placeholder that promises nothing about its
+contents, so tightening it to typed fields, as the per-section porting PRs
+do, passes the gate. The gate guards what the previous schema declared, so
+tightening an already declared field, such as dropping null from
+`contest.max_entries_per_user`, is breaking.
+
+To ship a breaking change deliberately, label the PR `breaking-change` and add
+an entry to the [Breaking changes](#breaking-changes) log in the same PR; the
+gate then passes only if the log gained an entry. To run the gate locally
+against `main`:
+
+```bash
+git show origin/main:contract/snapshot.schema.json > /tmp/base.schema.json
+uv run python check_snapshot_schema_compat.py --base /tmp/base.schema.json
+```
+
+The gate compares shapes, not meaning: a field that keeps its name and type
+but changes meaning passes. The prose here and the golden envelope diffs are
+the guard for that.
 
 ## Rules that apply to every metric
 
@@ -210,3 +249,13 @@ Omitted per row when:
 The pre-v3 `ownership_in_play_source` field is not emitted. **Behavior change
 from pre-v3:** the old producer counted pre-game players as in play; they are
 now excluded.
+
+## Breaking changes
+
+Every deliberate breaking change to `contract/snapshot.schema.json`, newest
+first. Each entry is one top-level bullet: the date, the PR, each path and
+kind the gate reported, and the migration a consumer needs. A PR labeled
+`breaking-change` passes the compatibility gate only when it adds an entry
+here.
+
+No breaking changes yet.
