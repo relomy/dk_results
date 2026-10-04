@@ -540,11 +540,16 @@ def _validate_ownership_summary_row(path: str, row: dict[str, Any]) -> list[str]
         if field in row and not _is_non_empty_string(row[field])
     )
     violations.extend(_validate_ownership_summary_numbers(path, row))
-    if "is_partial" not in row:
-        violations.append(f"{path}.is_partial is required")
-    elif not isinstance(row["is_partial"], bool):
-        violations.append(f"{path}.is_partial has invalid type")
+    violations.extend(_validate_partial_flag(path, row))
     return violations
+
+
+def _validate_partial_flag(path: str, row: dict[str, Any]) -> list[str]:
+    if "is_partial" not in row:
+        return [f"{path}.is_partial is required"]
+    if not isinstance(row["is_partial"], bool):
+        return [f"{path}.is_partial has invalid type"]
+    return []
 
 
 def _validate_ownership_summary_numbers(path: str, row: dict[str, Any]) -> list[str]:
@@ -649,4 +654,5 @@ def _validate_vip_vs_field_leverage(path: str, rows: Any) -> list[str]:
             for field in _LEVERAGE_NUMBER_FIELDS
             if not _is_finite_number(row.get(field))
         )
+        violations.extend(_validate_partial_flag(row_path, row))
     return violations

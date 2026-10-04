@@ -145,6 +145,17 @@ class TestFieldRemaining:
 
 
 class TestVipVsFieldLeverage:
+    def test_vip_partial_flag_uses_own_standings_completeness(self) -> None:
+        bundle = _field_bundle(field_pct=40.0, partial=True)
+        _with_vip_remaining(bundle, e1=25.5, e2=55.0)
+        bundle["ownership"]["vip_remaining_is_partial_by_entry_key"] = {"e1": True, "e2": False}
+        bundle["vip_lineups"] = [_vip("e1", "Alice"), _vip("e2", "Bob")]
+        bundle["vip_lineups"][1]["players_live"] = [{"slot": "UTIL", "player_name": "LOCKED 🔒", "is_locked": True}]
+
+        rows = _threat(bundle)["vip_vs_field_leverage"]
+
+        assert [(row["entry_key"], row["is_partial"]) for row in rows] == [("e1", True), ("e2", False)]
+
     def test_row_per_matched_vip_with_signed_delta(self) -> None:
         bundle = _field_bundle(field_pct=40.0)
         _with_vip_remaining(bundle, e1=25.5, e2=55.0)
@@ -160,6 +171,7 @@ class TestVipVsFieldLeverage:
                 "vip_remaining_pct": 25.5,
                 "field_remaining_pct": 40.0,
                 "uniqueness_delta_pct": 14.5,
+                "is_partial": False,
             },
             {
                 "vip_entry_key": "vip-e2",
@@ -168,6 +180,7 @@ class TestVipVsFieldLeverage:
                 "vip_remaining_pct": 55.0,
                 "field_remaining_pct": 40.0,
                 "uniqueness_delta_pct": -15.0,
+                "is_partial": False,
             },
         ]
 
@@ -230,6 +243,31 @@ class TestVipVsFieldLeverage:
 
 
 class TestValidatorCoversNewFields:
+    @pytest.mark.parametrize("value", [None, 0, 1, "true", [], {}])
+    def test_rejects_malformed_leverage_partial_flag(self, value: Any) -> None:
+        from dk_results.services.snapshot_v3.validate import validate_v3_envelope
+
+        bundle = _field_bundle()
+        _with_vip_remaining(bundle, e1=25.0)
+        bundle["vip_lineups"] = [_vip("e1", "Alice")]
+        envelope = _envelope(bundle)
+        row = envelope["sports"]["nba"]["contests"][0]["metrics"]["threat"]["vip_vs_field_leverage"][0]
+        row["is_partial"] = value
+
+        assert any("vip_vs_field_leverage[0].is_partial has invalid type" in v for v in validate_v3_envelope(envelope))
+
+    def test_rejects_missing_leverage_partial_flag(self) -> None:
+        from dk_results.services.snapshot_v3.validate import validate_v3_envelope
+
+        bundle = _field_bundle()
+        _with_vip_remaining(bundle, e1=25.0)
+        bundle["vip_lineups"] = [_vip("e1", "Alice")]
+        envelope = _envelope(bundle)
+        row = envelope["sports"]["nba"]["contests"][0]["metrics"]["threat"]["vip_vs_field_leverage"][0]
+        del row["is_partial"]
+
+        assert any("vip_vs_field_leverage[0].is_partial is required" in v for v in validate_v3_envelope(envelope))
+
     @pytest.mark.parametrize(
         ("mutation", "expected"),
         [

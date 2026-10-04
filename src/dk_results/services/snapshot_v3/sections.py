@@ -67,10 +67,10 @@ def _is_user_cashing(
 
 
 def _ownership_remaining_total_pct(user: Any) -> float | None:
-    lineupobj = getattr(user, "lineupobj", None)
-    if not lineupobj:
+    lineup = getattr(getattr(user, "lineupobj", None), "lineup", None)
+    if not lineup:
         return None
-    return remaining_ownership(getattr(lineupobj, "lineup", ()))
+    return remaining_ownership(lineup)
 
 
 def _build_standings_row(

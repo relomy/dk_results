@@ -6,6 +6,7 @@ import csv
 import datetime
 import logging
 import os
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from typing import Any, NamedTuple
@@ -14,6 +15,7 @@ from zoneinfo import ZoneInfo
 from dfs_common import state
 
 from dk_results.analytics.contest_metrics import average_remaining_salary
+from dk_results.analytics.game_status import is_locked_slot
 from dk_results.domain.contest_standings import parse_contest_standings
 from dk_results.domain.draftables import Draftables
 from dk_results.domain.sport import Sport
@@ -637,19 +639,33 @@ def _compute_ownership_remaining_total(full_standings: list[dict[str, Any]]) -> 
 
 
 class FieldRemaining(NamedTuple):
-    """Contest-field remaining mean and whether any standings row was left out of it."""
+    """Contest-field remaining mean and whether any entry is incomplete."""
 
     pct: float | None
     is_partial: bool
 
 
-def _compute_field_remaining(full_standings: list[dict[str, Any]]) -> FieldRemaining:
-    """Return the contest-field remaining mean and whether any row was left out of it.
+def _lineup_ownership_is_partial(user: Any) -> bool:
+    lineup = getattr(getattr(user, "lineupobj", None), "lineup", None)
+    if not lineup:
+        return True
+    return any(
+        is_locked_slot(slot)
+        or (slot.get("ownership") if isinstance(slot, Mapping) else getattr(slot, "ownership", None)) in (None, "")
+        for slot in lineup
+    )
+
+
+def _compute_field_remaining(full_standings: list[dict[str, Any]], users: Iterable[Any]) -> FieldRemaining:
+    """Return the contest-field mean and whether any entry is incomplete.
 
     Runs over the full, pre-truncation standings. A row is left out when its lineup
-    could not be resolved, so it carries no remaining-ownership total.
+    could not be resolved, so it carries no remaining-ownership total. Included
+    entries with hidden or unresolved slots also make the field incomplete.
     """
-    is_partial = any(row["ownership_remaining_total_pct"] is None for row in full_standings)
+    is_partial = any(row["ownership_remaining_total_pct"] is None for row in full_standings) or any(
+        _lineup_ownership_is_partial(user) for user in users
+    )
     return FieldRemaining(pct=_compute_ownership_remaining_total(full_standings), is_partial=is_partial)
 
 
@@ -696,6 +712,7 @@ def _assemble_source_bundle(
     ownership_remaining_total: float | None,
     field_remaining: FieldRemaining,
     vip_remaining_by_entry_key: dict[str, float],
+    vip_remaining_is_partial_by_entry_key: dict[str, bool],
     avg_salary_per_player_remaining: Any,
     non_cashing_user_count: Any,
     non_cashing_avg_pmr: Any,
@@ -745,6 +762,7 @@ def _assemble_source_bundle(
             "field_remaining_pct": field_remaining.pct,
             "field_remaining_is_partial": field_remaining.is_partial,
             "vip_remaining_by_entry_key": vip_remaining_by_entry_key,
+            "vip_remaining_is_partial_by_entry_key": vip_remaining_is_partial_by_entry_key,
             "avg_salary_per_player_remaining": avg_salary_per_player_remaining,
             "non_cashing_user_count": non_cashing_user_count,
             "non_cashing_avg_pmr": non_cashing_avg_pmr,
@@ -817,11 +835,17 @@ def _build_source_metrics(
         vip_points_by_entry=vip_points_by_entry,
     )
     standings, truncation = _apply_truncation(full_standings, standings_limit)
+    vip_remaining_by_entry_key = _compute_vip_remaining_by_entry_key(full_standings)
     return {
         "players": sections.build_players(results, matchups=matchups),
         "ownership_remaining_total": _compute_ownership_remaining_total(full_standings),
-        "field_remaining": _compute_field_remaining(full_standings),
-        "vip_remaining_by_entry_key": _compute_vip_remaining_by_entry_key(full_standings),
+        "field_remaining": _compute_field_remaining(full_standings, results.users),
+        "vip_remaining_by_entry_key": vip_remaining_by_entry_key,
+        "vip_remaining_is_partial_by_entry_key": {
+            str(user.player_id): _lineup_ownership_is_partial(user)
+            for user in results.users
+            if str(user.player_id) in vip_remaining_by_entry_key
+        },
         "avg_salary_per_player_remaining": average_remaining_salary(results.users),
         "top_remaining_players": sections.build_top_remaining_players(results),
         "watchlist_entries": sections.build_watchlist(full_standings),
@@ -903,6 +927,7 @@ def _collect_source_snapshot(
             ownership_remaining_total=metrics["ownership_remaining_total"],
             field_remaining=metrics["field_remaining"],
             vip_remaining_by_entry_key=metrics["vip_remaining_by_entry_key"],
+            vip_remaining_is_partial_by_entry_key=metrics["vip_remaining_is_partial_by_entry_key"],
             avg_salary_per_player_remaining=metrics["avg_salary_per_player_remaining"],
             non_cashing_user_count=results.non_cashing_users,
             non_cashing_avg_pmr=results.non_cashing_avg_pmr,
