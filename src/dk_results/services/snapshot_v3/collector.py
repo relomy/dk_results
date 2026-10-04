@@ -258,11 +258,16 @@ def _derive_composite_player_key(sport: str, row: dict[str, Any]) -> str | None:
     return f"{sport.lower()}:{name_slug}:{team_slug}:{salary_part}:{pos_slug}"
 
 
+def _trimmed(name: Any) -> Any:
+    """The one place a player name loses its leading/trailing whitespace; non-strings pass through."""
+    return name.strip() if isinstance(name, str) else name
+
+
 def _with_trimmed_name(row: dict[str, Any], field: str) -> dict[str, Any]:
-    """Copy ``row`` with leading/trailing whitespace stripped from its string name."""
+    """Copy ``row`` with its string name under ``field`` trimmed."""
     mapped = dict(row)
-    if isinstance(mapped.get(field), str):
-        mapped[field] = mapped[field].strip()
+    if field in mapped:
+        mapped[field] = _trimmed(mapped[field])
     return mapped
 
 
@@ -382,7 +387,7 @@ def _normalize_vip_identity(display_name: Any, entry_key: Any, vip_entry_key: An
 
 
 def _slot_player_name(slot: dict[str, Any]) -> str:
-    return str(slot.get("player_name") or slot.get("name") or "").strip()
+    return str(_trimmed(slot.get("player_name") or slot.get("name") or ""))
 
 
 def _normalize_vip_player_slot(
