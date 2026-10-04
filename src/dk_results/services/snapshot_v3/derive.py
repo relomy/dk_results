@@ -35,6 +35,10 @@ def _sorted_vip_rows(vip_lineups: list[dict[str, Any]]) -> list[dict[str, Any]]:
     )
 
 
+def _vip_identity(row: dict[str, Any]) -> dict[str, Any]:
+    return {key: row[key] for key in ("vip_entry_key", "entry_key", "display_name") if row.get(key) not in (None, "")}
+
+
 def _build_distance_to_cash_entry(
     row: dict[str, Any], cutoff_points: float | None, rank_cutoff: int | None
 ) -> dict[str, Any] | None:
@@ -42,12 +46,8 @@ def _build_distance_to_cash_entry(
     if current_points is None or cutoff_points is None:
         return None
 
-    entry: dict[str, Any] = {
-        "vip_entry_key": row.get("vip_entry_key"),
-        "entry_key": row.get("entry_key"),
-        "display_name": row.get("display_name"),
-        "points_delta": round(current_points - cutoff_points, 2),
-    }
+    entry = _vip_identity(row)
+    entry["points_delta"] = round(current_points - cutoff_points, 2)
 
     current_rank = to_int(row.get("rank"))
     if rank_cutoff is not None and current_rank is not None:
