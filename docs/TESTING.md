@@ -17,6 +17,24 @@ After changing the snapshot contract models
 schema with `uv run python export_snapshot_schema.py`; a test fails while
 `contract/snapshot.schema.json` is stale.
 
+## Golden envelopes
+
+`contract/goldens/<scenario>.json` are complete snapshot envelopes built by the
+real pipeline (injected collector, real derive, builder and validators, fixed
+`generated_at`) from the hand-built bundles in
+`tests/services/snapshot_scenarios.py`. `tests/services/test_snapshot_v3_goldens.py`
+rebuilds each one and fails while it differs from the committed file.
+
+After an intentional change to the emitted envelope, rewrite every golden in one
+step and review the diff:
+
+```bash
+UPDATE_GOLDENS=1 uv run pytest tests/services/test_snapshot_v3_goldens.py
+```
+
+To add a scenario, write one bundle builder and add one `Scenario` entry to
+`SCENARIOS` in `tests/services/snapshot_scenarios.py`, then run the command above.
+
 ## dfs-common is a git dependency
 
 `dfs-common` is sourced from the private `relomy/dfs-common` GitHub repo in

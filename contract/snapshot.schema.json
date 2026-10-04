@@ -555,10 +555,78 @@
       "type":"object"
     },
     "VipLineupRow":{
-      "additionalProperties":true,
-      "description":"One tracked VIP's lineup in `contest.vip_lineups`.",
-      "properties":{},
+      "additionalProperties":false,
+      "description":"One tracked VIP's lineup in `contest.vip_lineups`.\n\nEvery field is omitted when the source cannot supply it; none is ever null.",
+      "properties":{
+        "display_name":{
+          "title":"Display Name",
+          "type":"string"
+        },
+        "entry_key":{
+          "title":"Entry Key",
+          "type":"string"
+        },
+        "players_live":{
+          "items":{
+            "$ref":"#/$defs/VipLineupSlot"
+          },
+          "title":"Players Live",
+          "type":"array"
+        },
+        "pmr":{
+          "title":"Pmr",
+          "type":"number"
+        },
+        "points":{
+          "title":"Points",
+          "type":"number"
+        },
+        "rank":{
+          "title":"Rank",
+          "type":"integer"
+        },
+        "vip_entry_key":{
+          "title":"Vip Entry Key",
+          "type":"string"
+        }
+      },
       "title":"VipLineupRow",
+      "type":"object"
+    },
+    "VipLineupSlot":{
+      "additionalProperties":false,
+      "description":"One roster slot in a VIP's `players_live`.\n\nA revealed player carries `player_key` when resolvable, `salary` when known\nand `is_live`. A locked slot (a player DraftKings has not revealed) is\n`{slot, player_name: \"LOCKED \ud83d\udd12\", is_locked: true}` and carries none of those.",
+      "properties":{
+        "is_live":{
+          "title":"Is Live",
+          "type":"boolean"
+        },
+        "is_locked":{
+          "title":"Is Locked",
+          "type":"boolean"
+        },
+        "player_key":{
+          "title":"Player Key",
+          "type":"string"
+        },
+        "player_name":{
+          "title":"Player Name",
+          "type":"string"
+        },
+        "salary":{
+          "title":"Salary",
+          "type":"integer"
+        },
+        "slot":{
+          "title":"Slot",
+          "type":"string"
+        }
+      },
+      "required":[
+        "slot",
+        "player_name"
+      ],
+      "title":"VipLineupSlot",
       "type":"object"
     },
     "VipVsFieldLeverage":{
