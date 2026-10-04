@@ -64,6 +64,26 @@ class TestPipelineEnforcesContract:
         with pytest.raises(ValueError, match="sports.nba.contests\\[0\\].sport must match sport key"):
             _build(_bundle(sport="nfl"))
 
+    def test_a_fault_both_checks_catch_is_reported_once(self) -> None:
+        bundle = _bundle()
+        bundle["vip_lineups"] = [{"entry_key": "e1", "players_live": [{"slot": "PG", "is_live": True}]}]
+
+        message = _build_error(bundle)
+
+        assert message.count("players_live[0].player_name") == 1
+
+    def test_hand_written_validator_is_skipped_while_the_models_fail(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        calls: list[Any] = []
+        monkeypatch.setattr(
+            "dk_results.services.snapshot_v3.pipeline.validate_v3_envelope",
+            lambda envelope: calls.append(envelope) or [],
+        )
+
+        with pytest.raises(ValueError):
+            _build(_bundle(max_entries="100"))
+
+        assert calls == []
+
     def test_null_the_contract_allows_is_emitted_and_passes(self) -> None:
         bundle = _bundle()
         assert "max_entries_per_user" not in bundle["contest"]

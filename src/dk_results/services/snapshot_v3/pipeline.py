@@ -92,9 +92,10 @@ def build_snapshot_v3_envelope(
         "sports": sports,
     }
 
-    # The contract models check shape first; the hand-written validator then
-    # covers what the models don't type yet, plus cross-field coherence.
-    violations = contract_violations(envelope) + validate_v3_envelope(envelope)
+    # The contract models check shape first. The hand-written validator, which
+    # covers what the models don't type yet plus cross-field coherence, runs only
+    # once they pass, so one fault is reported once.
+    violations = contract_violations(envelope) or validate_v3_envelope(envelope)
     if violations:
         joined = ",".join(violations)
         raise ValueError(f"Snapshot v3 validation failed: {joined}")
