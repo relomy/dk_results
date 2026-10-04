@@ -146,6 +146,11 @@ def test_threat_vip_count_joins_on_player_key_only() -> None:
                     {"player_key": "nba:2", "player_name": "Player A"},
                 ]
             },
+            {
+                "players_live": [
+                    {"player_key": "nba:1", "player_name": "unrevealed", "is_locked": True},
+                ]
+            },
         ],
     }
 
