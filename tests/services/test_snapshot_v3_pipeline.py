@@ -37,6 +37,10 @@ def test_build_snapshot_v3_envelope_normalizes_generated_at_and_orders_sports(mo
                     "prize_pool_cents": 100000,
                     "currency": "USD",
                     "max_entries": 100,
+                    "max_entries_per_user": None,
+                    "standings": [],
+                    "vip_lineups": [],
+                    "train_clusters": [],
                 }
             ],
         }
