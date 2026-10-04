@@ -15,6 +15,7 @@ from dfs_common import state
 
 from dk_results.analytics.contest_metrics import average_remaining_salary
 from dk_results.domain.contest_standings import parse_contest_standings
+from dk_results.domain.draftables import Draftables
 from dk_results.domain.sport import Sport
 from dk_results.draftkings import DraftKings as Draftkings
 from dk_results.paths import repo_file
@@ -568,6 +569,17 @@ def _fetch_leaderboard_payouts(dk: Draftkings, dk_id: Any) -> dict[str, int]:
     return {}
 
 
+def _fetch_matchups(dk: Draftkings, draft_group: Any) -> dict[str, str | None]:
+    """Read the draftable ID -> Matchup lookup, returning an empty lookup on any failure."""
+    if not draft_group:
+        return {}
+    try:
+        return Draftables.from_payload(dk.get_draftables(int(draft_group))).matchups_by_draftable_id()
+    except Exception:
+        logger.warning("draftables matchup lookup failed for draft_group=%s", draft_group, exc_info=True)
+    return {}
+
+
 def _build_vip_points_by_entry(
     vip_lineup_rows: list[dict[str, Any]],
     vip_list: list[Any],
@@ -730,6 +742,7 @@ def _build_source_metrics(
     leaderboard_payout_by_entry: dict[str, int],
     vip_lookup: set[str],
     vip_points_by_entry: dict[str, float | None],
+    matchups: dict[str, str | None],
     standings_limit: int,
 ) -> dict[str, Any]:
     full_standings = sections.build_standings_rows(
@@ -740,7 +753,7 @@ def _build_source_metrics(
     )
     standings, truncation = _apply_truncation(full_standings, standings_limit)
     return {
-        "players": sections.build_players(results),
+        "players": sections.build_players(results, matchups=matchups),
         "ownership_remaining_total": _compute_ownership_remaining_total(full_standings),
         "avg_salary_per_player_remaining": average_remaining_salary(results.users),
         "top_remaining_players": sections.build_top_remaining_players(results),
@@ -780,6 +793,7 @@ def _collect_source_snapshot(
         salary_path = os.path.join(SALARY_DIR, f"DKSalaries_{sport_cls.name}_{now_et:%A}.csv")
         if draft_group:
             dk.download_salary_csv(sport_cls.name, draft_group, salary_path)
+        matchups = _fetch_matchups(dk, draft_group)
 
         standings_rows = _download_standings_rows(dk, dk_id)
         leaderboard_payout_by_entry = _fetch_leaderboard_payouts(dk, dk_id)
@@ -810,6 +824,7 @@ def _collect_source_snapshot(
             leaderboard_payout_by_entry=leaderboard_payout_by_entry,
             vip_lookup=vip_lookup,
             vip_points_by_entry=vip_points_by_entry,
+            matchups=matchups,
             standings_limit=standings_limit,
         )
 

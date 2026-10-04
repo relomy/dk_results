@@ -23,6 +23,7 @@ class Player:
     fpts: float = 0.0
     value: float = 0.0
     matchup_info: str = ""
+    draftable_id: str | None = field(default=None, compare=False)
 
     def __post_init__(self, salary_raw: int | str) -> None:
         self.logger = self.logger or logging.getLogger(__name__)

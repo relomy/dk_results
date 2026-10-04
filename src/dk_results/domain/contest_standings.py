@@ -74,6 +74,7 @@ class _SalaryColumnIndexes:
     salary: int
     game_info: int
     team: int
+    draftable_id: int | None = None
 
     @property
     def max_index(self) -> int:
@@ -100,7 +101,14 @@ def _resolve_salary_column_indexes(header: list[str]) -> _SalaryColumnIndexes:
         salary=index_for("salary"),
         game_info=index_for("game info"),
         team=index_for("teamabbrev", "team"),
+        draftable_id=header_indexes.get("id"),
     )
+
+
+def _draftable_id_from_row(row: list[str], indexes: _SalaryColumnIndexes) -> str | None:
+    if indexes.draftable_id is None or indexes.draftable_id >= len(row):
+        return None
+    return str(row[indexes.draftable_id]).strip() or None
 
 
 def _parse_salary_row(row: list[str], row_number: int, indexes: _SalaryColumnIndexes) -> tuple[str, Player] | None:
@@ -117,7 +125,8 @@ def _parse_salary_row(row: list[str], row_number: int, indexes: _SalaryColumnInd
     salary = row[indexes.salary]
     game_info = row[indexes.game_info]
     team_abbv = row[indexes.team]
-    return name, Player(name, pos, roster_pos, salary, game_info, team_abbv)
+    draftable_id = _draftable_id_from_row(row, indexes)
+    return name, Player(name, pos, roster_pos, salary, game_info, team_abbv, draftable_id=draftable_id)
 
 
 def _parse_salary_rows(rows: Iterable[list[str]]) -> dict[str, Player]:

@@ -524,3 +524,34 @@ def test_non_cashing_log_uses_key_value_format(caplog):
     messages = [r.message for r in caplog.records]
     assert any(m.startswith("non_cashing") and "users=" in m and "total_pmr=" in m for m in messages)
     assert not any("non_cashing:" in m for m in messages)
+
+
+def _standings_rows_for_draftable_id():
+    return [
+        ["rank", "player_id", "name", "pmr", "pts", "lineup_str"],
+        ["1", "111", "CashUser", "0", "150", "QB Jadan Baugh"],
+    ]
+
+
+def test_parse_keeps_draftable_id_from_salary_csv_id_column():
+    salary_rows = [
+        ["Position", "Name + ID", "Name", "ID", "Roster Position", "Salary", "Game Info", "TeamAbbrev"],
+        ["RB", "Jadan Baugh (44324584)", "Jadan Baugh", "44324584", "RB/FLEX", "6000", "FLA@UGA", "FLA"],
+    ]
+
+    standings = parse_contest_standings(NFLSport, salary_rows, _standings_rows_for_draftable_id(), positions_paid=1)
+
+    assert standings.players["Jadan Baugh"].draftable_id == "44324584"
+
+
+def test_parse_without_id_column_leaves_draftable_id_unset():
+    salary_rows = [
+        ["Position", "Name", "Roster Position", "Salary", "Game Info", "TeamAbbrev"],
+        ["RB", "Jadan Baugh", "RB/FLEX", "6000", "FLA@UGA", "FLA"],
+    ]
+
+    standings = parse_contest_standings(NFLSport, salary_rows, _standings_rows_for_draftable_id(), positions_paid=1)
+
+    player = standings.players["Jadan Baugh"]
+    assert player.draftable_id is None
+    assert player.salary == 6000

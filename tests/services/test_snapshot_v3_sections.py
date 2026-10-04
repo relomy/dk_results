@@ -20,6 +20,7 @@ def _player(**kwargs):
         team_abbv="",
         game_info="",
         matchup_info="",
+        draftable_id=None,
         ownership=0.0,
         fpts=0.0,
         value=0.0,

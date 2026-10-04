@@ -337,6 +337,38 @@ def test_get_lobby_contests_live_uses_url():
     assert "getlivecontests" in called["url"]
 
 
+def test_get_draftables_reads_draft_group_without_authenticating(anonymous_lobby):
+    payload = {"draftables": [], "competitions": []}
+    anonymous_lobby(payload)
+    seen = {}
+    stubbed_get = Session.get
+
+    def _recording_get(self, url, *args, **kwargs):
+        seen["url"] = url
+        seen["is_client_session"] = self is authed
+        seen["cookies"] = self.cookies.get_dict()
+        seen["has_authorization"] = "Authorization" in self.headers
+        seen["extra_kwargs"] = set(kwargs)
+        return stubbed_get(self, url, *args, **kwargs)
+
+    authed = Session()
+    authed.cookies.set("auth", "secret", domain="draftkings.com", path="/")
+    authed.headers["Authorization"] = "Bearer secret"
+
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(Session, "get", _recording_get)
+        dk = DraftKings(session=authed)
+        assert dk.get_draftables(154161) == payload
+
+    assert seen == {
+        "url": "https://api.draftkings.com/draftgroups/v1/draftgroups/154161/draftables",
+        "is_client_session": False,
+        "cookies": {},
+        "has_authorization": False,
+        "extra_kwargs": {"timeout"},
+    }
+
+
 def test_download_contest_rows_writes_cookie_dump(tmp_path):
     csv_bytes = b"col1,col2\n1,2\n"
     response = _Response(headers={"Content-Type": "text/csv"}, content=csv_bytes)
