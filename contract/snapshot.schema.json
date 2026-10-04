@@ -1,5 +1,33 @@
 {
   "$defs":{
+    "CashLine":{
+      "additionalProperties":false,
+      "description":"Where the cash line sits: a rank, a points total, or both.",
+      "properties":{
+        "cutoff_type":{
+          "enum":[
+            "rank",
+            "points",
+            "unknown"
+          ],
+          "title":"Cutoff Type",
+          "type":"string"
+        },
+        "points_cutoff":{
+          "title":"Points Cutoff",
+          "type":"number"
+        },
+        "rank_cutoff":{
+          "title":"Rank Cutoff",
+          "type":"integer"
+        }
+      },
+      "required":[
+        "cutoff_type"
+      ],
+      "title":"CashLine",
+      "type":"object"
+    },
     "Contest":{
       "additionalProperties":false,
       "description":"One DraftKings contest with its standings, VIP lineups and metrics.",
@@ -111,17 +139,212 @@
       "type":"object"
     },
     "ContestMetrics":{
-      "additionalProperties":true,
+      "additionalProperties":false,
       "description":"The `contest.metrics` section (derived contest metrics).",
-      "properties":{},
+      "properties":{
+        "distance_to_cash":{
+          "$ref":"#/$defs/DistanceToCash"
+        },
+        "non_cashing":{
+          "$ref":"#/$defs/NonCashing"
+        },
+        "ownership_summary":{
+          "$ref":"#/$defs/OwnershipSummary"
+        },
+        "threat":{
+          "$ref":"#/$defs/Threat"
+        },
+        "updated_at":{
+          "title":"Updated At",
+          "type":"string"
+        }
+      },
+      "required":[
+        "updated_at"
+      ],
       "title":"ContestMetrics",
       "type":"object"
     },
+    "DistanceToCash":{
+      "additionalProperties":false,
+      "description":"Per-VIP distance to the cash line; present only when some VIP can be measured.",
+      "properties":{
+        "cutoff_points":{
+          "title":"Cutoff Points",
+          "type":"number"
+        },
+        "per_vip":{
+          "items":{
+            "$ref":"#/$defs/DistanceToCashVip"
+          },
+          "minItems":1,
+          "title":"Per Vip",
+          "type":"array"
+        }
+      },
+      "required":[
+        "per_vip"
+      ],
+      "title":"DistanceToCash",
+      "type":"object"
+    },
+    "DistanceToCashVip":{
+      "additionalProperties":false,
+      "description":"How far one tracked VIP is from the cash line.",
+      "properties":{
+        "display_name":{
+          "minLength":1,
+          "title":"Display Name",
+          "type":"string"
+        },
+        "entry_key":{
+          "minLength":1,
+          "title":"Entry Key",
+          "type":"string"
+        },
+        "points_delta":{
+          "title":"Points Delta",
+          "type":"number"
+        },
+        "rank_delta":{
+          "title":"Rank Delta",
+          "type":"integer"
+        },
+        "vip_entry_key":{
+          "minLength":1,
+          "title":"Vip Entry Key",
+          "type":"string"
+        }
+      },
+      "required":[
+        "points_delta"
+      ],
+      "title":"DistanceToCashVip",
+      "type":"object"
+    },
     "LiveMetrics":{
-      "additionalProperties":true,
-      "description":"The `contest.live_metrics` section.",
-      "properties":{},
+      "additionalProperties":false,
+      "description":"The `contest.live_metrics` section: figures that move while the contest is live.",
+      "properties":{
+        "avg_salary_per_player_remaining":{
+          "minimum":0,
+          "title":"Avg Salary Per Player Remaining",
+          "type":"number"
+        },
+        "cash_line":{
+          "$ref":"#/$defs/CashLine"
+        },
+        "updated_at":{
+          "title":"Updated At",
+          "type":"string"
+        }
+      },
+      "required":[
+        "updated_at"
+      ],
       "title":"LiveMetrics",
+      "type":"object"
+    },
+    "NonCashing":{
+      "additionalProperties":false,
+      "description":"The tally of users below the cash line.\n\n`top_remaining_players` is only emitted for sports that tally it (not MLB, not golf).",
+      "properties":{
+        "avg_pmr_remaining":{
+          "title":"Avg Pmr Remaining",
+          "type":"number"
+        },
+        "top_remaining_players":{
+          "items":{
+            "$ref":"#/$defs/TopRemainingPlayer"
+          },
+          "maxItems":10,
+          "title":"Top Remaining Players",
+          "type":"array"
+        },
+        "users_not_cashing":{
+          "minimum":1,
+          "title":"Users Not Cashing",
+          "type":"integer"
+        }
+      },
+      "required":[
+        "users_not_cashing",
+        "avg_pmr_remaining"
+      ],
+      "title":"NonCashing",
+      "type":"object"
+    },
+    "OwnershipSummary":{
+      "additionalProperties":false,
+      "description":"Ownership summary over the tracked VIP lineups.",
+      "properties":{
+        "per_vip":{
+          "items":{
+            "$ref":"#/$defs/OwnershipSummaryVip"
+          },
+          "minItems":1,
+          "title":"Per Vip",
+          "type":"array"
+        },
+        "scope":{
+          "const":"vip_lineup",
+          "title":"Scope",
+          "type":"string"
+        },
+        "source":{
+          "const":"vip_lineup_players",
+          "title":"Source",
+          "type":"string"
+        }
+      },
+      "required":[
+        "source",
+        "scope",
+        "per_vip"
+      ],
+      "title":"OwnershipSummary",
+      "type":"object"
+    },
+    "OwnershipSummaryVip":{
+      "additionalProperties":false,
+      "description":"Ownership totals for one tracked VIP lineup.",
+      "properties":{
+        "display_name":{
+          "minLength":1,
+          "title":"Display Name",
+          "type":"string"
+        },
+        "entry_key":{
+          "minLength":1,
+          "title":"Entry Key",
+          "type":"string"
+        },
+        "is_partial":{
+          "title":"Is Partial",
+          "type":"boolean"
+        },
+        "ownership_in_play_pct":{
+          "minimum":0,
+          "title":"Ownership In Play Pct",
+          "type":"number"
+        },
+        "total_ownership_pct":{
+          "minimum":0,
+          "title":"Total Ownership Pct",
+          "type":"number"
+        },
+        "vip_entry_key":{
+          "minLength":1,
+          "title":"Vip Entry Key",
+          "type":"string"
+        }
+      },
+      "required":[
+        "vip_entry_key",
+        "total_ownership_pct",
+        "is_partial"
+      ],
+      "title":"OwnershipSummaryVip",
       "type":"object"
     },
     "OwnershipWatchlist":{
@@ -226,6 +449,104 @@
       "title":"StandingsRow",
       "type":"object"
     },
+    "SwingPlayer":{
+      "additionalProperties":false,
+      "description":"A player whose result can swing VIPs against the field.",
+      "properties":{
+        "ownership_remaining_pct":{
+          "title":"Ownership Remaining Pct",
+          "type":"number"
+        },
+        "player_key":{
+          "minLength":1,
+          "title":"Player Key",
+          "type":"string"
+        },
+        "player_name":{
+          "minLength":1,
+          "title":"Player Name",
+          "type":"string"
+        },
+        "vip_count":{
+          "minimum":0,
+          "title":"Vip Count",
+          "type":"integer"
+        }
+      },
+      "required":[
+        "player_key",
+        "player_name",
+        "vip_count"
+      ],
+      "title":"SwingPlayer",
+      "type":"object"
+    },
+    "Threat":{
+      "additionalProperties":false,
+      "description":"Threat metrics: swing players plus the field-remaining group (absent for sports with no Game status).",
+      "properties":{
+        "field_remaining_is_partial":{
+          "title":"Field Remaining Is Partial",
+          "type":"boolean"
+        },
+        "field_remaining_pct":{
+          "title":"Field Remaining Pct",
+          "type":"number"
+        },
+        "field_remaining_scope":{
+          "const":"contest_field",
+          "title":"Field Remaining Scope",
+          "type":"string"
+        },
+        "field_remaining_source":{
+          "const":"contest_standings_mean",
+          "title":"Field Remaining Source",
+          "type":"string"
+        },
+        "leverage_semantics":{
+          "const":"positive=unique",
+          "title":"Leverage Semantics",
+          "type":"string"
+        },
+        "top_swing_players":{
+          "items":{
+            "$ref":"#/$defs/SwingPlayer"
+          },
+          "title":"Top Swing Players",
+          "type":"array"
+        },
+        "vip_vs_field_leverage":{
+          "items":{
+            "$ref":"#/$defs/VipVsFieldLeverage"
+          },
+          "title":"Vip Vs Field Leverage",
+          "type":"array"
+        }
+      },
+      "title":"Threat",
+      "type":"object"
+    },
+    "TopRemainingPlayer":{
+      "additionalProperties":false,
+      "description":"A player still to play on non-cashing lineups.",
+      "properties":{
+        "ownership_remaining_pct":{
+          "title":"Ownership Remaining Pct",
+          "type":"number"
+        },
+        "player_name":{
+          "minLength":1,
+          "title":"Player Name",
+          "type":"string"
+        }
+      },
+      "required":[
+        "player_name",
+        "ownership_remaining_pct"
+      ],
+      "title":"TopRemainingPlayer",
+      "type":"object"
+    },
     "TrainCluster":{
       "additionalProperties":true,
       "description":"One cluster of identical lineups in `contest.train_clusters`.",
@@ -238,6 +559,54 @@
       "description":"One tracked VIP's lineup in `contest.vip_lineups`.",
       "properties":{},
       "title":"VipLineupRow",
+      "type":"object"
+    },
+    "VipVsFieldLeverage":{
+      "additionalProperties":false,
+      "description":"One VIP's remaining ownership against the contest field's.",
+      "properties":{
+        "display_name":{
+          "minLength":1,
+          "title":"Display Name",
+          "type":"string"
+        },
+        "entry_key":{
+          "minLength":1,
+          "title":"Entry Key",
+          "type":"string"
+        },
+        "field_remaining_pct":{
+          "title":"Field Remaining Pct",
+          "type":"number"
+        },
+        "is_partial":{
+          "title":"Is Partial",
+          "type":"boolean"
+        },
+        "uniqueness_delta_pct":{
+          "title":"Uniqueness Delta Pct",
+          "type":"number"
+        },
+        "vip_entry_key":{
+          "minLength":1,
+          "title":"Vip Entry Key",
+          "type":"string"
+        },
+        "vip_remaining_pct":{
+          "title":"Vip Remaining Pct",
+          "type":"number"
+        }
+      },
+      "required":[
+        "vip_entry_key",
+        "entry_key",
+        "display_name",
+        "vip_remaining_pct",
+        "field_remaining_pct",
+        "uniqueness_delta_pct",
+        "is_partial"
+      ],
+      "title":"VipVsFieldLeverage",
       "type":"object"
     }
   },
