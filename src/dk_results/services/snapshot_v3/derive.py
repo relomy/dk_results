@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Iterable
 
-from dk_results.analytics.game_status import sport_has_game_status
+from dk_results.analytics.game_status import classify_game_status, sport_has_game_status
 from dk_results.domain.contest_standings import NON_CASHING_TALLY_SPORTS
 from dk_results.services.snapshot_v3.normalize import resolve_lineup_slots, to_float, to_int
 
@@ -208,3 +208,47 @@ def derive_non_cashing(raw_bundle: dict[str, Any]) -> dict[str, Any] | None:
     if _bundle_sport(raw_bundle) in {sport.lower() for sport in NON_CASHING_TALLY_SPORTS}:
         metric["top_remaining_players"] = _build_top_remaining_players(_resolve_threat_top_source(ownership))
     return metric
+
+
+def _player_rows_by_key(raw_bundle: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    rows: dict[str, dict[str, Any]] = {}
+    for row in list(raw_bundle.get("players") or []):
+        if isinstance(row, dict) and row.get("player_key") not in (None, ""):
+            rows.setdefault(str(row["player_key"]), row)
+    return rows
+
+
+def _summarize_vip_ownership(row: dict[str, Any], slots: list[Any], players: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    total = 0.0
+    in_play = 0.0
+    for slot in slots:
+        player = players.get(str(slot.get("player_key"))) if isinstance(slot, dict) else None
+        ownership = to_float(player.get("ownership_pct")) if player else None
+        if ownership is None:
+            continue
+        total += ownership
+        if classify_game_status(player.get("game_status")).in_play:
+            in_play += ownership
+    return {
+        "vip_entry_key": row.get("vip_entry_key"),
+        "entry_key": row.get("entry_key"),
+        "display_name": row.get("display_name"),
+        "total_ownership_pct": round(total, 2),
+        "ownership_in_play_pct": round(in_play, 2),
+        "is_partial": False,
+    }
+
+
+def derive_ownership_summary(raw_bundle: dict[str, Any]) -> dict[str, Any] | None:
+    """Per-VIP total ownership and ownership in play, looked up in ``players[]``."""
+
+    players = _player_rows_by_key(raw_bundle)
+    vip_lineups = [row for row in list(raw_bundle.get("vip_lineups") or []) if isinstance(row, dict)]
+    per_vip = [
+        _summarize_vip_ownership(row, slots, players)
+        for row in _sorted_vip_rows(vip_lineups)
+        if (slots := resolve_lineup_slots(row))
+    ]
+    if not per_vip:
+        return None
+    return {"source": "vip_lineup_players", "scope": "vip_lineup", "per_vip": per_vip}
