@@ -4,7 +4,11 @@ from __future__ import annotations
 
 from typing import Any, Iterable
 
-from dk_results.services.snapshot_v3.normalize import is_live_from_slot, resolve_lineup_slots, to_float, to_int
+from dk_results.analytics.game_status import sport_has_game_status
+from dk_results.domain.contest_standings import NON_CASHING_TALLY_SPORTS
+from dk_results.services.snapshot_v3.normalize import resolve_lineup_slots, to_float, to_int
+
+TOP_REMAINING_PLAYERS_LIMIT = 10
 
 
 def _sorted_vip_rows(vip_lineups: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -152,31 +156,55 @@ def derive_threat(raw_bundle: dict[str, Any]) -> dict[str, Any] | None:
     return {"top_swing_players": top_swing_players}
 
 
-def _collect_live_slot_salaries(lineup_row: dict[str, Any]) -> list[float]:
-    slots = resolve_lineup_slots(lineup_row)
-    if slots is None:
-        return []
-    salaries: list[float] = []
-    for slot in slots:
-        if not isinstance(slot, dict):
-            continue
-        if not is_live_from_slot(slot):
-            continue
-        salary = to_float(slot.get("salary"))
-        if salary is None:
-            continue
-        salaries.append(salary)
-    return salaries
+def bundle_has_game_status(raw_bundle: dict[str, Any]) -> bool:
+    """Return True when any player in the bundle's pool carries a Game status.
+
+    False means the sport has no Game status (today: golf), so every
+    "remaining" and "in play" metric must be omitted.
+    """
+
+    players = [row for row in list(raw_bundle.get("players") or []) if isinstance(row, dict)]
+    return sport_has_game_status(row.get("game_status") for row in players)
 
 
 def derive_avg_salary_per_player_remaining(raw_bundle: dict[str, Any]) -> float | None:
-    vip_lineups = [row for row in list(raw_bundle.get("vip_lineups") or []) if isinstance(row, dict)]
+    """Return the collector's average salary remaining, or None when it is omitted."""
 
-    live_slot_salaries: list[float] = []
-    for lineup_row in vip_lineups:
-        live_slot_salaries.extend(_collect_live_slot_salaries(lineup_row))
+    value = to_float(dict(raw_bundle.get("ownership") or {}).get("avg_salary_per_player_remaining"))
+    if value is None or not bundle_has_game_status(raw_bundle):
+        return None
+    return round(value, 2)
 
-    if not live_slot_salaries:
+
+def _bundle_sport(raw_bundle: dict[str, Any]) -> str:
+    return str(raw_bundle.get("sport") or dict(raw_bundle.get("contest") or {}).get("sport") or "").lower()
+
+
+def _build_top_remaining_players(rows: Any) -> list[dict[str, Any]]:
+    top_players: list[dict[str, Any]] = []
+    for row in rows if isinstance(rows, list) else []:
+        if not isinstance(row, dict) or row.get("player_name") in (None, ""):
+            continue
+        ownership_remaining_pct = to_float(row.get("ownership_remaining_pct"))
+        if ownership_remaining_pct is None:
+            continue
+        top_players.append(
+            {"player_name": str(row["player_name"]), "ownership_remaining_pct": round(ownership_remaining_pct, 2)}
+        )
+    return top_players[:TOP_REMAINING_PLAYERS_LIMIT]
+
+
+def derive_non_cashing(raw_bundle: dict[str, Any]) -> dict[str, Any] | None:
+    ownership = dict(raw_bundle.get("ownership") or {})
+    users_not_cashing = to_int(ownership.get("non_cashing_user_count"))
+    avg_pmr_remaining = to_float(ownership.get("non_cashing_avg_pmr"))
+    if users_not_cashing is None or users_not_cashing <= 0 or avg_pmr_remaining is None:
         return None
 
-    return round(sum(live_slot_salaries) / len(live_slot_salaries), 2)
+    metric: dict[str, Any] = {
+        "users_not_cashing": users_not_cashing,
+        "avg_pmr_remaining": round(avg_pmr_remaining, 2),
+    }
+    if _bundle_sport(raw_bundle) in {sport.lower() for sport in NON_CASHING_TALLY_SPORTS}:
+        metric["top_remaining_players"] = _build_top_remaining_players(_resolve_threat_top_source(ownership))
+    return metric

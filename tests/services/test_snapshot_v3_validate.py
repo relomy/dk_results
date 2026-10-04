@@ -1,5 +1,7 @@
 from copy import deepcopy
 
+import pytest
+
 from dk_results.services.snapshot_v3.validate import (
     _collect_known_player_keys,
     _validate_section_rows,
@@ -257,6 +259,100 @@ def test_validate_section_rows_rejects_invalid_metrics_threat_type() -> None:
     contest["metrics"]["threat"] = "bad"
     violations = _validate_section_rows("nba", contest)
     assert "sports.nba.contests[0].metrics.threat has invalid type" in violations
+
+
+# ── avg salary remaining and non-cashing ─────────────────────────────────────
+
+LIVE_AVG = "sports.nba.contests[0].live_metrics.avg_salary_per_player_remaining"
+NON_CASHING = "sports.nba.contests[0].metrics.non_cashing"
+
+
+def _valid_non_cashing() -> dict:
+    return {
+        "users_not_cashing": 40,
+        "avg_pmr_remaining": 123.46,
+        "top_remaining_players": [{"player_name": "A", "ownership_remaining_pct": 62.5}],
+    }
+
+
+def test_validate_section_rows_accepts_valid_avg_salary_and_non_cashing() -> None:
+    contest = _valid_contest()
+    contest["live_metrics"] = {"avg_salary_per_player_remaining": 6543.22}
+    contest["metrics"]["non_cashing"] = _valid_non_cashing()
+    assert _validate_section_rows("nba", contest) == []
+
+
+def test_validate_section_rows_accepts_non_cashing_without_top_remaining_players() -> None:
+    contest = _valid_contest()
+    contest["metrics"]["non_cashing"] = {"users_not_cashing": 3, "avg_pmr_remaining": 0.0}
+    assert _validate_section_rows("nba", contest) == []
+
+
+@pytest.mark.parametrize("bad", ["6000", None, True, float("nan"), float("inf"), -1.0])
+def test_validate_section_rows_rejects_malformed_avg_salary(bad) -> None:
+    contest = _valid_contest()
+    contest["live_metrics"] = {"avg_salary_per_player_remaining": bad}
+    assert f"{LIVE_AVG} has invalid type" in _validate_section_rows("nba", contest)
+
+
+def test_validate_section_rows_rejects_non_dict_non_cashing() -> None:
+    contest = _valid_contest()
+    contest["metrics"]["non_cashing"] = "bad"
+    assert f"{NON_CASHING} has invalid type" in _validate_section_rows("nba", contest)
+
+
+@pytest.mark.parametrize(
+    ("field", "bad"),
+    [
+        ("users_not_cashing", "40"),
+        ("users_not_cashing", 4.5),
+        ("users_not_cashing", True),
+        ("users_not_cashing", None),
+        ("avg_pmr_remaining", "1.0"),
+        ("avg_pmr_remaining", None),
+        ("avg_pmr_remaining", float("nan")),
+        ("top_remaining_players", "bad"),
+        ("top_remaining_players", None),
+    ],
+)
+def test_validate_v3_envelope_rejects_malformed_non_cashing_fields(field, bad) -> None:
+    envelope = _valid_envelope()
+    non_cashing = _valid_non_cashing()
+    non_cashing[field] = bad
+    envelope["sports"]["nba"]["contests"][0]["metrics"]["non_cashing"] = non_cashing
+
+    assert f"{NON_CASHING}.{field} has invalid type" in validate_v3_envelope(envelope)
+
+
+@pytest.mark.parametrize("missing", ["users_not_cashing", "avg_pmr_remaining"])
+def test_validate_v3_envelope_requires_core_non_cashing_fields(missing) -> None:
+    envelope = _valid_envelope()
+    non_cashing = _valid_non_cashing()
+    del non_cashing[missing]
+    envelope["sports"]["nba"]["contests"][0]["metrics"]["non_cashing"] = non_cashing
+
+    assert f"{NON_CASHING}.{missing} is required" in validate_v3_envelope(envelope)
+
+
+@pytest.mark.parametrize(
+    "row",
+    [
+        "bad",
+        {"ownership_remaining_pct": 5.0},
+        {"player_name": "", "ownership_remaining_pct": 5.0},
+        {"player_name": "A"},
+        {"player_name": "A", "ownership_remaining_pct": "5"},
+    ],
+)
+def test_validate_v3_envelope_rejects_malformed_top_remaining_player_rows(row) -> None:
+    envelope = _valid_envelope()
+    non_cashing = _valid_non_cashing()
+    non_cashing["top_remaining_players"] = [row]
+    envelope["sports"]["nba"]["contests"][0]["metrics"]["non_cashing"] = non_cashing
+
+    violations = validate_v3_envelope(envelope)
+
+    assert any(message.startswith(f"{NON_CASHING}.top_remaining_players[0]") for message in violations)
 
 
 # ── _collect_known_player_keys ───────────────────────────────────────────────

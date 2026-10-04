@@ -2,6 +2,8 @@
 
 from types import SimpleNamespace
 
+import pytest
+
 from dk_results.services.snapshot_v3 import sections
 
 
@@ -142,6 +144,27 @@ def test_build_standings_rows_computes_ownership_remaining_from_lineupobj() -> N
     )
 
     assert rows[0]["ownership_remaining_total_pct"] == 20.0
+
+
+def test_build_standings_rows_ownership_remaining_uses_game_status_classifier() -> None:
+    slots = [
+        SimpleNamespace(game_info="Final", ownership=0.10),
+        SimpleNamespace(game_info="Postponed", ownership=0.20),
+        SimpleNamespace(game_info="Canceled", ownership=0.30),
+        SimpleNamespace(game_info="Delayed", ownership=0.01),
+        SimpleNamespace(game_info="Suspended", ownership=0.02),
+        SimpleNamespace(game_info="In-Progress", ownership=0.04),
+        SimpleNamespace(game_info="BOS@LAL 10:00PM ET", ownership=0.08),
+    ]
+    results = _results(
+        users=[_user(rank="1", pts="1", pmr="0", player_id="e1", name="u1", lineupobj=SimpleNamespace(lineup=slots))]
+    )
+
+    rows = sections.build_standings_rows(
+        results, leaderboard_payout_by_entry={}, vip_lookup=set(), vip_points_by_entry={}
+    )
+
+    assert rows[0]["ownership_remaining_total_pct"] == pytest.approx(15.0)
 
 
 def test_build_players_sorts_by_position_then_name_then_salary() -> None:
