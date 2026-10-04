@@ -12,7 +12,14 @@ from dk_results.services.snapshot_v3.contracts import (
     validate_single_contest,
     validate_top_swing_players,
 )
-from dk_results.services.snapshot_v3.derive import TOP_REMAINING_PLAYERS_LIMIT
+from dk_results.services.snapshot_v3.derive import (
+    FIELD_REMAINING_SCOPE,
+    FIELD_REMAINING_SOURCE,
+    LEVERAGE_SEMANTICS,
+    OWNERSHIP_SUMMARY_SCOPE,
+    OWNERSHIP_SUMMARY_SOURCE,
+    TOP_REMAINING_PLAYERS_LIMIT,
+)
 from dk_results.services.snapshot_v3.normalize import resolve_lineup_slots
 
 
@@ -428,10 +435,10 @@ def _validate_ownership_summary(sport: str, summary: Any) -> list[str]:
     if not isinstance(summary, dict):
         return [f"{path} has invalid type"]
     violations: list[str] = []
-    if summary.get("source") != "vip_lineup_players":
-        violations.append(f"{path}.source must be vip_lineup_players")
-    if summary.get("scope") != "vip_lineup":
-        violations.append(f"{path}.scope must be vip_lineup")
+    if summary.get("source") != OWNERSHIP_SUMMARY_SOURCE:
+        violations.append(f"{path}.source must be {OWNERSHIP_SUMMARY_SOURCE}")
+    if summary.get("scope") != OWNERSHIP_SUMMARY_SCOPE:
+        violations.append(f"{path}.scope must be {OWNERSHIP_SUMMARY_SCOPE}")
     rows = summary.get("per_vip")
     if not isinstance(rows, list):
         violations.append(f"{path}.per_vip has invalid type")
@@ -497,11 +504,15 @@ def _validate_top_swing_players(
 
 
 _THREAT_ENUM_FIELDS = {
-    "leverage_semantics": "positive=unique",
-    "field_remaining_scope": "contest_field",
-    "field_remaining_source": "contest_standings_mean",
+    "leverage_semantics": LEVERAGE_SEMANTICS,
+    "field_remaining_scope": FIELD_REMAINING_SCOPE,
+    "field_remaining_source": FIELD_REMAINING_SOURCE,
 }
 _FIELD_REMAINING_KEYS = (*_THREAT_ENUM_FIELDS, "field_remaining_pct", "field_remaining_is_partial")
+_FIELD_REMAINING_TYPE_CHECKS = {
+    "field_remaining_pct": _is_finite_number,
+    "field_remaining_is_partial": lambda value: isinstance(value, bool),
+}
 _LEVERAGE_STRING_FIELDS = ("vip_entry_key", "entry_key", "display_name")
 _LEVERAGE_NUMBER_FIELDS = ("vip_remaining_pct", "field_remaining_pct", "uniqueness_delta_pct")
 
@@ -510,22 +521,34 @@ def _validate_threat_field_metrics(sport: str, threat: dict[str, Any]) -> list[s
     """Check the field-remaining and VIP-leverage parts of ``metrics.threat``."""
 
     path = f"sports.{sport}.contests[0].metrics.threat"
-    violations: list[str] = []
-    if any(key in threat for key in _FIELD_REMAINING_KEYS):
-        violations.extend(f"{path}.{key} is required" for key in _FIELD_REMAINING_KEYS if key not in threat)
-    if "field_remaining_pct" in threat and not _is_finite_number(threat["field_remaining_pct"]):
-        violations.append(f"{path}.field_remaining_pct has invalid type")
-    if "field_remaining_is_partial" in threat and not isinstance(threat["field_remaining_is_partial"], bool):
-        violations.append(f"{path}.field_remaining_is_partial has invalid type")
+    violations = _validate_field_remaining_group(path, threat)
+    if "vip_vs_field_leverage" in threat:
+        if "field_remaining_pct" not in threat:
+            violations.append(f"{path}.vip_vs_field_leverage requires field_remaining_pct")
+        violations.extend(_validate_vip_vs_field_leverage(path, threat["vip_vs_field_leverage"]))
+    return violations
+
+
+def _missing_field_remaining_keys(path: str, threat: dict[str, Any]) -> list[str]:
+    if not any(key in threat for key in _FIELD_REMAINING_KEYS):
+        return []
+    return [f"{path}.{key} is required" for key in _FIELD_REMAINING_KEYS if key not in threat]
+
+
+def _validate_field_remaining_group(path: str, threat: dict[str, Any]) -> list[str]:
+    """The five field-remaining keys appear together or not at all; each present key is checked."""
+
+    violations = _missing_field_remaining_keys(path, threat)
     violations.extend(
         f"{path}.{field} has invalid value"
         for field, expected in _THREAT_ENUM_FIELDS.items()
         if field in threat and threat[field] != expected
     )
-    if "vip_vs_field_leverage" in threat:
-        if "field_remaining_pct" not in threat:
-            violations.append(f"{path}.vip_vs_field_leverage requires field_remaining_pct")
-        violations.extend(_validate_vip_vs_field_leverage(path, threat["vip_vs_field_leverage"]))
+    violations.extend(
+        f"{path}.{field} has invalid type"
+        for field, is_valid in _FIELD_REMAINING_TYPE_CHECKS.items()
+        if field in threat and not is_valid(threat[field])
+    )
     return violations
 
 
