@@ -104,7 +104,8 @@ One row per tracked VIP:
 | `field_remaining_pct` | number | The same value as the `threat` field of that name. |
 | `uniqueness_delta_pct` | number | `field_remaining_pct - vip_remaining_pct`, in percentage points. Positive means the VIP is more unique than the field. |
 
-A VIP with no matching standings row (including a row cut by the standings
-limit, or one with no resolvable lineup) is omitted from the list, never
-emitted with nulls. The list is absent when no tracked VIP is entered, when no
+`vip_remaining_pct` is read from the full, pre-truncation standings, so a VIP
+ranked below the standings limit still gets a row. A VIP with no matching
+standings row (or one with no resolvable lineup) is omitted from the list,
+never emitted with nulls. The list is absent when no tracked VIP is entered, when no
 VIP matches, or whenever the field-remaining fields are omitted (golf).

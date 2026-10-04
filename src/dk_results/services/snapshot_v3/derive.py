@@ -201,14 +201,13 @@ def derive_field_remaining(raw_bundle: dict[str, Any]) -> dict[str, Any] | None:
     }
 
 
-def _standings_remaining_by_entry(standings: Any) -> dict[str, float]:
+def _vip_remaining_by_entry(ownership: dict[str, Any]) -> dict[str, float]:
+    raw = ownership.get("vip_remaining_by_entry_key")
     remaining_by_entry: dict[str, float] = {}
-    for row in standings if isinstance(standings, list) else []:
-        if not isinstance(row, dict) or row.get("entry_key") in (None, ""):
-            continue
-        remaining = to_float(row.get("ownership_remaining_total_pct"))
+    for entry_key, value in (raw if isinstance(raw, dict) else {}).items():
+        remaining = to_float(value)
         if remaining is not None:
-            remaining_by_entry[str(row["entry_key"])] = remaining
+            remaining_by_entry[str(entry_key)] = remaining
     return remaining_by_entry
 
 
@@ -237,10 +236,14 @@ def _build_leverage_row(
 
 
 def derive_vip_vs_field_leverage(raw_bundle: dict[str, Any], field_remaining_pct: float) -> list[dict[str, Any]]:
-    """One row per tracked VIP matched to a standings row by entry key; unmatched VIPs are left out."""
+    """One row per tracked VIP matched to a standings row by entry key; unmatched VIPs are left out.
+
+    The collector keys VIP remaining by entry key from the full, pre-truncation
+    standings, so a VIP ranked below the standings limit is still matched.
+    """
 
     vip_lineups = [row for row in list(raw_bundle.get("vip_lineups") or []) if isinstance(row, dict)]
-    remaining_by_entry = _standings_remaining_by_entry(raw_bundle.get("standings"))
+    remaining_by_entry = _vip_remaining_by_entry(dict(raw_bundle.get("ownership") or {}))
     return [
         row
         for vip_row in _sorted_vip_rows(vip_lineups)

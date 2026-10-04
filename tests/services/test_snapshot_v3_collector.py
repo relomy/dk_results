@@ -860,10 +860,10 @@ def test_collect_snapshot_keeps_typed_vip_lineups_from_the_fetcher(monkeypatch, 
 # --- field remaining over the full standings ------------------------------------
 
 
-def _collect_with_users(monkeypatch, tmp_path, users, *, standings_limit):
+def _collect_with_users(monkeypatch, tmp_path, users, *, standings_limit, vip_list=()):
     monkeypatch.setattr(collector, "SALARY_DIR", str(tmp_path))
     results = SimpleNamespace(
-        vip_list=[],
+        vip_list=list(vip_list),
         players={},
         users=users,
         non_cashing_users=0,
@@ -916,3 +916,14 @@ def test_field_remaining_is_none_when_no_row_has_a_lineup(monkeypatch, tmp_path)
     raw = _collect_with_users(monkeypatch, tmp_path, [_field_user(1, "e1", None)], standings_limit=500)
 
     assert raw["ownership"]["field_remaining_pct"] is None
+
+
+def test_vip_remaining_by_entry_key_covers_vips_ranked_below_the_standings_limit(monkeypatch, tmp_path) -> None:
+    users = [_field_user(1, "e1", 0.10), _field_user(2, "e2", 0.20), _field_user(3, "e3", 0.60)]
+    users[2].name = "vip-user"
+    results_vips = [SimpleNamespace(name="vip-user", player_id="e3", pts="5", pmr="0", rank="3")]
+
+    raw = _collect_with_users(monkeypatch, tmp_path, users, standings_limit=1, vip_list=results_vips)
+
+    assert [row["entry_key"] for row in raw["standings"]] == ["e1"]  # the VIP's row was truncated away
+    assert raw["ownership"]["vip_remaining_by_entry_key"] == {"e3": pytest.approx(60.0)}

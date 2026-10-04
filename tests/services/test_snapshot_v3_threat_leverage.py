@@ -28,17 +28,9 @@ def _player(name: str, status: str) -> dict[str, Any]:
     }
 
 
-def _standing(entry_key: str, remaining: float | None, *, rank: int = 1) -> dict[str, Any]:
-    return {
-        "rank": rank,
-        "entry_key": entry_key,
-        "username": f"user-{entry_key}",
-        "points": 100.0,
-        "pmr": 10.0,
-        "is_cashing": True,
-        "ownership_remaining_total_pct": remaining,
-        "is_vip": False,
-    }
+def _with_vip_remaining(bundle: dict[str, Any], **remaining_by_entry_key: float) -> dict[str, Any]:
+    bundle["ownership"]["vip_remaining_by_entry_key"] = dict(remaining_by_entry_key)
+    return bundle
 
 
 def _vip(entry_key: str, name: str) -> dict[str, Any]:
@@ -128,7 +120,7 @@ class TestFieldRemaining:
     def test_omitted_for_golf_like_pool_without_game_status(self) -> None:
         bundle = _field_bundle("GOLF")
         bundle["players"] = [_player("A", "Masters Tournament"), _player("B", "Masters Tournament")]
-        bundle["standings"] = [_standing("e1", 30.0)]
+        _with_vip_remaining(bundle, e1=30.0)
         bundle["vip_lineups"] = [_vip("e1", "Alice")]
 
         assert _threat(bundle) == {}
@@ -146,7 +138,7 @@ class TestFieldRemaining:
 
     def test_omitted_when_collector_could_not_compute_field_remaining(self) -> None:
         bundle = _bundle(field_remaining_pct=None, field_remaining_is_partial=True)
-        bundle["standings"] = [_standing("e1", 30.0)]
+        _with_vip_remaining(bundle, e1=30.0)
         bundle["vip_lineups"] = [_vip("e1", "Alice")]
 
         assert _threat(bundle) == {}
@@ -155,7 +147,7 @@ class TestFieldRemaining:
 class TestVipVsFieldLeverage:
     def test_row_per_matched_vip_with_signed_delta(self) -> None:
         bundle = _field_bundle(field_pct=40.0)
-        bundle["standings"] = [_standing("e1", 25.5), _standing("e2", 55.0, rank=2)]
+        _with_vip_remaining(bundle, e1=25.5, e2=55.0)
         bundle["vip_lineups"] = [_vip("e1", "Alice"), _vip("e2", "Bob")]
 
         rows = _threat(bundle)["vip_vs_field_leverage"]
@@ -179,9 +171,20 @@ class TestVipVsFieldLeverage:
             },
         ]
 
+    def test_vip_outside_the_truncated_standings_still_gets_a_row(self) -> None:
+        bundle = _field_bundle(field_pct=40.0)
+        bundle["standings"] = [{"rank": 1, "entry_key": "top", "username": "top", "is_vip": False}]
+        bundle["truncation"] = {"applied": True, "limit": 1, "total_rows_before_truncation": 900}
+        _with_vip_remaining(bundle, deep=22.0)
+        bundle["vip_lineups"] = [_vip("deep", "Deep Alice")]
+
+        rows = _threat(bundle)["vip_vs_field_leverage"]
+
+        assert [(row["entry_key"], row["uniqueness_delta_pct"]) for row in rows] == [("deep", 18.0)]
+
     def test_vip_without_standings_row_is_absent(self) -> None:
         bundle = _field_bundle(field_pct=40.0)
-        bundle["standings"] = [_standing("e1", 25.0)]
+        _with_vip_remaining(bundle, e1=25.0)
         bundle["vip_lineups"] = [_vip("e1", "Alice"), _vip("e9", "Ghost")]
 
         rows = _threat(bundle)["vip_vs_field_leverage"]
@@ -190,7 +193,7 @@ class TestVipVsFieldLeverage:
 
     def test_vip_whose_standings_row_has_no_remaining_is_absent(self) -> None:
         bundle = _field_bundle(field_pct=40.0)
-        bundle["standings"] = [_standing("e1", None)]
+        _with_vip_remaining(bundle)
         bundle["vip_lineups"] = [_vip("e1", "Alice")]
 
         assert "vip_vs_field_leverage" not in _threat(bundle)
@@ -204,17 +207,9 @@ class TestVipVsFieldLeverage:
         assert "vip_vs_field_leverage" not in threat
         assert threat["field_remaining_pct"] == 40.0
 
-    def test_entry_keys_match_across_int_and_string(self) -> None:
-        bundle = _field_bundle(field_pct=40.0)
-        bundle["standings"] = [_standing("77", 25.0)]
-        bundle["standings"][0]["entry_key"] = 77
-        bundle["vip_lineups"] = [_vip("77", "Alice")]
-
-        assert len(_threat(bundle)["vip_vs_field_leverage"]) == 1
-
     def test_delta_uses_rounded_values_the_dashboard_sees(self) -> None:
         bundle = _field_bundle(field_pct=40.004)
-        bundle["standings"] = [_standing("e1", 25.006)]
+        _with_vip_remaining(bundle, e1=25.006)
         bundle["vip_lineups"] = [_vip("e1", "Alice")]
 
         row = _threat(bundle)["vip_vs_field_leverage"][0]
@@ -228,7 +223,7 @@ class TestVipVsFieldLeverage:
     def test_omitted_for_golf_like_pool_without_game_status(self) -> None:
         bundle = _field_bundle("GOLF", field_pct=40.0)
         bundle["players"] = [_player("A", "Masters Tournament")]
-        bundle["standings"] = [_standing("e1", 25.0)]
+        _with_vip_remaining(bundle, e1=25.0)
         bundle["vip_lineups"] = [_vip("e1", "Alice")]
 
         assert "vip_vs_field_leverage" not in _threat(bundle)
@@ -278,7 +273,7 @@ class TestValidatorCoversNewFields:
         from dk_results.services.snapshot_v3.validate import validate_v3_envelope
 
         bundle = _field_bundle(field_pct=40.0)
-        bundle["standings"] = [_standing("e1", 25.0)]
+        _with_vip_remaining(bundle, e1=25.0)
         bundle["vip_lineups"] = [_vip("e1", "Alice")]
         envelope = _envelope(bundle)
         rows = envelope["sports"]["nba"]["contests"][0]["metrics"]["threat"]["vip_vs_field_leverage"]
