@@ -48,7 +48,7 @@ def test_fails_and_prints_each_breaking_change(tmp_path: Path, capsys: pytest.Ca
 
 def test_passes_an_additive_change(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     base = _write(tmp_path / "base.json", _schema(rank={"type": "integer"}))
-    current = _write(tmp_path / "current.json", {**_schema(rank={"type": "integer"}), "required": []})
+    current = _write(tmp_path / "current.json", _schema(rank={"type": "integer"}, points={"type": "number"}))
 
     assert main(["--base", str(base), "--current", str(current)]) == 0
     assert "no breaking changes" in capsys.readouterr().out
