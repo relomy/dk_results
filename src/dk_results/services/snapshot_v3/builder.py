@@ -135,6 +135,10 @@ def _add_derived_metrics(contest: dict[str, Any], derived: dict[str, Any], gener
     if isinstance(non_cashing, dict) and non_cashing:
         metrics["non_cashing"] = non_cashing
 
+    ownership_summary = derived.get("ownership_summary")
+    if isinstance(ownership_summary, dict) and ownership_summary.get("per_vip"):
+        metrics["ownership_summary"] = ownership_summary
+
     threat = derived.get("threat")
     if isinstance(threat, dict) and threat.get("top_swing_players"):
         metrics["threat"] = threat
