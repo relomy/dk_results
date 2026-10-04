@@ -700,10 +700,7 @@ def _nfl_mid_slate_bundle() -> dict[str, Any]:
                 lambda **kwargs: real_collect(dk=dk, contest_db=_NflContestDatabase(row), **kwargs),
             )
         )
-        bundle = collector.collect_snapshot(sport="NFL", contest_id=300400, standings_limit=_NFL_STANDINGS_LIMIT).bundle
-    # The fetcher collects VIP scorecards on worker threads, so their order follows thread completion.
-    bundle["vip_lineups"].sort(key=lambda vip: vip["rank"])
-    return bundle
+        return collector.collect_snapshot(sport="NFL", contest_id=300400, standings_limit=_NFL_STANDINGS_LIMIT).bundle
 
 
 SCENARIOS: tuple[Scenario, ...] = (

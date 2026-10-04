@@ -318,7 +318,14 @@ def _normalize_vip_lineup_rows(
         if normalized:
             normalized_rows.append(normalized)
 
-    return normalized_rows
+    # The fetcher returns lineups in worker-thread completion order; emit a stable order instead.
+    return sorted(normalized_rows, key=_vip_lineup_order)
+
+
+def _vip_lineup_order(row: dict[str, Any]) -> tuple[bool, int, bool, str, str]:
+    """Rank ascending, then ``vip_entry_key``, then ``display_name``; a missing rank or key sorts last."""
+    rank, vip_entry_key = row.get("rank"), row.get("vip_entry_key")
+    return (rank is None, rank or 0, vip_entry_key is None, vip_entry_key or "", row.get("display_name", ""))
 
 
 def _unique_standings_entry_keys(standings: list[dict[str, Any]]) -> dict[str, str]:
