@@ -480,6 +480,40 @@ def test_collect_known_player_keys_from_vip_lineups_players_live() -> None:
     assert _collect_known_player_keys({}, contest) == {"nba:3"}
 
 
+def test_collect_known_player_keys_ignores_locked_vip_slots() -> None:
+    contest = {"vip_lineups": [{"players_live": [{"player_key": "nba:hidden", "is_locked": True}]}]}
+    assert _collect_known_player_keys({}, contest) == set()
+
+
+@pytest.mark.parametrize(
+    ("slot_row", "expected"),
+    [
+        ({"player_name": "A", "player_key": "nba:1"}, ".slot is required"),
+        ({"slot": 3, "player_name": "A"}, ".slot has invalid type"),
+        ({"slot": "UTIL", "player_name": "A", "is_locked": "yes"}, ".is_locked has invalid type"),
+        (
+            {"slot": "UTIL", "player_name": "LOCKED 🔒", "is_locked": True, "player_key": "nba:1"},
+            ".player_key is forbidden for locked slot",
+        ),
+        (
+            {"slot": "UTIL", "player_name": "LOCKED 🔒", "is_locked": True, "salary": 5000},
+            ".salary is forbidden for locked slot",
+        ),
+        (
+            {"slot": "UTIL", "player_name": "LOCKED 🔒", "is_locked": True, "is_live": False},
+            ".is_live is forbidden for locked slot",
+        ),
+    ],
+)
+def test_validate_v3_envelope_checks_vip_slot_contract(slot_row: dict, expected: str) -> None:
+    payload = _valid_envelope()
+    payload["sports"]["nba"]["contests"][0]["vip_lineups"] = [{"players_live": [slot_row]}]
+
+    violations = validate_v3_envelope(payload)
+
+    assert any("vip_lineups[0].players_live[0]" in violation and expected in violation for violation in violations)
+
+
 def test_collect_known_player_keys_from_vip_lineups_slots_fallback() -> None:
     contest = {"vip_lineups": [{"slots": [{"player_key": "nba:4"}]}]}
     assert _collect_known_player_keys({}, contest) == {"nba:4"}

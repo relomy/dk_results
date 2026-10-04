@@ -130,8 +130,20 @@ def _bundle_with_vip_lineup() -> dict:
                 "pts": 260.75,
                 "pmr": "120",
                 "players_live": [
-                    {"player_name": "Player A", "player_key": "nba:player-a", "salary": 8000, "is_live": True},
-                    {"player_name": "Player B", "player_key": "nba:player-b", "salary": 7000, "is_live": False},
+                    {
+                        "slot": "PG",
+                        "player_name": "Player A",
+                        "player_key": "nba:player-a",
+                        "salary": 8000,
+                        "is_live": True,
+                    },
+                    {
+                        "slot": "SG",
+                        "player_name": "Player B",
+                        "player_key": "nba:player-b",
+                        "salary": 7000,
+                        "is_live": False,
+                    },
                 ],
             }
         ],
@@ -148,9 +160,9 @@ def test_build_snapshot_v3_envelope_surfaces_vip_lineups_and_vip_derived_metrics
     contest = envelope["sports"]["nba"]["contests"][0]
     vip = contest["vip_lineups"][0]
     assert (vip["display_name"], vip["entry_key"], vip["rank"], vip["pts"]) == ("vipuser", "e1", "55", 260.75)
-    assert [(s["player_key"], s["salary"], s["is_live"]) for s in vip["players_live"]] == [
-        ("nba:player-a", 8000, True),
-        ("nba:player-b", 7000, False),
+    assert [(s["slot"], s["player_key"], s["salary"], s["is_live"]) for s in vip["players_live"]] == [
+        ("PG", "nba:player-a", 8000, True),
+        ("SG", "nba:player-b", 7000, False),
     ]
     assert contest["metrics"]["distance_to_cash"]["per_vip"] == [
         {

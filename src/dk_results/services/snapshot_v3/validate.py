@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 from datetime import datetime
+from itertools import filterfalse
 from typing import Any
 
 from dk_results.services.snapshot_v3.contracts import (
@@ -163,6 +164,64 @@ def _validate_list_sections(sport: str, contest: dict[str, Any]) -> list[str]:
     return violations
 
 
+def _validate_vip_lineups(sport: str, contest: dict[str, Any]) -> list[str]:
+    vip_lineups = contest.get("vip_lineups")
+    if not isinstance(vip_lineups, list):
+        return []
+    return [
+        violation
+        for index, row in enumerate(vip_lineups)
+        if isinstance(row, dict)
+        for violation in _validate_vip_lineup_slots(sport, index, row)
+    ]
+
+
+def _validate_vip_lineup_slots(sport: str, vip_index: int, row: dict[str, Any]) -> list[str]:
+    slots = row.get("players_live")
+    if slots is None:
+        return []
+    path = f"sports.{sport}.contests[0].vip_lineups[{vip_index}].players_live"
+    if not isinstance(slots, list):
+        return [f"{path} has invalid type"]
+
+    return [
+        violation
+        for slot_index, slot in enumerate(slots)
+        for violation in _validate_vip_lineup_slot(f"{path}[{slot_index}]", slot)
+    ]
+
+
+def _validate_vip_lineup_slot(path: str, slot: Any) -> list[str]:
+    if not isinstance(slot, dict):
+        return [f"{path} must be an object"]
+    return [*_validate_vip_slot_identity(path, slot), *_validate_vip_slot_lock(path, slot)]
+
+
+def _validate_vip_slot_identity(path: str, slot: dict[str, Any]) -> list[str]:
+    violations = []
+    if not _is_non_empty_string(slot.get("slot")):
+        message = "is required" if "slot" not in slot else "has invalid type"
+        violations.append(f"{path}.slot {message}")
+    if not _is_non_empty_string(slot.get("player_name")):
+        violations.append(f"{path}.player_name is required")
+    return violations
+
+
+def _validate_vip_slot_lock(path: str, slot: dict[str, Any]) -> list[str]:
+    violations = []
+    if "is_locked" in slot and not isinstance(slot["is_locked"], bool):
+        violations.append(f"{path}.is_locked has invalid type")
+    if slot.get("player_name") == "LOCKED 🔒" and slot.get("is_locked") is not True:
+        violations.append(f"{path}.is_locked must be true for locked slot")
+    if slot.get("is_locked") is True:
+        violations.extend(
+            f"{path}.{field} is forbidden for locked slot"
+            for field in ("player_key", "salary", "is_live")
+            if field in slot
+        )
+    return violations
+
+
 def _validate_dict_sections(sport: str, contest: dict[str, Any]) -> list[str]:
     return [
         f"sports.{sport}.contests[0].{section} has invalid type"
@@ -263,7 +322,14 @@ def _add_player_keys_from_vip_lineups(vip_lineups: Any, keys: set[str]) -> None:
         slots = resolve_lineup_slots(vip_row)
         if slots is None:
             continue
-        _add_player_keys_from_rows(slots, keys)
+        _add_player_keys_from_rows(list(filterfalse(_is_locked_vip_slot, slots)), keys)
+
+
+def _is_locked_vip_slot(slot: Any) -> bool:
+    if not isinstance(slot, dict):
+        return False
+    name = str(slot.get("player_name") or slot.get("name") or "")
+    return slot.get("is_locked") is True or slot.get("locked") is True or name == "LOCKED 🔒"
 
 
 def _collect_known_player_keys(sport_payload: dict[str, Any], contest: dict[str, Any]) -> set[str]:
@@ -357,6 +423,7 @@ def _validate_sport_entry(sport: str, sport_payload_raw: Any) -> list[str]:
         return violations + [f"sports.{sport}.contests[0] must be an object"]
     violations.extend(_validate_contest_required_fields(sport, contest))
     violations.extend(_validate_section_rows(sport, contest))
+    violations.extend(_validate_vip_lineups(sport, contest))
     violations.extend(_validate_contest_id_coherence(sport, contest))
     violations.extend(_validate_train_cluster_references(sport, contest))
     violations.extend(_validate_primary_coherence(sport, sport_payload, contest))

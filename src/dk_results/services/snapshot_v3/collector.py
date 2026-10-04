@@ -369,12 +369,31 @@ def _normalize_vip_player_slot(
     player_name = slot.get("player_name") or slot.get("name")
     if player_name in (None, ""):
         return None
+    roster_slot = slot.get("slot") or slot.get("pos")
+    live_slot: dict[str, Any] = {
+        "slot": str(roster_slot or ""),
+        "player_name": str(player_name),
+    }
+    if _vip_slot_is_locked(slot):
+        live_slot["player_name"] = "LOCKED 🔒"
+        live_slot["is_locked"] = True
+        return live_slot
+
+    return _normalize_revealed_vip_slot(live_slot, slot, sport, unique_name_to_player_key, player_name)
+
+
+def _normalize_revealed_vip_slot(
+    live_slot: dict[str, Any],
+    slot: dict[str, Any],
+    sport: str,
+    unique_name_to_player_key: dict[str, str],
+    player_name: Any,
+) -> dict[str, Any]:
     player_key = slot.get("player_key")
     if player_key in (None, ""):
         player_key = unique_name_to_player_key.get(normalize_name(player_name))
     if player_key in (None, ""):
         player_key = _derive_composite_player_key(sport, {**slot, "player_name": player_name})
-    live_slot: dict[str, Any] = {"player_name": str(player_name)}
     if player_key not in (None, ""):
         live_slot["player_key"] = str(player_key)
     salary = to_float(slot.get("salary"))
@@ -386,13 +405,22 @@ def _normalize_vip_player_slot(
 
 def _collect_slot_names_and_keys(slots: list[Any], keys_by_name: dict[str, set[str]]) -> None:
     for slot in slots:
-        if not isinstance(slot, dict):
-            continue
-        player_name = slot.get("player_name") or slot.get("name")
-        player_key = slot.get("player_key")
-        if player_name in (None, "") or player_key in (None, ""):
-            continue
-        keys_by_name.setdefault(normalize_name(player_name), set()).add(str(player_key))
+        _collect_slot_name_and_key(slot, keys_by_name)
+
+
+def _collect_slot_name_and_key(slot: Any, keys_by_name: dict[str, set[str]]) -> None:
+    if not isinstance(slot, dict) or _vip_slot_is_locked(slot):
+        return
+    player_name = slot.get("player_name") or slot.get("name")
+    player_key = slot.get("player_key")
+    if player_name in (None, "") or player_key in (None, ""):
+        return
+    keys_by_name.setdefault(normalize_name(player_name), set()).add(str(player_key))
+
+
+def _vip_slot_is_locked(slot: dict[str, Any]) -> bool:
+    name = str(slot.get("player_name") or slot.get("name") or "")
+    return slot.get("is_locked") is True or slot.get("locked") is True or name == "LOCKED 🔒"
 
 
 def _build_unique_name_to_player_key_from_vip_lineups(vip_lineups: list[dict[str, Any]]) -> dict[str, str]:

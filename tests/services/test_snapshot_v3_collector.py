@@ -181,7 +181,7 @@ def test_collect_raw_bundle_keeps_vips_without_entry_key_and_does_not_truncate_t
             "standings": [{"entry_key": "e1"}, {"entry_key": "e2"}],
             "vip_lineups": [
                 {"entry_key": "e1", "display_name": "keep"},
-                {"user": "vip-without-key", "players": [{"name": "A"}]},
+                {"user": "vip-without-key", "players": [{"name": "A", "pos": "UTIL"}]},
             ],
             "train_clusters": [
                 {"cluster_id": "c1", "entry_keys": ["e1", "x9"]},
@@ -202,7 +202,7 @@ def test_collect_raw_bundle_keeps_vips_without_entry_key_and_does_not_truncate_t
         {"entry_key": "e1", "vip_entry_key": "e1", "display_name": "keep"},
         {
             "display_name": "vip-without-key",
-            "players_live": [{"player_name": "A", "player_key": "nba:a:na:na:na", "is_live": False}],
+            "players_live": [{"slot": "UTIL", "player_name": "A", "player_key": "nba:a:na:na:util", "is_live": False}],
         },
     ]
     assert raw["train_clusters"] == [
@@ -223,7 +223,7 @@ def test_collect_raw_bundle_does_not_backfill_entry_key_from_ambiguous_display_n
                 {"entry_key": "e2", "username": "dup-user"},
             ],
             "vip_lineups": [
-                {"user": "dup-user", "players": [{"name": "A"}]},
+                {"user": "dup-user", "players": [{"name": "A", "pos": "UTIL"}]},
             ],
             "train_clusters": [],
             "players": [],
@@ -240,7 +240,7 @@ def test_collect_raw_bundle_does_not_backfill_entry_key_from_ambiguous_display_n
     assert raw["vip_lineups"] == [
         {
             "display_name": "dup-user",
-            "players_live": [{"player_name": "A", "player_key": "nba:a:na:na:na", "is_live": False}],
+            "players_live": [{"slot": "UTIL", "player_name": "A", "player_key": "nba:a:na:na:util", "is_live": False}],
         }
     ]
 
@@ -789,6 +789,19 @@ def _typed_vip_lineup() -> VipLineup:
                 value_icon="",
                 stats="",
             ),
+            VipPlayer(
+                pos="UTIL",
+                name="LOCKED 🔒",
+                pts=0.0,
+                salary=None,
+                value=0.0,
+                ownership=0.0,
+                rt_proj="",
+                pregame_proj="",
+                time_status="",
+                value_icon="",
+                stats="",
+            ),
         ],
     )
 
@@ -850,9 +863,24 @@ def test_collect_snapshot_typed_vip_lineup_slots_carry_salary_and_live_state(mon
     bundle = _collect_typed_vip_bundle(monkeypatch, tmp_path)
 
     slots = {slot["player_name"]: slot for slot in bundle["vip_lineups"][0]["players_live"]}
-    assert (slots["Player A"]["salary"], slots["Player A"]["is_live"]) == (8000, True)
+    assert (slots["Player A"]["slot"], slots["Player A"]["salary"], slots["Player A"]["is_live"]) == (
+        "QB",
+        8000,
+        True,
+    )
     assert slots["Player A"]["player_key"]
-    assert (slots["Player B"]["salary"], slots["Player B"]["is_live"]) == (7000, False)
+    assert (slots["Player B"]["slot"], slots["Player B"]["salary"], slots["Player B"]["is_live"]) == (
+        "RB",
+        7000,
+        False,
+    )
+
+
+def test_collect_snapshot_typed_vip_lineup_locked_slot_omits_player_details(monkeypatch, tmp_path) -> None:
+    bundle = _collect_typed_vip_bundle(monkeypatch, tmp_path)
+
+    locked = bundle["vip_lineups"][0]["players_live"][2]
+    assert locked == {"slot": "UTIL", "player_name": "LOCKED 🔒", "is_locked": True}
 
 
 def test_collect_snapshot_vip_points_lookup_sees_typed_vip_lineup(monkeypatch, tmp_path) -> None:
@@ -860,6 +888,24 @@ def test_collect_snapshot_vip_points_lookup_sees_typed_vip_lineup(monkeypatch, t
 
     # the VIP-points lookup sees the lineup's 130.0 (>= 120 cutoff), not the standings row's 100.0
     assert bundle["standings"][0]["is_cashing"] is True
+
+
+def test_typed_vip_lineup_reaches_validated_snapshot_envelope(monkeypatch, tmp_path) -> None:
+    bundle = _collect_typed_vip_bundle(monkeypatch, tmp_path)
+    bundle["contest"]["state"] = "live"
+    bundle["contest"]["prize_pool"] = 1000
+
+    envelope = build_snapshot_v3_envelope(
+        {"NBA": 321},
+        generated_at="2026-10-04T12:00:00Z",
+        collector=lambda **_: bundle,
+    )
+    vip = envelope["sports"]["nba"]["contests"][0]["vip_lineups"][0]
+
+    assert (vip["vip_entry_key"], vip["entry_key"], vip["rank"], vip["pts"]) == ("e1", "e1", "5", 130.0)
+    assert [slot["slot"] for slot in vip["players_live"]] == ["QB", "RB", "UTIL"]
+    assert vip["players_live"][2] == {"slot": "UTIL", "player_name": "LOCKED 🔒", "is_locked": True}
+    assert envelope["sports"]["nba"]["contests"][0]["standings"][0]["is_cashing"] is True
 
 
 # --- field remaining over the full standings ------------------------------------
