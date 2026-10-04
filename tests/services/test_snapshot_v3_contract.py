@@ -11,6 +11,7 @@ from typing import Any
 
 import pytest
 
+from dk_results.services.snapshot_v3.models.envelope import contract_violations
 from dk_results.services.snapshot_v3.pipeline import build_snapshot_v3_envelope
 
 GENERATED_AT = "2026-10-04T12:00:00Z"
@@ -57,3 +58,48 @@ class TestPipelineEnforcesContract:
         message = str(excinfo.value)
         assert message.startswith("Snapshot v3 validation failed: ")
         assert "sports.nba.contests[0].max_entries: Input should be a valid integer" in message
+
+    def test_hand_written_validator_still_runs_after_the_contract_passes(self) -> None:
+        # Coherence between the sport key and the contest is not a shape the models express.
+        with pytest.raises(ValueError, match="sports.nba.contests\\[0\\].sport must match sport key"):
+            _build(_bundle(sport="nfl"))
+
+    def test_null_the_contract_allows_is_emitted_and_passes(self) -> None:
+        bundle = _bundle()
+        assert "max_entries_per_user" not in bundle["contest"]
+
+        contest = _build(bundle)["sports"]["nba"]["contests"][0]
+
+        assert contest["max_entries_per_user"] is None
+
+
+class TestContractViolations:
+    def test_emitted_envelope_satisfies_the_contract(self) -> None:
+        assert contract_violations(_build(_bundle())) == []
+
+    @pytest.mark.parametrize("section", ["ownership_watchlist", "live_metrics", "metrics"])
+    def test_null_on_an_omittable_section_is_rejected(self, section: str) -> None:
+        envelope = _build(_bundle())
+        envelope["sports"]["nba"]["contests"][0][section] = None
+
+        assert contract_violations(envelope) == [f"sports.nba.contests[0].{section}: must be omitted, never null"]
+
+    def test_numbers_are_not_coerced_from_strings(self) -> None:
+        envelope = _build(_bundle())
+        envelope["sports"]["nba"]["contests"][0]["entry_fee_cents"] = "1000"
+
+        assert contract_violations(envelope) == [
+            "sports.nba.contests[0].entry_fee_cents: Input should be a valid integer"
+        ]
+
+    def test_unknown_contest_key_is_rejected(self) -> None:
+        envelope = _build(_bundle())
+        envelope["sports"]["nba"]["contests"][0]["pts"] = 1.0
+
+        assert contract_violations(envelope) == ["sports.nba.contests[0].pts: Extra inputs are not permitted"]
+
+    def test_missing_required_field_is_named(self) -> None:
+        envelope = _build(_bundle())
+        del envelope["sports"]["nba"]["primary_contest"]["selected_at"]
+
+        assert contract_violations(envelope) == ["sports.nba.primary_contest.selected_at: Field required"]
