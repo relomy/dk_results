@@ -74,3 +74,15 @@ def test_golf_golden_has_no_game_status_and_omits_every_remaining_figure() -> No
     assert "threat" not in contest["metrics"]
     assert "top_remaining_players" not in contest["metrics"]["non_cashing"]
     assert all("ownership_in_play_pct" not in row for row in contest["metrics"]["ownership_summary"]["per_vip"])
+
+
+def test_zero_vip_golden_carries_field_metrics_and_no_vip_metrics() -> None:
+    contest = _committed_contest("zero_vip")
+
+    assert contest["vip_lineups"] == []
+    assert not any(row["is_vip"] for row in contest["standings"])
+    assert contest["live_metrics"]["avg_salary_per_player_remaining"] > 0
+    assert {"non_cashing", "threat"} <= set(contest["metrics"])
+    assert contest["metrics"]["threat"]["field_remaining_pct"] > 0
+    assert not {"distance_to_cash", "ownership_summary"} & set(contest["metrics"])
+    assert "vip_vs_field_leverage" not in contest["metrics"]["threat"]
