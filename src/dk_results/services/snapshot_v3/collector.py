@@ -8,7 +8,7 @@ import logging
 import os
 from dataclasses import dataclass
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
-from typing import Any
+from typing import Any, NamedTuple
 from zoneinfo import ZoneInfo
 
 from dfs_common import state
@@ -608,14 +608,21 @@ def _compute_ownership_remaining_total(full_standings: list[dict[str, Any]]) -> 
     return sum(ownership_values) / len(ownership_values)
 
 
-def _compute_field_remaining(full_standings: list[dict[str, Any]]) -> tuple[float | None, bool]:
+class FieldRemaining(NamedTuple):
+    """Contest-field remaining mean and whether any standings row was left out of it."""
+
+    pct: float | None
+    is_partial: bool
+
+
+def _compute_field_remaining(full_standings: list[dict[str, Any]]) -> FieldRemaining:
     """Return the contest-field remaining mean and whether any row was left out of it.
 
     Runs over the full, pre-truncation standings. A row is left out when its lineup
     could not be resolved, so it carries no remaining-ownership total.
     """
     is_partial = any(row["ownership_remaining_total_pct"] is None for row in full_standings)
-    return _compute_ownership_remaining_total(full_standings), is_partial
+    return FieldRemaining(pct=_compute_ownership_remaining_total(full_standings), is_partial=is_partial)
 
 
 def _compute_vip_remaining_by_entry_key(full_standings: list[dict[str, Any]]) -> dict[str, float]:
@@ -659,7 +666,7 @@ def _assemble_source_bundle(
     vip_lineups: list[Any],
     players: list[dict[str, Any]],
     ownership_remaining_total: float | None,
-    field_remaining: tuple[float | None, bool],
+    field_remaining: FieldRemaining,
     vip_remaining_by_entry_key: dict[str, float],
     avg_salary_per_player_remaining: Any,
     non_cashing_user_count: Any,
@@ -707,8 +714,8 @@ def _assemble_source_bundle(
         "players": players,
         "ownership": {
             "ownership_remaining_total_pct": ownership_remaining_total,
-            "field_remaining_pct": field_remaining[0],
-            "field_remaining_is_partial": field_remaining[1],
+            "field_remaining_pct": field_remaining.pct,
+            "field_remaining_is_partial": field_remaining.is_partial,
             "vip_remaining_by_entry_key": vip_remaining_by_entry_key,
             "avg_salary_per_player_remaining": avg_salary_per_player_remaining,
             "non_cashing_user_count": non_cashing_user_count,

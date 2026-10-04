@@ -113,6 +113,7 @@ fetch is injectable. `load_vips()` and `build_vip_entries()` round out the inter
 | Module | Interface | Notes |
 |---|---|---|
 | `analytics/optimizer.py` | `Optimizer.get_optimal_lineup() -> list[Player] \| None` | LP solver (PuLP). **Shallow interface risk:** callers only need `get_optimal_lineup`, but `create_decision_variables`, `define_*_constraint`, `solve_problem`, `extract_optimal_lineup` are all public — internal LP steps leaking through the interface. Candidate to make private. |
+| `analytics/game_status.py` | `classify_game_status(text) -> GameStatus(remaining, in_play)`, `sport_has_game_status(statuses)`, `UNKNOWN` | Single place that decides which DraftKings game-info texts mean a player is still to score or live; shared by every snapshot "remaining" metric. |
 | `analytics/trainfinder.py` | `TrainFinder`: `get_total_users`, `get_total_users_above_salary`, `get_users_above_salary_spent` | Clusters users by salary spent ("trains"). |
 
 ---

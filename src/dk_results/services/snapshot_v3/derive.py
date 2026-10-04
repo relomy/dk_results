@@ -12,6 +12,16 @@ TOP_REMAINING_PLAYERS_LIMIT = 10
 LEVERAGE_SEMANTICS = "positive=unique"
 FIELD_REMAINING_SCOPE = "contest_field"
 FIELD_REMAINING_SOURCE = "contest_standings_mean"
+OWNERSHIP_SUMMARY_SOURCE = "vip_lineup_players"
+OWNERSHIP_SUMMARY_SCOPE = "vip_lineup"
+
+
+def _vip_lineup_rows(raw_bundle: dict[str, Any]) -> list[dict[str, Any]]:
+    return [row for row in list(raw_bundle.get("vip_lineups") or []) if isinstance(row, dict)]
+
+
+def _ownership(raw_bundle: dict[str, Any]) -> dict[str, Any]:
+    return dict(raw_bundle.get("ownership") or {})
 
 
 def _sorted_vip_rows(vip_lineups: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -48,7 +58,7 @@ def _build_distance_to_cash_entry(
 
 def derive_distance_to_cash(raw_bundle: dict[str, Any]) -> dict[str, Any] | None:
     cash_line = dict(raw_bundle.get("cash_line") or {})
-    vip_lineups = [row for row in list(raw_bundle.get("vip_lineups") or []) if isinstance(row, dict)]
+    vip_lineups = _vip_lineup_rows(raw_bundle)
 
     cutoff_points = to_float(cash_line.get("points"))
     rank_cutoff = to_int(cash_line.get("rank"))
@@ -135,8 +145,8 @@ def _threat_sort_key(row: dict[str, Any]) -> tuple[bool, float, str]:
 
 
 def _derive_top_swing_players(raw_bundle: dict[str, Any]) -> list[dict[str, Any]]:
-    ownership = dict(raw_bundle.get("ownership") or {})
-    vip_lineups = [row for row in list(raw_bundle.get("vip_lineups") or []) if isinstance(row, dict)]
+    ownership = _ownership(raw_bundle)
+    vip_lineups = _vip_lineup_rows(raw_bundle)
 
     top_source = _resolve_threat_top_source(ownership)
     if top_source is None:
@@ -188,7 +198,7 @@ def derive_field_remaining(raw_bundle: dict[str, Any]) -> dict[str, Any] | None:
     Omitted for a sport with no Game status, or when no row had a resolvable lineup.
     """
 
-    ownership = dict(raw_bundle.get("ownership") or {})
+    ownership = _ownership(raw_bundle)
     field_remaining_pct = to_float(ownership.get("field_remaining_pct"))
     if field_remaining_pct is None or not bundle_has_game_status(raw_bundle):
         return None
@@ -242,8 +252,8 @@ def derive_vip_vs_field_leverage(raw_bundle: dict[str, Any], field_remaining_pct
     standings, so a VIP ranked below the standings limit is still matched.
     """
 
-    vip_lineups = [row for row in list(raw_bundle.get("vip_lineups") or []) if isinstance(row, dict)]
-    remaining_by_entry = _vip_remaining_by_entry(dict(raw_bundle.get("ownership") or {}))
+    vip_lineups = _vip_lineup_rows(raw_bundle)
+    remaining_by_entry = _vip_remaining_by_entry(_ownership(raw_bundle))
     return [
         row
         for vip_row in _sorted_vip_rows(vip_lineups)
@@ -254,7 +264,7 @@ def derive_vip_vs_field_leverage(raw_bundle: dict[str, Any], field_remaining_pct
 def derive_avg_salary_per_player_remaining(raw_bundle: dict[str, Any]) -> float | None:
     """Return the collector's average salary remaining, or None when it is omitted."""
 
-    value = to_float(dict(raw_bundle.get("ownership") or {}).get("avg_salary_per_player_remaining"))
+    value = to_float(_ownership(raw_bundle).get("avg_salary_per_player_remaining"))
     if value is None or not bundle_has_game_status(raw_bundle):
         return None
     return round(value, 2)
@@ -279,7 +289,7 @@ def _build_top_remaining_players(rows: Any) -> list[dict[str, Any]]:
 
 
 def derive_non_cashing(raw_bundle: dict[str, Any]) -> dict[str, Any] | None:
-    ownership = dict(raw_bundle.get("ownership") or {})
+    ownership = _ownership(raw_bundle)
     users_not_cashing = to_int(ownership.get("non_cashing_user_count"))
     avg_pmr_remaining = to_float(ownership.get("non_cashing_avg_pmr"))
     if users_not_cashing is None or users_not_cashing <= 0 or avg_pmr_remaining is None:
@@ -355,7 +365,7 @@ def derive_ownership_summary(raw_bundle: dict[str, Any]) -> dict[str, Any] | Non
 
     players = _player_rows_by_key(raw_bundle)
     has_game_status = bundle_has_game_status(raw_bundle)
-    vip_lineups = [row for row in list(raw_bundle.get("vip_lineups") or []) if isinstance(row, dict)]
+    vip_lineups = _vip_lineup_rows(raw_bundle)
     per_vip = [
         _summarize_vip_ownership(row, slots, players, has_game_status)
         for row in _sorted_vip_rows(vip_lineups)
@@ -363,4 +373,4 @@ def derive_ownership_summary(raw_bundle: dict[str, Any]) -> dict[str, Any] | Non
     ]
     if not per_vip:
         return None
-    return {"source": "vip_lineup_players", "scope": "vip_lineup", "per_vip": per_vip}
+    return {"source": OWNERSHIP_SUMMARY_SOURCE, "scope": OWNERSHIP_SUMMARY_SCOPE, "per_vip": per_vip}

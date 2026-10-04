@@ -884,9 +884,11 @@ def _collect_with_users(monkeypatch, tmp_path, users, *, standings_limit, vip_li
     )
 
 
-def _field_user(rank, entry_key, ownership):
+def _field_user(rank, entry_key, ownership, *, game_info="Live", salary=None):
     lineupobj = (
-        None if ownership is None else SimpleNamespace(lineup=[SimpleNamespace(game_info="Live", ownership=ownership)])
+        None
+        if ownership is None
+        else SimpleNamespace(lineup=[SimpleNamespace(game_info=game_info, ownership=ownership, salary=salary)])
     )
     return SimpleNamespace(
         rank=str(rank), pts="10", pmr="0", player_id=entry_key, name=f"u{entry_key}", salary=0, lineupobj=lineupobj
@@ -927,3 +929,33 @@ def test_vip_remaining_by_entry_key_covers_vips_ranked_below_the_standings_limit
 
     assert [row["entry_key"] for row in raw["standings"]] == ["e1"]  # the VIP's row was truncated away
     assert raw["ownership"]["vip_remaining_by_entry_key"] == {"e3": pytest.approx(60.0)}
+
+
+@pytest.mark.parametrize("game_info", ["Delayed", "Suspended"])
+def test_delayed_and_suspended_players_count_toward_collector_remaining_metrics(
+    monkeypatch, tmp_path, game_info
+) -> None:
+    users = [
+        _field_user(1, "e1", 0.10, game_info="Final", salary=5000),
+        _field_user(2, "e2", 0.30, game_info=game_info, salary=7000),
+    ]
+
+    raw = _collect_with_users(monkeypatch, tmp_path, users, standings_limit=500)
+
+    assert raw["ownership"]["field_remaining_pct"] == pytest.approx(15.0)  # (0 + 30) / 2
+    assert raw["ownership"]["avg_salary_per_player_remaining"] == pytest.approx(7000.0)
+
+
+@pytest.mark.parametrize("game_info", ["Postponed", "Cancelled"])
+def test_postponed_and_cancelled_players_do_not_count_toward_collector_remaining_metrics(
+    monkeypatch, tmp_path, game_info
+) -> None:
+    users = [
+        _field_user(1, "e1", 0.10, game_info=game_info, salary=5000),
+        _field_user(2, "e2", 0.30, game_info="Live", salary=7000),
+    ]
+
+    raw = _collect_with_users(monkeypatch, tmp_path, users, standings_limit=500)
+
+    assert raw["ownership"]["field_remaining_pct"] == pytest.approx(15.0)  # (0 + 30) / 2
+    assert raw["ownership"]["avg_salary_per_player_remaining"] == pytest.approx(7000.0)
