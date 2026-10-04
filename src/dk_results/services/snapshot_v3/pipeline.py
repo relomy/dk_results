@@ -14,6 +14,8 @@ from dk_results.services.snapshot_v3.contracts import SCHEMA_VERSION
 from dk_results.services.snapshot_v3.derive import (
     derive_avg_salary_per_player_remaining,
     derive_distance_to_cash,
+    derive_non_cashing,
+    derive_ownership_summary,
     derive_threat,
 )
 from dk_results.services.snapshot_v3.normalize import to_utc_iso
@@ -55,6 +57,8 @@ def _build_single_sport_payload(
     derived = {
         "avg_salary_per_player_remaining": derive_avg_salary_per_player_remaining(raw_bundle),
         "distance_to_cash": derive_distance_to_cash(raw_bundle),
+        "non_cashing": derive_non_cashing(raw_bundle),
+        "ownership_summary": derive_ownership_summary(raw_bundle),
         "threat": derive_threat(raw_bundle),
     }
     return build_sport_payload(raw_bundle, derived=derived, generated_at=generated_at)

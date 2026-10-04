@@ -8,7 +8,7 @@ import logging
 import os
 from dataclasses import dataclass
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
-from typing import Any, cast
+from typing import Any, NamedTuple
 from zoneinfo import ZoneInfo
 
 from dfs_common import state
@@ -608,6 +608,36 @@ def _compute_ownership_remaining_total(full_standings: list[dict[str, Any]]) -> 
     return sum(ownership_values) / len(ownership_values)
 
 
+class FieldRemaining(NamedTuple):
+    """Contest-field remaining mean and whether any standings row was left out of it."""
+
+    pct: float | None
+    is_partial: bool
+
+
+def _compute_field_remaining(full_standings: list[dict[str, Any]]) -> FieldRemaining:
+    """Return the contest-field remaining mean and whether any row was left out of it.
+
+    Runs over the full, pre-truncation standings. A row is left out when its lineup
+    could not be resolved, so it carries no remaining-ownership total.
+    """
+    is_partial = any(row["ownership_remaining_total_pct"] is None for row in full_standings)
+    return FieldRemaining(pct=_compute_ownership_remaining_total(full_standings), is_partial=is_partial)
+
+
+def _compute_vip_remaining_by_entry_key(full_standings: list[dict[str, Any]]) -> dict[str, float]:
+    """Map entry key to ownership remaining for every VIP standings row.
+
+    Built from the full, pre-truncation standings, so a VIP ranked below the
+    standings limit still has a value.
+    """
+    return {
+        str(row["entry_key"]): row["ownership_remaining_total_pct"]
+        for row in full_standings
+        if row["is_vip"] and row["entry_key"] not in (None, "") and row["ownership_remaining_total_pct"] is not None
+    }
+
+
 def _apply_truncation(
     full_standings: list[dict[str, Any]],
     standings_limit: int,
@@ -636,6 +666,8 @@ def _assemble_source_bundle(
     vip_lineups: list[Any],
     players: list[dict[str, Any]],
     ownership_remaining_total: float | None,
+    field_remaining: FieldRemaining,
+    vip_remaining_by_entry_key: dict[str, float],
     avg_salary_per_player_remaining: Any,
     non_cashing_user_count: Any,
     non_cashing_avg_pmr: Any,
@@ -682,6 +714,9 @@ def _assemble_source_bundle(
         "players": players,
         "ownership": {
             "ownership_remaining_total_pct": ownership_remaining_total,
+            "field_remaining_pct": field_remaining.pct,
+            "field_remaining_is_partial": field_remaining.is_partial,
+            "vip_remaining_by_entry_key": vip_remaining_by_entry_key,
             "avg_salary_per_player_remaining": avg_salary_per_player_remaining,
             "non_cashing_user_count": non_cashing_user_count,
             "non_cashing_avg_pmr": non_cashing_avg_pmr,
@@ -723,10 +758,10 @@ def _fetch_vip_lineups_for_contest(
     vips: list[str],
     vip_entries: dict[str, dict[str, Any]],
     player_salary_map: dict[str, int],
-) -> list[Any]:
+) -> list[dict[str, Any]]:
     if not draft_group:
         return []
-    return fetch_vip_lineups(
+    lineups = fetch_vip_lineups(
         int(dk_id),
         int(draft_group),
         dk,
@@ -734,6 +769,8 @@ def _fetch_vip_lineups_for_contest(
         vip_entries=vip_entries,
         player_salary_map=player_salary_map,
     )
+    # The fetcher returns typed VipLineup objects; normalization works on dict rows.
+    return [lineup.to_dict() for lineup in lineups]
 
 
 def _build_source_metrics(
@@ -755,6 +792,8 @@ def _build_source_metrics(
     return {
         "players": sections.build_players(results, matchups=matchups),
         "ownership_remaining_total": _compute_ownership_remaining_total(full_standings),
+        "field_remaining": _compute_field_remaining(full_standings),
+        "vip_remaining_by_entry_key": _compute_vip_remaining_by_entry_key(full_standings),
         "avg_salary_per_player_remaining": average_remaining_salary(results.users),
         "top_remaining_players": sections.build_top_remaining_players(results),
         "watchlist_entries": sections.build_watchlist(full_standings),
@@ -814,10 +853,7 @@ def _collect_source_snapshot(
         vip_lineups = _fetch_vip_lineups_for_contest(dk, dk_id, draft_group, vips, vip_entries, player_salary_map)
 
         vip_lookup = {vip.name for vip in results.vip_list}
-        vip_lineup_rows: list[dict[str, Any]] = [
-            cast(dict[str, Any], row) for row in vip_lineups if isinstance(row, dict)
-        ]
-        vip_points_by_entry = _build_vip_points_by_entry(vip_lineup_rows, results.vip_list)
+        vip_points_by_entry = _build_vip_points_by_entry(vip_lineups, results.vip_list)
 
         metrics = _build_source_metrics(
             results,
@@ -837,6 +873,8 @@ def _collect_source_snapshot(
             vip_lineups=vip_lineups,
             players=metrics["players"],
             ownership_remaining_total=metrics["ownership_remaining_total"],
+            field_remaining=metrics["field_remaining"],
+            vip_remaining_by_entry_key=metrics["vip_remaining_by_entry_key"],
             avg_salary_per_player_remaining=metrics["avg_salary_per_player_remaining"],
             non_cashing_user_count=results.non_cashing_users,
             non_cashing_avg_pmr=results.non_cashing_avg_pmr,
