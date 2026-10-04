@@ -7,6 +7,7 @@ from typing import Annotated, Literal
 from pydantic import Field, StrictBool, StrictInt, StrictStr, model_validator
 
 from dk_results.services.snapshot_v3.models.base import ContractModel, omittable
+from dk_results.services.snapshot_v3.models.names import TrimmedName
 from dk_results.services.snapshot_v3.models.numbers import FiniteFloat, NonEmptyStr, NonNegativeFloat
 
 TOP_REMAINING_PLAYERS_LIMIT = 10
@@ -32,7 +33,7 @@ class DistanceToCash(ContractModel):
 class TopRemainingPlayer(ContractModel):
     """A player still to play on non-cashing lineups."""
 
-    player_name: NonEmptyStr
+    player_name: TrimmedName
     ownership_remaining_pct: FiniteFloat
 
 
@@ -72,7 +73,7 @@ class SwingPlayer(ContractModel):
     """A player whose result can swing VIPs against the field."""
 
     player_key: NonEmptyStr
-    player_name: NonEmptyStr
+    player_name: TrimmedName
     vip_count: StrictInt = Field(ge=0)
     ownership_remaining_pct: FiniteFloat = omittable()
 

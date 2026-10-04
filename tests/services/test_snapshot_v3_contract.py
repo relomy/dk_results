@@ -201,7 +201,7 @@ class TestVipLineupsContract:
     def test_padded_player_name_fails_the_build(self, name: str) -> None:
         message = _build_error(_vip_bundle(slots=[{"slot": "PG", "player_name": name, "is_live": True}]))
 
-        assert "players_live[0].player_name must not have leading or trailing whitespace" in message
+        assert "players_live[0].player_name: must not have leading or trailing whitespace" in message
 
     @pytest.mark.parametrize(
         ("field", "value"), [("player_key", "nba:a"), ("salary", 8000), ("is_live", True), ("is_live", False)]

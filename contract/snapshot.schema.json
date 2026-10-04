@@ -442,7 +442,7 @@
     },
     "SportPlayer":{
       "additionalProperties":true,
-      "description":"One row of a sport payload's `players`.",
+      "description":"One row of a sport payload's `players`.\n\nNot typed field by field yet, but a `name` it carries has no leading or trailing whitespace.",
       "properties":{},
       "title":"SportPlayer",
       "type":"object"
@@ -469,6 +469,7 @@
         },
         "player_name":{
           "minLength":1,
+          "pattern":"^\\S(?:[\\s\\S]*\\S)?$",
           "title":"Player Name",
           "type":"string"
         },
@@ -541,6 +542,7 @@
         },
         "player_name":{
           "minLength":1,
+          "pattern":"^\\S(?:[\\s\\S]*\\S)?$",
           "title":"Player Name",
           "type":"string"
         }
@@ -615,6 +617,8 @@
           "type":"string"
         },
         "player_name":{
+          "minLength":1,
+          "pattern":"^\\S(?:[\\s\\S]*\\S)?$",
           "title":"Player Name",
           "type":"string"
         },
@@ -623,6 +627,7 @@
           "type":"integer"
         },
         "slot":{
+          "minLength":1,
           "title":"Slot",
           "type":"string"
         }

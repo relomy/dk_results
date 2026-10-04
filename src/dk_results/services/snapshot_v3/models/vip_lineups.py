@@ -1,8 +1,7 @@
 """Contract for `contest.vip_lineups` rows and their `players_live` slots.
 
-Player names with no leading or trailing whitespace, and locked slots carrying
-no player key, salary or live state, are semantic checks a type cannot express;
-the hand-written validator enforces them.
+Locked slots carrying no player key, salary or live state is a semantic check a
+type cannot express; the hand-written validator enforces it.
 """
 
 from __future__ import annotations
@@ -10,6 +9,8 @@ from __future__ import annotations
 from pydantic import StrictBool, StrictFloat, StrictInt, StrictStr
 
 from dk_results.services.snapshot_v3.models.base import ContractModel, omittable
+from dk_results.services.snapshot_v3.models.names import TrimmedName
+from dk_results.services.snapshot_v3.models.numbers import NonEmptyStr
 
 
 class VipLineupSlot(ContractModel):
@@ -20,8 +21,8 @@ class VipLineupSlot(ContractModel):
     `{slot, player_name: "LOCKED 🔒", is_locked: true}` and carries none of those.
     """
 
-    slot: StrictStr
-    player_name: StrictStr
+    slot: NonEmptyStr
+    player_name: TrimmedName
     player_key: StrictStr = omittable()
     salary: StrictInt = omittable()
     is_live: StrictBool = omittable()

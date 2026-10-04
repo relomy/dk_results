@@ -298,3 +298,67 @@ class TestProducerOmitsWhatItCannotKnow:
             {"vip_entry_key": "v1", "points_delta": 10.0, "rank_delta": 5}
         ]
         assert contract_violations(envelope) == []
+
+
+def _build_error(bundle: dict[str, Any]) -> str:
+    with pytest.raises(ValueError) as excinfo:
+        _build(bundle)
+    return str(excinfo.value)
+
+
+def _pad_vip_slot_name(bundle: dict[str, Any]) -> None:
+    bundle["vip_lineups"][0]["players_live"][0]["player_name"] = " A"
+
+
+def _pad_sport_player_name(bundle: dict[str, Any]) -> None:
+    bundle["players"][0]["name"] = "A "
+
+
+def _pad_top_remaining_player_name(bundle: dict[str, Any]) -> None:
+    bundle["ownership"]["non_cashing_top_remaining_players"][0]["player_name"] = "A\n"
+
+
+def _pad_top_swing_player_name(bundle: dict[str, Any]) -> None:
+    # Swing players come from the non-cashing tally when there is one, else this fallback list.
+    del bundle["ownership"]["non_cashing_top_remaining_players"]
+    bundle["ownership"]["top_remaining_players"] = [
+        {"player_name": " A ", "player_key": "x:a", "ownership_remaining_pct": 62.5}
+    ]
+
+
+class TestEveryEmittedPlayerNameIsTrimmed:
+    @pytest.mark.parametrize(
+        ("pad", "location"),
+        [
+            (_pad_vip_slot_name, "sports.nba.contests[0].vip_lineups[0].players_live[0].player_name"),
+            (_pad_sport_player_name, "sports.nba.players[0]"),
+            (
+                _pad_top_remaining_player_name,
+                "sports.nba.contests[0].metrics.non_cashing.top_remaining_players[0].player_name",
+            ),
+            (
+                _pad_top_swing_player_name,
+                "sports.nba.contests[0].metrics.threat.top_swing_players[0].player_name",
+            ),
+        ],
+        ids=["vip_slot", "players", "top_remaining_players", "top_swing_players"],
+    )
+    def test_padded_name_fails_the_build(self, pad: Any, location: str) -> None:
+        bundle = _rich_bundle()
+        pad(bundle)
+
+        message = _build_error(bundle)
+
+        assert f"{location}: " in message
+        assert "must not have leading or trailing whitespace" in message
+
+    def test_trimmed_names_build(self) -> None:
+        assert contract_violations(_build(_rich_bundle())) == []
+
+    def test_vip_slot_needs_a_roster_position(self) -> None:
+        bundle = _rich_bundle()
+        bundle["vip_lineups"][0]["players_live"][0]["slot"] = ""
+
+        message = _build_error(bundle)
+
+        assert "sports.nba.contests[0].vip_lineups[0].players_live[0].slot: " in message
