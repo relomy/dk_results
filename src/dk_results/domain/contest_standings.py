@@ -293,8 +293,12 @@ def _update_cash_stats(
 ) -> tuple[int, float, float, int]:
     if positions_paid is None or parsed_rank is None or parsed_points is None:
         return min_rank, min_cash_pts, non_cashing_total_pmr, 0
-    if positions_paid >= parsed_rank and min_cash_pts > parsed_points:
-        return parsed_rank, parsed_points, non_cashing_total_pmr, 0
+    if parsed_rank <= positions_paid:
+        # Cashing is positional: ties and out-of-score-order rows inside the paid
+        # positions still cash. The cash line is the last paid position's score.
+        if parsed_rank >= min_rank:
+            return parsed_rank, parsed_points, non_cashing_total_pmr, 0
+        return min_rank, min_cash_pts, non_cashing_total_pmr, 0
     _record_non_cashing_user(sport, players, lineup, non_cashing_players, showdown_captains)
     return min_rank, min_cash_pts, non_cashing_total_pmr + float(pmr), 1
 

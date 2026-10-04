@@ -323,6 +323,35 @@ def test_collect_raw_bundle_maps_top_remaining_players_from_vip_slots_when_playe
     assert threat is None  # an empty player pool has no Game status
 
 
+def test_collect_raw_bundle_trims_player_names_in_players_and_top_remaining(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "dk_results.services.snapshot_v3.collector._collect_source_snapshot",
+        lambda **_kwargs: {
+            "sport": "NFL",
+            "contest": {"contest_id": "123", "name": "Contest"},
+            "selection": {"selected_contest_id": "123", "reason": {"mode": "explicit_id"}},
+            "standings": [],
+            "vip_lineups": [],
+            "train_clusters": [],
+            "players": [{"name": "Rams ", "position": "DST", "salary": 3000, "team": "LAR"}],
+            "cash_line": {},
+            "ownership": {
+                "top_remaining_players": [{"player_name": "Rams ", "ownership_remaining_pct": 40.0}],
+                "non_cashing_top_remaining_players": [{"player_name": "Jets ", "ownership_remaining_pct": 30.0}],
+            },
+            "metadata": {},
+            "truncation": {},
+            "candidates": [],
+        },
+    )
+
+    raw = collect_raw_bundle(sport="NFL", contest_id=123, standings_limit=10)
+
+    assert [row["name"] for row in raw["players"]] == ["Rams"]
+    assert [row["player_name"] for row in raw["ownership"]["top_remaining_players"]] == ["Rams"]
+    assert [row["player_name"] for row in raw["ownership"]["non_cashing_top_remaining_players"]] == ["Jets"]
+
+
 # --- extracted collector helpers -------------------------------------------------
 
 
@@ -810,10 +839,10 @@ def _typed_vip_lineup() -> VipLineup:
     )
 
 
-def _collect_typed_vip_bundle(monkeypatch, tmp_path) -> dict:
+def _collect_typed_vip_bundle(monkeypatch, tmp_path, *, lineup=None, extra_users=(), standings_limit=None) -> dict:
     monkeypatch.setattr(collector, "SALARY_DIR", str(tmp_path))
     monkeypatch.setattr(collector, "load_vips", lambda: ["vipuser"])
-    monkeypatch.setattr(collector, "fetch_vip_lineups", lambda *a, **k: [_typed_vip_lineup()])
+    monkeypatch.setattr(collector, "fetch_vip_lineups", lambda *a, **k: [lineup or _typed_vip_lineup()])
     vip_user = SimpleNamespace(
         rank="5",
         player_id="e1",
@@ -827,7 +856,7 @@ def _collect_typed_vip_bundle(monkeypatch, tmp_path) -> dict:
     results = SimpleNamespace(
         vip_list=[vip_user],
         players={},
-        users=[vip_user],
+        users=[vip_user, *extra_users],
         non_cashing_users=0,
         non_cashing_avg_pmr=None,
         min_rank=10,
@@ -851,7 +880,8 @@ def _collect_typed_vip_bundle(monkeypatch, tmp_path) -> dict:
         lambda **kwargs: real_collect(dk=_FakeDK(), contest_db=_FakeContestDB(by_id=row), **kwargs),
     )
 
-    return collect_snapshot(sport="NBA", contest_id=321).bundle
+    kwargs = {} if standings_limit is None else {"standings_limit": standings_limit}
+    return collect_snapshot(sport="NBA", contest_id=321, **kwargs).bundle
 
 
 def test_collect_snapshot_keeps_typed_vip_lineups_from_the_fetcher(monkeypatch, tmp_path) -> None:
@@ -860,7 +890,8 @@ def test_collect_snapshot_keeps_typed_vip_lineups_from_the_fetcher(monkeypatch, 
     assert len(bundle["vip_lineups"]) == 1
     vip = bundle["vip_lineups"][0]
     assert (vip["display_name"], vip["entry_key"], vip["vip_entry_key"]) == ("vipuser", "e1", "e1")
-    assert (vip["rank"], vip["pts"]) == ("5", 130.0)
+    assert (vip["rank"], vip["points"], vip["pmr"]) == (5, 130.0, 120.0)
+    assert "pts" not in vip
 
 
 def test_collect_snapshot_typed_vip_lineup_slots_carry_salary_and_live_state(monkeypatch, tmp_path) -> None:
@@ -906,10 +937,64 @@ def test_typed_vip_lineup_reaches_validated_snapshot_envelope(monkeypatch, tmp_p
     )
     vip = envelope["sports"]["nba"]["contests"][0]["vip_lineups"][0]
 
-    assert (vip["vip_entry_key"], vip["entry_key"], vip["rank"], vip["pts"]) == ("e1", "e1", "5", 130.0)
+    assert (vip["vip_entry_key"], vip["entry_key"], vip["rank"], vip["points"]) == ("e1", "e1", 5, 130.0)
     assert [slot["slot"] for slot in vip["players_live"]] == ["QB", "RB", "UTIL"]
     assert vip["players_live"][2] == {"slot": "UTIL", "player_name": "LOCKED 🔒", "is_locked": True}
     assert envelope["sports"]["nba"]["contests"][0]["standings"][0]["is_cashing"] is True
+
+
+def _prod_shaped_vip_lineup() -> VipLineup:
+    lineup = _typed_vip_lineup()
+    lineup.rank = "879"
+    lineup.pmr = "390"
+    lineup.pts = 28.64
+    lineup.players[0].name = "Rams "
+    return lineup
+
+
+def _collect_vip_below_standings_limit(monkeypatch, tmp_path) -> dict:
+    leader = SimpleNamespace(
+        rank="1", player_id="e0", name="leader", pmr="0", pts=200.0, salary=0, lineupobj=None, lineup=[]
+    )
+    bundle = _collect_typed_vip_bundle(
+        monkeypatch, tmp_path, lineup=_prod_shaped_vip_lineup(), extra_users=[leader], standings_limit=1
+    )
+    bundle["contest"]["state"] = "live"
+    bundle["contest"]["prize_pool"] = 1000
+    return bundle
+
+
+def test_vip_below_standings_limit_emits_numeric_rank_points_and_pmr(monkeypatch, tmp_path) -> None:
+    bundle = _collect_vip_below_standings_limit(monkeypatch, tmp_path)
+    envelope = build_snapshot_v3_envelope(
+        {"NBA": 321}, generated_at="2026-10-04T12:00:00Z", collector=lambda **_: bundle
+    )
+    contest = envelope["sports"]["nba"]["contests"][0]
+
+    assert [row["entry_key"] for row in contest["standings"]] == ["e0"]
+    (vip,) = contest["vip_lineups"]
+    assert (vip["rank"], vip["points"], vip["pmr"]) == (879, 28.64, 390.0)
+    assert type(vip["rank"]) is int
+    assert [row["entry_key"] for row in contest["metrics"]["distance_to_cash"]["per_vip"]] == ["e1"]
+
+
+def test_vip_lineup_player_names_are_trimmed(monkeypatch, tmp_path) -> None:
+    bundle = _collect_vip_below_standings_limit(monkeypatch, tmp_path)
+
+    names = [slot["player_name"] for slot in bundle["vip_lineups"][0]["players_live"]]
+    assert names == ["Rams", "Player B", "LOCKED 🔒"]
+
+
+@pytest.mark.parametrize(
+    ("rank", "pts", "pmr"),
+    [("", None, "n/a"), (None, "", None)],
+)
+def test_unparseable_vip_figures_are_omitted_not_null(monkeypatch, tmp_path, rank, pts, pmr) -> None:
+    lineup = _typed_vip_lineup()
+    lineup.rank, lineup.pts, lineup.pmr = rank, pts, pmr
+    vip = _collect_typed_vip_bundle(monkeypatch, tmp_path, lineup=lineup)["vip_lineups"][0]
+
+    assert not {"rank", "points", "pmr", "pts"} & vip.keys()
 
 
 # --- field remaining over the full standings ------------------------------------
@@ -1122,6 +1207,49 @@ def test_collector_no_status_pool_omits_remaining_outputs_but_keeps_non_cashing(
     assert "avg_salary_per_player_remaining" not in contest["live_metrics"]
     assert "threat" not in contest["metrics"]
     assert contest["metrics"]["non_cashing"] == {"users_not_cashing": 1, "avg_pmr_remaining": 100.0}
+
+
+def test_users_not_cashing_is_entries_minus_positions_paid_for_a_fully_parsed_standings_file(monkeypatch, tmp_path):
+    lineup = "PG Alpha SG Bravo SF Charlie PF Delta C Echo G Foxtrot F LOCKED UTIL LOCKED"
+    header = ["rank", "entry", "name", "pmr", "points", "lineup"]
+    dk = _RemainingMetricsDK(["Delayed"] * 5)
+    # Paid positions = 4 of 6 entries: ties inside the line, one at it, rows out of score order.
+    dk.standings_rows = [
+        header,
+        ["2", "e1", "tied_a", "0", "90", lineup],
+        ["1", "e2", "leader", "0", "100", lineup],
+        ["4", "e3", "at_line", "0", "80", lineup],
+        ["2", "e4", "tied_b", "0", "90", lineup],
+        ["5", "e5", "below_a", "40", "70", lineup],
+        ["6", "e6", "below_b", "60", "60", lineup],
+    ]
+    monkeypatch.setattr(collector, "SALARY_DIR", str(tmp_path))
+    monkeypatch.setattr(collector, "load_vips", lambda: [])
+    monkeypatch.setattr(collector, "fetch_vip_lineups", lambda *a, **k: [])
+    row = ContestRow(
+        dk_id=321,
+        name="C",
+        draft_group=8,
+        positions_paid=4,
+        start_date="2026-10-04",
+        entry_fee=5,
+        entries=6,
+        contest_state="live",
+        prize_pool=100,
+    )
+    real_collect = collector._collect_source_snapshot
+    monkeypatch.setattr(
+        collector,
+        "_collect_source_snapshot",
+        lambda **kwargs: real_collect(dk=dk, contest_db=_FakeContestDB(by_id=row), **kwargs),
+    )
+    envelope = build_snapshot_v3_envelope(
+        {"NBA": 321}, generated_at="2026-10-04T12:00:00Z", standings_limit=10, collector=collect_snapshot
+    )
+    contest = envelope["sports"]["nba"]["contests"][0]
+
+    assert contest["metrics"]["non_cashing"]["users_not_cashing"] == 6 - 4
+    assert contest["metrics"]["non_cashing"]["avg_pmr_remaining"] == 50.0
 
 
 def test_field_remaining_marks_included_locked_lineups_partial_before_truncation(monkeypatch, tmp_path):

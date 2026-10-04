@@ -1,0 +1,724 @@
+{
+  "$defs":{
+    "CashLine":{
+      "additionalProperties":false,
+      "description":"Where the cash line sits: a rank, a points total, or both.",
+      "properties":{
+        "cutoff_type":{
+          "enum":[
+            "rank",
+            "points",
+            "unknown"
+          ],
+          "title":"Cutoff Type",
+          "type":"string"
+        },
+        "points_cutoff":{
+          "title":"Points Cutoff",
+          "type":"number"
+        },
+        "rank_cutoff":{
+          "title":"Rank Cutoff",
+          "type":"integer"
+        }
+      },
+      "required":[
+        "cutoff_type"
+      ],
+      "title":"CashLine",
+      "type":"object"
+    },
+    "Contest":{
+      "additionalProperties":false,
+      "description":"One DraftKings contest with its standings, VIP lineups and metrics.",
+      "properties":{
+        "contest_id":{
+          "title":"Contest Id",
+          "type":"string"
+        },
+        "contest_key":{
+          "title":"Contest Key",
+          "type":"string"
+        },
+        "contest_type":{
+          "title":"Contest Type",
+          "type":"string"
+        },
+        "currency":{
+          "title":"Currency",
+          "type":"string"
+        },
+        "entry_fee_cents":{
+          "title":"Entry Fee Cents",
+          "type":"integer"
+        },
+        "live_metrics":{
+          "$ref":"#/$defs/LiveMetrics"
+        },
+        "max_entries":{
+          "title":"Max Entries",
+          "type":"integer"
+        },
+        "max_entries_per_user":{
+          "anyOf":[
+            {
+              "type":"integer"
+            },
+            {
+              "type":"null"
+            }
+          ],
+          "title":"Max Entries Per User"
+        },
+        "metrics":{
+          "$ref":"#/$defs/ContestMetrics"
+        },
+        "name":{
+          "title":"Name",
+          "type":"string"
+        },
+        "ownership_watchlist":{
+          "$ref":"#/$defs/OwnershipWatchlist"
+        },
+        "positions_paid":{
+          "minimum":1,
+          "title":"Positions Paid",
+          "type":"integer"
+        },
+        "prize_pool_cents":{
+          "title":"Prize Pool Cents",
+          "type":"integer"
+        },
+        "sport":{
+          "title":"Sport",
+          "type":"string"
+        },
+        "standings":{
+          "items":{
+            "$ref":"#/$defs/StandingsRow"
+          },
+          "title":"Standings",
+          "type":"array"
+        },
+        "start_time":{
+          "title":"Start Time",
+          "type":"string"
+        },
+        "state":{
+          "title":"State",
+          "type":"string"
+        },
+        "train_clusters":{
+          "items":{
+            "$ref":"#/$defs/TrainCluster"
+          },
+          "title":"Train Clusters",
+          "type":"array"
+        },
+        "vip_lineups":{
+          "items":{
+            "$ref":"#/$defs/VipLineupRow"
+          },
+          "title":"Vip Lineups",
+          "type":"array"
+        }
+      },
+      "required":[
+        "contest_id",
+        "contest_key",
+        "name",
+        "sport",
+        "contest_type",
+        "start_time",
+        "state",
+        "currency",
+        "max_entries",
+        "max_entries_per_user",
+        "entry_fee_cents",
+        "prize_pool_cents",
+        "standings",
+        "vip_lineups",
+        "train_clusters"
+      ],
+      "title":"Contest",
+      "type":"object"
+    },
+    "ContestMetrics":{
+      "additionalProperties":false,
+      "description":"The `contest.metrics` section (derived contest metrics).",
+      "properties":{
+        "distance_to_cash":{
+          "$ref":"#/$defs/DistanceToCash"
+        },
+        "non_cashing":{
+          "$ref":"#/$defs/NonCashing"
+        },
+        "ownership_summary":{
+          "$ref":"#/$defs/OwnershipSummary"
+        },
+        "threat":{
+          "$ref":"#/$defs/Threat"
+        },
+        "updated_at":{
+          "title":"Updated At",
+          "type":"string"
+        }
+      },
+      "required":[
+        "updated_at"
+      ],
+      "title":"ContestMetrics",
+      "type":"object"
+    },
+    "DistanceToCash":{
+      "additionalProperties":false,
+      "description":"Per-VIP distance to the cash line; present only when some VIP can be measured.",
+      "properties":{
+        "cutoff_points":{
+          "title":"Cutoff Points",
+          "type":"number"
+        },
+        "per_vip":{
+          "items":{
+            "$ref":"#/$defs/DistanceToCashVip"
+          },
+          "minItems":1,
+          "title":"Per Vip",
+          "type":"array"
+        }
+      },
+      "required":[
+        "per_vip"
+      ],
+      "title":"DistanceToCash",
+      "type":"object"
+    },
+    "DistanceToCashVip":{
+      "additionalProperties":false,
+      "description":"How far one tracked VIP is from the cash line.",
+      "properties":{
+        "display_name":{
+          "minLength":1,
+          "title":"Display Name",
+          "type":"string"
+        },
+        "entry_key":{
+          "minLength":1,
+          "title":"Entry Key",
+          "type":"string"
+        },
+        "points_delta":{
+          "title":"Points Delta",
+          "type":"number"
+        },
+        "rank_delta":{
+          "title":"Rank Delta",
+          "type":"integer"
+        },
+        "vip_entry_key":{
+          "minLength":1,
+          "title":"Vip Entry Key",
+          "type":"string"
+        }
+      },
+      "required":[
+        "points_delta"
+      ],
+      "title":"DistanceToCashVip",
+      "type":"object"
+    },
+    "LiveMetrics":{
+      "additionalProperties":false,
+      "description":"The `contest.live_metrics` section: figures that move while the contest is live.",
+      "properties":{
+        "avg_salary_per_player_remaining":{
+          "minimum":0,
+          "title":"Avg Salary Per Player Remaining",
+          "type":"number"
+        },
+        "cash_line":{
+          "$ref":"#/$defs/CashLine"
+        },
+        "updated_at":{
+          "title":"Updated At",
+          "type":"string"
+        }
+      },
+      "required":[
+        "updated_at"
+      ],
+      "title":"LiveMetrics",
+      "type":"object"
+    },
+    "NonCashing":{
+      "additionalProperties":false,
+      "description":"The tally of users below the cash line.\n\n`top_remaining_players` is only emitted for sports that tally it (not MLB, not golf).",
+      "properties":{
+        "avg_pmr_remaining":{
+          "title":"Avg Pmr Remaining",
+          "type":"number"
+        },
+        "top_remaining_players":{
+          "items":{
+            "$ref":"#/$defs/TopRemainingPlayer"
+          },
+          "maxItems":10,
+          "title":"Top Remaining Players",
+          "type":"array"
+        },
+        "users_not_cashing":{
+          "minimum":1,
+          "title":"Users Not Cashing",
+          "type":"integer"
+        }
+      },
+      "required":[
+        "users_not_cashing",
+        "avg_pmr_remaining"
+      ],
+      "title":"NonCashing",
+      "type":"object"
+    },
+    "OwnershipSummary":{
+      "additionalProperties":false,
+      "description":"Ownership summary over the tracked VIP lineups.",
+      "properties":{
+        "per_vip":{
+          "items":{
+            "$ref":"#/$defs/OwnershipSummaryVip"
+          },
+          "minItems":1,
+          "title":"Per Vip",
+          "type":"array"
+        },
+        "scope":{
+          "const":"vip_lineup",
+          "title":"Scope",
+          "type":"string"
+        },
+        "source":{
+          "const":"vip_lineup_players",
+          "title":"Source",
+          "type":"string"
+        }
+      },
+      "required":[
+        "source",
+        "scope",
+        "per_vip"
+      ],
+      "title":"OwnershipSummary",
+      "type":"object"
+    },
+    "OwnershipSummaryVip":{
+      "additionalProperties":false,
+      "description":"Ownership totals for one tracked VIP lineup.",
+      "properties":{
+        "display_name":{
+          "minLength":1,
+          "title":"Display Name",
+          "type":"string"
+        },
+        "entry_key":{
+          "minLength":1,
+          "title":"Entry Key",
+          "type":"string"
+        },
+        "is_partial":{
+          "title":"Is Partial",
+          "type":"boolean"
+        },
+        "ownership_in_play_pct":{
+          "minimum":0,
+          "title":"Ownership In Play Pct",
+          "type":"number"
+        },
+        "total_ownership_pct":{
+          "minimum":0,
+          "title":"Total Ownership Pct",
+          "type":"number"
+        },
+        "vip_entry_key":{
+          "minLength":1,
+          "title":"Vip Entry Key",
+          "type":"string"
+        }
+      },
+      "required":[
+        "vip_entry_key",
+        "total_ownership_pct",
+        "is_partial"
+      ],
+      "title":"OwnershipSummaryVip",
+      "type":"object"
+    },
+    "OwnershipWatchlist":{
+      "additionalProperties":true,
+      "description":"The `contest.ownership_watchlist` section.",
+      "properties":{},
+      "title":"OwnershipWatchlist",
+      "type":"object"
+    },
+    "PrimaryContest":{
+      "additionalProperties":false,
+      "description":"The contest the sport payload is built around.",
+      "properties":{
+        "contest_id":{
+          "title":"Contest Id",
+          "type":"string"
+        },
+        "contest_key":{
+          "title":"Contest Key",
+          "type":"string"
+        },
+        "selected_at":{
+          "title":"Selected At",
+          "type":"string"
+        },
+        "selection_reason":{
+          "$ref":"#/$defs/SelectionReason"
+        }
+      },
+      "required":[
+        "contest_id",
+        "contest_key",
+        "selection_reason",
+        "selected_at"
+      ],
+      "title":"PrimaryContest",
+      "type":"object"
+    },
+    "SelectionReason":{
+      "additionalProperties":true,
+      "description":"Why the primary contest was selected.",
+      "properties":{},
+      "title":"SelectionReason",
+      "type":"object"
+    },
+    "SportPayload":{
+      "additionalProperties":false,
+      "description":"One sport's slice of the snapshot.",
+      "properties":{
+        "contests":{
+          "items":{
+            "$ref":"#/$defs/Contest"
+          },
+          "title":"Contests",
+          "type":"array"
+        },
+        "players":{
+          "items":{
+            "$ref":"#/$defs/SportPlayer"
+          },
+          "title":"Players",
+          "type":"array"
+        },
+        "primary_contest":{
+          "$ref":"#/$defs/PrimaryContest"
+        },
+        "status":{
+          "enum":[
+            "ok",
+            "stale",
+            "error"
+          ],
+          "title":"Status",
+          "type":"string"
+        },
+        "updated_at":{
+          "title":"Updated At",
+          "type":"string"
+        }
+      },
+      "required":[
+        "status",
+        "updated_at",
+        "players",
+        "primary_contest",
+        "contests"
+      ],
+      "title":"SportPayload",
+      "type":"object"
+    },
+    "SportPlayer":{
+      "additionalProperties":true,
+      "description":"One row of a sport payload's `players`.\n\nNot typed field by field yet, but a `name` it carries has no leading or trailing whitespace.",
+      "properties":{},
+      "title":"SportPlayer",
+      "type":"object"
+    },
+    "StandingsRow":{
+      "additionalProperties":true,
+      "description":"One row of `contest.standings`.",
+      "properties":{},
+      "title":"StandingsRow",
+      "type":"object"
+    },
+    "SwingPlayer":{
+      "additionalProperties":false,
+      "description":"A player whose result can swing VIPs against the field.",
+      "properties":{
+        "ownership_remaining_pct":{
+          "title":"Ownership Remaining Pct",
+          "type":"number"
+        },
+        "player_key":{
+          "minLength":1,
+          "title":"Player Key",
+          "type":"string"
+        },
+        "player_name":{
+          "minLength":1,
+          "pattern":"^\\S(?:[\\s\\S]*\\S)?$",
+          "title":"Player Name",
+          "type":"string"
+        },
+        "vip_count":{
+          "minimum":0,
+          "title":"Vip Count",
+          "type":"integer"
+        }
+      },
+      "required":[
+        "player_key",
+        "player_name",
+        "vip_count"
+      ],
+      "title":"SwingPlayer",
+      "type":"object"
+    },
+    "Threat":{
+      "additionalProperties":false,
+      "description":"Threat metrics: swing players plus the field-remaining group (absent for sports with no Game status).",
+      "properties":{
+        "field_remaining_is_partial":{
+          "title":"Field Remaining Is Partial",
+          "type":"boolean"
+        },
+        "field_remaining_pct":{
+          "title":"Field Remaining Pct",
+          "type":"number"
+        },
+        "field_remaining_scope":{
+          "const":"contest_field",
+          "title":"Field Remaining Scope",
+          "type":"string"
+        },
+        "field_remaining_source":{
+          "const":"contest_standings_mean",
+          "title":"Field Remaining Source",
+          "type":"string"
+        },
+        "leverage_semantics":{
+          "const":"positive=unique",
+          "title":"Leverage Semantics",
+          "type":"string"
+        },
+        "top_swing_players":{
+          "items":{
+            "$ref":"#/$defs/SwingPlayer"
+          },
+          "title":"Top Swing Players",
+          "type":"array"
+        },
+        "vip_vs_field_leverage":{
+          "items":{
+            "$ref":"#/$defs/VipVsFieldLeverage"
+          },
+          "title":"Vip Vs Field Leverage",
+          "type":"array"
+        }
+      },
+      "title":"Threat",
+      "type":"object"
+    },
+    "TopRemainingPlayer":{
+      "additionalProperties":false,
+      "description":"A player still to play on non-cashing lineups.",
+      "properties":{
+        "ownership_remaining_pct":{
+          "title":"Ownership Remaining Pct",
+          "type":"number"
+        },
+        "player_name":{
+          "minLength":1,
+          "pattern":"^\\S(?:[\\s\\S]*\\S)?$",
+          "title":"Player Name",
+          "type":"string"
+        }
+      },
+      "required":[
+        "player_name",
+        "ownership_remaining_pct"
+      ],
+      "title":"TopRemainingPlayer",
+      "type":"object"
+    },
+    "TrainCluster":{
+      "additionalProperties":true,
+      "description":"One cluster of identical lineups in `contest.train_clusters`.",
+      "properties":{},
+      "title":"TrainCluster",
+      "type":"object"
+    },
+    "VipLineupRow":{
+      "additionalProperties":false,
+      "description":"One tracked VIP's lineup in `contest.vip_lineups`.\n\nEvery field is omitted when the source cannot supply it; none is ever null.",
+      "properties":{
+        "display_name":{
+          "title":"Display Name",
+          "type":"string"
+        },
+        "entry_key":{
+          "title":"Entry Key",
+          "type":"string"
+        },
+        "players_live":{
+          "items":{
+            "$ref":"#/$defs/VipLineupSlot"
+          },
+          "title":"Players Live",
+          "type":"array"
+        },
+        "pmr":{
+          "title":"Pmr",
+          "type":"number"
+        },
+        "points":{
+          "title":"Points",
+          "type":"number"
+        },
+        "rank":{
+          "title":"Rank",
+          "type":"integer"
+        },
+        "vip_entry_key":{
+          "title":"Vip Entry Key",
+          "type":"string"
+        }
+      },
+      "title":"VipLineupRow",
+      "type":"object"
+    },
+    "VipLineupSlot":{
+      "additionalProperties":false,
+      "description":"One roster slot in a VIP's `players_live`.\n\nA revealed player carries `player_key` when resolvable, `salary` when known\nand `is_live`. A locked slot (a player DraftKings has not revealed) is\n`{slot, player_name: \"LOCKED \ud83d\udd12\", is_locked: true}` and carries none of those.",
+      "properties":{
+        "is_live":{
+          "title":"Is Live",
+          "type":"boolean"
+        },
+        "is_locked":{
+          "title":"Is Locked",
+          "type":"boolean"
+        },
+        "player_key":{
+          "title":"Player Key",
+          "type":"string"
+        },
+        "player_name":{
+          "minLength":1,
+          "pattern":"^\\S(?:[\\s\\S]*\\S)?$",
+          "title":"Player Name",
+          "type":"string"
+        },
+        "salary":{
+          "title":"Salary",
+          "type":"integer"
+        },
+        "slot":{
+          "minLength":1,
+          "title":"Slot",
+          "type":"string"
+        }
+      },
+      "required":[
+        "slot",
+        "player_name"
+      ],
+      "title":"VipLineupSlot",
+      "type":"object"
+    },
+    "VipVsFieldLeverage":{
+      "additionalProperties":false,
+      "description":"One VIP's remaining ownership against the contest field's.",
+      "properties":{
+        "display_name":{
+          "minLength":1,
+          "title":"Display Name",
+          "type":"string"
+        },
+        "entry_key":{
+          "minLength":1,
+          "title":"Entry Key",
+          "type":"string"
+        },
+        "field_remaining_pct":{
+          "title":"Field Remaining Pct",
+          "type":"number"
+        },
+        "is_partial":{
+          "title":"Is Partial",
+          "type":"boolean"
+        },
+        "uniqueness_delta_pct":{
+          "title":"Uniqueness Delta Pct",
+          "type":"number"
+        },
+        "vip_entry_key":{
+          "minLength":1,
+          "title":"Vip Entry Key",
+          "type":"string"
+        },
+        "vip_remaining_pct":{
+          "title":"Vip Remaining Pct",
+          "type":"number"
+        }
+      },
+      "required":[
+        "vip_entry_key",
+        "entry_key",
+        "display_name",
+        "vip_remaining_pct",
+        "field_remaining_pct",
+        "uniqueness_delta_pct",
+        "is_partial"
+      ],
+      "title":"VipVsFieldLeverage",
+      "type":"object"
+    }
+  },
+  "$schema":"https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties":false,
+  "description":"A schema-3 live snapshot, keyed by lowercase sport name.",
+  "properties":{
+    "generated_at":{
+      "title":"Generated At",
+      "type":"string"
+    },
+    "schema_version":{
+      "const":3,
+      "title":"Schema Version",
+      "type":"integer"
+    },
+    "snapshot_at":{
+      "title":"Snapshot At",
+      "type":"string"
+    },
+    "sports":{
+      "additionalProperties":{
+        "$ref":"#/$defs/SportPayload"
+      },
+      "title":"Sports",
+      "type":"object"
+    }
+  },
+  "required":[
+    "schema_version",
+    "snapshot_at",
+    "generated_at",
+    "sports"
+  ],
+  "title":"SnapshotEnvelope",
+  "type":"object"
+}

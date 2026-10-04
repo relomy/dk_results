@@ -23,29 +23,36 @@ def _money_to_cents(value: Any) -> int | None:
     return None
 
 
-def _cash_line_metric(cash_line: dict[str, Any]) -> dict[str, Any] | None:
-    rank_cutoff = cash_line.get("rank")
-    points_cutoff = cash_line.get("points")
+def _positions_paid(value: Any) -> int | None:
+    """The paid-position count when the source carries a usable one; omitted otherwise."""
+    if isinstance(value, str) and value.strip().isdecimal():
+        value = int(value)
+    return value if isinstance(value, int) and not isinstance(value, bool) and value >= 1 else None
+
+
+def _positions_paid_field(raw_contest: dict[str, Any]) -> dict[str, int]:
+    positions_paid = _positions_paid(raw_contest.get("positions_paid"))
+    return {} if positions_paid is None else {"positions_paid": positions_paid}
+
+
+def _cash_line_type(cash_line: dict[str, Any]) -> str:
     raw_cutoff_type = str(cash_line.get("cutoff_type") or "").strip().lower()
     if raw_cutoff_type in {"positions_paid", "rank"}:
-        cutoff_type = "rank"
-    elif raw_cutoff_type == "points":
-        cutoff_type = "points"
-    else:
-        cutoff_type = "unknown"
+        return "rank"
+    return "points" if raw_cutoff_type == "points" else "unknown"
 
-    metric: dict[str, Any] = {
-        "cutoff_type": cutoff_type,
-        "rank_cutoff": rank_cutoff,
-        "points_cutoff": points_cutoff,
+
+def _cash_line_metric(cash_line: dict[str, Any]) -> dict[str, Any] | None:
+    cutoff_type = _cash_line_type(cash_line)
+    # A cutoff the collector could not determine is omitted, never null.
+    cutoffs = {
+        key: value
+        for key, value in (("rank_cutoff", cash_line.get("rank")), ("points_cutoff", cash_line.get("points")))
+        if value is not None
     }
-    if cutoff_type == "rank" and metric["rank_cutoff"] is None:
+    if not cutoffs or (cutoff_type != "unknown" and f"{cutoff_type}_cutoff" not in cutoffs):
         return None
-    if cutoff_type == "points" and metric["points_cutoff"] is None:
-        return None
-    if metric["rank_cutoff"] is None and metric["points_cutoff"] is None:
-        return None
-    return metric
+    return {"cutoff_type": cutoff_type, **cutoffs}
 
 
 def _build_contest(raw_bundle: dict[str, Any], derived: dict[str, Any], generated_at: str) -> dict[str, Any]:
@@ -70,6 +77,7 @@ def _build_contest_fields(
             "prize_pool_cents": _money_to_cents(raw_contest.get("prize_pool_cents") or raw_contest.get("prize_pool")),
         }
     )
+    fields.update(_positions_paid_field(raw_contest))
     return fields
 
 

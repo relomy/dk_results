@@ -169,6 +169,36 @@ def test_non_cashing_stats():
     assert standings.non_cashing_avg_pmr > 0
 
 
+def _tied_standings_rows():
+    """Paid positions = 4; ties inside the line, a tie at the line, rows out of score order."""
+    cash = "QB Tom Brady"
+    non_cash = "RB Derrick Henry"
+    return [
+        ["rank", "player_id", "name", "pmr", "pts", "lineup_str"],
+        ["2", "1", "TiedInside1", "0", "90", cash],
+        ["1", "2", "Leader", "0", "100", cash],
+        ["4", "3", "AtLine1", "0", "80", cash],
+        ["2", "4", "TiedInside2", "0", "90", cash],
+        ["4", "5", "AtLine2", "0", "80", cash],
+        ["6", "6", "Below1", "10", "70", non_cash],
+        ["7", "7", "Below2", "20", "60", non_cash],
+    ]
+
+
+def test_non_cashing_is_decided_by_rank_alone_so_ties_and_out_of_order_rows_still_cash():
+    standings = parse_contest_standings(NFLSport, _salary_rows(), _tied_standings_rows(), positions_paid=4)
+
+    assert standings.non_cashing_users == 2
+    assert standings.non_cashing_avg_pmr == 15.0
+    assert standings.non_cashing_players == {"Derrick Henry": 2}
+
+
+def test_cash_line_is_last_paid_position_regardless_of_ties_and_row_order():
+    standings = parse_contest_standings(NFLSport, _salary_rows(), _tied_standings_rows(), positions_paid=4)
+
+    assert (standings.min_rank, standings.min_cash_pts) == (4, 80.0)
+
+
 def test_locked_slots_are_not_added_to_non_cashing_player_stats():
     rows = [
         ["rank", "player_id", "name", "pmr", "pts", "lineup_str"],

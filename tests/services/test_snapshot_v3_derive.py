@@ -15,14 +15,14 @@ def test_distance_to_cash_emits_rows_only_when_points_delta_available() -> None:
                 "entry_key": "e1",
                 "display_name": "Vip 1",
                 "rank": 55,
-                "pts": 251.5,
+                "points": 251.5,
             },
             {
                 "vip_entry_key": "v2",
                 "entry_key": "e2",
                 "display_name": "Vip 2",
                 "rank": 45,
-                "pts": None,
+                "points": None,
             },
         ],
     }
@@ -46,7 +46,7 @@ def test_distance_to_cash_emits_rows_only_when_points_delta_available() -> None:
 def test_distance_to_cash_missing_cash_line_returns_none() -> None:
     raw = {
         "vip_lineups": [
-            {"vip_entry_key": "v1", "entry_key": "e1", "display_name": "Vip 1", "rank": 55, "pts": 251.5},
+            {"vip_entry_key": "v1", "entry_key": "e1", "display_name": "Vip 1", "rank": 55, "points": 251.5},
         ],
     }
 
@@ -63,7 +63,7 @@ def test_distance_to_cash_omits_rank_delta_when_rank_cutoff_missing() -> None:
     raw = {
         "cash_line": {"points": 250.0},
         "vip_lineups": [
-            {"vip_entry_key": "v1", "entry_key": "e1", "display_name": "Vip 1", "rank": 55, "pts": 251.5},
+            {"vip_entry_key": "v1", "entry_key": "e1", "display_name": "Vip 1", "rank": 55, "points": 251.5},
         ],
     }
 

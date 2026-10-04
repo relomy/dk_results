@@ -12,6 +12,41 @@ broad; the relevant subset when it's narrow.
 - `uv run ruff check .`
 - `uv run ty check`
 
+After changing the snapshot contract models
+(`src/dk_results/services/snapshot_v3/models/`), regenerate the committed
+schema with `uv run python export_snapshot_schema.py`; a test fails while
+`contract/snapshot.schema.json` is stale.
+
+CI also gates that schema against the PR's base branch and fails on a breaking
+change unless the PR is labeled `breaking-change` and logs it (see
+`docs/SNAPSHOT_SCHEMA.md`, "Compatibility gate"). To run the gate locally:
+
+```bash
+git show origin/main:contract/snapshot.schema.json > /tmp/base.schema.json
+uv run python check_snapshot_schema_compat.py --base /tmp/base.schema.json
+```
+
+## Golden envelopes
+
+`contract/goldens/<scenario>.json` are complete snapshot envelopes built by the
+real pipeline (injected collector, real derive, builder and validators, fixed
+`generated_at`) from the hand-built bundles in
+`tests/services/snapshot_scenarios.py`. `tests/services/test_snapshot_v3_goldens.py`
+rebuilds each one and fails while it differs from the committed file.
+
+After an intentional change to the emitted envelope, rewrite every golden in one
+step and review the diff:
+
+```bash
+UPDATE_GOLDENS=1 uv run pytest tests/services/test_snapshot_v3_goldens.py
+```
+
+The `nfl_mid_slate` bundle is itself produced by the real collector from stubbed DraftKings
+payloads (standings CSV rows, scorecards, leaderboard), so prod-shaped input quirks reach the golden.
+
+To add a scenario, write one bundle builder and add one `Scenario` entry to
+`SCENARIOS` in `tests/services/snapshot_scenarios.py`, then run the command above.
+
 ## dfs-common is a git dependency
 
 `dfs-common` is sourced from the private `relomy/dfs-common` GitHub repo in

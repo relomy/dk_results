@@ -18,6 +18,7 @@ from dk_results.services.snapshot_v3.derive import (
     derive_ownership_summary,
     derive_threat,
 )
+from dk_results.services.snapshot_v3.models.envelope import contract_violations
 from dk_results.services.snapshot_v3.normalize import to_utc_iso
 from dk_results.services.snapshot_v3.serialize import normalize_rfc3339_utc_seconds
 from dk_results.services.snapshot_v3.validate import validate_v3_envelope
@@ -91,7 +92,10 @@ def build_snapshot_v3_envelope(
         "sports": sports,
     }
 
-    violations = validate_v3_envelope(envelope)
+    # The contract models check shape first. The hand-written validator, which
+    # covers what the models don't type yet plus cross-field coherence, runs only
+    # once they pass, so one fault is reported once.
+    violations = contract_violations(envelope) or validate_v3_envelope(envelope)
     if violations:
         joined = ",".join(violations)
         raise ValueError(f"Snapshot v3 validation failed: {joined}")

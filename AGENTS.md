@@ -13,6 +13,7 @@ updates, and Discord notifications.
 - `dfs-common` is a private git dependency; read `docs/TESTING.md` when a `uv`
   command fails while building the venv.
 - Complexity regressions: `uv run --group quality complexity-ratchet --base origin/main --worktree`.
+- Changes under `src/dk_results/services/snapshot_v3/` update `docs/SNAPSHOT_SCHEMA.md` and the exported `contract/snapshot.schema.json` in the same PR; relomy/dk_dashboard checks itself against the feed.
 
 ## Further instructions
 

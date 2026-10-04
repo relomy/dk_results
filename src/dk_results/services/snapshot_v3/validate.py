@@ -13,7 +13,7 @@ from dk_results.services.snapshot_v3.contracts import (
     validate_single_contest,
     validate_top_swing_players,
 )
-from dk_results.services.snapshot_v3.derive import (
+from dk_results.services.snapshot_v3.models.metrics import (
     FIELD_REMAINING_SCOPE,
     FIELD_REMAINING_SOURCE,
     LEVERAGE_SEMANTICS,
@@ -172,8 +172,23 @@ def _validate_vip_lineups(sport: str, contest: dict[str, Any]) -> list[str]:
         violation
         for index, row in enumerate(vip_lineups)
         if isinstance(row, dict)
-        for violation in _validate_vip_lineup_slots(sport, index, row)
+        for violation in [
+            *_validate_vip_figures(f"sports.{sport}.contests[0].vip_lineups[{index}]", row),
+            *_validate_vip_lineup_slots(sport, index, row),
+        ]
     ]
+
+
+def _validate_vip_figures(path: str, row: dict[str, Any]) -> list[str]:
+    violations = []
+    if "rank" in row and not (isinstance(row["rank"], int) and not isinstance(row["rank"], bool)):
+        violations.append(f"{path}.rank has invalid type")
+    violations.extend(
+        f"{path}.{field} has invalid type"
+        for field in ("points", "pmr")
+        if field in row and not _is_finite_number(row[field])
+    )
+    return violations
 
 
 def _validate_vip_lineup_slots(sport: str, vip_index: int, row: dict[str, Any]) -> list[str]:
@@ -204,6 +219,8 @@ def _validate_vip_slot_identity(path: str, slot: dict[str, Any]) -> list[str]:
         violations.append(f"{path}.slot {message}")
     if not _is_non_empty_string(slot.get("player_name")):
         violations.append(f"{path}.player_name is required")
+    elif slot["player_name"] != slot["player_name"].strip():
+        violations.append(f"{path}.player_name must not have leading or trailing whitespace")
     return violations
 
 
