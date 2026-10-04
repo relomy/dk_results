@@ -80,6 +80,11 @@
         "ownership_watchlist":{
           "$ref":"#/$defs/OwnershipWatchlist"
         },
+        "positions_paid":{
+          "minimum":1,
+          "title":"Positions Paid",
+          "type":"integer"
+        },
         "prize_pool_cents":{
           "title":"Prize Pool Cents",
           "type":"integer"

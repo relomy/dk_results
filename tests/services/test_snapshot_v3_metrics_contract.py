@@ -29,7 +29,13 @@ def _player(name: str, status: str) -> dict[str, Any]:
     }
 
 
-def _bundle(sport: str = "NBA", *, cash_line: dict[str, Any] | None = None, **ownership: Any) -> dict[str, Any]:
+def _bundle(
+    sport: str = "NBA",
+    *,
+    cash_line: dict[str, Any] | None = None,
+    positions_paid: int | None = None,
+    **ownership: Any,
+) -> dict[str, Any]:
     return {
         "sport": sport,
         "contest": {
@@ -41,6 +47,7 @@ def _bundle(sport: str = "NBA", *, cash_line: dict[str, Any] | None = None, **ow
             "entry_fee": 10,
             "prize_pool": 1000,
             "max_entries": 100,
+            **({"positions_paid": positions_paid} if positions_paid is not None else {}),
         },
         "selected_contest_id": "900",
         "selection_reason": {"mode": "explicit_id"},
@@ -61,12 +68,11 @@ def _build(bundle: dict[str, Any]) -> dict[str, Any]:
     )
 
 
-def _non_cashing_bundle(
-    users_not_cashing: int, *, cash_line: dict[str, Any] | None, sport: str = "NBA"
-) -> dict[str, Any]:
+def _non_cashing_bundle(users_not_cashing: int, *, positions_paid: int | None, sport: str = "NBA") -> dict[str, Any]:
     return _bundle(
         sport,
-        cash_line=cash_line,
+        cash_line=PAID_60,
+        positions_paid=positions_paid,
         non_cashing_user_count=users_not_cashing,
         non_cashing_avg_pmr=120.0,
         non_cashing_top_remaining_players=[
@@ -82,30 +88,53 @@ class TestNonCashingCannotExceedEntriesMinusPositionsPaid:
     def test_count_above_the_bound_fails_the_build(self) -> None:
         # 100 entries, 60 paid: at most 40 can be non-cashing.
         with pytest.raises(ValueError, match="non_cashing.users_not_cashing"):
-            _build(_non_cashing_bundle(41, cash_line=PAID_60))
+            _build(_non_cashing_bundle(41, positions_paid=60))
 
     def test_count_at_the_bound_passes(self) -> None:
-        envelope = _build(_non_cashing_bundle(40, cash_line=PAID_60))
+        envelope = _build(_non_cashing_bundle(40, positions_paid=60))
 
         assert envelope["sports"]["nba"]["contests"][0]["metrics"]["non_cashing"]["users_not_cashing"] == 40
 
-    def test_check_is_skipped_when_there_is_no_cash_line(self) -> None:
-        envelope = _build(_non_cashing_bundle(500, cash_line=None))
+    def test_bound_uses_positions_paid_not_the_cash_line_rank(self) -> None:
+        # The cash line seen so far is rank 60, but 90 positions are paid: at most 10 can be non-cashing.
+        with pytest.raises(ValueError, match="non_cashing.users_not_cashing"):
+            _build(_non_cashing_bundle(11, positions_paid=90))
 
-        assert envelope["sports"]["nba"]["contests"][0]["metrics"]["non_cashing"]["users_not_cashing"] == 500
+    def test_positions_paid_is_emitted_on_the_contest(self) -> None:
+        envelope = _build(_non_cashing_bundle(40, positions_paid=60))
 
-    def test_violation_names_the_non_cashing_path(self) -> None:
-        envelope = _build(_non_cashing_bundle(40, cash_line=PAID_60))
+        assert envelope["sports"]["nba"]["contests"][0]["positions_paid"] == 60
+
+    def test_check_is_skipped_when_positions_paid_is_unknown(self) -> None:
+        envelope = _build(_non_cashing_bundle(500, positions_paid=None))
+
+        contest = envelope["sports"]["nba"]["contests"][0]
+        assert "positions_paid" not in contest
+        assert contest["metrics"]["non_cashing"]["users_not_cashing"] == 500
+
+    def test_violation_names_the_contest_path(self) -> None:
+        envelope = _build(_non_cashing_bundle(40, positions_paid=60))
         envelope["sports"]["nba"]["contests"][0]["metrics"]["non_cashing"]["users_not_cashing"] = 41
 
         assert len(contract_violations(envelope)) == 1
         assert contract_violations(envelope)[0].startswith("sports.nba.contests[0]: ")
+
+    @pytest.mark.parametrize("value", [0, -5, "60", True])
+    def test_malformed_positions_paid_is_not_emitted(self, value: Any) -> None:
+        bundle = _non_cashing_bundle(40, positions_paid=None)
+        bundle["contest"]["positions_paid"] = value
+
+        envelope = _build(bundle)
+
+        expected = {"60": 60}.get(value) if isinstance(value, str) else None
+        assert _contest(envelope).get("positions_paid") == expected
 
 
 def _rich_bundle(sport: str = "NBA") -> dict[str, Any]:
     bundle = _bundle(
         sport,
         cash_line=PAID_60,
+        positions_paid=60,
         non_cashing_user_count=40,
         non_cashing_avg_pmr=120.0,
         non_cashing_top_remaining_players=[
@@ -151,7 +180,7 @@ class TestEmittedMetricsSatisfyTheContract:
         assert contract_violations(envelope) == []
 
     def test_sport_without_a_non_cashing_tally_has_no_top_remaining_players(self) -> None:
-        envelope = _build(_non_cashing_bundle(40, cash_line=PAID_60, sport="MLB"))
+        envelope = _build(_non_cashing_bundle(40, positions_paid=60, sport="MLB"))
 
         assert "top_remaining_players" not in _contest_for(envelope, "mlb")["metrics"]["non_cashing"]
         assert contract_violations(envelope) == []

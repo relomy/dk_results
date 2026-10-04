@@ -23,6 +23,13 @@ def _money_to_cents(value: Any) -> int | None:
     return None
 
 
+def _positions_paid(value: Any) -> int | None:
+    """The paid-position count when the source carries a usable one; omitted otherwise."""
+    if isinstance(value, str) and value.strip().isdecimal():
+        value = int(value)
+    return value if isinstance(value, int) and not isinstance(value, bool) and value >= 1 else None
+
+
 def _cash_line_type(cash_line: dict[str, Any]) -> str:
     raw_cutoff_type = str(cash_line.get("cutoff_type") or "").strip().lower()
     if raw_cutoff_type in {"positions_paid", "rank"}:
@@ -65,6 +72,9 @@ def _build_contest_fields(
             "prize_pool_cents": _money_to_cents(raw_contest.get("prize_pool_cents") or raw_contest.get("prize_pool")),
         }
     )
+    positions_paid = _positions_paid(raw_contest.get("positions_paid"))
+    if positions_paid is not None:
+        fields["positions_paid"] = positions_paid
     return fields
 
 

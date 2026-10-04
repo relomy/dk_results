@@ -174,11 +174,11 @@ def test_nfl_mid_slate_golden_carries_locked_slots_next_to_revealed_ones() -> No
 
 def test_nfl_mid_slate_golden_non_cashing_stays_within_entries_minus_positions_paid() -> None:
     contest = _committed_contest("nfl_mid_slate")
-    cash_line = contest["live_metrics"]["cash_line"]
 
     assert contest["max_entries"] == NFL_ENTRIES
-    assert cash_line["rank_cutoff"] == NFL_POSITIONS_PAID
-    assert contest["metrics"]["non_cashing"]["users_not_cashing"] <= NFL_ENTRIES - cash_line["rank_cutoff"]
+    assert contest["positions_paid"] == NFL_POSITIONS_PAID
+    assert contest["live_metrics"]["cash_line"]["rank_cutoff"] == NFL_POSITIONS_PAID
+    assert contest["metrics"]["non_cashing"]["users_not_cashing"] <= NFL_ENTRIES - contest["positions_paid"]
 
 
 def test_nfl_mid_slate_golden_does_not_count_ties_at_or_inside_the_cash_line_as_non_cashing() -> None:

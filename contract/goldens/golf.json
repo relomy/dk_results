@@ -54,6 +54,7 @@
             "updated_at":"2026-10-04T12:00:00Z"
           },
           "name":"PGA $20 Double Up",
+          "positions_paid":40,
           "prize_pool_cents":800000,
           "sport":"golf",
           "standings":[
