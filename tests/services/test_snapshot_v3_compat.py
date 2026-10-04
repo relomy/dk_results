@@ -324,3 +324,121 @@ def test_recursive_definitions_are_compared_without_looping() -> None:
     assert [(c.path, c.kind) for c in breaking_changes(previous, current)] == [
         ("children", BreakingKind.BECAME_REQUIRED)
     ]
+
+
+def _kind(value: str, **fields: Any) -> dict[str, Any]:
+    """An object union branch discriminated by a ``kind`` const."""
+    return _obj({"kind": {"type": "string", "const": value}, **fields}, ("kind",))
+
+
+def _union(*branches: dict[str, Any]) -> dict[str, Any]:
+    return _obj({"v": {"anyOf": list(branches)}}, ("v",))
+
+
+BRANCH_A = _kind("a", x=INT)
+BRANCH_B = _kind("b", y=INT)
+
+BRANCH_CASES = [
+    pytest.param(
+        _union(BRANCH_A, BRANCH_B),
+        _union(BRANCH_A, _kind("b")),
+        [BreakingChange("v.y", BreakingKind.FIELD_REMOVED)],
+        id="field-removed-in-a-later-branch",
+    ),
+    pytest.param(
+        _union(BRANCH_A, BRANCH_B),
+        _union(BRANCH_A, _kind("b", y=STR)),
+        [BreakingChange("v.y", BreakingKind.TYPE_CHANGED, "integer -> string")],
+        id="type-changed-in-a-later-branch",
+    ),
+    pytest.param(
+        _union(BRANCH_A, BRANCH_B),
+        _union(BRANCH_A),
+        [BreakingChange("v", BreakingKind.BRANCH_REMOVED, 'object branch kind="b" has no counterpart')],
+        id="discriminated-branch-without-counterpart",
+    ),
+    pytest.param(
+        _union(BRANCH_A, BRANCH_B),
+        _union(BRANCH_A, _kind("c", y=INT)),
+        [BreakingChange("v", BreakingKind.BRANCH_REMOVED, 'object branch kind="b" has no counterpart')],
+        id="discriminator-value-changed",
+    ),
+    pytest.param(
+        _union(_obj({"x": INT}), _obj({"y": INT})),
+        _union(_obj({"x": INT}), _obj({})),
+        [BreakingChange("v.y", BreakingKind.FIELD_REMOVED)],
+        id="positional-fallback-compares-the-second-branch",
+    ),
+    pytest.param(
+        _union(_obj({"x": INT}), _obj({"y": INT})),
+        _union(_obj({"x": INT})),
+        [BreakingChange("v", BreakingKind.BRANCH_REMOVED, "object branch #2 has no counterpart")],
+        id="positional-branch-without-counterpart",
+    ),
+    pytest.param(
+        _union({"type": "array", "items": INT}, {"type": "array", "items": STR}),
+        _union({"type": "array", "items": INT}, {"type": "array", "items": INT}),
+        [BreakingChange("v[]", BreakingKind.TYPE_CHANGED, "string -> integer")],
+        id="array-branches-paired-by-position",
+    ),
+    pytest.param(
+        _union({"type": "array", "items": INT}, {"type": "array", "items": STR}),
+        _union({"type": "array", "items": INT}),
+        [BreakingChange("v", BreakingKind.BRANCH_REMOVED, "array branch #2 has no counterpart")],
+        id="array-branch-without-counterpart",
+    ),
+    pytest.param(
+        _union({"type": "array", "items": BRANCH_A}, {"type": "array", "items": BRANCH_B}),
+        _union({"type": "array", "items": BRANCH_B}),
+        [BreakingChange("v", BreakingKind.BRANCH_REMOVED, 'array branch kind="a" has no counterpart')],
+        id="array-branch-paired-by-item-discriminator",
+    ),
+]
+
+
+@pytest.mark.parametrize(("previous", "current", "expected"), BRANCH_CASES)
+def test_every_union_branch_is_compared(
+    previous: dict[str, Any], current: dict[str, Any], expected: list[BreakingChange]
+) -> None:
+    assert breaking_changes(previous, current) == expected
+
+
+BRANCH_COMPATIBLE_CASES = [
+    pytest.param(_union(BRANCH_A, BRANCH_B), _union(BRANCH_B, BRANCH_A), id="discriminated-branches-reordered"),
+    pytest.param(
+        _union(BRANCH_A, BRANCH_B, {"type": "null"}),
+        _union({"type": "null"}, BRANCH_B, BRANCH_A),
+        id="discriminated-branches-reordered-around-null",
+    ),
+    pytest.param(
+        _union(BRANCH_A, BRANCH_B),
+        _union(BRANCH_A, BRANCH_B, _kind("c", z=INT)),
+        id="branch-added",
+    ),
+    pytest.param(
+        _union(BRANCH_A, _obj({"y": INT})),
+        _union(_obj({"y": INT, "z": INT}), BRANCH_A),
+        id="plain-branch-pairs-with-the-remaining-branch-after-discriminated-ones",
+    ),
+    pytest.param(
+        _union({"type": "array", "items": BRANCH_A}, {"type": "array", "items": BRANCH_B}),
+        _union({"type": "array", "items": BRANCH_B}, {"type": "array", "items": BRANCH_A}),
+        id="array-branches-reordered",
+    ),
+]
+
+
+@pytest.mark.parametrize(("previous", "current"), BRANCH_COMPATIBLE_CASES)
+def test_reordered_or_added_branches_are_not_breaking(previous: dict[str, Any], current: dict[str, Any]) -> None:
+    assert breaking_changes(previous, current) == []
+
+
+def test_branches_resolved_through_refs_are_paired_by_discriminator() -> None:
+    def refs(*names: str) -> dict[str, Any]:
+        return _obj(
+            {"v": {"anyOf": [{"$ref": f"#/$defs/{name}"} for name in names]}},
+            ("v",),
+            **{"$defs": {"A": BRANCH_A, "B": BRANCH_B}},
+        )
+
+    assert breaking_changes(refs("A", "B"), refs("B", "A")) == []

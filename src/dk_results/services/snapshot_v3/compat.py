@@ -15,7 +15,7 @@ no promise, so declaring it later is not breaking. Additions never are.
 from __future__ import annotations
 
 import json
-from collections.abc import Mapping
+from collections.abc import Iterator, Mapping
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any
@@ -31,6 +31,7 @@ class BreakingKind(StrEnum):
     BECAME_OPTIONAL = "became_optional"
     TYPE_CHANGED = "type_changed"
     TYPE_NARROWED = "type_narrowed"
+    BRANCH_REMOVED = "branch_removed"
     ENUM_VALUE_REMOVED = "enum_value_removed"
 
 
@@ -191,8 +192,48 @@ def _narrows(keyword: str, old: Any, new: Any) -> bool:
     return new > old if keyword in _LOWER_LIMITS else new < old
 
 
-def _first_of_type(variants: list[Schema], type_name: str) -> Schema | None:
-    return next((v for v in variants if v.get("type") == type_name), None)
+def _branches(variants: list[Schema], type_name: str) -> list[Schema]:
+    return [v for v in variants if v.get("type") == type_name]
+
+
+def _object_discriminator(root: Schema, branch: Schema) -> dict[str, str]:
+    """The properties of an object branch whose schema is a ``const``, with the value JSON-encoded."""
+    found: dict[str, str] = {}
+    for name, prop in branch.get("properties", {}).items():
+        resolved = _resolve(root, prop)
+        if "const" in resolved:
+            found[name] = json.dumps(resolved["const"], sort_keys=True)
+    return found
+
+
+def _discriminator(root: Schema, branch: Schema) -> dict[str, str]:
+    """What tells a union branch apart from its siblings: its const properties, or its single object item's."""
+    if branch.get("type") == "object":
+        return _object_discriminator(root, branch)
+    items = branch.get("items")
+    item_variants = (
+        [v for v in _variants(root, items) if v.get("type") == "object"] if isinstance(items, Mapping) else []
+    )
+    return _object_discriminator(root, item_variants[0]) if len(item_variants) == 1 else {}
+
+
+def _match(key: dict[str, str], candidates: list[dict[str, str]]) -> int | None:
+    """Index of the first candidate carrying every const value in ``key`` (``None`` for an empty key)."""
+    if not key:
+        return None
+    return next((index for index, other in enumerate(candidates) if key.items() <= other.items()), None)
+
+
+def _counterpart(
+    new: list[Schema], match: int | None, unclaimed: Iterator[Schema], *, positional: bool
+) -> Schema | None:
+    if match is not None:
+        return new[match]
+    return next(unclaimed, None) if positional else None
+
+
+def _label(key: dict[str, str], position: int) -> str:
+    return ", ".join(f"{name}={value}" for name, value in sorted(key.items())) if key else f"#{position}"
 
 
 class _Comparison:
@@ -209,8 +250,45 @@ class _Comparison:
         if _accepted_types(old) is not None and _accepted_types(old) == _accepted_types(new):
             self._compare_values(path, _allowed_values(old), _allowed_values(new))
         self._compare_limits(path, old, new)
-        self._compare_objects(path, _first_of_type(old, "object"), _first_of_type(new, "object"))
-        self._compare_arrays(path, _first_of_type(old, "array"), _first_of_type(new, "array"))
+        self._compare_branches(path, old, new, "object", self._compare_objects)
+        self._compare_branches(path, old, new, "array", self._compare_arrays)
+
+    def _compare_branches(
+        self, path: str, old: list[Schema], new: list[Schema], type_name: str, compare_pair: Any
+    ) -> None:
+        """Compare every ``type_name`` branch the previous schema had with its counterpart.
+
+        A branch the previous schema declared must still exist; with no ``type_name`` branch left at all
+        the type check already reports it.
+        """
+        old_branches, new_branches = _branches(old, type_name), _branches(new, type_name)
+        if not new_branches:
+            return
+        for position, (branch, counterpart) in enumerate(zip(old_branches, self._pair(old_branches, new_branches)), 1):
+            if counterpart is not None:
+                compare_pair(path, branch, counterpart)
+                continue
+            label = _label(_discriminator(self._previous_root, branch), position)
+            detail = f"{type_name} branch {label} has no counterpart"
+            self.changes.append(BreakingChange(path, BreakingKind.BRANCH_REMOVED, detail))
+
+    def _pair(self, old: list[Schema], new: list[Schema]) -> list[Schema | None]:
+        """The current counterpart of each previous branch.
+
+        A branch with a discriminator pairs with the current branch carrying the same const values; when
+        there is none, it is unmatched, unless it is the only branch (not a union, so nothing to tell apart
+        from: a changed const is then a value change on that branch). The rest pair by position with the
+        current branches not claimed that way.
+        """
+        old_keys = [_discriminator(self._previous_root, branch) for branch in old]
+        new_keys = [_discriminator(self._current_root, branch) for branch in new]
+        matches = [_match(key, new_keys) for key in old_keys]
+        claimed = {match for match in matches if match is not None}
+        unclaimed = iter(branch for index, branch in enumerate(new) if index not in claimed)
+        counterparts: list[Schema | None] = []
+        for key, match in zip(old_keys, matches, strict=True):
+            counterparts.append(_counterpart(new, match, unclaimed, positional=not key or len(old) == 1))
+        return counterparts
 
     def _compare_types(self, path: str, old: frozenset[str] | None, new: frozenset[str] | None) -> None:
         if old is None or old == new:
