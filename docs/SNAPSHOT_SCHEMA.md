@@ -65,3 +65,47 @@ status (golf) because it does not depend on per-player status.
 
 The Google Sheet's non-cashing block is produced separately and is unaffected
 by this metric.
+
+## `contest.metrics.ownership_summary`
+
+| Field | Type | Meaning |
+|---|---|---|
+| `source` | string | Always `vip_lineup_players`. |
+| `scope` | string | Always `vip_lineup`. |
+| `per_vip` | array | One row per tracked VIP entered in the contest, ordered by `vip_entry_key`. |
+
+Each `per_vip` row:
+
+| Field | Type | Meaning |
+|---|---|---|
+| `vip_entry_key` | string | The VIP's entry key. |
+| `entry_key` | string | The VIP's standings entry key. |
+| `display_name` | string | The VIP's display name. |
+| `total_ownership_pct` | number | Ownership summed over every lineup slot, in percentage points, two decimals. |
+| `ownership_in_play_pct` | number, optional | Ownership summed over slots whose Game status is in play (In-Progress, Delayed, Suspended), two decimals. Pre-game and finished players are excluded, so this differs from ownership remaining. |
+| `is_partial` | boolean | True when the numbers may be incomplete: see below. Always present. |
+
+Each slot's ownership and Game status come from the contest's `players[]`,
+looked up by the slot's `player_key`. VIP slots carry neither themselves, so
+`players[]` stays the single source of both.
+
+`is_partial` is true when any slot is locked, has no matching `player_key` in
+`players[]` (or the matched player has no ownership), or has an unrecognized
+Game status. A locked or unmatched slot adds nothing to either sum. An
+unrecognized status still counts toward `total_ownership_pct` but not toward
+`ownership_in_play_pct`. For a sport with no Game status (golf) an
+unrecognized status is expected and does not set `is_partial`.
+
+Omitted when:
+
+- no tracked VIP is entered (`vip_lineups` is empty), or no entered VIP has
+  any lineup slots. The whole metric is absent, not an empty `per_vip`.
+
+Omitted per row when:
+
+- the sport has no Game status (golf): `ownership_in_play_pct` is absent and
+  `total_ownership_pct` is still emitted.
+
+The pre-v3 `ownership_in_play_source` field is not emitted. **Behavior change
+from pre-v3:** the old producer counted pre-game players as in play; they are
+now excluded.
