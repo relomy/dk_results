@@ -1124,6 +1124,49 @@ def test_collector_no_status_pool_omits_remaining_outputs_but_keeps_non_cashing(
     assert contest["metrics"]["non_cashing"] == {"users_not_cashing": 1, "avg_pmr_remaining": 100.0}
 
 
+def test_users_not_cashing_is_entries_minus_positions_paid_for_a_fully_parsed_standings_file(monkeypatch, tmp_path):
+    lineup = "PG Alpha SG Bravo SF Charlie PF Delta C Echo G Foxtrot F LOCKED UTIL LOCKED"
+    header = ["rank", "entry", "name", "pmr", "points", "lineup"]
+    dk = _RemainingMetricsDK(["Delayed"] * 5)
+    # Paid positions = 4 of 6 entries: ties inside the line, one at it, rows out of score order.
+    dk.standings_rows = [
+        header,
+        ["2", "e1", "tied_a", "0", "90", lineup],
+        ["1", "e2", "leader", "0", "100", lineup],
+        ["4", "e3", "at_line", "0", "80", lineup],
+        ["2", "e4", "tied_b", "0", "90", lineup],
+        ["5", "e5", "below_a", "40", "70", lineup],
+        ["6", "e6", "below_b", "60", "60", lineup],
+    ]
+    monkeypatch.setattr(collector, "SALARY_DIR", str(tmp_path))
+    monkeypatch.setattr(collector, "load_vips", lambda: [])
+    monkeypatch.setattr(collector, "fetch_vip_lineups", lambda *a, **k: [])
+    row = ContestRow(
+        dk_id=321,
+        name="C",
+        draft_group=8,
+        positions_paid=4,
+        start_date="2026-10-04",
+        entry_fee=5,
+        entries=6,
+        contest_state="live",
+        prize_pool=100,
+    )
+    real_collect = collector._collect_source_snapshot
+    monkeypatch.setattr(
+        collector,
+        "_collect_source_snapshot",
+        lambda **kwargs: real_collect(dk=dk, contest_db=_FakeContestDB(by_id=row), **kwargs),
+    )
+    envelope = build_snapshot_v3_envelope(
+        {"NBA": 321}, generated_at="2026-10-04T12:00:00Z", standings_limit=10, collector=collect_snapshot
+    )
+    contest = envelope["sports"]["nba"]["contests"][0]
+
+    assert contest["metrics"]["non_cashing"]["users_not_cashing"] == 6 - 4
+    assert contest["metrics"]["non_cashing"]["avg_pmr_remaining"] == 50.0
+
+
 def test_field_remaining_marks_included_locked_lineups_partial_before_truncation(monkeypatch, tmp_path):
     contest = _remaining_metrics_contest(
         monkeypatch, tmp_path, ["Final", "Delayed", "Suspended", "AAA@BBB 07:00PM ET", "Final"]
