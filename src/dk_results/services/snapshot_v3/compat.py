@@ -153,6 +153,44 @@ def _describe(types: frozenset[str] | None) -> str:
     return " | ".join(sorted(types)) if types is not None else "any"
 
 
+_NUMERIC_LIMITS = ("minimum", "exclusiveMinimum", "maximum", "exclusiveMaximum")
+_LOWER_LIMITS = frozenset({"minimum", "exclusiveMinimum", "minLength", "minItems", "minProperties"})
+_LIMITS_BY_TYPE: dict[str, tuple[str, ...]] = {
+    "integer": _NUMERIC_LIMITS,
+    "number": _NUMERIC_LIMITS,
+    "string": ("minLength", "maxLength", "pattern"),
+    "array": ("minItems", "maxItems"),
+    "object": ("minProperties", "maxProperties"),
+}
+
+
+def _limit(variant: Schema, keyword: str) -> Any:
+    """The keyword's value, or ``None``; a boolean (draft-4 ``exclusiveMinimum``) is no numeric limit."""
+    value = variant.get(keyword)
+    return None if isinstance(value, bool) else value
+
+
+def _loosest(keyword: str, limits: list[Any], old: Any) -> Any:
+    """The limit that accepts the most among the current alternatives (``None``: unlimited)."""
+    if any(limit is None for limit in limits):
+        return None
+    if keyword == "pattern":
+        return old if old in limits else limits[0]
+    return min(limits) if keyword in _LOWER_LIMITS else max(limits)
+
+
+def _narrows(keyword: str, old: Any, new: Any) -> bool:
+    """Whether the current limit can reject a value the previous one accepted.
+
+    A pattern can't be compared by containment (undecidable), so any other pattern counts as narrowing.
+    """
+    if new is None or new == old:
+        return False
+    if old is None or keyword == "pattern":
+        return True
+    return new > old if keyword in _LOWER_LIMITS else new < old
+
+
 def _first_of_type(variants: list[Schema], type_name: str) -> Schema | None:
     return next((v for v in variants if v.get("type") == type_name), None)
 
@@ -170,6 +208,7 @@ class _Comparison:
         self._compare_types(path, _accepted_types(old), _accepted_types(new))
         if _accepted_types(old) is not None and _accepted_types(old) == _accepted_types(new):
             self._compare_values(path, _allowed_values(old), _allowed_values(new))
+        self._compare_limits(path, old, new)
         self._compare_objects(path, _first_of_type(old, "object"), _first_of_type(new, "object"))
         self._compare_arrays(path, _first_of_type(old, "array"), _first_of_type(new, "array"))
 
@@ -184,6 +223,20 @@ class _Comparison:
             change = _value_change(path, type_name, old_values, new[type_name])
             if change is not None:
                 self.changes.append(change)
+
+    def _compare_limits(self, path: str, old: list[Schema], new: list[Schema]) -> None:
+        """Per type the previous schema declared, report a limit the current one tightens or adds."""
+        for old_variant in old:
+            for type_name in sorted(_variant_types(old_variant) or ()):
+                matching = [v for v in new if type_name in (_variant_types(v) or {type_name})]
+                for keyword in _LIMITS_BY_TYPE.get(type_name, ()) if matching else ():
+                    self._compare_limit(path, keyword, _limit(old_variant, keyword), matching)
+
+    def _compare_limit(self, path: str, keyword: str, old: Any, matching: list[Schema]) -> None:
+        new = _loosest(keyword, [_limit(variant, keyword) for variant in matching], old)
+        if _narrows(keyword, old, new):
+            detail = f"{keyword}: {'none' if old is None else old} -> {new}"
+            self.changes.append(BreakingChange(path, BreakingKind.TYPE_NARROWED, detail))
 
     def _compare_objects(self, path: str, old: Schema | None, new: Schema | None) -> None:
         """Compare two object schemas; a pair already being compared up the stack is a cycle."""

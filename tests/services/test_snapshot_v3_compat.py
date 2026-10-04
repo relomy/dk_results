@@ -6,7 +6,7 @@ from typing import Any
 
 import pytest
 
-from dk_results.services.snapshot_v3.compat import BreakingKind, breaking_changes
+from dk_results.services.snapshot_v3.compat import BreakingChange, BreakingKind, breaking_changes
 
 
 def _obj(properties: dict[str, Any], required: tuple[str, ...] = (), **extra: Any) -> dict[str, Any]:
@@ -160,11 +160,146 @@ ADDITIVE_CASES = [
         _obj({"selection_reason": STR}),
         id="untyped-value-given-a-type",
     ),
+    pytest.param(
+        _obj({"selection_reason": {}}),
+        _obj({"selection_reason": {"type": "string", "minLength": 1, "pattern": "^[a-z]+$"}}),
+        id="untyped-value-given-a-type-with-limits",
+    ),
+    pytest.param(
+        _envelope(LOOSE),
+        _envelope(_obj({"rank": {"type": "integer", "minimum": 1}}, ("rank",))),
+        id="loose-section-tightened-to-typed-fields-with-limits",
+    ),
 ]
 
 
 @pytest.mark.parametrize(("previous", "current"), ADDITIVE_CASES)
 def test_additive_change_is_not_breaking(previous: dict[str, Any], current: dict[str, Any]) -> None:
+    assert breaking_changes(previous, current) == []
+
+
+def _limited(keyword: str, limit: Any) -> dict[str, Any]:
+    """A field of the type ``keyword`` applies to, carrying that limit (no limit when ``limit`` is None)."""
+    base: dict[str, Any] = {
+        "minimum": INT,
+        "exclusiveMinimum": INT,
+        "maximum": INT,
+        "exclusiveMaximum": INT,
+        "minLength": STR,
+        "maxLength": STR,
+        "pattern": STR,
+        "minItems": {"type": "array", "items": INT},
+        "maxItems": {"type": "array", "items": INT},
+        "minProperties": {"type": "object"},
+        "maxProperties": {"type": "object"},
+    }[keyword]
+    return base if limit is None else {**base, keyword: limit}
+
+
+def _limit_rows(keyword: str, loose: Any, tight: Any) -> list[Any]:
+    """Rows for one keyword: ``loose`` -> ``tight`` is narrowing, ``None`` is no limit declared."""
+    return [
+        pytest.param(keyword, loose, tight, id=f"{keyword}-tightened"),
+        pytest.param(keyword, None, tight, id=f"{keyword}-added"),
+    ]
+
+
+LIMIT_NARROWING = [
+    *_limit_rows("minimum", 0, 1),
+    *_limit_rows("exclusiveMinimum", 0, 1),
+    *_limit_rows("minLength", 1, 2),
+    *_limit_rows("minItems", 1, 2),
+    *_limit_rows("minProperties", 1, 2),
+    *_limit_rows("maximum", 10, 9),
+    *_limit_rows("exclusiveMaximum", 10, 9),
+    *_limit_rows("maxLength", 10, 9),
+    *_limit_rows("maxItems", 10, 9),
+    *_limit_rows("maxProperties", 10, 9),
+    pytest.param("pattern", None, "^[A-Z]+$", id="pattern-added"),
+    pytest.param("pattern", "^[a-z]+$", "^[A-Z]+$", id="pattern-changed"),
+]
+
+
+@pytest.mark.parametrize(("keyword", "old", "new"), LIMIT_NARROWING)
+def test_tightened_or_added_limit_is_type_narrowed(keyword: str, old: Any, new: Any) -> None:
+    previous = _obj({"x": _limited(keyword, old)}, ("x",))
+    current = _obj({"x": _limited(keyword, new)}, ("x",))
+
+    assert breaking_changes(previous, current) == [
+        BreakingChange("x", BreakingKind.TYPE_NARROWED, f"{keyword}: {'none' if old is None else old} -> {new}")
+    ]
+
+
+LIMIT_LOOSENING = [
+    pytest.param("minimum", 1, 0, id="minimum-lowered"),
+    pytest.param("exclusiveMinimum", 1, 0, id="exclusiveMinimum-lowered"),
+    pytest.param("minLength", 2, 1, id="minLength-lowered"),
+    pytest.param("minItems", 2, 1, id="minItems-lowered"),
+    pytest.param("minProperties", 2, 1, id="minProperties-lowered"),
+    pytest.param("maximum", 9, 10, id="maximum-raised"),
+    pytest.param("exclusiveMaximum", 9, 10, id="exclusiveMaximum-raised"),
+    pytest.param("maxLength", 9, 10, id="maxLength-raised"),
+    pytest.param("maxItems", 9, 10, id="maxItems-raised"),
+    pytest.param("maxProperties", 9, 10, id="maxProperties-raised"),
+    pytest.param("minimum", 1, None, id="minimum-removed"),
+    pytest.param("maxLength", 9, None, id="maxLength-removed"),
+    pytest.param("pattern", "^[a-z]+$", None, id="pattern-removed"),
+    pytest.param("pattern", "^[a-z]+$", "^[a-z]+$", id="pattern-unchanged"),
+    pytest.param("minimum", 1, 1, id="minimum-unchanged"),
+]
+
+
+@pytest.mark.parametrize(("keyword", "old", "new"), LIMIT_LOOSENING)
+def test_loosened_or_removed_limit_is_not_breaking(keyword: str, old: Any, new: Any) -> None:
+    previous = _obj({"x": _limited(keyword, old)}, ("x",))
+    current = _obj({"x": _limited(keyword, new)}, ("x",))
+
+    assert breaking_changes(previous, current) == []
+
+
+def test_limit_raised_on_the_integer_variant_of_a_nullable_field_is_narrowed() -> None:
+    previous = _obj({"x": {"anyOf": [{"type": "integer", "minimum": 0}, {"type": "null"}]}}, ("x",))
+    current = _obj({"x": {"anyOf": [{"type": "integer", "minimum": 1}, {"type": "null"}]}}, ("x",))
+
+    assert breaking_changes(previous, current) == [BreakingChange("x", BreakingKind.TYPE_NARROWED, "minimum: 0 -> 1")]
+
+
+def test_limit_raised_on_a_type_list_variant_is_narrowed() -> None:
+    previous = _obj({"x": {"type": ["integer", "null"], "minimum": 0}}, ("x",))
+    current = _obj({"x": {"type": ["integer", "null"], "minimum": 1}}, ("x",))
+
+    assert breaking_changes(previous, current) == [BreakingChange("x", BreakingKind.TYPE_NARROWED, "minimum: 0 -> 1")]
+
+
+def test_limit_tightened_behind_refs_maps_and_arrays_is_reported_at_the_field_path() -> None:
+    previous = _envelope(_obj({"rank": {"type": "integer", "minimum": 1}}, ("rank",)))
+    current = _envelope(_obj({"rank": {"type": "integer", "minimum": 2}}, ("rank",)))
+
+    assert [(c.path, c.kind) for c in breaking_changes(previous, current)] == [
+        ("sports.*.contests[].vip_lineups[].rank", BreakingKind.TYPE_NARROWED)
+    ]
+
+
+def test_limit_added_to_a_declared_type_variant_is_narrowed() -> None:
+    previous = _obj({"x": {"anyOf": [{"type": "integer"}, {"type": "null"}]}}, ("x",))
+    current = _obj({"x": {"anyOf": [{"type": "integer", "minimum": 0}, {"type": "null"}]}}, ("x",))
+
+    assert [c.detail for c in breaking_changes(previous, current)] == ["minimum: none -> 0"]
+
+
+def test_limit_kept_loose_on_one_of_several_current_variants_is_not_narrowing() -> None:
+    previous = _obj({"x": {"anyOf": [{"type": "integer", "minimum": 0}, {"type": "null"}]}}, ("x",))
+    current = _obj({"x": {"anyOf": [{"type": "integer", "minimum": 0}, {"type": "integer"}, {"type": "null"}]}}, ("x",))
+
+    assert breaking_changes(previous, current) == []
+
+
+def test_pattern_still_accepted_by_one_of_several_current_variants_is_not_narrowing() -> None:
+    previous = _obj({"x": {"type": "string", "pattern": "^a$"}}, ("x",))
+    current = _obj(
+        {"x": {"anyOf": [{"type": "string", "pattern": "^a$"}, {"type": "string", "pattern": "^b$"}]}}, ("x",)
+    )
+
     assert breaking_changes(previous, current) == []
 
 
