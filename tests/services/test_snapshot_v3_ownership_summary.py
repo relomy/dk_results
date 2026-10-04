@@ -12,6 +12,7 @@ from typing import Any
 import pytest
 
 from dk_results.services.snapshot_v3.pipeline import build_snapshot_v3_envelope
+from dk_results.services.snapshot_v3.validate import validate_v3_envelope
 
 GENERATED_AT = "2026-10-04T12:00:00Z"
 
@@ -210,3 +211,46 @@ class TestOmission:
 
         assert "ownership_in_play_source" not in summary
         assert "ownership_in_play_source" not in summary["per_vip"][0]
+
+
+class TestValidator:
+    def _envelope(self) -> dict[str, Any]:
+        bundle = _bundle([_player("A", "In Progress", 10.0)], [_vip("v1", _slot("A"))])
+        return build_snapshot_v3_envelope(
+            {"NBA": 900}, generated_at=GENERATED_AT, collector=lambda **_: deepcopy(bundle)
+        )
+
+    def _violations(self, mutate: Any) -> list[str]:
+        envelope = self._envelope()
+        assert validate_v3_envelope(envelope) == []
+        summary = envelope["sports"]["nba"]["contests"][0]["metrics"]["ownership_summary"]
+        mutate(summary)
+        return validate_v3_envelope(envelope)
+
+    @pytest.mark.parametrize(
+        ("mutate", "expected"),
+        [
+            (lambda s: s.update(source="other"), "ownership_summary.source must be vip_lineup_players"),
+            (lambda s: s.update(scope="watchlist"), "ownership_summary.scope must be vip_lineup"),
+            (lambda s: s.update(per_vip={}), "ownership_summary.per_vip has invalid type"),
+            (lambda s: s.pop("per_vip"), "ownership_summary.per_vip has invalid type"),
+            (lambda s: s["per_vip"].append("x"), "per_vip[1] must be an object"),
+            (lambda s: s["per_vip"][0].pop("vip_entry_key"), "per_vip[0].vip_entry_key is required"),
+            (lambda s: s["per_vip"][0].update(entry_key=7), "per_vip[0].entry_key has invalid type"),
+            (lambda s: s["per_vip"][0].update(display_name=7), "per_vip[0].display_name has invalid type"),
+            (lambda s: s["per_vip"][0].pop("total_ownership_pct"), "per_vip[0].total_ownership_pct is required"),
+            (lambda s: s["per_vip"][0].update(total_ownership_pct="9"), "per_vip[0].total_ownership_pct has invalid"),
+            (lambda s: s["per_vip"][0].update(total_ownership_pct=-1.0), "per_vip[0].total_ownership_pct has invalid"),
+            (lambda s: s["per_vip"][0].update(ownership_in_play_pct=None), "per_vip[0].ownership_in_play_pct has"),
+            (lambda s: s["per_vip"][0].update(ownership_in_play_pct=float("nan")), "ownership_in_play_pct has"),
+            (lambda s: s["per_vip"][0].pop("is_partial"), "per_vip[0].is_partial is required"),
+            (lambda s: s["per_vip"][0].update(is_partial=1), "per_vip[0].is_partial has invalid type"),
+        ],
+    )
+    def test_rejects_malformed_summary(self, mutate: Any, expected: str) -> None:
+        violations = self._violations(mutate)
+
+        assert any(expected in v and "metrics.ownership_summary" in v for v in violations), violations
+
+    def test_allows_missing_in_play_for_golf_like_rows(self) -> None:
+        assert self._violations(lambda s: s["per_vip"][0].pop("ownership_in_play_pct")) == []
