@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from datetime import datetime
 from typing import Any
 
@@ -34,6 +35,10 @@ def _has_type(value: Any, expected: type) -> bool:
     if expected is int:
         return isinstance(value, int) and not isinstance(value, bool)
     return isinstance(value, expected)
+
+
+def _is_finite_number(value: Any) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
 
 
 def _prefix_contract_path(sport: str, message: str) -> str:
@@ -168,6 +173,12 @@ def _validate_live_metrics_section(sport: str, contest: dict[str, Any]) -> list[
     cash_line = live_metrics.get("cash_line")
     if cash_line is not None and not isinstance(cash_line, dict):
         violations.append(f"sports.{sport}.contests[0].live_metrics.cash_line has invalid type")
+    if "avg_salary_per_player_remaining" in live_metrics:
+        value = live_metrics["avg_salary_per_player_remaining"]
+        if not _is_finite_number(value) or value < 0:
+            violations.append(
+                f"sports.{sport}.contests[0].live_metrics.avg_salary_per_player_remaining has invalid type"
+            )
     return violations
 
 
@@ -178,7 +189,7 @@ def _validate_metrics_section(sport: str, contest: dict[str, Any]) -> list[str]:
     violations: list[str] = []
     if "updated_at" in metrics and not _is_valid_timestamp(metrics.get("updated_at")):
         violations.append(f"sports.{sport}.contests[0].metrics.updated_at must be a valid ISO timestamp")
-    for section in ("distance_to_cash", "threat"):
+    for section in ("distance_to_cash", "threat", "non_cashing"):
         value = metrics.get(section)
         if value is not None and not isinstance(value, dict):
             violations.append(f"sports.{sport}.contests[0].metrics.{section} has invalid type")
@@ -363,9 +374,45 @@ def _validate_contest_metrics(sport: str, sport_payload: dict[str, Any], contest
             _prefix_contract_path(sport, message)
             for message in validate_distance_to_cash_rows(distance_to_cash["per_vip"])
         )
+    non_cashing = metrics.get("non_cashing")
+    if isinstance(non_cashing, dict):
+        violations.extend(_validate_non_cashing(sport, non_cashing))
     threat = metrics.get("threat")
     if isinstance(threat, dict) and isinstance(threat.get("top_swing_players"), list):
         violations.extend(_validate_top_swing_players(sport, sport_payload, contest, threat["top_swing_players"]))
+    return violations
+
+
+def _validate_non_cashing(sport: str, non_cashing: dict[str, Any]) -> list[str]:
+    path = f"sports.{sport}.contests[0].metrics.non_cashing"
+    violations: list[str] = []
+    users = non_cashing.get("users_not_cashing")
+    if "users_not_cashing" not in non_cashing:
+        violations.append(f"{path}.users_not_cashing is required")
+    elif not _has_type(users, int) or users < 0:
+        violations.append(f"{path}.users_not_cashing has invalid type")
+    if "avg_pmr_remaining" not in non_cashing:
+        violations.append(f"{path}.avg_pmr_remaining is required")
+    elif not _is_finite_number(non_cashing["avg_pmr_remaining"]):
+        violations.append(f"{path}.avg_pmr_remaining has invalid type")
+    if "top_remaining_players" in non_cashing:
+        violations.extend(_validate_top_remaining_players(path, non_cashing["top_remaining_players"]))
+    return violations
+
+
+def _validate_top_remaining_players(path: str, rows: Any) -> list[str]:
+    if not isinstance(rows, list):
+        return [f"{path}.top_remaining_players has invalid type"]
+    violations: list[str] = []
+    for index, row in enumerate(rows):
+        row_path = f"{path}.top_remaining_players[{index}]"
+        if not isinstance(row, dict):
+            violations.append(f"{row_path} must be an object")
+            continue
+        if not _is_non_empty_string(row.get("player_name")):
+            violations.append(f"{row_path}.player_name is required")
+        if not _is_finite_number(row.get("ownership_remaining_pct")):
+            violations.append(f"{row_path}.ownership_remaining_pct has invalid type")
     return violations
 
 
