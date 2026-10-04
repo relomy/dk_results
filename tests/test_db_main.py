@@ -299,6 +299,47 @@ def test_process_sport_persists_cash_line_and_vip_status(tmp_path):
     assert db.vip_statuses[123] == [VipCashStatus(vip_name="UserA", rank=1, points=120.0)]
 
 
+class _FakeContestDbTwoPaid(_FakeContestDb):
+    def get_live_contest(self, *_args, **_kwargs):
+        return (123, "Test Contest", 999, 2, "2026-02-14 01:00:00")
+
+
+class _FakeDraftKingsTiedAtTop(_FakeDraftKings):
+    def download_contest_rows(self, *_args, **_kwargs):
+        both = "QB Tom Brady RB Derrick Henry"
+        return [
+            ["Rank", "EntryId", "EntryName", "TimeRemaining", "Points", "Lineup"],
+            ["1", "111", "UserA", "0", "120", both],
+            ["2", "222", "UserB", "0", "120", both],
+            ["3", "333", "UserC", "30", "100", "RB Derrick Henry"],
+        ]
+
+
+class _CapturingSheet(_FakeSheet):
+    def __init__(self):
+        super().__init__()
+        self.non_cashing_info = None
+
+    def add_non_cashing_info(self, info):
+        self.non_cashing_info = info
+
+
+def test_process_sport_sheet_non_cashing_block_excludes_rows_tied_inside_the_cash_line(tmp_path):
+    sheet = _CapturingSheet()
+    processor = _make_processor(
+        _FakeContestDbTwoPaid(), vips=[], dk=_FakeDraftKingsTiedAtTop(), sheet=sheet, salary_dir=str(tmp_path)
+    )
+    processor.run("NFL", NFLSport)
+
+    assert sheet.non_cashing_info == [
+        ["Non-Cashing Info", ""],
+        ["Users not cashing", 1],
+        ["Avg PMR Remaining", 30.0],
+        ["Top 10 Own% Remaining", ""],
+        ["Derrick Henry", 1.0],
+    ]
+
+
 def test_process_sport_persists_none_cash_line_when_positions_paid_missing(tmp_path):
     db = _FakeContestDbNoPositionsPaid()
     processor = _make_processor(db, vips=["UserA"], salary_dir=str(tmp_path))
