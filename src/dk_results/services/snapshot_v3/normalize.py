@@ -4,8 +4,21 @@ from __future__ import annotations
 
 import datetime
 import re
+from collections.abc import Mapping
 from typing import Any
 from zoneinfo import ZoneInfo
+
+from dk_results.analytics.game_status import is_locked_slot
+
+
+def is_locked_snapshot_slot(slot: Any) -> bool:
+    """Recognize explicit domain locks and the exact legacy snapshot sentinel."""
+    if is_locked_slot(slot):
+        return True
+    if not isinstance(slot, Mapping):
+        return False
+    name = str(slot.get("player_name") or slot.get("name") or "")
+    return name == "LOCKED 🔒"
 
 
 def to_utc_iso(value: datetime.datetime | str | None) -> str | None:
