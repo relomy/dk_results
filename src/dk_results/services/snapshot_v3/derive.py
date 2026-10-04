@@ -228,7 +228,10 @@ def _vip_remaining_by_entry(ownership: dict[str, Any]) -> dict[str, float]:
 
 
 def _build_leverage_row(
-    vip_row: dict[str, Any], remaining_by_entry: dict[str, float], field_remaining_pct: float
+    vip_row: dict[str, Any],
+    remaining_by_entry: dict[str, float],
+    partial_by_entry: dict[str, Any],
+    field_remaining_pct: float,
 ) -> dict[str, Any] | None:
     entry_key = vip_row.get("entry_key")
     if (
@@ -248,6 +251,7 @@ def _build_leverage_row(
         "vip_remaining_pct": vip_remaining_pct,
         "field_remaining_pct": field_remaining_pct,
         "uniqueness_delta_pct": round(field_remaining_pct - vip_remaining_pct, 2),
+        "is_partial": partial_by_entry.get(str(entry_key)) is True,
     }
 
 
@@ -259,11 +263,15 @@ def derive_vip_vs_field_leverage(raw_bundle: dict[str, Any], field_remaining_pct
     """
 
     vip_lineups = _vip_lineup_rows(raw_bundle)
-    remaining_by_entry = _vip_remaining_by_entry(_ownership(raw_bundle))
+    ownership = _ownership(raw_bundle)
+    remaining_by_entry = _vip_remaining_by_entry(ownership)
+    partial_by_entry = ownership.get("vip_remaining_is_partial_by_entry_key")
+    if not isinstance(partial_by_entry, dict):
+        partial_by_entry = {}
     return [
         row
         for vip_row in _sorted_vip_rows(vip_lineups)
-        if (row := _build_leverage_row(vip_row, remaining_by_entry, field_remaining_pct)) is not None
+        if (row := _build_leverage_row(vip_row, remaining_by_entry, partial_by_entry, field_remaining_pct)) is not None
     ]
 
 

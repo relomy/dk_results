@@ -89,7 +89,7 @@ available. Terms (Field remaining, Uniqueness delta) are defined in
 | `field_remaining_scope` | string | Always `"contest_field"`: the number covers every standings row in the contest, not the tracked VIPs. |
 | `field_remaining_source` | string | Always `"contest_standings_mean"`. |
 | `field_remaining_pct` | number | Mean ownership remaining (percentage points, two decimals) over the **full, pre-truncation** standings, not the truncated `standings` list and not the watchlist. Ownership remaining uses the shared Game status classifier. |
-| `field_remaining_is_partial` | boolean | True exactly when a standings row was left out of the mean because its lineup could not be resolved. Always emitted next to `field_remaining_pct`. |
+| `field_remaining_is_partial` | boolean | True when any standings entry was excluded from the mean (its lineup is missing or empty), or any included lineup contains a locked or unresolved slot with unavailable ownership. Always emitted next to `field_remaining_pct`; covers the full contest field before truncation. |
 
 Present for any live primary contest, whether or not any tracked VIP is
 entered. The five fields are emitted together or not at all. They are omitted
@@ -109,7 +109,8 @@ One row per tracked VIP:
 | `display_name` | string | The VIP's display name. |
 | `vip_remaining_pct` | number | Ownership remaining on the VIP's own standings row, matched to the VIP by `entry_key`. |
 | `field_remaining_pct` | number | The same value as the `threat` field of that name. |
-| `uniqueness_delta_pct` | number | `field_remaining_pct - vip_remaining_pct`, in percentage points. Positive means the VIP is more unique than the field. |
+| `uniqueness_delta_pct` | number | The rounded `field_remaining_pct` minus the rounded `vip_remaining_pct`, rounded to two decimals, in percentage points. Positive means the VIP is more unique than the field. |
+| `is_partial` | boolean | Required on every row. True when this VIP's own standings lineup contains a locked or unresolved slot with unavailable ownership. A complete VIP's flag remains false when another entry makes the field partial. |
 
 `vip_remaining_pct` is read from the full, pre-truncation standings, so a VIP
 ranked below the standings limit still gets a row. A VIP with no matching
