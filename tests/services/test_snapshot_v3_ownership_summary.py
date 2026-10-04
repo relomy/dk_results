@@ -100,3 +100,113 @@ class TestOwnershipInPlay:
                 "is_partial": False,
             }
         ]
+
+    @pytest.mark.parametrize(
+        ("status", "counted"),
+        [
+            ("In-Progress", True),
+            ("Delayed", True),
+            ("Suspended", True),
+            ("LAL@BOS 07:30PM ET", False),
+            ("Final", False),
+            ("Postponed", False),
+            ("Cancelled", False),
+            ("Canceled", False),
+        ],
+    )
+    def test_game_status_decides_in_play(self, status: str, counted: bool) -> None:
+        players = [_player("A", status, 12.5), _player("Anchor", "In Progress", 1.0)]
+        bundle = _bundle(players, [_vip("v1", _slot("A"))])
+
+        row = _per_vip(bundle)[0]
+
+        assert row["total_ownership_pct"] == 12.5
+        assert row["ownership_in_play_pct"] == (12.5 if counted else 0.0)
+        assert row["is_partial"] is False
+
+    def test_rounds_sums_to_two_decimals(self) -> None:
+        players = [_player("A", "In Progress", 10.123), _player("B", "In Progress", 20.456)]
+        bundle = _bundle(players, [_vip("v1", _slot("A"), _slot("B"))])
+
+        row = _per_vip(bundle)[0]
+
+        assert row["total_ownership_pct"] == 30.58
+        assert row["ownership_in_play_pct"] == 30.58
+
+    def test_one_row_per_vip_in_vip_key_order(self) -> None:
+        players = [_player("A", "In Progress", 10.0), _player("B", "Final", 30.0)]
+        bundle = _bundle(players, [_vip("v2", _slot("B")), _vip("v1", _slot("A"))])
+
+        rows = _per_vip(bundle)
+
+        assert [(r["vip_entry_key"], r["total_ownership_pct"]) for r in rows] == [("v1", 10.0), ("v2", 30.0)]
+
+
+class TestPartialSummary:
+    def test_unmatched_player_key_is_partial_and_adds_nothing(self) -> None:
+        players = [_player("A", "In Progress", 10.0)]
+        bundle = _bundle(players, [_vip("v1", _slot("A"), _slot("Ghost"))])
+
+        row = _per_vip(bundle)[0]
+
+        assert row["is_partial"] is True
+        assert row["total_ownership_pct"] == 10.0
+        assert row["ownership_in_play_pct"] == 10.0
+
+    def test_locked_slot_is_partial(self) -> None:
+        players = [_player("A", "In Progress", 10.0)]
+        locked = {"player_name": "LOCKED 🔒", "player_key": "x:locked", "is_live": False}
+        bundle = _bundle(players, [_vip("v1", _slot("A"), locked)])
+
+        row = _per_vip(bundle)[0]
+
+        assert row["is_partial"] is True
+        assert row["total_ownership_pct"] == 10.0
+
+    def test_locked_slot_is_partial_even_when_key_matches_a_player(self) -> None:
+        players = [_player("A", "In Progress", 10.0)]
+        locked = {**_slot("A"), "locked": True}
+        bundle = _bundle(players, [_vip("v1", locked)])
+
+        assert _per_vip(bundle)[0]["is_partial"] is True
+
+    def test_unknown_status_is_partial_but_counts_toward_total(self) -> None:
+        players = [_player("A", "In Progress", 10.0), _player("Odd", "Weather Hold", 5.0)]
+        bundle = _bundle(players, [_vip("v1", _slot("A"), _slot("Odd"))])
+
+        row = _per_vip(bundle)[0]
+
+        assert row["is_partial"] is True
+        assert row["total_ownership_pct"] == 15.0
+        assert row["ownership_in_play_pct"] == 10.0
+
+    def test_partial_flag_is_per_vip(self) -> None:
+        players = [_player("A", "In Progress", 10.0)]
+        bundle = _bundle(players, [_vip("v1", _slot("A")), _vip("v2", _slot("A"), _slot("Ghost"))])
+
+        assert [r["is_partial"] for r in _per_vip(bundle)] == [False, True]
+
+
+class TestOmission:
+    def test_absent_with_zero_tracked_vips(self) -> None:
+        bundle = _bundle([_player("A", "In Progress", 10.0)], [])
+
+        assert "ownership_summary" not in _contest(bundle).get("metrics", {})
+
+    def test_golf_like_pool_omits_in_play_but_keeps_totals(self) -> None:
+        players = [_player("A", "Masters Tournament", 10.0), _player("B", "Masters Tournament", 15.0)]
+        bundle = _bundle(players, [_vip("v1", _slot("A"), _slot("B"))], sport="GOLF")
+
+        row = _per_vip(bundle)[0]
+
+        assert row["total_ownership_pct"] == 25.0
+        assert "ownership_in_play_pct" not in row
+        assert row["is_partial"] is False
+
+    def test_does_not_restore_pre_v3_in_play_source(self) -> None:
+        bundle = _bundle([_player("A", "In Progress", 10.0)], [_vip("v1", _slot("A"))])
+
+        summary = _contest(bundle)["metrics"]["ownership_summary"]
+
+        assert "ownership_in_play_source" not in summary
+        assert "ownership_in_play_source" not in summary["per_vip"][0]
