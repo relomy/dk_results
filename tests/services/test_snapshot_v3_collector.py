@@ -3,6 +3,8 @@ import logging
 from types import SimpleNamespace
 from zoneinfo import ZoneInfo
 
+import pytest
+
 from dk_results.domain.player import Player
 from dk_results.persistence.contestdatabase import ContestRow
 from dk_results.services.snapshot_v3 import collector
@@ -853,3 +855,64 @@ def test_collect_snapshot_keeps_typed_vip_lineups_from_the_fetcher(monkeypatch, 
     assert slots["Player B"]["is_live"] is False
     # the VIP-points lookup sees the lineup's 130.0 (>= 120 cutoff), not the standings row's 100.0
     assert bundle["standings"][0]["is_cashing"] is True
+
+
+# --- field remaining over the full standings ------------------------------------
+
+
+def _collect_with_users(monkeypatch, tmp_path, users, *, standings_limit):
+    monkeypatch.setattr(collector, "SALARY_DIR", str(tmp_path))
+    results = SimpleNamespace(
+        vip_list=[],
+        players={},
+        users=users,
+        non_cashing_users=0,
+        non_cashing_avg_pmr=None,
+        min_rank=0,
+        min_cash_pts=0.0,
+        non_cashing_players={},
+    )
+    monkeypatch.setattr(collector, "load_vips", lambda: [])
+    monkeypatch.setattr(collector, "parse_contest_standings", lambda *a, **k: results)
+    monkeypatch.setattr(collector, "fetch_vip_lineups", lambda *a, **k: [])
+    row = ContestRow(
+        dk_id=321, name="C", draft_group=8, positions_paid=10, start_date="2026-01-04", entry_fee=5, entries=100
+    )
+    dk = _FakeDK(standings_rows=[["header"], ["row"]], leaderboard={})
+    return collector._collect_source_snapshot(
+        sport="NBA", contest_id=321, standings_limit=standings_limit, dk=dk, contest_db=_FakeContestDB(by_id=row)
+    )
+
+
+def _field_user(rank, entry_key, ownership):
+    lineupobj = (
+        None if ownership is None else SimpleNamespace(lineup=[SimpleNamespace(game_info="Live", ownership=ownership)])
+    )
+    return SimpleNamespace(
+        rank=str(rank), pts="10", pmr="0", player_id=entry_key, name=f"u{entry_key}", salary=0, lineupobj=lineupobj
+    )
+
+
+def test_field_remaining_is_the_mean_over_full_standings_before_truncation(monkeypatch, tmp_path) -> None:
+    users = [_field_user(1, "e1", 0.10), _field_user(2, "e2", 0.20), _field_user(3, "e3", 0.60)]
+
+    raw = _collect_with_users(monkeypatch, tmp_path, users, standings_limit=1)
+
+    assert len(raw["standings"]) == 1  # truncated
+    assert raw["ownership"]["field_remaining_pct"] == pytest.approx(30.0)  # not 10.0 from the kept row
+    assert raw["ownership"]["field_remaining_is_partial"] is False
+
+
+def test_field_remaining_is_partial_exactly_when_a_row_has_no_resolvable_lineup(monkeypatch, tmp_path) -> None:
+    users = [_field_user(1, "e1", 0.10), _field_user(2, "e2", None), _field_user(3, "e3", 0.30)]
+
+    raw = _collect_with_users(monkeypatch, tmp_path, users, standings_limit=500)
+
+    assert raw["ownership"]["field_remaining_pct"] == pytest.approx(20.0)
+    assert raw["ownership"]["field_remaining_is_partial"] is True
+
+
+def test_field_remaining_is_none_when_no_row_has_a_lineup(monkeypatch, tmp_path) -> None:
+    raw = _collect_with_users(monkeypatch, tmp_path, [_field_user(1, "e1", None)], standings_limit=500)
+
+    assert raw["ownership"]["field_remaining_pct"] is None
