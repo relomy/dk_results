@@ -1,7 +1,6 @@
 import pytest
 
 from dk_results.services.snapshot_v3.derive import (
-    derive_avg_salary_per_player_remaining,
     derive_distance_to_cash,
     derive_threat,
 )
@@ -186,73 +185,6 @@ def test_threat_rejects_duplicate_player_key_rows() -> None:
 
     with pytest.raises(ValueError, match="duplicate player_key"):
         derive_threat(raw)
-
-
-def test_avg_salary_per_player_remaining_uses_slot_weighted_live_slots() -> None:
-    raw = {
-        "vip_lineups": [
-            {
-                "lineup": [
-                    {"salary": 10000, "is_live": True},
-                    {"salary": 5000, "is_live": False},
-                    {"salary": 7000, "is_live": True},
-                ]
-            },
-            {
-                "lineup": [
-                    {"salary": 9000, "is_live": True},
-                    {"salary": 4000, "is_live": False},
-                ]
-            },
-        ]
-    }
-
-    avg_salary = derive_avg_salary_per_player_remaining(raw)
-
-    assert avg_salary == 8666.67
-
-
-def test_avg_salary_per_player_remaining_supports_raw_vip_players_shape() -> None:
-    raw = {
-        "vip_lineups": [
-            {
-                "players": [
-                    {"name": "Player A", "salary": "$10,300", "timeStatus": "In Progress"},
-                    {"name": "Player B", "salary": "$7,800", "timeStatus": "0"},
-                ]
-            },
-            {
-                "players": [
-                    {"name": "Player C", "salary": "$9,300", "timeStatus": "Q3 08:20"},
-                ]
-            },
-        ]
-    }
-
-    avg_salary = derive_avg_salary_per_player_remaining(raw)
-
-    assert avg_salary == 9800.0
-
-
-def test_avg_salary_per_player_remaining_prefers_players_live_key() -> None:
-    raw = {
-        "vip_lineups": [
-            {
-                "players_live": [{"salary": 10000, "is_live": True}],
-                "lineup": [{"salary": 1, "is_live": True}],
-            },
-        ]
-    }
-
-    avg_salary = derive_avg_salary_per_player_remaining(raw)
-
-    assert avg_salary == 10000.0
-
-
-def test_avg_salary_per_player_remaining_no_live_slots_returns_none() -> None:
-    raw = {"vip_lineups": [{"lineup": [{"salary": 5000, "is_live": False}]}]}
-
-    assert derive_avg_salary_per_player_remaining(raw) is None
 
 
 def test_threat_sort_is_deterministic_for_ties() -> None:

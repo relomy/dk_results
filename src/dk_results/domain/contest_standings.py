@@ -255,6 +255,10 @@ def _parse_standing_user(
     return user, parsed_rank, parsed_points
 
 
+# Sports whose non-cashing entries get a per-player tally of unfinished players.
+NON_CASHING_TALLY_SPORTS = ("NFL", "NFLShowdown", "CFB", "NBA")
+
+
 def _record_non_cashing_user(
     sport: Sport | Type[Sport],
     players: dict[str, Player],
@@ -262,7 +266,7 @@ def _record_non_cashing_user(
     non_cashing_players: dict[str, int],
     showdown_captains: dict[str, int],
 ) -> None:
-    if sport.name not in ["NFL", "NFLShowdown", "CFB", "NBA"]:
+    if sport.name not in NON_CASHING_TALLY_SPORTS:
         return
     for player in parse_lineup_string(sport, players, lineup):
         if isinstance(player, LockedSlot):
