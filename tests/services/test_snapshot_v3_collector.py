@@ -2,11 +2,15 @@ import csv
 import datetime
 import logging
 from types import SimpleNamespace
+from typing import Any
 from zoneinfo import ZoneInfo
 
 import pytest
 
+from dk_results.domain.contest_standings import ContestStandings
+from dk_results.domain.lineup import Lineup
 from dk_results.domain.player import Player
+from dk_results.domain.user import User
 from dk_results.persistence.contestdatabase import ContestRow
 from dk_results.services.snapshot_v3 import collector
 from dk_results.services.snapshot_v3.collector import (
@@ -1233,3 +1237,59 @@ def test_collector_excludes_unusable_empty_lineup_from_field_and_vip_remaining(m
     assert raw["ownership"]["field_remaining_is_partial"] is True
     assert raw["ownership"]["vip_remaining_by_entry_key"] == {}
     assert raw["ownership"]["vip_remaining_is_partial_by_entry_key"] == {}
+
+
+def test_collector_keeps_known_ownership_when_included_vip_slot_has_no_ownership(monkeypatch, tmp_path):
+    monkeypatch.setattr(collector, "SALARY_DIR", str(tmp_path))
+    monkeypatch.setattr(collector, "load_vips", lambda: ["partial-vip"])
+    monkeypatch.setattr(
+        collector, "fetch_vip_lineups", lambda *a, **k: [VipLineup("partial-vip", "2", 100.0, "100", "e2", 0)]
+    )
+    sport = collector._sport_choices()["NBA"]
+    alpha = Player("Alpha", "PG", "PG", 9000, "In Progress", "AAA", ownership=0.2)
+    bravo = Player("Bravo", "SG", "SG", 8000, "In Progress", "AAA", ownership=0.4)
+    players = {"Alpha": alpha, "Bravo": bravo}
+    complete_lineup = Lineup(sport, players, "SG Bravo")
+    partial_lineup = Lineup(sport, players, "PG Alpha SG Bravo")
+    # The CSV parser rejects unresolved names and defaults absent ownership to zero.
+    # A domain standings adapter can instead supply a slot with unavailable ownership;
+    # exercise the collector's defensive contract without replacing its parser.
+    partial_slots: list[Any] = [alpha, {"player_name": "Bravo", "game_info": "In Progress"}]
+    partial_lineup.lineup = partial_slots
+    leader = User(1, "e1", "leader", "100", 150.0, "SG Bravo", lineupobj=complete_lineup)
+    vip = User(2, "e2", "partial-vip", "100", 100.0, "PG Alpha SG Bravo", lineupobj=partial_lineup)
+    standings = ContestStandings(players, [leader, vip], [vip], 1, 1, 150.0, 1, 100.0, {})
+    row = ContestRow(
+        dk_id=321,
+        name="C",
+        draft_group=8,
+        positions_paid=1,
+        start_date="2026-10-04",
+        entry_fee=5,
+        entries=2,
+        contest_state="live",
+        prize_pool=100,
+    )
+    real_collect = collector._collect_source_snapshot
+
+    def collect_with_standings(**kwargs):
+        return real_collect(**kwargs, dk=_FakeDK(), contest_db=_FakeContestDB(by_id=row), standings=standings)
+
+    monkeypatch.setattr(collector, "_collect_source_snapshot", collect_with_standings)
+    envelope = build_snapshot_v3_envelope({"NBA": 321}, generated_at="2026-10-04T12:00:00Z", collector=collect_snapshot)
+    contest = envelope["sports"]["nba"]["contests"][0]
+    assert contest["standings"][1]["ownership_remaining_total_pct"] == 20.0
+    threat = contest["metrics"]["threat"]
+    assert threat["field_remaining_pct"] == 30.0
+    assert threat["field_remaining_is_partial"] is True
+    assert threat["vip_vs_field_leverage"] == [
+        {
+            "vip_entry_key": "e2",
+            "entry_key": "e2",
+            "display_name": "partial-vip",
+            "vip_remaining_pct": 20.0,
+            "field_remaining_pct": 30.0,
+            "uniqueness_delta_pct": 10.0,
+            "is_partial": True,
+        }
+    ]

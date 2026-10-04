@@ -16,7 +16,7 @@ from dfs_common import state
 
 from dk_results.analytics.contest_metrics import average_remaining_salary
 from dk_results.analytics.game_status import is_locked_slot
-from dk_results.domain.contest_standings import parse_contest_standings
+from dk_results.domain.contest_standings import ContestStandings, parse_contest_standings
 from dk_results.domain.draftables import Draftables
 from dk_results.domain.sport import Sport
 from dk_results.draftkings import DraftKings as Draftkings
@@ -26,6 +26,7 @@ from dk_results.services.snapshot_v3 import sections
 from dk_results.services.snapshot_v3.constants import DEFAULT_STANDINGS_LIMIT
 from dk_results.services.snapshot_v3.normalize import (
     is_live_from_slot,
+    is_locked_snapshot_slot,
     normalize_name,
     resolve_lineup_slots,
     slug,
@@ -376,7 +377,7 @@ def _normalize_vip_player_slot(
         "slot": str(roster_slot or ""),
         "player_name": str(player_name),
     }
-    if _vip_slot_is_locked(slot):
+    if is_locked_snapshot_slot(slot):
         live_slot["player_name"] = "LOCKED 🔒"
         live_slot["is_locked"] = True
         return live_slot
@@ -411,18 +412,13 @@ def _collect_slot_names_and_keys(slots: list[Any], keys_by_name: dict[str, set[s
 
 
 def _collect_slot_name_and_key(slot: Any, keys_by_name: dict[str, set[str]]) -> None:
-    if not isinstance(slot, dict) or _vip_slot_is_locked(slot):
+    if not isinstance(slot, dict) or is_locked_snapshot_slot(slot):
         return
     player_name = slot.get("player_name") or slot.get("name")
     player_key = slot.get("player_key")
     if player_name in (None, "") or player_key in (None, ""):
         return
     keys_by_name.setdefault(normalize_name(player_name), set()).add(str(player_key))
-
-
-def _vip_slot_is_locked(slot: dict[str, Any]) -> bool:
-    name = str(slot.get("player_name") or slot.get("name") or "")
-    return slot.get("is_locked") is True or slot.get("locked") is True or name == "LOCKED 🔒"
 
 
 def _build_unique_name_to_player_key_from_vip_lineups(vip_lineups: list[dict[str, Any]]) -> dict[str, str]:
@@ -856,6 +852,22 @@ def _build_source_metrics(
     }
 
 
+def _resolve_contest_standings(
+    standings: ContestStandings | None,
+    *,
+    sport_cls: type[Sport],
+    salary_path: str,
+    standings_rows: list[list[str]],
+    positions_paid: Any,
+    vips: list[str],
+) -> ContestStandings:
+    if standings is not None:
+        return standings
+    with open(salary_path, newline="", encoding="utf-8") as salary_file:
+        salary_rows = list(csv.reader(salary_file))
+    return parse_contest_standings(sport_cls, salary_rows, standings_rows, positions_paid=positions_paid, vips=vips)
+
+
 def _collect_source_snapshot(
     *,
     sport: str,
@@ -863,7 +875,9 @@ def _collect_source_snapshot(
     standings_limit: int = DEFAULT_STANDINGS_LIMIT,
     dk: Draftkings | None = None,
     contest_db: ContestDatabase | None = None,
+    standings: ContestStandings | None = None,
 ) -> dict[str, Any]:
+    """Collect behind injectable edges, optionally using already-parsed standings."""
     sport_map = _sport_choices()
     sport_cls = sport_map[sport.upper()]
     contest_db, owns_db = _open_contest_db(contest_db)
@@ -890,12 +904,11 @@ def _collect_source_snapshot(
         leaderboard_payout_by_entry = _fetch_leaderboard_payouts(dk, dk_id)
 
         vips = load_vips()
-        with open(salary_path, newline="", encoding="utf-8") as salary_file:
-            salary_rows = list(csv.reader(salary_file))
-        results = parse_contest_standings(
-            sport_cls,
-            salary_rows,
-            standings_rows,
+        results = _resolve_contest_standings(
+            standings,
+            sport_cls=sport_cls,
+            salary_path=salary_path,
+            standings_rows=standings_rows,
             positions_paid=resolved.positions_paid,
             vips=vips,
         )

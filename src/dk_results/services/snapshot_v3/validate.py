@@ -21,7 +21,7 @@ from dk_results.services.snapshot_v3.derive import (
     OWNERSHIP_SUMMARY_SOURCE,
     TOP_REMAINING_PLAYERS_LIMIT,
 )
-from dk_results.services.snapshot_v3.normalize import resolve_lineup_slots
+from dk_results.services.snapshot_v3.normalize import is_locked_snapshot_slot, resolve_lineup_slots
 
 
 def _is_non_empty_string(value: Any) -> bool:
@@ -322,14 +322,7 @@ def _add_player_keys_from_vip_lineups(vip_lineups: Any, keys: set[str]) -> None:
         slots = resolve_lineup_slots(vip_row)
         if slots is None:
             continue
-        _add_player_keys_from_rows(list(filterfalse(_is_locked_vip_slot, slots)), keys)
-
-
-def _is_locked_vip_slot(slot: Any) -> bool:
-    if not isinstance(slot, dict):
-        return False
-    name = str(slot.get("player_name") or slot.get("name") or "")
-    return slot.get("is_locked") is True or slot.get("locked") is True or name == "LOCKED 🔒"
+        _add_player_keys_from_rows(list(filterfalse(is_locked_snapshot_slot, slots)), keys)
 
 
 def _collect_known_player_keys(sport_payload: dict[str, Any], contest: dict[str, Any]) -> set[str]:
