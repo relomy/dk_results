@@ -148,7 +148,9 @@ class TestNoGameStatus:
                 "vip_entry_key": "v1",
                 "entry_key": "e1",
                 "display_name": "VIP",
-                "players_live": [{"player_key": "x:a", "player_name": "A", "salary": 5000, "is_live": False}],
+                "players_live": [
+                    {"slot": "UTIL", "player_key": "x:a", "player_name": "A", "salary": 5000, "is_live": False}
+                ],
             }
         ]
 

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Iterable
 
-from dk_results.analytics.game_status import UNKNOWN, classify_game_status, sport_has_game_status
+from dk_results.analytics.game_status import UNKNOWN, classify_game_status, is_locked_slot, sport_has_game_status
 from dk_results.domain.contest_standings import NON_CASHING_TALLY_SPORTS
 from dk_results.services.snapshot_v3.normalize import resolve_lineup_slots, to_float, to_int
 
@@ -89,7 +89,7 @@ def _iter_vip_lineup_player_keys(vip_lineups: list[dict[str, Any]]) -> Iterable[
 def _iter_lineup_player_keys(slots: list[Any]) -> Iterable[str]:
     seen_in_lineup: set[str] = set()
     for slot in slots:
-        if not isinstance(slot, dict) or _slot_is_locked(slot):
+        if not isinstance(slot, dict) or is_locked_slot(slot):
             continue
         player_key = slot.get("player_key")
         if player_key in (None, ""):
@@ -324,15 +324,10 @@ def _player_rows_by_key(raw_bundle: dict[str, Any]) -> dict[str, dict[str, Any]]
     return rows
 
 
-def _slot_is_locked(slot: dict[str, Any]) -> bool:
-    name = str(slot.get("player_name") or slot.get("name") or "")
-    return slot.get("is_locked") is True or slot.get("locked") is True or name == "LOCKED 🔒"
-
-
 def _slot_ownership(slot: Any, players: dict[str, dict[str, Any]]) -> tuple[float, bool, bool] | None:
     """Return (ownership, in_play, known_status) for a usable slot, else None."""
 
-    if not isinstance(slot, dict) or _slot_is_locked(slot):
+    if not isinstance(slot, dict) or is_locked_slot(slot):
         return None
     player = players.get(str(slot.get("player_key")))
     ownership = to_float(player.get("ownership_pct")) if player else None
