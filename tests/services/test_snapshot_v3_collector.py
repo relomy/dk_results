@@ -18,6 +18,7 @@ from dk_results.services.snapshot_v3.collector import (
     collect_snapshot,
 )
 from dk_results.services.snapshot_v3.derive import derive_threat
+from dk_results.vip_lineups import VipLineup, VipPlayer
 from tests.domain.draftables_payloads import cfb_payload, golf_payload
 
 
@@ -753,3 +754,102 @@ def test_failed_draftables_read_logs_one_warning_and_snapshot_still_builds(monke
         assert len(warnings) == 1
         assert "draftables" in warnings[0].getMessage()
         assert dk.draftables_requests == [154161]
+
+
+# --- typed VIP lineups from the fetcher survive collection ------------------------
+
+
+def _typed_vip_lineup() -> VipLineup:
+    return VipLineup(
+        user="vipuser",
+        rank="5",
+        pts=130.0,
+        pmr="120",
+        entry_key="e1",
+        total_salary=15000,
+        players=[
+            VipPlayer(
+                pos="QB",
+                name="Player A",
+                pts=20.0,
+                salary=8000,
+                value=2.5,
+                ownership=12.5,
+                rt_proj="21.0",
+                pregame_proj=19.0,
+                time_status="45",
+                value_icon="",
+                stats="",
+            ),
+            VipPlayer(
+                pos="RB",
+                name="Player B",
+                pts=10.0,
+                salary=7000,
+                value=1.4,
+                ownership=8.0,
+                rt_proj="0",
+                pregame_proj=12.0,
+                time_status="0",
+                value_icon="",
+                stats="",
+            ),
+        ],
+    )
+
+
+def test_collect_snapshot_keeps_typed_vip_lineups_from_the_fetcher(monkeypatch, tmp_path) -> None:
+    monkeypatch.setattr(collector, "SALARY_DIR", str(tmp_path))
+    monkeypatch.setattr(collector, "load_vips", lambda: ["vipuser"])
+    monkeypatch.setattr(collector, "fetch_vip_lineups", lambda *a, **k: [_typed_vip_lineup()])
+    vip_user = SimpleNamespace(
+        rank="5",
+        player_id="e1",
+        name="vipuser",
+        pmr="120",
+        pts=100.0,
+        salary=50000,
+        lineupobj=None,
+        lineup=[],
+    )
+    results = SimpleNamespace(
+        vip_list=[vip_user],
+        players={},
+        users=[vip_user],
+        non_cashing_users=0,
+        non_cashing_avg_pmr=None,
+        min_rank=10,
+        min_cash_pts=120.0,
+        non_cashing_players={},
+    )
+    monkeypatch.setattr(collector, "parse_contest_standings", lambda *a, **k: results)
+    row = ContestRow(
+        dk_id=321,
+        name="Contest",
+        draft_group=8,
+        positions_paid=10,
+        start_date="2026-01-04",
+        entry_fee=5,
+        entries=100,
+    )
+    real_collect = collector._collect_source_snapshot
+    monkeypatch.setattr(
+        collector,
+        "_collect_source_snapshot",
+        lambda **kwargs: real_collect(dk=_FakeDK(), contest_db=_FakeContestDB(by_id=row), **kwargs),
+    )
+
+    bundle = collect_snapshot(sport="NBA", contest_id=321).bundle
+
+    assert len(bundle["vip_lineups"]) == 1
+    vip = bundle["vip_lineups"][0]
+    assert (vip["display_name"], vip["entry_key"], vip["vip_entry_key"]) == ("vipuser", "e1", "e1")
+    assert (vip["rank"], vip["pts"]) == ("5", 130.0)
+    slots = {slot["player_name"]: slot for slot in vip["players_live"]}
+    assert slots["Player A"]["salary"] == 8000
+    assert slots["Player A"]["is_live"] is True
+    assert slots["Player A"]["player_key"]
+    assert slots["Player B"]["salary"] == 7000
+    assert slots["Player B"]["is_live"] is False
+    # the VIP-points lookup sees the lineup's 130.0 (>= 120 cutoff), not the standings row's 100.0
+    assert bundle["standings"][0]["is_cashing"] is True
