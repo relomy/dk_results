@@ -389,7 +389,7 @@ def _validate_non_cashing(sport: str, non_cashing: dict[str, Any]) -> list[str]:
     users = non_cashing.get("users_not_cashing")
     if "users_not_cashing" not in non_cashing:
         violations.append(f"{path}.users_not_cashing is required")
-    elif not _has_type(users, int) or users < 0:
+    elif not isinstance(users, int) or isinstance(users, bool) or users < 0:
         violations.append(f"{path}.users_not_cashing has invalid type")
     if "avg_pmr_remaining" not in non_cashing:
         violations.append(f"{path}.avg_pmr_remaining is required")
