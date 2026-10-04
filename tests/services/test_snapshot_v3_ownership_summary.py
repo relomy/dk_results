@@ -11,6 +11,7 @@ from typing import Any
 
 import pytest
 
+from dk_results.services.snapshot_v3.derive import derive_ownership_summary
 from dk_results.services.snapshot_v3.pipeline import build_snapshot_v3_envelope
 from dk_results.services.snapshot_v3.validate import validate_v3_envelope
 
@@ -30,7 +31,13 @@ def _player(name: str, status: str, ownership_pct: float) -> dict[str, Any]:
 
 
 def _slot(name: str) -> dict[str, Any]:
-    return {"player_name": name, "player_key": f"x:{name.lower()}", "salary": 5000, "is_live": True}
+    return {
+        "slot": "UTIL",
+        "player_name": name,
+        "player_key": f"x:{name.lower()}",
+        "salary": 5000,
+        "is_live": True,
+    }
 
 
 def _vip(vip_entry_key: str, *slots: dict[str, Any]) -> dict[str, Any]:
@@ -156,7 +163,7 @@ class TestPartialSummary:
 
     def test_locked_slot_is_partial(self) -> None:
         players = [_player("A", "In Progress", 10.0)]
-        locked = {"player_name": "LOCKED 🔒", "player_key": "x:locked", "is_live": False}
+        locked = {"slot": "UTIL", "player_name": "LOCKED 🔒", "is_locked": True}
         bundle = _bundle(players, [_vip("v1", _slot("A"), locked)])
 
         row = _per_vip(bundle)[0]
@@ -166,10 +173,26 @@ class TestPartialSummary:
 
     def test_locked_slot_is_partial_even_when_key_matches_a_player(self) -> None:
         players = [_player("A", "In Progress", 10.0)]
-        locked = {**_slot("A"), "locked": True}
+        locked = {"slot": "UTIL", "player_name": "LOCKED 🔒", "is_locked": True}
         bundle = _bundle(players, [_vip("v1", locked)])
 
         assert _per_vip(bundle)[0]["is_partial"] is True
+
+    def test_explicit_locked_flag_wins_over_display_name_and_adds_nothing(self) -> None:
+        players = [_player("A", "In Progress", 10.0)]
+        locked = {
+            "slot": "UTIL",
+            "player_name": "unrevealed",
+            "player_key": "x:a",
+            "is_locked": True,
+        }
+        bundle = _bundle(players, [_vip("v1", locked)])
+
+        row = derive_ownership_summary(bundle)["per_vip"][0]
+
+        assert row["is_partial"] is True
+        assert row["total_ownership_pct"] == 0.0
+        assert row["ownership_in_play_pct"] == 0.0
 
     def test_unknown_status_is_partial_but_counts_toward_total(self) -> None:
         players = [_player("A", "In Progress", 10.0), _player("Odd", "Weather Hold", 5.0)]
@@ -219,7 +242,7 @@ class TestOmission:
 
         assert row["total_ownership_pct"] == 25.0
         assert "ownership_in_play_pct" not in row
-        assert row["is_partial"] is False
+        assert row["is_partial"] is True
 
     def test_does_not_restore_pre_v3_in_play_source(self) -> None:
         bundle = _bundle([_player("A", "In Progress", 10.0)], [_vip("v1", _slot("A"))])

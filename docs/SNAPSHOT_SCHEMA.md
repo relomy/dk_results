@@ -110,6 +110,18 @@ standings row (or one with no resolvable lineup) is omitted from the list,
 never emitted with nulls. The list is absent when no tracked VIP is entered, when no
 VIP matches, or whenever the field-remaining fields are omitted (golf).
 
+## VIP lineup slots
+
+Each `contest.vip_lineups[]` row may include `players_live`, the lineup's
+slots in DraftKings roster order. Every row carries `slot`, the roster
+position. A revealed player also carries its existing `player_name`,
+`player_key` when resolvable, optional `salary`, and `is_live` fields.
+
+A player DraftKings has not revealed is represented as a locked slot:
+`{slot, player_name: "LOCKED 🔒", is_locked: true}`. Locked rows omit
+`player_key`, `salary`, and `is_live`; they do not identify a player, add to
+swing-player VIP counts, or enter the validator's known-player key set.
+
 ## `contest.metrics.ownership_summary`
 
 | Field | Type | Meaning |
@@ -130,15 +142,16 @@ Each `per_vip` row:
 | `is_partial` | boolean | True when the numbers may be incomplete: see below. Always present. |
 
 Each slot's ownership and Game status come from the contest's `players[]`,
-looked up by the slot's `player_key`. VIP slots carry neither themselves, so
+looked up by the slot's `player_key`. VIP slot rows carry neither value, so
 `players[]` stays the single source of both.
 
-`is_partial` is true when any slot is locked, has no matching `player_key` in
-`players[]` (or the matched player has no ownership), or has an unrecognized
-Game status. A locked or unmatched slot adds nothing to either sum. An
-unrecognized status still counts toward `total_ownership_pct` but not toward
-`ownership_in_play_pct`. For a sport with no Game status (golf) an
-unrecognized status is expected and does not set `is_partial`.
+`is_partial` is true when any slot is explicitly locked (`is_locked: true`),
+has no matching `player_key` in `players[]` (or the matched player has no
+ownership), or has an unrecognized Game status. A locked or unmatched slot
+adds nothing to either sum. An unrecognized status still counts toward
+`total_ownership_pct` but not toward `ownership_in_play_pct`. Unknown status
+sets `is_partial` for golf-like pools too, even though golf omits
+`ownership_in_play_pct`.
 
 Omitted when:
 
