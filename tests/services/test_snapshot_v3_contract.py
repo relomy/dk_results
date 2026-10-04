@@ -103,3 +103,97 @@ class TestContractViolations:
         del envelope["sports"]["nba"]["primary_contest"]["selected_at"]
 
         assert contract_violations(envelope) == ["sports.nba.primary_contest.selected_at: Field required"]
+
+
+def _vip_bundle(*, slots: list[dict[str, Any]] | None = None, **row: Any) -> dict[str, Any]:
+    bundle = _bundle()
+    bundle["vip_lineups"] = [
+        {
+            "display_name": "vipuser",
+            "entry_key": "e1",
+            "vip_entry_key": "e1",
+            "rank": 55,
+            "points": 260.75,
+            "pmr": 120.0,
+            "players_live": slots
+            if slots is not None
+            else [
+                {"slot": "PG", "player_name": "Player A", "player_key": "nba:a", "salary": 8000, "is_live": True},
+                {"slot": "SG", "player_name": "LOCKED 🔒", "is_locked": True},
+            ],
+            **row,
+        }
+    ]
+    return bundle
+
+
+def _build_error(bundle: dict[str, Any]) -> str:
+    with pytest.raises(ValueError) as excinfo:
+        _build(bundle)
+    return str(excinfo.value)
+
+
+class TestVipLineupsContract:
+    def test_properly_typed_rows_and_slots_build(self) -> None:
+        vip = _build(_vip_bundle())["sports"]["nba"]["contests"][0]["vip_lineups"][0]
+
+        assert (vip["rank"], vip["points"], vip["pmr"]) == (55, 260.75, 120.0)
+
+    def test_figures_and_slots_may_be_omitted(self) -> None:
+        bundle = _bundle()
+        bundle["vip_lineups"] = [{"entry_key": "e1"}]
+
+        assert _build(bundle)["sports"]["nba"]["contests"][0]["vip_lineups"] == [{"entry_key": "e1"}]
+
+    @pytest.mark.parametrize("field", ["rank", "pmr", "points"])
+    def test_string_figure_fails_the_build(self, field: str) -> None:
+        message = _build_error(_vip_bundle(**{field: "55"}))
+
+        assert f"sports.nba.contests[0].vip_lineups[0].{field}: Input should be a valid" in message
+
+    def test_points_under_the_wrong_field_name_fail_the_build(self) -> None:
+        bundle = _vip_bundle()
+        del bundle["vip_lineups"][0]["points"]
+        bundle["vip_lineups"][0]["pts"] = 260.75
+
+        assert "sports.nba.contests[0].vip_lineups[0].pts: Extra inputs are not permitted" in _build_error(bundle)
+
+    def test_null_figure_fails_the_build(self) -> None:
+        message = _build_error(_vip_bundle(rank=None))
+
+        assert "sports.nba.contests[0].vip_lineups[0].rank: must be omitted, never null" in message
+
+    def test_slot_with_wrongly_typed_salary_fails_the_build(self) -> None:
+        slot = {"slot": "PG", "player_name": "Player A", "salary": "8000", "is_live": True}
+
+        message = _build_error(_vip_bundle(slots=[slot]))
+
+        assert (
+            "sports.nba.contests[0].vip_lineups[0].players_live[0].salary: Input should be a valid integer" in message
+        )
+
+    def test_slot_without_a_player_name_fails_the_build(self) -> None:
+        message = _build_error(_vip_bundle(slots=[{"slot": "PG", "is_live": True}]))
+
+        assert "sports.nba.contests[0].vip_lineups[0].players_live[0].player_name: Field required" in message
+
+    @pytest.mark.parametrize("name", [" Player A", "Player A ", "Player A\n"])
+    def test_padded_player_name_fails_the_build(self, name: str) -> None:
+        message = _build_error(_vip_bundle(slots=[{"slot": "PG", "player_name": name, "is_live": True}]))
+
+        assert "players_live[0].player_name must not have leading or trailing whitespace" in message
+
+    @pytest.mark.parametrize(
+        ("field", "value"), [("player_key", "nba:a"), ("salary", 8000), ("is_live", True), ("is_live", False)]
+    )
+    def test_locked_slot_carrying_player_state_fails_the_build(self, field: str, value: Any) -> None:
+        slot = {"slot": "PG", "player_name": "LOCKED 🔒", "is_locked": True, field: value}
+
+        message = _build_error(_vip_bundle(slots=[slot]))
+
+        assert f"players_live[0].{field} is forbidden for locked slot" in message
+
+    def test_locked_sentinel_without_the_locked_flag_fails_the_build(self) -> None:
+        message = _build_error(_vip_bundle(slots=[{"slot": "PG", "player_name": "LOCKED 🔒", "is_live": False}]))
+
+        assert "players_live[0].is_locked must be true for locked slot" in message
