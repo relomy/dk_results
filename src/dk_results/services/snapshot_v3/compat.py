@@ -28,6 +28,7 @@ class BreakingKind(StrEnum):
 
     FIELD_REMOVED = "field_removed"
     BECAME_REQUIRED = "became_required"
+    BECAME_OPTIONAL = "became_optional"
     TYPE_CHANGED = "type_changed"
     TYPE_NARROWED = "type_narrowed"
     ENUM_VALUE_REMOVED = "enum_value_removed"
@@ -194,13 +195,15 @@ class _Comparison:
 
     def _compare_properties(self, path: str, old: Schema, new: Schema) -> None:
         new_props = new.get("properties", {})
-        newly_required = set(new.get("required", ())) - set(old.get("required", ()))
+        old_required, new_required = set(old.get("required", ())), set(new.get("required", ()))
         for name, old_prop in old.get("properties", {}).items():
             if name not in new_props:
                 self.changes.append(BreakingChange(_child(path, name), BreakingKind.FIELD_REMOVED))
                 continue
-            if name in newly_required:
+            if name in new_required - old_required:
                 self.changes.append(BreakingChange(_child(path, name), BreakingKind.BECAME_REQUIRED))
+            if name in old_required - new_required:
+                self.changes.append(BreakingChange(_child(path, name), BreakingKind.BECAME_OPTIONAL))
             self.compare(_child(path, name), old_prop, new_props[name])
         old_values, new_values = old.get("additionalProperties"), new.get("additionalProperties")
         if isinstance(old_values, Mapping) and isinstance(new_values, Mapping):

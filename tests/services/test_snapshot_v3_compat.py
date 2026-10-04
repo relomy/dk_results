@@ -76,6 +76,18 @@ BREAKING_CASES = [
         id="optional-became-required",
     ),
     pytest.param(
+        _obj({"rank": INT}, ("rank",)),
+        _obj({"rank": INT}),
+        [("rank", BreakingKind.BECAME_OPTIONAL)],
+        id="required-became-optional",
+    ),
+    pytest.param(
+        _envelope(_obj({"rank": INT, "pmr": INT}, ("rank", "pmr"))),
+        _envelope(_obj({"rank": INT, "pmr": INT}, ("rank",))),
+        [("sports.*.contests[].vip_lineups[].pmr", BreakingKind.BECAME_OPTIONAL)],
+        id="required-became-optional-behind-refs-maps-and-arrays",
+    ),
+    pytest.param(
         _obj({"rank": STR}, ("rank",)),
         _obj({"rank": INT}, ("rank",)),
         [("rank", BreakingKind.TYPE_CHANGED)],
@@ -127,11 +139,6 @@ ADDITIVE_CASES = [
         _obj({"rank": INT}, ("rank",)),
         _obj({"rank": INT, "points": {"type": "number"}}, ("rank", "points")),
         id="required-field-added",
-    ),
-    pytest.param(
-        _obj({"rank": INT}, ("rank",)),
-        _obj({"rank": INT}),
-        id="required-field-became-optional",
     ),
     pytest.param(
         _obj({"status": {"type": "string", "enum": ["ok", "error"]}}, ("status",)),
