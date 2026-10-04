@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Iterable
 
-from dk_results.analytics.game_status import UNKNOWN, classify_game_status, sport_has_game_status
+from dk_results.analytics.game_status import UNKNOWN, classify_game_status, is_locked_slot, sport_has_game_status
 from dk_results.domain.contest_standings import NON_CASHING_TALLY_SPORTS
 from dk_results.services.snapshot_v3.normalize import resolve_lineup_slots, to_float, to_int
 
@@ -83,18 +83,22 @@ def _iter_vip_lineup_player_keys(vip_lineups: list[dict[str, Any]]) -> Iterable[
         slots = resolve_lineup_slots(lineup_row)
         if slots is None:
             continue
-        seen_in_lineup: set[str] = set()
-        for slot in slots:
-            if not isinstance(slot, dict):
-                continue
-            player_key = slot.get("player_key")
-            if player_key in (None, ""):
-                continue
-            normalized_key = str(player_key)
-            if normalized_key in seen_in_lineup:
-                continue
-            seen_in_lineup.add(normalized_key)
-            yield normalized_key
+        yield from _iter_lineup_player_keys(slots)
+
+
+def _iter_lineup_player_keys(slots: list[Any]) -> Iterable[str]:
+    seen_in_lineup: set[str] = set()
+    for slot in slots:
+        if not isinstance(slot, dict) or is_locked_slot(slot):
+            continue
+        player_key = slot.get("player_key")
+        if player_key in (None, ""):
+            continue
+        normalized_key = str(player_key)
+        if normalized_key in seen_in_lineup:
+            continue
+        seen_in_lineup.add(normalized_key)
+        yield normalized_key
 
 
 def _resolve_threat_top_source(ownership: dict[str, Any]) -> list[Any] | None:
@@ -145,6 +149,8 @@ def _threat_sort_key(row: dict[str, Any]) -> tuple[bool, float, str]:
 
 
 def _derive_top_swing_players(raw_bundle: dict[str, Any]) -> list[dict[str, Any]]:
+    if not bundle_has_game_status(raw_bundle):
+        return []
     ownership = _ownership(raw_bundle)
     vip_lineups = _vip_lineup_rows(raw_bundle)
 
@@ -222,7 +228,10 @@ def _vip_remaining_by_entry(ownership: dict[str, Any]) -> dict[str, float]:
 
 
 def _build_leverage_row(
-    vip_row: dict[str, Any], remaining_by_entry: dict[str, float], field_remaining_pct: float
+    vip_row: dict[str, Any],
+    remaining_by_entry: dict[str, float],
+    partial_by_entry: dict[str, Any],
+    field_remaining_pct: float,
 ) -> dict[str, Any] | None:
     entry_key = vip_row.get("entry_key")
     if (
@@ -242,6 +251,7 @@ def _build_leverage_row(
         "vip_remaining_pct": vip_remaining_pct,
         "field_remaining_pct": field_remaining_pct,
         "uniqueness_delta_pct": round(field_remaining_pct - vip_remaining_pct, 2),
+        "is_partial": partial_by_entry.get(str(entry_key)) is True,
     }
 
 
@@ -253,11 +263,15 @@ def derive_vip_vs_field_leverage(raw_bundle: dict[str, Any], field_remaining_pct
     """
 
     vip_lineups = _vip_lineup_rows(raw_bundle)
-    remaining_by_entry = _vip_remaining_by_entry(_ownership(raw_bundle))
+    ownership = _ownership(raw_bundle)
+    remaining_by_entry = _vip_remaining_by_entry(ownership)
+    partial_by_entry = ownership.get("vip_remaining_is_partial_by_entry_key")
+    if not isinstance(partial_by_entry, dict):
+        partial_by_entry = {}
     return [
         row
         for vip_row in _sorted_vip_rows(vip_lineups)
-        if (row := _build_leverage_row(vip_row, remaining_by_entry, field_remaining_pct)) is not None
+        if (row := _build_leverage_row(vip_row, remaining_by_entry, partial_by_entry, field_remaining_pct)) is not None
     ]
 
 
@@ -288,6 +302,12 @@ def _build_top_remaining_players(rows: Any) -> list[dict[str, Any]]:
     return top_players[:TOP_REMAINING_PLAYERS_LIMIT]
 
 
+def _has_non_cashing_player_tally(raw_bundle: dict[str, Any]) -> bool:
+    return bundle_has_game_status(raw_bundle) and _bundle_sport(raw_bundle) in {
+        sport.lower() for sport in NON_CASHING_TALLY_SPORTS
+    }
+
+
 def derive_non_cashing(raw_bundle: dict[str, Any]) -> dict[str, Any] | None:
     ownership = _ownership(raw_bundle)
     users_not_cashing = to_int(ownership.get("non_cashing_user_count"))
@@ -299,7 +319,7 @@ def derive_non_cashing(raw_bundle: dict[str, Any]) -> dict[str, Any] | None:
         "users_not_cashing": users_not_cashing,
         "avg_pmr_remaining": round(avg_pmr_remaining, 2),
     }
-    if _bundle_sport(raw_bundle) in {sport.lower() for sport in NON_CASHING_TALLY_SPORTS}:
+    if _has_non_cashing_player_tally(raw_bundle):
         metric["top_remaining_players"] = _build_top_remaining_players(_resolve_threat_top_source(ownership))
     return metric
 
@@ -312,15 +332,10 @@ def _player_rows_by_key(raw_bundle: dict[str, Any]) -> dict[str, dict[str, Any]]
     return rows
 
 
-def _slot_is_locked(slot: dict[str, Any]) -> bool:
-    name = str(slot.get("player_name") or slot.get("name") or "")
-    return slot.get("locked") is True or "LOCKED" in name.upper()
-
-
 def _slot_ownership(slot: Any, players: dict[str, dict[str, Any]]) -> tuple[float, bool, bool] | None:
     """Return (ownership, in_play, known_status) for a usable slot, else None."""
 
-    if not isinstance(slot, dict) or _slot_is_locked(slot):
+    if not isinstance(slot, dict) or is_locked_slot(slot):
         return None
     player = players.get(str(slot.get("player_key")))
     ownership = to_float(player.get("ownership_pct")) if player else None
@@ -344,7 +359,7 @@ def _summarize_vip_ownership(
         ownership, slot_in_play, known_status = usable
         total += ownership
         in_play += ownership if slot_in_play else 0.0
-        is_partial = is_partial or (has_game_status and not known_status)
+        is_partial = is_partial or not known_status
     summary: dict[str, Any] = {
         key: row[key] for key in ("vip_entry_key", "entry_key", "display_name") if row.get(key) not in (None, "")
     }
@@ -359,8 +374,8 @@ def derive_ownership_summary(raw_bundle: dict[str, Any]) -> dict[str, Any] | Non
     """Per-VIP total ownership and ownership in play, looked up in ``players[]``.
 
     A slot is partial when locked, unmatched to a player (or one without
-    ownership), or when its Game status is unknown in a sport that has Game
-    status. Omitted when no tracked VIP has a lineup.
+    ownership), or when its Game status is unknown, including golf-like pools.
+    Omitted when no tracked VIP has a lineup.
     """
 
     players = _player_rows_by_key(raw_bundle)

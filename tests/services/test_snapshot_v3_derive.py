@@ -74,6 +74,7 @@ def test_distance_to_cash_omits_rank_delta_when_rank_cutoff_missing() -> None:
 
 def test_threat_falls_back_to_top_remaining_players_when_non_cashing_missing() -> None:
     raw = {
+        "players": [{"game_status": "In Progress"}],
         "ownership": {
             "top_remaining_players": [
                 {"player_key": "nba:1", "player_name": "Player A", "ownership_remaining_pct": 80.0},
@@ -95,6 +96,7 @@ def test_threat_returns_none_when_no_top_source_list_present() -> None:
 
 def test_threat_uses_player_level_source_only() -> None:
     raw = {
+        "players": [{"game_status": "In Progress"}],
         "ownership": {
             "watchlist_entries": [
                 {"display_name": "user-a", "ownership_remaining_pct": 120.0},
@@ -115,6 +117,7 @@ def test_threat_uses_player_level_source_only() -> None:
 
 def test_threat_accepts_rows_without_ownership_remaining_pct() -> None:
     raw = {
+        "players": [{"game_status": "In Progress"}],
         "ownership": {
             "non_cashing_top_remaining_players": [
                 {"player_key": "nba:1", "player_name": "Player A"},
@@ -130,6 +133,7 @@ def test_threat_accepts_rows_without_ownership_remaining_pct() -> None:
 
 def test_threat_vip_count_joins_on_player_key_only() -> None:
     raw = {
+        "players": [{"game_status": "In Progress"}],
         "ownership": {
             "non_cashing_top_remaining_players": [
                 {"player_key": "nba:1", "player_name": "Player A", "ownership_remaining_pct": 80.0},
@@ -146,6 +150,11 @@ def test_threat_vip_count_joins_on_player_key_only() -> None:
                     {"player_key": "nba:2", "player_name": "Player A"},
                 ]
             },
+            {
+                "players_live": [
+                    {"player_key": "nba:1", "player_name": "unrevealed", "is_locked": True},
+                ]
+            },
         ],
     }
 
@@ -156,6 +165,7 @@ def test_threat_vip_count_joins_on_player_key_only() -> None:
 
 def test_threat_drops_rows_without_player_key() -> None:
     raw = {
+        "players": [{"game_status": "In Progress"}],
         "ownership": {
             "non_cashing_top_remaining_players": [
                 {"player_name": "Player A", "ownership_remaining_pct": 80.0},
@@ -174,6 +184,7 @@ def test_threat_drops_rows_without_player_key() -> None:
 
 def test_threat_rejects_duplicate_player_key_rows() -> None:
     raw = {
+        "players": [{"game_status": "In Progress"}],
         "ownership": {
             "non_cashing_top_remaining_players": [
                 {"player_key": "nba:1", "player_name": "Player A", "ownership_remaining_pct": 80.0},
@@ -189,6 +200,7 @@ def test_threat_rejects_duplicate_player_key_rows() -> None:
 
 def test_threat_sort_is_deterministic_for_ties() -> None:
     raw = {
+        "players": [{"game_status": "In Progress"}],
         "ownership": {
             "non_cashing_top_remaining_players": [
                 {"player_key": "nba:2", "player_name": "B", "ownership_remaining_pct": 80.0},

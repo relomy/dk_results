@@ -23,13 +23,18 @@ metrics are added here as they ship.
   |---|---|---|
   | In-Progress, Delayed, Suspended | yes | yes |
   | Matchup text (pre-game; contains `@`) | yes | no |
+  | Explicit locked slot (player hidden) | yes | no |
   | Final, Postponed, Cancelled / Canceled | no | no |
   | anything else (including golf's tournament name) | unknown | unknown |
 
 - **A sport has no Game status** when no player in its pool classifies as
   anything but unknown (today: golf). This is detected from
-  `players[].game_status`, not from a list of sport names. Metrics that depend
-  on "remaining" are omitted for such a sport.
+  `players[].game_status`, not from a list of sport names. Ownership remaining
+  in standings and the ownership watchlist, top remaining and swing players,
+  average salary remaining, field remaining, leverage, and ownership in play
+  are omitted for such a pool. VIP total ownership and computable non-cashing
+  count/average PMR remain available. Remaining salary (a user's cap minus
+  revealed salaries) and train detection retain their separate meanings.
 
 ## `contest.live_metrics.avg_salary_per_player_remaining`
 
@@ -37,13 +42,13 @@ metrics are added here as they ship.
 |---|---|
 | Type | number (DraftKings dollars, two decimals) |
 | Location | `sports.<sport>.contests[0].live_metrics` |
-| Meaning | Mean salary over every entry's unfinished lineup slots across the whole contest, weighted by slot. A contest-level figure, not per VIP. A slot is unfinished unless its player's Game status is Final, Postponed or Cancelled; players with an unrecognized status count as unfinished. |
+| Meaning | Mean salary over every entry's unfinished slots whose player and salary are known, across the whole contest, weighted by slot. Locked slots are excluded because their salaries are hidden; no salary partial flag is emitted. A contest-level figure, not per VIP. A slot is unfinished unless its player's Game status is Final, Postponed, Cancelled or Canceled; players with an unrecognized status count as unfinished. |
 
 Present for any live primary contest, whether or not any tracked VIP is entered.
 
 Omitted when:
 
-- every lineup slot is finished (nothing to average), or
+- no unfinished slot has a known player and salary (nothing to average), or
 - the sport has no Game status (golf).
 
 ## `contest.metrics.non_cashing`
@@ -57,7 +62,9 @@ Omitted when:
 `top_remaining_players` appears only for sports that tally it: NFL,
 NFLShowdown, CFB and NBA. For any other sport (for example MLB) the key is
 absent, not an empty list. For a tallied sport it is a list and may be empty
-when every held player is finished.
+when every held player is finished. It is omitted for any pool without Game status,
+even when the sport normally tallies it. Snapshot rows exclude all finished statuses
+using the shared classifier; the Google Sheet's separate tally is unchanged.
 
 The whole metric is omitted when no entry is below the cash line or the
 non-cashing figures are unavailable. It is emitted for sports with no Game
@@ -82,7 +89,7 @@ available. Terms (Field remaining, Uniqueness delta) are defined in
 | `field_remaining_scope` | string | Always `"contest_field"`: the number covers every standings row in the contest, not the tracked VIPs. |
 | `field_remaining_source` | string | Always `"contest_standings_mean"`. |
 | `field_remaining_pct` | number | Mean ownership remaining (percentage points, two decimals) over the **full, pre-truncation** standings, not the truncated `standings` list and not the watchlist. Ownership remaining uses the shared Game status classifier. |
-| `field_remaining_is_partial` | boolean | True exactly when a standings row was left out of the mean because its lineup could not be resolved. Always emitted next to `field_remaining_pct`. |
+| `field_remaining_is_partial` | boolean | True when any standings entry was excluded from the mean (its lineup is missing or empty), or any included lineup contains a locked or unresolved slot with unavailable ownership. Always emitted next to `field_remaining_pct`; covers the full contest field before truncation. |
 
 Present for any live primary contest, whether or not any tracked VIP is
 entered. The five fields are emitted together or not at all. They are omitted
@@ -102,13 +109,26 @@ One row per tracked VIP:
 | `display_name` | string | The VIP's display name. |
 | `vip_remaining_pct` | number | Ownership remaining on the VIP's own standings row, matched to the VIP by `entry_key`. |
 | `field_remaining_pct` | number | The same value as the `threat` field of that name. |
-| `uniqueness_delta_pct` | number | `field_remaining_pct - vip_remaining_pct`, in percentage points. Positive means the VIP is more unique than the field. |
+| `uniqueness_delta_pct` | number | The rounded `field_remaining_pct` minus the rounded `vip_remaining_pct`, rounded to two decimals, in percentage points. Positive means the VIP is more unique than the field. |
+| `is_partial` | boolean | Required on every row. True when this VIP's own standings lineup contains a locked or unresolved slot with unavailable ownership. A complete VIP's flag remains false when another entry makes the field partial. |
 
 `vip_remaining_pct` is read from the full, pre-truncation standings, so a VIP
 ranked below the standings limit still gets a row. A VIP with no matching
 standings row (or one with no resolvable lineup) is omitted from the list,
 never emitted with nulls. The list is absent when no tracked VIP is entered, when no
 VIP matches, or whenever the field-remaining fields are omitted (golf).
+
+## VIP lineup slots
+
+Each `contest.vip_lineups[]` row may include `players_live`, the lineup's
+slots in DraftKings roster order. Every row carries `slot`, the roster
+position. A revealed player also carries its existing `player_name`,
+`player_key` when resolvable, optional `salary`, and `is_live` fields.
+
+A player DraftKings has not revealed is represented as a locked slot:
+`{slot, player_name: "LOCKED 🔒", is_locked: true}`. Locked rows omit
+`player_key`, `salary`, and `is_live`; they do not identify a player, add to
+swing-player VIP counts, or enter the validator's known-player key set.
 
 ## `contest.metrics.ownership_summary`
 
@@ -130,15 +150,16 @@ Each `per_vip` row:
 | `is_partial` | boolean | True when the numbers may be incomplete: see below. Always present. |
 
 Each slot's ownership and Game status come from the contest's `players[]`,
-looked up by the slot's `player_key`. VIP slots carry neither themselves, so
+looked up by the slot's `player_key`. VIP slot rows carry neither value, so
 `players[]` stays the single source of both.
 
-`is_partial` is true when any slot is locked, has no matching `player_key` in
-`players[]` (or the matched player has no ownership), or has an unrecognized
-Game status. A locked or unmatched slot adds nothing to either sum. An
-unrecognized status still counts toward `total_ownership_pct` but not toward
-`ownership_in_play_pct`. For a sport with no Game status (golf) an
-unrecognized status is expected and does not set `is_partial`.
+`is_partial` is true when any slot is explicitly locked (`is_locked: true`),
+has no matching `player_key` in `players[]` (or the matched player has no
+ownership), or has an unrecognized Game status. A locked or unmatched slot
+adds nothing to either sum. An unrecognized status still counts toward
+`total_ownership_pct` but not toward `ownership_in_play_pct`. Unknown status
+sets `is_partial` for golf-like pools too, even though golf omits
+`ownership_in_play_pct`.
 
 Omitted when:
 

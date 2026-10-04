@@ -13,6 +13,7 @@ from collections.abc import Mapping
 from typing import Any
 
 from dk_results.analytics.contest_metrics import remaining_ownership
+from dk_results.analytics.game_status import classify_slot_game_status
 from dk_results.analytics.trainfinder import TrainFinder
 from dk_results.domain.contest_standings import ContestStandings
 from dk_results.domain.player import Player
@@ -66,10 +67,10 @@ def _is_user_cashing(
 
 
 def _ownership_remaining_total_pct(user: Any) -> float | None:
-    lineupobj = getattr(user, "lineupobj", None)
-    if not lineupobj:
+    lineup = getattr(getattr(user, "lineupobj", None), "lineup", None)
+    if not lineup:
         return None
-    return remaining_ownership(getattr(lineupobj, "lineup", ()))
+    return remaining_ownership(lineup)
 
 
 def _build_standings_row(
@@ -184,6 +185,8 @@ def build_top_remaining_players(results: ContestStandings) -> list[dict[str, Any
     top_remaining_players: list[dict[str, Any]] = []
     if results.non_cashing_users > 0:
         for name, count in results.non_cashing_players.items():
+            if classify_slot_game_status(results.players.get(name)).remaining is False:
+                continue
             top_remaining_players.append(
                 {
                     "player_name": name,
