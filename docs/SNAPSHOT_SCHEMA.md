@@ -60,19 +60,40 @@ fails on a breaking change, naming each one by path and kind:
 - `field_removed`: a declared field is gone. A rename is reported as the old
   name removed (the new name is an addition).
 - `type_changed` / `type_narrowed`: a declared value's JSON type changed, or
-  it accepts less than before (null dropped from a nullable field, a free
-  string becoming an enum).
+  it accepts less than before: null dropped from a nullable field, a free
+  string becoming an enum, or a constraint tightened. The `type_narrowed`
+  detail names the keyword and `old -> new` (`none` when it was absent). The
+  constraints are `minimum`, `exclusiveMinimum`, `minLength`, `minItems` and
+  `minProperties` raised or newly added; `maximum`, `exclusiveMaximum`,
+  `maxLength`, `maxItems` and `maxProperties` lowered or newly added; and a
+  `pattern` added or changed. Regex containment is undecidable, so any new or
+  different pattern counts; the gate is conservative here. Each type
+  alternative is compared on its own, so `integer | null` with a raised
+  `minimum` is caught.
 - `became_required`: a declared optional field is now required.
+- `became_optional`: a declared required field is now optional. This extends
+  the spec's list on purpose: consumers generate TypeScript types from the
+  schema, and `x: T` becoming `x?: T` breaks them.
 - `enum_value_removed`: an enum (or `const`) lost a value.
+- `branch_removed`: an object or array alternative of a union that the
+  previous schema declared has no counterpart in the current one. Every
+  alternative is compared, not only the first. Object branches pair by
+  discriminator (the properties whose schema is a `const`, matched on value, so
+  reordering branches is not a change); branches without one, and array
+  branches, pair by position among the branches of that type, an array branch
+  by the discriminator of its object items when it has one. A lone branch
+  always pairs with the current one, so a changed `const` there is
+  `enum_value_removed`.
 
 Not breaking: additions (a new field, required or optional, a new section, a
-new enum value), title and description edits, a required field becoming
-optional, and **declaring what was left open**. A loose section (one that
+new union branch, a new enum value), title and description edits, a loosened or
+removed limit, a removed `pattern`, and **declaring what was left open**. A loose section (one that
 "accepts any JSON object") is a placeholder that promises nothing about its
 contents, so tightening it to typed fields, as the per-section porting PRs
-do, passes the gate. The gate guards what the previous schema declared, so
-tightening an already declared field, such as dropping null from
-`contest.max_entries_per_user`, is breaking.
+do, passes the gate, as does giving an untyped value a type and limits. The gate guards what the previous
+schema declared, so tightening an already declared field, such as dropping
+null from `contest.max_entries_per_user` or adding a `minLength` to a typed
+string, is breaking.
 
 To ship a breaking change deliberately, label the PR `breaking-change` and add
 an entry to the [Breaking changes](#breaking-changes) log in the same PR; the

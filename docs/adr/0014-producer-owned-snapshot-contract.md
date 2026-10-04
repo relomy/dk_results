@@ -23,12 +23,16 @@ against it without depending on the consumer:
   reviewable diff.
 - **A compatibility gate** in CI compares the PR's exported schema with the
   base branch's. Additive changes pass. A breaking change (a declared field
-  removed or renamed, a type changed or narrowed, an optional field made
-  required, an enum value removed) fails unless the PR is labeled
+  removed or renamed, a type changed or narrowed, a constraint tightened or
+  added, a union branch dropped, an optional field made required, a required
+  field made optional, an enum value removed) fails unless the PR is labeled
   `breaking-change` and the schema document's Breaking changes log gains an
   entry. The gate guards only what the previous schema declared: declaring a
   loose placeholder section's fields is not breaking, because the placeholder
-  promised nothing a consumer could build on.
+  promised nothing a consumer could build on. Required-to-optional goes beyond
+  the original spec's list: the dashboard generates TypeScript types from the
+  schema, and `x: T` becoming `x?: T` breaks them. Regex containment is
+  undecidable, so a new or changed `pattern` counts as narrowing.
 - **The consumer checks itself.** The dashboard pulls the exported schema and
   goldens at a pinned commit, generates its types from them, and runs its own
   contract test. Producer CI never runs consumer code.

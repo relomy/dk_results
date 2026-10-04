@@ -6,10 +6,20 @@ against ``previous``. ``$ref``/``$defs`` are resolved and ``anyOf``/``oneOf``
 unions are flattened, so the pydantic export's shape doesn't matter.
 
 The gate guards what ``previous`` declared: a declared field stays, a declared
-type keeps accepting what it accepted, a declared optional field stays
-optional, a declared enum keeps its values. What ``previous`` left open (a
-loose section with no declared fields, a value with no declared type) carries
-no promise, so declaring it later is not breaking. Additions never are.
+type keeps accepting what it accepted (its limits included: a raised minimum,
+a lowered maximum, a limit or ``pattern`` newly added or changed, compared per
+type alternative), a declared optional field stays optional, a declared
+required field stays required, a declared enum keeps its values, and every
+declared object or array union branch keeps a counterpart. Branches pair by
+discriminator (the properties whose schema is a ``const``, matched on value),
+else by position among the branches of that type. What ``previous`` left open
+(a loose section with no declared fields, a value with no declared type)
+carries no promise, so declaring it later is not breaking. Additions never are.
+
+``became_optional`` (``x: T`` -> ``x?: T``) extends the spec's list on purpose:
+consumers generate TypeScript types from the schema, and that change breaks
+them. A ``pattern`` can't be compared by containment (undecidable), so any new
+or different pattern counts as ``type_narrowed``; removing one does not.
 """
 
 from __future__ import annotations
@@ -24,7 +34,10 @@ Schema = Mapping[str, Any]
 
 
 class BreakingKind(StrEnum):
-    """How a change breaks the previous contract. A rename is a removal plus an addition."""
+    """How a change breaks the previous contract. A rename is a removal plus an addition.
+
+    ``BRANCH_REMOVED``: an object or array union branch the previous schema declared has no counterpart.
+    """
 
     FIELD_REMOVED = "field_removed"
     BECAME_REQUIRED = "became_required"
