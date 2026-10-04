@@ -30,6 +30,11 @@ def _positions_paid(value: Any) -> int | None:
     return value if isinstance(value, int) and not isinstance(value, bool) and value >= 1 else None
 
 
+def _positions_paid_field(raw_contest: dict[str, Any]) -> dict[str, int]:
+    positions_paid = _positions_paid(raw_contest.get("positions_paid"))
+    return {} if positions_paid is None else {"positions_paid": positions_paid}
+
+
 def _cash_line_type(cash_line: dict[str, Any]) -> str:
     raw_cutoff_type = str(cash_line.get("cutoff_type") or "").strip().lower()
     if raw_cutoff_type in {"positions_paid", "rank"}:
@@ -72,9 +77,7 @@ def _build_contest_fields(
             "prize_pool_cents": _money_to_cents(raw_contest.get("prize_pool_cents") or raw_contest.get("prize_pool")),
         }
     )
-    positions_paid = _positions_paid(raw_contest.get("positions_paid"))
-    if positions_paid is not None:
-        fields["positions_paid"] = positions_paid
+    fields.update(_positions_paid_field(raw_contest))
     return fields
 
 
