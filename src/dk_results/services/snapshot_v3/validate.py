@@ -181,13 +181,17 @@ def _validate_live_metrics_section(sport: str, contest: dict[str, Any]) -> list[
     cash_line = live_metrics.get("cash_line")
     if cash_line is not None and not isinstance(cash_line, dict):
         violations.append(f"sports.{sport}.contests[0].live_metrics.cash_line has invalid type")
-    if "avg_salary_per_player_remaining" in live_metrics:
-        value = live_metrics["avg_salary_per_player_remaining"]
-        if not _is_finite_number(value) or value < 0:
-            violations.append(
-                f"sports.{sport}.contests[0].live_metrics.avg_salary_per_player_remaining has invalid type"
-            )
+    violations.extend(_validate_avg_salary_remaining(sport, live_metrics))
     return violations
+
+
+def _validate_avg_salary_remaining(sport: str, live_metrics: dict[str, Any]) -> list[str]:
+    if "avg_salary_per_player_remaining" not in live_metrics:
+        return []
+    value = live_metrics["avg_salary_per_player_remaining"]
+    if _is_finite_number(value) and value >= 0:
+        return []
+    return [f"sports.{sport}.contests[0].live_metrics.avg_salary_per_player_remaining has invalid type"]
 
 
 def _validate_metrics_section(sport: str, contest: dict[str, Any]) -> list[str]:
@@ -382,20 +386,27 @@ def _validate_contest_metrics(sport: str, sport_payload: dict[str, Any], contest
             _prefix_contract_path(sport, message)
             for message in validate_distance_to_cash_rows(distance_to_cash["per_vip"])
         )
-    non_cashing = metrics.get("non_cashing")
-    if isinstance(non_cashing, dict):
-        violations.extend(_validate_non_cashing(sport, non_cashing))
+    violations.extend(_validate_non_cashing(sport, metrics.get("non_cashing")))
     if "ownership_summary" in metrics:
         violations.extend(_validate_ownership_summary(sport, metrics["ownership_summary"]))
-    threat = metrics.get("threat")
-    if isinstance(threat, dict) and isinstance(threat.get("top_swing_players"), list):
-        violations.extend(_validate_top_swing_players(sport, sport_payload, contest, threat["top_swing_players"]))
-    if isinstance(threat, dict):
-        violations.extend(_validate_threat_field_metrics(sport, threat))
+    violations.extend(_validate_threat(sport, sport_payload, contest, metrics.get("threat")))
     return violations
 
 
-def _validate_non_cashing(sport: str, non_cashing: dict[str, Any]) -> list[str]:
+def _validate_threat(sport: str, sport_payload: dict[str, Any], contest: dict[str, Any], threat: Any) -> list[str]:
+    if not isinstance(threat, dict):
+        return []
+    violations: list[str] = []
+    if isinstance(threat.get("top_swing_players"), list):
+        violations.extend(_validate_top_swing_players(sport, sport_payload, contest, threat["top_swing_players"]))
+    violations.extend(_validate_threat_field_metrics(sport, threat))
+    return violations
+
+
+def _validate_non_cashing(sport: str, non_cashing: Any) -> list[str]:
+    # A non-dict section is reported by _validate_metrics_section.
+    if not isinstance(non_cashing, dict):
+        return []
     path = f"sports.{sport}.contests[0].metrics.non_cashing"
     violations: list[str] = []
     users = non_cashing.get("users_not_cashing")

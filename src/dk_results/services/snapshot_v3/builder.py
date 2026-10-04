@@ -125,24 +125,28 @@ def _add_live_metrics(
         contest["live_metrics"] = live_metrics
 
 
+# Derived metric sections, each with the key that must be non-empty for it to be
+# emitted (None: the section itself must be non-empty).
+_DERIVED_METRIC_GATES: dict[str, str | None] = {
+    "distance_to_cash": "per_vip",
+    "non_cashing": None,
+    "ownership_summary": "per_vip",
+    "threat": None,
+}
+
+
+def _is_emittable_metric(value: Any, required_key: str | None) -> bool:
+    if not isinstance(value, dict) or not value:
+        return False
+    return required_key is None or bool(value.get(required_key))
+
+
 def _add_derived_metrics(contest: dict[str, Any], derived: dict[str, Any], generated_at: str) -> None:
-    metrics: dict[str, Any] = {}
-    distance_to_cash = derived.get("distance_to_cash")
-    if isinstance(distance_to_cash, dict) and distance_to_cash.get("per_vip"):
-        metrics["distance_to_cash"] = distance_to_cash
-
-    non_cashing = derived.get("non_cashing")
-    if isinstance(non_cashing, dict) and non_cashing:
-        metrics["non_cashing"] = non_cashing
-
-    ownership_summary = derived.get("ownership_summary")
-    if isinstance(ownership_summary, dict) and ownership_summary.get("per_vip"):
-        metrics["ownership_summary"] = ownership_summary
-
-    threat = derived.get("threat")
-    if isinstance(threat, dict) and threat:
-        metrics["threat"] = threat
-
+    metrics: dict[str, Any] = {
+        name: derived[name]
+        for name, required_key in _DERIVED_METRIC_GATES.items()
+        if _is_emittable_metric(derived.get(name), required_key)
+    }
     if metrics:
         metrics["updated_at"] = generated_at
         contest["metrics"] = metrics

@@ -800,7 +800,7 @@ def _typed_vip_lineup() -> VipLineup:
     )
 
 
-def test_collect_snapshot_keeps_typed_vip_lineups_from_the_fetcher(monkeypatch, tmp_path) -> None:
+def _collect_typed_vip_bundle(monkeypatch, tmp_path) -> dict:
     monkeypatch.setattr(collector, "SALARY_DIR", str(tmp_path))
     monkeypatch.setattr(collector, "load_vips", lambda: ["vipuser"])
     monkeypatch.setattr(collector, "fetch_vip_lineups", lambda *a, **k: [_typed_vip_lineup()])
@@ -841,18 +841,30 @@ def test_collect_snapshot_keeps_typed_vip_lineups_from_the_fetcher(monkeypatch, 
         lambda **kwargs: real_collect(dk=_FakeDK(), contest_db=_FakeContestDB(by_id=row), **kwargs),
     )
 
-    bundle = collect_snapshot(sport="NBA", contest_id=321).bundle
+    return collect_snapshot(sport="NBA", contest_id=321).bundle
+
+
+def test_collect_snapshot_keeps_typed_vip_lineups_from_the_fetcher(monkeypatch, tmp_path) -> None:
+    bundle = _collect_typed_vip_bundle(monkeypatch, tmp_path)
 
     assert len(bundle["vip_lineups"]) == 1
     vip = bundle["vip_lineups"][0]
     assert (vip["display_name"], vip["entry_key"], vip["vip_entry_key"]) == ("vipuser", "e1", "e1")
     assert (vip["rank"], vip["pts"]) == ("5", 130.0)
-    slots = {slot["player_name"]: slot for slot in vip["players_live"]}
-    assert slots["Player A"]["salary"] == 8000
-    assert slots["Player A"]["is_live"] is True
+
+
+def test_collect_snapshot_typed_vip_lineup_slots_carry_salary_and_live_state(monkeypatch, tmp_path) -> None:
+    bundle = _collect_typed_vip_bundle(monkeypatch, tmp_path)
+
+    slots = {slot["player_name"]: slot for slot in bundle["vip_lineups"][0]["players_live"]}
+    assert (slots["Player A"]["salary"], slots["Player A"]["is_live"]) == (8000, True)
     assert slots["Player A"]["player_key"]
-    assert slots["Player B"]["salary"] == 7000
-    assert slots["Player B"]["is_live"] is False
+    assert (slots["Player B"]["salary"], slots["Player B"]["is_live"]) == (7000, False)
+
+
+def test_collect_snapshot_vip_points_lookup_sees_typed_vip_lineup(monkeypatch, tmp_path) -> None:
+    bundle = _collect_typed_vip_bundle(monkeypatch, tmp_path)
+
     # the VIP-points lookup sees the lineup's 130.0 (>= 120 cutoff), not the standings row's 100.0
     assert bundle["standings"][0]["is_cashing"] is True
 
