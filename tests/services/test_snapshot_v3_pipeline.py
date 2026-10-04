@@ -111,7 +111,7 @@ def _bundle_with_vip_lineup() -> dict:
         },
         "selected_contest_id": "188080404",
         "selection_reason": {"mode": "explicit_id", "criteria": {"contest_id": "188080404"}},
-        "players": [{"name": "Player C", "player_key": "nba:player-c"}],
+        "players": [{"name": "Player C", "player_key": "nba:player-c", "game_status": "In Progress"}],
         "standings": [],
         "train_clusters": [],
         "ownership": {

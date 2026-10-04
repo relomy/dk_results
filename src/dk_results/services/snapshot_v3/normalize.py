@@ -89,7 +89,7 @@ def resolve_lineup_slots(row: dict[str, Any]) -> list[Any] | None:
 
 
 _LIVE_STATUS_MARKERS = ("in progress", "live", "q1", "q2", "q3", "q4", "ot", "thru", "hole")
-_FINAL_STATUS_MARKERS = ("final", "complete", "completed", "locked", "postponed", "canceled", "cancelled")
+_FINAL_STATUS_MARKERS = ("final", "complete", "completed", "postponed", "canceled", "cancelled")
 
 
 def _minutes_remaining_says_live(slot: dict[str, Any]) -> bool | None:

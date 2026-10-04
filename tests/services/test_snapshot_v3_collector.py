@@ -1,3 +1,4 @@
+import csv
 import datetime
 import logging
 from types import SimpleNamespace
@@ -20,6 +21,7 @@ from dk_results.services.snapshot_v3.collector import (
     collect_snapshot,
 )
 from dk_results.services.snapshot_v3.derive import derive_threat
+from dk_results.services.snapshot_v3.pipeline import build_snapshot_v3_envelope
 from dk_results.vip_lineups import VipLineup, VipPlayer
 from tests.domain.draftables_payloads import cfb_payload, golf_payload
 
@@ -314,16 +316,7 @@ def test_collect_raw_bundle_maps_top_remaining_players_from_vip_slots_when_playe
 
     assert vip_slot["player_key"] == "nba:player-a:na:10300:na"
     assert top_row["player_key"] == "nba:player-a:na:10300:na"
-    assert threat == {
-        "top_swing_players": [
-            {
-                "player_key": "nba:player-a:na:10300:na",
-                "player_name": "Player A",
-                "ownership_remaining_pct": 80.0,
-                "vip_count": 1,
-            }
-        ]
-    }
+    assert threat is None  # an empty player pool has no Game status
 
 
 # --- extracted collector helpers -------------------------------------------------
@@ -971,3 +964,111 @@ def test_postponed_and_cancelled_players_do_not_count_toward_collector_remaining
 
     assert raw["ownership"]["field_remaining_pct"] == pytest.approx(15.0)  # (0 + 30) / 2
     assert raw["ownership"]["avg_salary_per_player_remaining"] == pytest.approx(7000.0)
+
+
+class _RemainingMetricsDK(_FakeDK):
+    def __init__(self, statuses):
+        super().__init__(
+            standings_rows=[
+                ["rank", "entry", "name", "pmr", "points", "lineup", "", "player", "position", "ownership", "fpts"],
+                [
+                    "1",
+                    "e1",
+                    "leader",
+                    "0",
+                    "150",
+                    "PG Alpha SG Bravo SF Charlie PF Delta C Echo G LOCKED F LOCKED UTIL LOCKED",
+                ],
+                [
+                    "2",
+                    "e2",
+                    "chaser",
+                    "100",
+                    "100",
+                    "PG Alpha SG Bravo SF Charlie PF Delta C Echo G Foxtrot F LOCKED UTIL LOCKED",
+                ],
+                ["", "", "", "", "", "", "", "Alpha", "PG", "20%", "10"],
+                ["", "", "", "", "", "", "", "Bravo", "SG", "10%", "10"],
+                ["", "", "", "", "", "", "", "Charlie", "SF", "30%", "10"],
+                ["", "", "", "", "", "", "", "Delta", "PF", "40%", "10"],
+                ["", "", "", "", "", "", "", "Echo", "C", "50%", "10"],
+                ["", "", "", "", "", "", "", "Foxtrot", "G", "15%", "10"],
+            ]
+        )
+        self.statuses = [*statuses, statuses[1]]
+
+    def download_salary_csv(self, _name, _draft_group, path):
+        with open(path, "w", newline="", encoding="utf-8") as handle:
+            writer = csv.writer(handle)
+            writer.writerow(["Position", "Name", "Roster Position", "Salary", "Game Info", "TeamAbbrev"])
+            for name, pos, salary, status in zip(
+                ("Alpha", "Bravo", "Charlie", "Delta", "Echo", "Foxtrot"),
+                ("PG", "SG", "SF", "PF", "C", "G"),
+                (9000, 8000, 7000, 6000, 5000, 4000),
+                self.statuses,
+                strict=True,
+            ):
+                writer.writerow([pos, name, pos, salary, status, "AAA"])
+
+
+def _remaining_metrics_contest(monkeypatch, tmp_path, statuses):
+    monkeypatch.setattr(collector, "SALARY_DIR", str(tmp_path))
+    monkeypatch.setattr(collector, "load_vips", lambda: [])
+    monkeypatch.setattr(collector, "fetch_vip_lineups", lambda *a, **k: [])
+    row = ContestRow(
+        dk_id=321,
+        name="C",
+        draft_group=8,
+        positions_paid=1,
+        start_date="2026-10-04",
+        entry_fee=5,
+        entries=2,
+        contest_state="live",
+        prize_pool=100,
+    )
+    real_collect = collector._collect_source_snapshot
+    monkeypatch.setattr(
+        collector,
+        "_collect_source_snapshot",
+        lambda **kwargs: real_collect(dk=_RemainingMetricsDK(statuses), contest_db=_FakeContestDB(by_id=row), **kwargs),
+    )
+    envelope = build_snapshot_v3_envelope(
+        {"NBA": 321},
+        generated_at="2026-10-04T12:00:00Z",
+        standings_limit=1,
+        collector=collect_snapshot,
+    )
+    return envelope["sports"]["nba"]["contests"][0]
+
+
+@pytest.mark.parametrize("finished", ["Final", "Postponed", "Cancelled", "Canceled"])
+def test_collector_omits_finished_players_from_all_remaining_outputs(monkeypatch, tmp_path, finished):
+    contest = _remaining_metrics_contest(
+        monkeypatch, tmp_path, [finished, "Delayed", "Suspended", "AAA@BBB 07:00PM ET", finished]
+    )
+
+    assert contest["live_metrics"]["avg_salary_per_player_remaining"] == 6571.43
+    assert contest["metrics"]["threat"]["field_remaining_pct"] == 87.5
+    assert contest["standings"][0]["ownership_remaining_total_pct"] == 80.0
+    assert contest["metrics"]["non_cashing"]["top_remaining_players"] == [
+        {"player_name": "Bravo", "ownership_remaining_pct": 100.0},
+        {"player_name": "Charlie", "ownership_remaining_pct": 100.0},
+        {"player_name": "Delta", "ownership_remaining_pct": 100.0},
+        {"player_name": "Foxtrot", "ownership_remaining_pct": 100.0},
+    ]
+    assert [row["player_name"] for row in contest["metrics"]["threat"]["top_swing_players"]] == [
+        "Bravo",
+        "Charlie",
+        "Delta",
+        "Foxtrot",
+    ]
+
+
+def test_collector_no_status_pool_omits_remaining_outputs_but_keeps_non_cashing(monkeypatch, tmp_path):
+    contest = _remaining_metrics_contest(monkeypatch, tmp_path, ["Masters Tournament"] * 5)
+
+    assert "ownership_remaining_total_pct" not in contest["standings"][0]
+    assert "ownership_watchlist" not in contest
+    assert "avg_salary_per_player_remaining" not in contest["live_metrics"]
+    assert "threat" not in contest["metrics"]
+    assert contest["metrics"]["non_cashing"] == {"users_not_cashing": 1, "avg_pmr_remaining": 100.0}

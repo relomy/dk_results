@@ -125,7 +125,7 @@ class TestFieldRemaining:
 
         assert _threat(bundle) == {}
 
-    def test_golf_keeps_swing_players_but_no_field_fields(self) -> None:
+    def test_no_status_pool_omits_swing_players_and_field_fields(self) -> None:
         bundle = _field_bundle("GOLF")
         bundle["players"] = [_player("A", "Masters Tournament")]
         bundle["ownership"]["top_remaining_players"] = [
@@ -134,7 +134,7 @@ class TestFieldRemaining:
 
         threat = _threat(bundle)
 
-        assert set(threat) == {"top_swing_players"}
+        assert threat == {}
 
     def test_omitted_when_collector_could_not_compute_field_remaining(self) -> None:
         bundle = _bundle(field_remaining_pct=None, field_remaining_is_partial=True)

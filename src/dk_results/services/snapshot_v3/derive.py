@@ -145,6 +145,8 @@ def _threat_sort_key(row: dict[str, Any]) -> tuple[bool, float, str]:
 
 
 def _derive_top_swing_players(raw_bundle: dict[str, Any]) -> list[dict[str, Any]]:
+    if not bundle_has_game_status(raw_bundle):
+        return []
     ownership = _ownership(raw_bundle)
     vip_lineups = _vip_lineup_rows(raw_bundle)
 
@@ -288,6 +290,12 @@ def _build_top_remaining_players(rows: Any) -> list[dict[str, Any]]:
     return top_players[:TOP_REMAINING_PLAYERS_LIMIT]
 
 
+def _has_non_cashing_player_tally(raw_bundle: dict[str, Any]) -> bool:
+    return bundle_has_game_status(raw_bundle) and _bundle_sport(raw_bundle) in {
+        sport.lower() for sport in NON_CASHING_TALLY_SPORTS
+    }
+
+
 def derive_non_cashing(raw_bundle: dict[str, Any]) -> dict[str, Any] | None:
     ownership = _ownership(raw_bundle)
     users_not_cashing = to_int(ownership.get("non_cashing_user_count"))
@@ -299,7 +307,7 @@ def derive_non_cashing(raw_bundle: dict[str, Any]) -> dict[str, Any] | None:
         "users_not_cashing": users_not_cashing,
         "avg_pmr_remaining": round(avg_pmr_remaining, 2),
     }
-    if _bundle_sport(raw_bundle) in {sport.lower() for sport in NON_CASHING_TALLY_SPORTS}:
+    if _has_non_cashing_player_tally(raw_bundle):
         metric["top_remaining_players"] = _build_top_remaining_players(_resolve_threat_top_source(ownership))
     return metric
 

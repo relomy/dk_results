@@ -23,13 +23,18 @@ metrics are added here as they ship.
   |---|---|---|
   | In-Progress, Delayed, Suspended | yes | yes |
   | Matchup text (pre-game; contains `@`) | yes | no |
+  | Explicit locked slot (player hidden) | yes | no |
   | Final, Postponed, Cancelled / Canceled | no | no |
   | anything else (including golf's tournament name) | unknown | unknown |
 
 - **A sport has no Game status** when no player in its pool classifies as
   anything but unknown (today: golf). This is detected from
-  `players[].game_status`, not from a list of sport names. Metrics that depend
-  on "remaining" are omitted for such a sport.
+  `players[].game_status`, not from a list of sport names. Ownership remaining
+  in standings and the ownership watchlist, top remaining and swing players,
+  average salary remaining, field remaining, leverage, and ownership in play
+  are omitted for such a pool. VIP total ownership and computable non-cashing
+  count/average PMR remain available. Remaining salary (a user's cap minus
+  revealed salaries) and train detection retain their separate meanings.
 
 ## `contest.live_metrics.avg_salary_per_player_remaining`
 
@@ -37,13 +42,13 @@ metrics are added here as they ship.
 |---|---|
 | Type | number (DraftKings dollars, two decimals) |
 | Location | `sports.<sport>.contests[0].live_metrics` |
-| Meaning | Mean salary over every entry's unfinished lineup slots across the whole contest, weighted by slot. A contest-level figure, not per VIP. A slot is unfinished unless its player's Game status is Final, Postponed or Cancelled; players with an unrecognized status count as unfinished. |
+| Meaning | Mean salary over every entry's unfinished slots whose player and salary are known, across the whole contest, weighted by slot. Locked slots are excluded because their salaries are hidden; no salary partial flag is emitted. A contest-level figure, not per VIP. A slot is unfinished unless its player's Game status is Final, Postponed, Cancelled or Canceled; players with an unrecognized status count as unfinished. |
 
 Present for any live primary contest, whether or not any tracked VIP is entered.
 
 Omitted when:
 
-- every lineup slot is finished (nothing to average), or
+- no unfinished slot has a known player and salary (nothing to average), or
 - the sport has no Game status (golf).
 
 ## `contest.metrics.non_cashing`
@@ -57,7 +62,9 @@ Omitted when:
 `top_remaining_players` appears only for sports that tally it: NFL,
 NFLShowdown, CFB and NBA. For any other sport (for example MLB) the key is
 absent, not an empty list. For a tallied sport it is a list and may be empty
-when every held player is finished.
+when every held player is finished. It is omitted for any pool without Game status,
+even when the sport normally tallies it. Snapshot rows exclude all finished statuses
+using the shared classifier; the Google Sheet's separate tally is unchanged.
 
 The whole metric is omitted when no entry is below the cash line or the
 non-cashing figures are unavailable. It is emitted for sports with no Game

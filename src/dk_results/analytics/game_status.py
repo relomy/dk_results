@@ -8,8 +8,10 @@ decides which of those texts mean a player is still to score or is live now.
 from __future__ import annotations
 
 import re
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from typing import Any, NamedTuple
+
+from dk_results.domain.lineup import LockedSlot
 
 
 class GameStatus(NamedTuple):
@@ -54,6 +56,23 @@ def classify_game_status(text: Any) -> GameStatus:
     if "@" in normalized:
         return _PRE_GAME
     return UNKNOWN
+
+
+def is_locked_slot(slot: Any) -> bool:
+    """Recognize a hidden player from the explicit lineup-slot representation."""
+    if isinstance(slot, LockedSlot):
+        return True
+    return isinstance(slot, Mapping) and (slot.get("is_locked") is True or slot.get("locked") is True)
+
+
+def classify_slot_game_status(slot: Any) -> GameStatus:
+    """Classify a lineup slot; a hidden player is always pre-game."""
+    if is_locked_slot(slot):
+        return _PRE_GAME
+    text = (
+        slot.get("game_info", slot.get("game_status")) if isinstance(slot, Mapping) else getattr(slot, "game_info", "")
+    )
+    return classify_game_status(text)
 
 
 def sport_has_game_status(statuses: Iterable[Any]) -> bool:
