@@ -5,8 +5,9 @@
 
 Prints each breaking change from the base schema to the committed
 ``contract/snapshot.schema.json`` and exits non-zero when there is one, unless
-the PR carries the ``breaking-change`` label and ``docs/SNAPSHOT_SCHEMA.md``'s
-Breaking changes log gained an entry over the base branch's copy. A base with
+the PR carries the ``breaking-change`` label and every reported path is named
+by an entry ``docs/SNAPSHOT_SCHEMA.md``'s Breaking changes log gained over the
+base branch's copy. A base with
 no schema yet (the contract's first introduction) passes. Uses only this
 repository's artifacts; CI passes the base files via ``git show``.
 """
@@ -15,11 +16,12 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 from collections.abc import Sequence
 from pathlib import Path
 
 from dk_results.paths import repo_file
-from dk_results.services.snapshot_v3.compat import BreakingChange, breaking_change_log_entries, breaking_changes
+from dk_results.services.snapshot_v3.compat import BreakingChange, breaking_changes
 
 SCHEMA_PATH = ("contract", "snapshot.schema.json")
 SCHEMA_DOC_PATH = ("docs", "SNAPSHOT_SCHEMA.md")
@@ -38,7 +40,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--breaking-change-label",
         action="store_true",
-        help=f"The PR carries the `{LABEL}` label: breaking changes pass if the schema doc's log gained an entry.",
+        help=f"The PR carries the `{LABEL}` label: breaking changes pass if new log entries name every path.",
     )
     parser.add_argument("--base-doc", type=Path, help="The base branch's docs/SNAPSHOT_SCHEMA.md (absent: no log).")
     parser.add_argument(
@@ -66,22 +68,62 @@ def main(argv: Sequence[str] | None = None) -> int:
             "and add a migration note to the Breaking changes log in docs/SNAPSHOT_SCHEMA.md."
         )
         return 1
-    return _check_log_gained_an_entry(args.base_doc, args.doc)
+    return _check_changes_are_logged(changes, args.base_doc, args.doc)
 
 
-def _check_log_gained_an_entry(base_doc: Path | None, doc: Path) -> int:
+def _check_changes_are_logged(changes: list[BreakingChange], base_doc: Path | None, doc: Path) -> int:
     base_entries = set(breaking_change_log_entries(_read_optional(base_doc)))
     added = [entry for entry in breaking_change_log_entries(_read_optional(doc)) if entry not in base_entries]
-    if not added:
-        print(
-            f"\nThe PR is labeled `{LABEL}`, but the Breaking changes log in {doc} gained no entry. "
-            "Add one naming the changes above and the consumer's migration."
-        )
+    unlogged = sorted({change.path for change in changes if not _is_named_by(change.path, added)})
+    if unlogged:
+        print(f"\nThe PR is labeled `{LABEL}`, but the Breaking changes log in {doc} is missing a note for:")
+        for path in unlogged:
+            print(f"  - no new Breaking changes log entry names `{_display(path)}`")
+        print("Add an entry naming each path above and the consumer's migration.")
         return 1
     print(f"\nLabeled `{LABEL}`; new Breaking changes log entries:")
     for entry in added:
         print(f"  - {entry}")
     return 0
+
+
+BREAKING_CHANGE_LOG_HEADING = "## Breaking changes"
+
+
+def breaking_change_log_entries(schema_doc: str) -> list[str]:
+    """The entries (top-level bullets) of the schema document's breaking-change log.
+
+    A bullet's indented continuation lines are joined onto it, so an entry
+    compares equal however it is wrapped.
+    """
+    entries: list[str] = []
+    in_log = False
+    for line in schema_doc.splitlines():
+        if line.startswith("## "):
+            in_log = line.strip() == BREAKING_CHANGE_LOG_HEADING
+        elif in_log:
+            _collect_entry_line(entries, line)
+    return entries
+
+
+def _collect_entry_line(entries: list[str], line: str) -> None:
+    if line.startswith("- "):
+        entries.append(line[2:].strip())
+    elif entries and line.startswith(" ") and line.strip():
+        entries[-1] = f"{entries[-1]} {line.strip()}"
+
+
+ROOT_PATH = "(root)"
+
+
+def _display(path: str) -> str:
+    return path or ROOT_PATH
+
+
+def _is_named_by(path: str, entries: list[str]) -> bool:
+    """True when an entry names the whole path, not just a longer or shorter dotted path sharing it."""
+    pattern = re.compile(rf"(?<![\w.*\[\]]){re.escape(_display(path))}(?![\w*\[]|\.\w)")
+    return any(pattern.search(entry) for entry in entries)
 
 
 def _read_optional(path: Path | None) -> str:

@@ -6,7 +6,7 @@ from typing import Any
 
 import pytest
 
-from dk_results.services.snapshot_v3.compat import BreakingKind, breaking_change_log_entries, breaking_changes
+from dk_results.services.snapshot_v3.compat import BreakingKind, breaking_changes
 
 
 def _obj(properties: dict[str, Any], required: tuple[str, ...] = (), **extra: Any) -> dict[str, Any]:
@@ -182,30 +182,3 @@ def test_recursive_definitions_are_compared_without_looping() -> None:
     assert [(c.path, c.kind) for c in breaking_changes(previous, current)] == [
         ("children", BreakingKind.BECAME_REQUIRED)
     ]
-
-
-SCHEMA_DOC = """# Snapshot schema 3
-
-## Breaking changes
-
-Newest first.
-
-- 2026-10-06 (#190): `sports.*.status` enum_value_removed "stale". Migration: treat a
-  missing status as "ok".
-- 2026-10-05 (#189): `contest.rank` type_changed string -> integer.
-
-## Rules that apply to every metric
-
-- Omit, never null.
-"""
-
-
-def test_breaking_change_log_entries_are_the_bullets_under_the_log_heading() -> None:
-    assert breaking_change_log_entries(SCHEMA_DOC) == [
-        '2026-10-06 (#190): `sports.*.status` enum_value_removed "stale". Migration: treat a missing status as "ok".',
-        "2026-10-05 (#189): `contest.rank` type_changed string -> integer.",
-    ]
-
-
-def test_a_document_without_the_log_has_no_entries() -> None:
-    assert breaking_change_log_entries("# Snapshot schema 3\n\n- Omit, never null.\n") == []

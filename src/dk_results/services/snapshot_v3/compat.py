@@ -212,29 +212,3 @@ class _Comparison:
         old_items, new_items = old.get("items"), new.get("items")
         if isinstance(old_items, Mapping) and isinstance(new_items, Mapping):
             self.compare(f"{path}[]", old_items, new_items)
-
-
-BREAKING_CHANGE_LOG_HEADING = "## Breaking changes"
-
-
-def breaking_change_log_entries(schema_doc: str) -> list[str]:
-    """The entries (top-level bullets) of the schema document's breaking-change log.
-
-    A bullet's indented continuation lines are joined onto it, so an entry
-    compares equal however it is wrapped.
-    """
-    entries: list[str] = []
-    in_log = False
-    for line in schema_doc.splitlines():
-        if line.startswith("## "):
-            in_log = line.strip() == BREAKING_CHANGE_LOG_HEADING
-        elif in_log:
-            _collect_entry_line(entries, line)
-    return entries
-
-
-def _collect_entry_line(entries: list[str], line: str) -> None:
-    if line.startswith("- "):
-        entries.append(line[2:].strip())
-    elif entries and line.startswith(" ") and line.strip():
-        entries[-1] = f"{entries[-1]} {line.strip()}"

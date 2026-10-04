@@ -54,7 +54,9 @@ tightening an already declared field, such as dropping null from
 
 To ship a breaking change deliberately, label the PR `breaking-change` and add
 an entry to the [Breaking changes](#breaking-changes) log in the same PR; the
-gate then passes only if the log gained an entry. To run the gate locally
+gate then passes only if every breaking path it reports is named by an entry
+the log gained in the PR (entries already on the base branch don't count). To
+run the gate locally
 against `main`:
 
 ```bash
@@ -255,7 +257,7 @@ now excluded.
 Every deliberate breaking change to `contract/snapshot.schema.json`, newest
 first. Each entry is one top-level bullet: the date, the PR, each path and
 kind the gate reported, and the migration a consumer needs. A PR labeled
-`breaking-change` passes the compatibility gate only when it adds an entry
-here.
+`breaking-change` passes the compatibility gate only when entries it adds here
+name every path the gate reports.
 
 No breaking changes yet.
