@@ -12,6 +12,11 @@ broad; the relevant subset when it's narrow.
 - `uv run ruff check .`
 - `uv run ty check`
 
+After changing the snapshot contract models
+(`src/dk_results/services/snapshot_v3/models/`), regenerate the committed
+schema with `uv run python export_snapshot_schema.py`; a test fails while
+`contract/snapshot.schema.json` is stale.
+
 ## dfs-common is a git dependency
 
 `dfs-common` is sourced from the private `relomy/dfs-common` GitHub repo in

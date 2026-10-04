@@ -7,6 +7,26 @@ remaining) are defined in `docs/CONTEXT.md`.
 This document covers the metrics the producer has defined so far. Later
 metrics are added here as they ship.
 
+## Machine-readable contract
+
+The authority on the envelope's shape is the pydantic models in
+`src/dk_results/services/snapshot_v3/models/` (one module per contest section).
+The feed validates every envelope against them before the hand-written
+validator runs; a failure stops the build and nothing is uploaded.
+
+Their JSON Schema is committed at **`contract/snapshot.schema.json`** (a stable
+path consumers may pull at a pinned commit). It is generated, never edited by
+hand; after changing the models, regenerate and commit it:
+
+```bash
+uv run python export_snapshot_schema.py
+```
+
+A test fails when the committed file is stale. In the models, optional fields
+are omitted, never null; a field that may be null is required and typed
+nullable (today only `contest.max_entries_per_user`). Sections not yet modelled
+field by field accept any JSON object.
+
 ## Rules that apply to every metric
 
 - **Omit, never null.** A metric or field that cannot be computed is absent.
