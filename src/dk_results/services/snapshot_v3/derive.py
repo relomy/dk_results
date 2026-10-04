@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Iterable
 
-from dk_results.analytics.game_status import UNKNOWN, classify_game_status, sport_has_game_status
+from dk_results.analytics.game_status import UNKNOWN, classify_game_status, is_locked_slot, sport_has_game_status
 from dk_results.domain.contest_standings import NON_CASHING_TALLY_SPORTS
 from dk_results.services.snapshot_v3.normalize import resolve_lineup_slots, to_float, to_int
 
@@ -89,7 +89,7 @@ def _iter_vip_lineup_player_keys(vip_lineups: list[dict[str, Any]]) -> Iterable[
 def _iter_lineup_player_keys(slots: list[Any]) -> Iterable[str]:
     seen_in_lineup: set[str] = set()
     for slot in slots:
-        if not isinstance(slot, dict) or _slot_is_locked(slot):
+        if not isinstance(slot, dict) or is_locked_slot(slot):
             continue
         player_key = slot.get("player_key")
         if player_key in (None, ""):
@@ -149,6 +149,8 @@ def _threat_sort_key(row: dict[str, Any]) -> tuple[bool, float, str]:
 
 
 def _derive_top_swing_players(raw_bundle: dict[str, Any]) -> list[dict[str, Any]]:
+    if not bundle_has_game_status(raw_bundle):
+        return []
     ownership = _ownership(raw_bundle)
     vip_lineups = _vip_lineup_rows(raw_bundle)
 
@@ -292,6 +294,12 @@ def _build_top_remaining_players(rows: Any) -> list[dict[str, Any]]:
     return top_players[:TOP_REMAINING_PLAYERS_LIMIT]
 
 
+def _has_non_cashing_player_tally(raw_bundle: dict[str, Any]) -> bool:
+    return bundle_has_game_status(raw_bundle) and _bundle_sport(raw_bundle) in {
+        sport.lower() for sport in NON_CASHING_TALLY_SPORTS
+    }
+
+
 def derive_non_cashing(raw_bundle: dict[str, Any]) -> dict[str, Any] | None:
     ownership = _ownership(raw_bundle)
     users_not_cashing = to_int(ownership.get("non_cashing_user_count"))
@@ -303,7 +311,7 @@ def derive_non_cashing(raw_bundle: dict[str, Any]) -> dict[str, Any] | None:
         "users_not_cashing": users_not_cashing,
         "avg_pmr_remaining": round(avg_pmr_remaining, 2),
     }
-    if _bundle_sport(raw_bundle) in {sport.lower() for sport in NON_CASHING_TALLY_SPORTS}:
+    if _has_non_cashing_player_tally(raw_bundle):
         metric["top_remaining_players"] = _build_top_remaining_players(_resolve_threat_top_source(ownership))
     return metric
 
@@ -316,15 +324,10 @@ def _player_rows_by_key(raw_bundle: dict[str, Any]) -> dict[str, dict[str, Any]]
     return rows
 
 
-def _slot_is_locked(slot: dict[str, Any]) -> bool:
-    name = str(slot.get("player_name") or slot.get("name") or "")
-    return slot.get("is_locked") is True or slot.get("locked") is True or name == "LOCKED 🔒"
-
-
 def _slot_ownership(slot: Any, players: dict[str, dict[str, Any]]) -> tuple[float, bool, bool] | None:
     """Return (ownership, in_play, known_status) for a usable slot, else None."""
 
-    if not isinstance(slot, dict) or _slot_is_locked(slot):
+    if not isinstance(slot, dict) or is_locked_slot(slot):
         return None
     player = players.get(str(slot.get("player_key")))
     ownership = to_float(player.get("ownership_pct")) if player else None

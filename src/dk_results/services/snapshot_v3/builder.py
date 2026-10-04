@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from dk_results.services.snapshot_v3.derive import bundle_has_game_status
+
 
 def _money_to_cents(value: Any) -> int | None:
     if isinstance(value, bool):
@@ -89,13 +91,33 @@ def _base_contest_fields(
         "currency": raw_contest.get("currency") or "USD",
         "max_entries": raw_contest.get("max_entries") or raw_contest.get("entries"),
         "max_entries_per_user": raw_contest.get("max_entries_per_user"),
-        "standings": list(raw_bundle.get("standings") or []),
+        "standings": _build_standings(raw_bundle),
         "vip_lineups": list(raw_bundle.get("vip_lineups") or []),
         "train_clusters": list(raw_bundle.get("train_clusters") or []),
     }
 
 
+def _build_standings(raw_bundle: dict[str, Any]) -> list[dict[str, Any]]:
+    has_game_status = bundle_has_game_status(raw_bundle)
+    return [
+        {
+            key: value
+            for key, value in row.items()
+            if key != "ownership_remaining_total_pct" or (has_game_status and value is not None)
+        }
+        for row in list(raw_bundle.get("standings") or [])
+    ]
+
+
 def _add_ownership_watchlist(contest: dict[str, Any], raw_bundle: dict[str, Any]) -> None:
+    if not bundle_has_game_status(raw_bundle):
+        return
+    watchlist = _build_ownership_watchlist(raw_bundle)
+    if watchlist is not None:
+        contest["ownership_watchlist"] = watchlist
+
+
+def _build_ownership_watchlist(raw_bundle: dict[str, Any]) -> dict[str, Any] | None:
     ownership = dict(raw_bundle.get("ownership") or {})
     watchlist_entries = list(ownership.get("watchlist_entries") or [])
     ownership_watchlist: dict[str, Any] = {
@@ -105,7 +127,8 @@ def _add_ownership_watchlist(contest: dict[str, Any], raw_bundle: dict[str, Any]
     if total_pct is not None:
         ownership_watchlist["ownership_remaining_total_pct"] = total_pct
     if ownership_watchlist["entries"] or "ownership_remaining_total_pct" in ownership_watchlist:
-        contest["ownership_watchlist"] = ownership_watchlist
+        return ownership_watchlist
+    return None
 
 
 def _add_live_metrics(

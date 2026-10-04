@@ -128,6 +128,45 @@ class TestNonCashing:
 
         assert non_cashing == {"users_not_cashing": 40, "avg_pmr_remaining": 123.46}
 
+
+class TestNoGameStatus:
+    @pytest.mark.parametrize("sport", ["GOLF", "NBA"])
+    def test_no_status_pool_omits_all_ownership_remaining_outputs(self, sport: str) -> None:
+        bundle = _non_cashing_bundle(sport)
+        bundle["players"] = [_player("A", "Masters Tournament"), _player("B", "Masters Tournament")]
+        bundle["ownership"].update(
+            avg_salary_per_player_remaining=7000.0,
+            field_remaining_pct=60.0,
+            field_remaining_is_partial=False,
+            vip_remaining_by_entry_key={"e1": 50.0},
+            ownership_remaining_total_pct=60.0,
+            watchlist_entries=[{"entry_key": "e1", "ownership_remaining_pct": 50.0}],
+        )
+        bundle["standings"] = [{"entry_key": "e1", "ownership_remaining_total_pct": 50.0}]
+        bundle["vip_lineups"] = [
+            {
+                "vip_entry_key": "v1",
+                "entry_key": "e1",
+                "display_name": "VIP",
+                "players_live": [
+                    {"slot": "UTIL", "player_key": "x:a", "player_name": "A", "salary": 5000, "is_live": False}
+                ],
+            }
+        ]
+
+        contest = _contest(bundle)
+
+        assert "ownership_remaining_total_pct" not in contest["standings"][0]
+        assert "ownership_watchlist" not in contest
+        assert "live_metrics" not in contest
+        assert "threat" not in contest["metrics"]
+        assert contest["metrics"]["non_cashing"] == {"users_not_cashing": 40, "avg_pmr_remaining": 123.46}
+        summary = contest["metrics"]["ownership_summary"]["per_vip"][0]
+        assert summary["total_ownership_pct"] == 10.0
+        assert "ownership_in_play_pct" not in summary
+
+
+class TestNonCashingAvailability:
     def test_top_remaining_players_capped_at_ten(self) -> None:
         bundle = _non_cashing_bundle("NBA")
         bundle["players"] += [_player(f"P{i}", "Final") for i in range(12)]
