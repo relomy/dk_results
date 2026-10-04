@@ -43,7 +43,7 @@ def _vip_identity(row: dict[str, Any]) -> dict[str, Any]:
 def _build_distance_to_cash_entry(
     row: dict[str, Any], cutoff_points: float | None, rank_cutoff: int | None
 ) -> dict[str, Any] | None:
-    current_points = to_float(row.get("points", row.get("pts")))
+    current_points = to_float(row.get("points"))
     if current_points is None or cutoff_points is None:
         return None
 
