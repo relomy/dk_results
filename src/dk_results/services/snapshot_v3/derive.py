@@ -6,14 +6,15 @@ from typing import Any, Iterable
 
 from dk_results.analytics.game_status import UNKNOWN, classify_game_status, is_locked_slot, sport_has_game_status
 from dk_results.domain.contest_standings import NON_CASHING_TALLY_SPORTS
+from dk_results.services.snapshot_v3.models.metrics import (
+    FIELD_REMAINING_SCOPE,
+    FIELD_REMAINING_SOURCE,
+    LEVERAGE_SEMANTICS,
+    OWNERSHIP_SUMMARY_SCOPE,
+    OWNERSHIP_SUMMARY_SOURCE,
+    TOP_REMAINING_PLAYERS_LIMIT,
+)
 from dk_results.services.snapshot_v3.normalize import resolve_lineup_slots, to_float, to_int
-
-TOP_REMAINING_PLAYERS_LIMIT = 10
-LEVERAGE_SEMANTICS = "positive=unique"
-FIELD_REMAINING_SCOPE = "contest_field"
-FIELD_REMAINING_SOURCE = "contest_standings_mean"
-OWNERSHIP_SUMMARY_SOURCE = "vip_lineup_players"
-OWNERSHIP_SUMMARY_SCOPE = "vip_lineup"
 
 
 def _vip_lineup_rows(raw_bundle: dict[str, Any]) -> list[dict[str, Any]]:

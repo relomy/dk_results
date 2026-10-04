@@ -13,7 +13,7 @@ from dk_results.services.snapshot_v3.contracts import (
     validate_single_contest,
     validate_top_swing_players,
 )
-from dk_results.services.snapshot_v3.derive import (
+from dk_results.services.snapshot_v3.models.metrics import (
     FIELD_REMAINING_SCOPE,
     FIELD_REMAINING_SOURCE,
     LEVERAGE_SEMANTICS,

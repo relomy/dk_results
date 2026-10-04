@@ -8,8 +8,11 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validat
 from pydantic_core import PydanticCustomError
 
 
-def _drop_default(schema: dict[str, Any]) -> None:
-    schema.pop("default", None)
+class _OmittableMarker:
+    """Marks a field as omittable and keeps its ``default: null`` out of the exported schema."""
+
+    def __call__(self, schema: dict[str, Any]) -> None:
+        schema.pop("default", None)
 
 
 def omittable() -> Any:
@@ -18,7 +21,7 @@ def omittable() -> Any:
     The field is not required and a null value is rejected. Fields the contract
     explicitly allows to be null are declared required as ``T | None`` instead.
     """
-    return Field(default=None, json_schema_extra=_drop_default)
+    return Field(default=None, json_schema_extra=_OmittableMarker())
 
 
 class ContractModel(BaseModel):
@@ -30,7 +33,7 @@ class ContractModel(BaseModel):
     @classmethod
     def _omitted_never_null(cls, value: Any, info: ValidationInfo) -> Any:
         field = cls.model_fields.get(info.field_name or "")
-        if value is None and field is not None and field.json_schema_extra is _drop_default:
+        if value is None and field is not None and isinstance(field.json_schema_extra, _OmittableMarker):
             raise PydanticCustomError("omit_never_null", "must be omitted, never null")
         return value
 

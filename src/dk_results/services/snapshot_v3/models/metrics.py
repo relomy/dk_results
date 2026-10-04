@@ -12,6 +12,19 @@ from dk_results.services.snapshot_v3.models.numbers import FiniteFloat, NonEmpty
 
 TOP_REMAINING_PLAYERS_LIMIT = 10
 
+# Each emitted constant is declared next to the Literal that pins it, so the
+# producer (derive) and the contract cannot drift: the type check ties them.
+LeverageSemantics = Literal["positive=unique"]
+FieldRemainingScope = Literal["contest_field"]
+FieldRemainingSource = Literal["contest_standings_mean"]
+OwnershipSummarySource = Literal["vip_lineup_players"]
+OwnershipSummaryScope = Literal["vip_lineup"]
+LEVERAGE_SEMANTICS: LeverageSemantics = "positive=unique"
+FIELD_REMAINING_SCOPE: FieldRemainingScope = "contest_field"
+FIELD_REMAINING_SOURCE: FieldRemainingSource = "contest_standings_mean"
+OWNERSHIP_SUMMARY_SOURCE: OwnershipSummarySource = "vip_lineup_players"
+OWNERSHIP_SUMMARY_SCOPE: OwnershipSummaryScope = "vip_lineup"
+
 
 class DistanceToCashVip(ContractModel):
     """How far one tracked VIP is from the cash line."""
@@ -64,8 +77,8 @@ class OwnershipSummaryVip(ContractModel):
 class OwnershipSummary(ContractModel):
     """Ownership summary over the tracked VIP lineups."""
 
-    source: Literal["vip_lineup_players"]
-    scope: Literal["vip_lineup"]
+    source: OwnershipSummarySource
+    scope: OwnershipSummaryScope
     per_vip: list[OwnershipSummaryVip] = Field(min_length=1)
 
 
@@ -103,9 +116,9 @@ class Threat(ContractModel):
     """Threat metrics: swing players plus the field-remaining group (absent for sports with no Game status)."""
 
     top_swing_players: list[SwingPlayer] = omittable()
-    leverage_semantics: Literal["positive=unique"] = omittable()
-    field_remaining_scope: Literal["contest_field"] = omittable()
-    field_remaining_source: Literal["contest_standings_mean"] = omittable()
+    leverage_semantics: LeverageSemantics = omittable()
+    field_remaining_scope: FieldRemainingScope = omittable()
+    field_remaining_source: FieldRemainingSource = omittable()
     field_remaining_pct: FiniteFloat = omittable()
     field_remaining_is_partial: StrictBool = omittable()
     vip_vs_field_leverage: list[VipVsFieldLeverage] = omittable()
