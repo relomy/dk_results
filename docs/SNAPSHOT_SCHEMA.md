@@ -79,8 +79,8 @@ Each `per_vip` row:
 | Field | Type | Meaning |
 |---|---|---|
 | `vip_entry_key` | string | The VIP's entry key. |
-| `entry_key` | string | The VIP's standings entry key. |
-| `display_name` | string | The VIP's display name. |
+| `entry_key` | string, optional | The VIP's standings entry key. Absent when it could not be resolved. |
+| `display_name` | string, optional | The VIP's display name. Absent when unknown. |
 | `total_ownership_pct` | number | Ownership summed over every lineup slot, in percentage points, two decimals. |
 | `ownership_in_play_pct` | number, optional | Ownership summed over slots whose Game status is in play (In-Progress, Delayed, Suspended), two decimals. Pre-game and finished players are excluded, so this differs from ownership remaining. |
 | `is_partial` | boolean | True when the numbers may be incomplete: see below. Always present. |
@@ -99,7 +99,7 @@ unrecognized status is expected and does not set `is_partial`.
 Omitted when:
 
 - no tracked VIP is entered (`vip_lineups` is empty), or no entered VIP has
-  any lineup slots. The whole metric is absent, not an empty `per_vip`.
+  an entry key and lineup slots. The whole metric is absent, not an empty `per_vip`.
 
 Omitted per row when:
 

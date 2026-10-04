@@ -189,6 +189,23 @@ class TestPartialSummary:
 
 
 class TestOmission:
+    def test_identity_fields_missing_from_the_vip_row_are_omitted_not_null(self) -> None:
+        vip = _vip("v1", _slot("A"))
+        del vip["display_name"], vip["entry_key"]
+        bundle = _bundle([_player("A", "In Progress", 10.0)], [vip])
+
+        assert set(_per_vip(bundle)[0]) == {
+            "vip_entry_key",
+            "total_ownership_pct",
+            "ownership_in_play_pct",
+            "is_partial",
+        }
+
+    def test_vip_without_lineup_slots_is_left_out(self) -> None:
+        bundle = _bundle([_player("A", "In Progress", 10.0)], [_vip("v1")])
+
+        assert "ownership_summary" not in _contest(bundle).get("metrics", {})
+
     def test_absent_with_zero_tracked_vips(self) -> None:
         bundle = _bundle([_player("A", "In Progress", 10.0)], [])
 

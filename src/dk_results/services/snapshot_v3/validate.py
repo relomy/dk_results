@@ -444,18 +444,26 @@ def _validate_ownership_summary_row(path: str, row: dict[str, Any]) -> list[str]
     violations: list[str] = []
     if not _is_non_empty_string(row.get("vip_entry_key")):
         violations.append(f"{path}.vip_entry_key is required")
-    for field in ("entry_key", "display_name"):
-        if field in row and not _is_non_empty_string(row[field]):
-            violations.append(f"{path}.{field} has invalid type")
-    if "total_ownership_pct" not in row:
-        violations.append(f"{path}.total_ownership_pct is required")
-    for field in ("total_ownership_pct", "ownership_in_play_pct"):
-        if field in row and (not _is_finite_number(row[field]) or row[field] < 0):
-            violations.append(f"{path}.{field} has invalid type")
+    violations.extend(
+        f"{path}.{field} has invalid type"
+        for field in ("entry_key", "display_name")
+        if field in row and not _is_non_empty_string(row[field])
+    )
+    violations.extend(_validate_ownership_summary_numbers(path, row))
     if "is_partial" not in row:
         violations.append(f"{path}.is_partial is required")
     elif not isinstance(row["is_partial"], bool):
         violations.append(f"{path}.is_partial has invalid type")
+    return violations
+
+
+def _validate_ownership_summary_numbers(path: str, row: dict[str, Any]) -> list[str]:
+    violations = [f"{path}.total_ownership_pct is required"] if "total_ownership_pct" not in row else []
+    violations.extend(
+        f"{path}.{field} has invalid type"
+        for field in ("total_ownership_pct", "ownership_in_play_pct")
+        if field in row and (not _is_finite_number(row[field]) or row[field] < 0)
+    )
     return violations
 
 

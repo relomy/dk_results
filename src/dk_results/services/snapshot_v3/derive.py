@@ -223,6 +223,19 @@ def _slot_is_locked(slot: dict[str, Any]) -> bool:
     return slot.get("locked") is True or "LOCKED" in name.upper()
 
 
+def _slot_ownership(slot: Any, players: dict[str, dict[str, Any]]) -> tuple[float, bool, bool] | None:
+    """Return (ownership, in_play, known_status) for a usable slot, else None."""
+
+    if not isinstance(slot, dict) or _slot_is_locked(slot):
+        return None
+    player = players.get(str(slot.get("player_key")))
+    ownership = to_float(player.get("ownership_pct")) if player else None
+    if player is None or ownership is None:
+        return None
+    status = classify_game_status(player.get("game_status"))
+    return ownership, bool(status.in_play), status is not UNKNOWN
+
+
 def _summarize_vip_ownership(
     row: dict[str, Any], slots: list[Any], players: dict[str, dict[str, Any]], has_game_status: bool
 ) -> dict[str, Any]:
@@ -230,23 +243,18 @@ def _summarize_vip_ownership(
     in_play = 0.0
     is_partial = False
     for slot in slots:
-        slot = slot if isinstance(slot, dict) else {}
-        player = players.get(str(slot.get("player_key")))
-        ownership = to_float(player.get("ownership_pct")) if player else None
-        if _slot_is_locked(slot) or ownership is None:
+        usable = _slot_ownership(slot, players)
+        if usable is None:
             is_partial = True
             continue
+        ownership, slot_in_play, known_status = usable
         total += ownership
-        status = classify_game_status(player.get("game_status")) if player else UNKNOWN
-        is_partial = is_partial or (has_game_status and status is UNKNOWN)
-        if status.in_play:
-            in_play += ownership
+        in_play += ownership if slot_in_play else 0.0
+        is_partial = is_partial or (has_game_status and not known_status)
     summary: dict[str, Any] = {
-        "vip_entry_key": row.get("vip_entry_key"),
-        "entry_key": row.get("entry_key"),
-        "display_name": row.get("display_name"),
-        "total_ownership_pct": round(total, 2),
+        key: row[key] for key in ("vip_entry_key", "entry_key", "display_name") if row.get(key) not in (None, "")
     }
+    summary["total_ownership_pct"] = round(total, 2)
     if has_game_status:
         summary["ownership_in_play_pct"] = round(in_play, 2)
     summary["is_partial"] = is_partial
@@ -267,7 +275,7 @@ def derive_ownership_summary(raw_bundle: dict[str, Any]) -> dict[str, Any] | Non
     per_vip = [
         _summarize_vip_ownership(row, slots, players, has_game_status)
         for row in _sorted_vip_rows(vip_lineups)
-        if (slots := resolve_lineup_slots(row))
+        if row.get("vip_entry_key") not in (None, "") and (slots := resolve_lineup_slots(row))
     ]
     if not per_vip:
         return None
