@@ -2,6 +2,8 @@ name: CI
 
 on:
   pull_request:
+    # labeled/unlabeled re-run the schema compatibility gate when `breaking-change` is toggled.
+    types: [opened, synchronize, reopened, labeled, unlabeled]
   push:
     branches:
       - main
@@ -68,3 +70,23 @@ jobs:
 
       - name: Pytest
         run: uv run pytest
+
+      # Compares the PR's committed contract schema with its base branch's, using only
+      # this repository's artifacts (never the consumer's). A base without a schema passes.
+      - name: Snapshot Schema Compatibility
+        if: github.event_name == 'pull_request' && matrix.os == 'ubuntu-latest'
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          BREAKING_CHANGE_LABEL: ${{ contains(github.event.pull_request.labels.*.name, 'breaking-change') }}
+        run: |
+          base_dir="$RUNNER_TEMP/schema-base"
+          mkdir -p "$base_dir"
+          git show "origin/$BASE_REF:contract/snapshot.schema.json" > "$base_dir/snapshot.schema.json" 2>/dev/null \
+            || rm -f "$base_dir/snapshot.schema.json"
+          git show "origin/$BASE_REF:docs/SNAPSHOT_SCHEMA.md" > "$base_dir/SNAPSHOT_SCHEMA.md" 2>/dev/null \
+            || rm -f "$base_dir/SNAPSHOT_SCHEMA.md"
+          args=(--base "$base_dir/snapshot.schema.json" --base-doc "$base_dir/SNAPSHOT_SCHEMA.md")
+          if [ "$BREAKING_CHANGE_LABEL" = "true" ]; then
+            args+=(--breaking-change-label)
+          fi
+          uv run python check_snapshot_schema_compat.py "${args[@]}"
