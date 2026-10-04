@@ -112,20 +112,20 @@ def test_the_committed_schema_passes_against_itself_by_default() -> None:
     assert main(["--base", str(COMMITTED_SCHEMA)]) == 0
 
 
-def test_tightening_a_loose_section_passes_but_dropping_a_null_does_not(
+def test_on_the_real_schema_tightening_a_loose_section_passes_but_removing_an_enum_value_fails(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    schema = json.loads(COMMITTED_SCHEMA.read_text())
-    tightened = copy.deepcopy(schema)
-    tightened["$defs"]["VipLineupRow"] = {
-        **_schema(rank={"type": "integer"}, points={"type": "number"}),
-        "title": "VipLineupRow",
-    }
-    tightened["$defs"]["Contest"]["properties"]["max_entries_per_user"] = {"type": "integer"}
+    """Previous: VIP rows still a loose placeholder (as before #182). Current: rows typed, a status dropped."""
+    current = json.loads(COMMITTED_SCHEMA.read_text())
+    previous = copy.deepcopy(current)
+    previous["$defs"]["VipLineupRow"] = {"type": "object", "properties": {}, "additionalProperties": True}
+    current["$defs"]["SportPayload"]["properties"]["status"]["enum"].remove("stale")
 
-    exit_code = main(["--base", str(COMMITTED_SCHEMA), "--current", str(_write(tmp_path / "c.json", tightened))])
+    exit_code = main(
+        ["--base", str(_write(tmp_path / "p.json", previous)), "--current", str(_write(tmp_path / "c.json", current))]
+    )
 
     out = capsys.readouterr().out
     assert exit_code == 1
     assert "1 breaking change(s)" in out
-    assert "type_narrowed: sports.*.contests[].max_entries_per_user (integer | null -> integer)" in out
+    assert 'enum_value_removed: sports.*.status (removed "stale")' in out
