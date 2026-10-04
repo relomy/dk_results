@@ -1,0 +1,277 @@
+{
+  "$defs":{
+    "Contest":{
+      "additionalProperties":false,
+      "description":"One DraftKings contest with its standings, VIP lineups and metrics.",
+      "properties":{
+        "contest_id":{
+          "title":"Contest Id",
+          "type":"string"
+        },
+        "contest_key":{
+          "title":"Contest Key",
+          "type":"string"
+        },
+        "contest_type":{
+          "title":"Contest Type",
+          "type":"string"
+        },
+        "currency":{
+          "title":"Currency",
+          "type":"string"
+        },
+        "entry_fee_cents":{
+          "title":"Entry Fee Cents",
+          "type":"integer"
+        },
+        "live_metrics":{
+          "$ref":"#/$defs/LiveMetrics"
+        },
+        "max_entries":{
+          "title":"Max Entries",
+          "type":"integer"
+        },
+        "max_entries_per_user":{
+          "anyOf":[
+            {
+              "type":"integer"
+            },
+            {
+              "type":"null"
+            }
+          ],
+          "title":"Max Entries Per User"
+        },
+        "metrics":{
+          "$ref":"#/$defs/ContestMetrics"
+        },
+        "name":{
+          "title":"Name",
+          "type":"string"
+        },
+        "ownership_watchlist":{
+          "$ref":"#/$defs/OwnershipWatchlist"
+        },
+        "prize_pool_cents":{
+          "title":"Prize Pool Cents",
+          "type":"integer"
+        },
+        "sport":{
+          "title":"Sport",
+          "type":"string"
+        },
+        "standings":{
+          "items":{
+            "$ref":"#/$defs/StandingsRow"
+          },
+          "title":"Standings",
+          "type":"array"
+        },
+        "start_time":{
+          "title":"Start Time",
+          "type":"string"
+        },
+        "state":{
+          "title":"State",
+          "type":"string"
+        },
+        "train_clusters":{
+          "items":{
+            "$ref":"#/$defs/TrainCluster"
+          },
+          "title":"Train Clusters",
+          "type":"array"
+        },
+        "vip_lineups":{
+          "items":{
+            "$ref":"#/$defs/VipLineupRow"
+          },
+          "title":"Vip Lineups",
+          "type":"array"
+        }
+      },
+      "required":[
+        "contest_id",
+        "contest_key",
+        "name",
+        "sport",
+        "contest_type",
+        "start_time",
+        "state",
+        "currency",
+        "max_entries",
+        "max_entries_per_user",
+        "entry_fee_cents",
+        "prize_pool_cents",
+        "standings",
+        "vip_lineups",
+        "train_clusters"
+      ],
+      "title":"Contest",
+      "type":"object"
+    },
+    "ContestMetrics":{
+      "additionalProperties":true,
+      "description":"The `contest.metrics` section (derived contest metrics).",
+      "properties":{},
+      "title":"ContestMetrics",
+      "type":"object"
+    },
+    "LiveMetrics":{
+      "additionalProperties":true,
+      "description":"The `contest.live_metrics` section.",
+      "properties":{},
+      "title":"LiveMetrics",
+      "type":"object"
+    },
+    "OwnershipWatchlist":{
+      "additionalProperties":true,
+      "description":"The `contest.ownership_watchlist` section.",
+      "properties":{},
+      "title":"OwnershipWatchlist",
+      "type":"object"
+    },
+    "PrimaryContest":{
+      "additionalProperties":false,
+      "description":"The contest the sport payload is built around.",
+      "properties":{
+        "contest_id":{
+          "title":"Contest Id",
+          "type":"string"
+        },
+        "contest_key":{
+          "title":"Contest Key",
+          "type":"string"
+        },
+        "selected_at":{
+          "title":"Selected At",
+          "type":"string"
+        },
+        "selection_reason":{
+          "$ref":"#/$defs/SelectionReason"
+        }
+      },
+      "required":[
+        "contest_id",
+        "contest_key",
+        "selection_reason",
+        "selected_at"
+      ],
+      "title":"PrimaryContest",
+      "type":"object"
+    },
+    "SelectionReason":{
+      "additionalProperties":true,
+      "description":"Why the primary contest was selected.",
+      "properties":{},
+      "title":"SelectionReason",
+      "type":"object"
+    },
+    "SportPayload":{
+      "additionalProperties":false,
+      "description":"One sport's slice of the snapshot.",
+      "properties":{
+        "contests":{
+          "items":{
+            "$ref":"#/$defs/Contest"
+          },
+          "title":"Contests",
+          "type":"array"
+        },
+        "players":{
+          "items":{
+            "$ref":"#/$defs/SportPlayer"
+          },
+          "title":"Players",
+          "type":"array"
+        },
+        "primary_contest":{
+          "$ref":"#/$defs/PrimaryContest"
+        },
+        "status":{
+          "enum":[
+            "ok",
+            "stale",
+            "error"
+          ],
+          "title":"Status",
+          "type":"string"
+        },
+        "updated_at":{
+          "title":"Updated At",
+          "type":"string"
+        }
+      },
+      "required":[
+        "status",
+        "updated_at",
+        "players",
+        "primary_contest",
+        "contests"
+      ],
+      "title":"SportPayload",
+      "type":"object"
+    },
+    "SportPlayer":{
+      "additionalProperties":true,
+      "description":"One row of a sport payload's `players`.",
+      "properties":{},
+      "title":"SportPlayer",
+      "type":"object"
+    },
+    "StandingsRow":{
+      "additionalProperties":true,
+      "description":"One row of `contest.standings`.",
+      "properties":{},
+      "title":"StandingsRow",
+      "type":"object"
+    },
+    "TrainCluster":{
+      "additionalProperties":true,
+      "description":"One cluster of identical lineups in `contest.train_clusters`.",
+      "properties":{},
+      "title":"TrainCluster",
+      "type":"object"
+    },
+    "VipLineupRow":{
+      "additionalProperties":true,
+      "description":"One tracked VIP's lineup in `contest.vip_lineups`.",
+      "properties":{},
+      "title":"VipLineupRow",
+      "type":"object"
+    }
+  },
+  "$schema":"https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties":false,
+  "description":"A schema-3 live snapshot, keyed by lowercase sport name.",
+  "properties":{
+    "generated_at":{
+      "title":"Generated At",
+      "type":"string"
+    },
+    "schema_version":{
+      "const":3,
+      "title":"Schema Version",
+      "type":"integer"
+    },
+    "snapshot_at":{
+      "title":"Snapshot At",
+      "type":"string"
+    },
+    "sports":{
+      "additionalProperties":{
+        "$ref":"#/$defs/SportPayload"
+      },
+      "title":"Sports",
+      "type":"object"
+    }
+  },
+  "required":[
+    "schema_version",
+    "snapshot_at",
+    "generated_at",
+    "sports"
+  ],
+  "title":"SnapshotEnvelope",
+  "type":"object"
+}
