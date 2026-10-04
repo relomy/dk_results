@@ -32,6 +32,9 @@ step and review the diff:
 UPDATE_GOLDENS=1 uv run pytest tests/services/test_snapshot_v3_goldens.py
 ```
 
+The `nfl_mid_slate` bundle is itself produced by the real collector from stubbed DraftKings
+payloads (standings CSV rows, scorecards, leaderboard), so prod-shaped input quirks reach the golden.
+
 To add a scenario, write one bundle builder and add one `Scenario` entry to
 `SCENARIOS` in `tests/services/snapshot_scenarios.py`, then run the command above.
 
