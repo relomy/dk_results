@@ -355,6 +355,113 @@ def test_validate_v3_envelope_rejects_malformed_top_remaining_player_rows(row) -
     assert any(message.startswith(f"{NON_CASHING}.top_remaining_players[0]") for message in violations)
 
 
+# ── threat field-remaining group and leverage ────────────────────────────────
+
+THREAT = "sports.nba.contests[0].metrics.threat"
+FIELD_REMAINING_KEYS = (
+    "leverage_semantics",
+    "field_remaining_scope",
+    "field_remaining_source",
+    "field_remaining_pct",
+    "field_remaining_is_partial",
+)
+
+
+def _threat_with_field_remaining() -> dict:
+    return {
+        "leverage_semantics": "positive=unique",
+        "field_remaining_scope": "contest_field",
+        "field_remaining_source": "contest_standings_mean",
+        "field_remaining_pct": 41.24,
+        "field_remaining_is_partial": False,
+    }
+
+
+def _envelope_with_threat(threat: dict) -> dict:
+    envelope = _valid_envelope()
+    envelope["sports"]["nba"]["contests"][0]["metrics"]["threat"] = threat
+    return envelope
+
+
+def test_validate_v3_envelope_accepts_complete_field_remaining_group() -> None:
+    assert validate_v3_envelope(_envelope_with_threat(_threat_with_field_remaining())) == []
+
+
+@pytest.mark.parametrize("missing", FIELD_REMAINING_KEYS)
+def test_validate_v3_envelope_requires_every_field_remaining_key_when_any_is_present(missing) -> None:
+    threat = _threat_with_field_remaining()
+    del threat[missing]
+
+    assert f"{THREAT}.{missing} is required" in validate_v3_envelope(_envelope_with_threat(threat))
+
+
+@pytest.mark.parametrize("present", FIELD_REMAINING_KEYS)
+def test_validate_v3_envelope_rejects_lone_field_remaining_key(present) -> None:
+    threat = {present: _threat_with_field_remaining()[present]}
+
+    violations = validate_v3_envelope(_envelope_with_threat(threat))
+
+    assert {f"{THREAT}.{key} is required" for key in FIELD_REMAINING_KEYS if key != present} <= set(violations)
+
+
+@pytest.mark.parametrize(
+    ("field", "bad", "message"),
+    [
+        ("leverage_semantics", "negative=unique", "has invalid value"),
+        ("field_remaining_scope", "watchlist", "has invalid value"),
+        ("field_remaining_source", "other", "has invalid value"),
+        ("field_remaining_pct", "41", "has invalid type"),
+        ("field_remaining_is_partial", "no", "has invalid type"),
+    ],
+)
+def test_validate_v3_envelope_checks_each_field_remaining_key_without_the_pct(field, bad, message) -> None:
+    threat = _threat_with_field_remaining()
+    threat[field] = bad
+
+    assert f"{THREAT}.{field} {message}" in validate_v3_envelope(_envelope_with_threat(threat))
+
+
+def test_validate_v3_envelope_rejects_leverage_without_field_remaining_pct() -> None:
+    threat = {
+        "vip_vs_field_leverage": [
+            {
+                "vip_entry_key": "v1",
+                "entry_key": "e1",
+                "display_name": "Alice",
+                "vip_remaining_pct": 25.0,
+                "field_remaining_pct": 40.0,
+                "uniqueness_delta_pct": 15.0,
+            }
+        ]
+    }
+
+    violations = validate_v3_envelope(_envelope_with_threat(threat))
+
+    assert f"{THREAT}.vip_vs_field_leverage requires field_remaining_pct" in violations
+
+
+def test_validate_v3_envelope_rejects_more_than_ten_top_remaining_players() -> None:
+    envelope = _valid_envelope()
+    non_cashing = _valid_non_cashing()
+    non_cashing["top_remaining_players"] = [
+        {"player_name": f"P{index}", "ownership_remaining_pct": 5.0} for index in range(11)
+    ]
+    envelope["sports"]["nba"]["contests"][0]["metrics"]["non_cashing"] = non_cashing
+
+    assert f"{NON_CASHING}.top_remaining_players has more than 10 rows" in validate_v3_envelope(envelope)
+
+
+def test_validate_v3_envelope_accepts_ten_top_remaining_players() -> None:
+    envelope = _valid_envelope()
+    non_cashing = _valid_non_cashing()
+    non_cashing["top_remaining_players"] = [
+        {"player_name": f"P{index}", "ownership_remaining_pct": 5.0} for index in range(10)
+    ]
+    envelope["sports"]["nba"]["contests"][0]["metrics"]["non_cashing"] = non_cashing
+
+    assert validate_v3_envelope(envelope) == []
+
+
 # ── _collect_known_player_keys ───────────────────────────────────────────────
 
 

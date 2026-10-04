@@ -12,6 +12,7 @@ from dk_results.services.snapshot_v3.contracts import (
     validate_single_contest,
     validate_top_swing_players,
 )
+from dk_results.services.snapshot_v3.derive import TOP_REMAINING_PLAYERS_LIMIT
 from dk_results.services.snapshot_v3.normalize import resolve_lineup_slots
 
 
@@ -408,6 +409,8 @@ def _validate_top_remaining_players(path: str, rows: Any) -> list[str]:
     if not isinstance(rows, list):
         return [f"{path}.top_remaining_players has invalid type"]
     violations: list[str] = []
+    if len(rows) > TOP_REMAINING_PLAYERS_LIMIT:
+        violations.append(f"{path}.top_remaining_players has more than {TOP_REMAINING_PLAYERS_LIMIT} rows")
     for index, row in enumerate(rows):
         row_path = f"{path}.top_remaining_players[{index}]"
         if not isinstance(row, dict):
@@ -498,6 +501,7 @@ _THREAT_ENUM_FIELDS = {
     "field_remaining_scope": "contest_field",
     "field_remaining_source": "contest_standings_mean",
 }
+_FIELD_REMAINING_KEYS = (*_THREAT_ENUM_FIELDS, "field_remaining_pct", "field_remaining_is_partial")
 _LEVERAGE_STRING_FIELDS = ("vip_entry_key", "entry_key", "display_name")
 _LEVERAGE_NUMBER_FIELDS = ("vip_remaining_pct", "field_remaining_pct", "uniqueness_delta_pct")
 
@@ -507,18 +511,20 @@ def _validate_threat_field_metrics(sport: str, threat: dict[str, Any]) -> list[s
 
     path = f"sports.{sport}.contests[0].metrics.threat"
     violations: list[str] = []
-    field_present = "field_remaining_pct" in threat
-    if field_present:
-        if not _is_finite_number(threat["field_remaining_pct"]):
-            violations.append(f"{path}.field_remaining_pct has invalid type")
-        if "field_remaining_is_partial" not in threat:
-            violations.append(f"{path}.field_remaining_is_partial is required")
-        for field, expected in _THREAT_ENUM_FIELDS.items():
-            if threat.get(field) != expected:
-                violations.append(f"{path}.{field} has invalid value")
+    if any(key in threat for key in _FIELD_REMAINING_KEYS):
+        violations.extend(f"{path}.{key} is required" for key in _FIELD_REMAINING_KEYS if key not in threat)
+    if "field_remaining_pct" in threat and not _is_finite_number(threat["field_remaining_pct"]):
+        violations.append(f"{path}.field_remaining_pct has invalid type")
     if "field_remaining_is_partial" in threat and not isinstance(threat["field_remaining_is_partial"], bool):
         violations.append(f"{path}.field_remaining_is_partial has invalid type")
+    violations.extend(
+        f"{path}.{field} has invalid value"
+        for field, expected in _THREAT_ENUM_FIELDS.items()
+        if field in threat and threat[field] != expected
+    )
     if "vip_vs_field_leverage" in threat:
+        if "field_remaining_pct" not in threat:
+            violations.append(f"{path}.vip_vs_field_leverage requires field_remaining_pct")
         violations.extend(_validate_vip_vs_field_leverage(path, threat["vip_vs_field_leverage"]))
     return violations
 
