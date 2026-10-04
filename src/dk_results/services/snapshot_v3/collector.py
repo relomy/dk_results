@@ -8,7 +8,7 @@ import logging
 import os
 from dataclasses import dataclass
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
-from typing import Any, cast
+from typing import Any
 from zoneinfo import ZoneInfo
 
 from dfs_common import state
@@ -723,10 +723,10 @@ def _fetch_vip_lineups_for_contest(
     vips: list[str],
     vip_entries: dict[str, dict[str, Any]],
     player_salary_map: dict[str, int],
-) -> list[Any]:
+) -> list[dict[str, Any]]:
     if not draft_group:
         return []
-    return fetch_vip_lineups(
+    lineups = fetch_vip_lineups(
         int(dk_id),
         int(draft_group),
         dk,
@@ -734,6 +734,8 @@ def _fetch_vip_lineups_for_contest(
         vip_entries=vip_entries,
         player_salary_map=player_salary_map,
     )
+    # The fetcher returns typed VipLineup objects; normalization works on dict rows.
+    return [lineup.to_dict() for lineup in lineups]
 
 
 def _build_source_metrics(
@@ -814,10 +816,7 @@ def _collect_source_snapshot(
         vip_lineups = _fetch_vip_lineups_for_contest(dk, dk_id, draft_group, vips, vip_entries, player_salary_map)
 
         vip_lookup = {vip.name for vip in results.vip_list}
-        vip_lineup_rows: list[dict[str, Any]] = [
-            cast(dict[str, Any], row) for row in vip_lineups if isinstance(row, dict)
-        ]
-        vip_points_by_entry = _build_vip_points_by_entry(vip_lineup_rows, results.vip_list)
+        vip_points_by_entry = _build_vip_points_by_entry(vip_lineups, results.vip_list)
 
         metrics = _build_source_metrics(
             results,
