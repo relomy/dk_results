@@ -31,6 +31,7 @@ from dk_results.services.snapshot_v3.normalize import (
     resolve_lineup_slots,
     slug,
     to_float,
+    to_int,
     to_utc_iso,
 )
 from dk_results.vip_lineups import build_vip_entries, fetch_vip_lineups, load_vips
@@ -257,6 +258,14 @@ def _derive_composite_player_key(sport: str, row: dict[str, Any]) -> str | None:
     return f"{sport.lower()}:{name_slug}:{team_slug}:{salary_part}:{pos_slug}"
 
 
+def _with_trimmed_name(row: dict[str, Any], field: str) -> dict[str, Any]:
+    """Copy ``row`` with leading/trailing whitespace stripped from its string name."""
+    mapped = dict(row)
+    if isinstance(mapped.get(field), str):
+        mapped[field] = mapped[field].strip()
+    return mapped
+
+
 def _normalize_players(
     raw_players: list[Any],
     sport: str,
@@ -267,7 +276,7 @@ def _normalize_players(
     for row in raw_players:
         if not isinstance(row, dict):
             continue
-        mapped = dict(row)
+        mapped = _with_trimmed_name(row, "name")
         player_key = row.get("player_key")
         if player_key in (None, ""):
             player_key = _derive_composite_player_key(sport, row)
@@ -332,13 +341,21 @@ def _normalize_vip_lineup_row(
         entry_key = standings_entry_keys.get(str(display_name).strip().lower())
     vip_entry_key = row.get("vip_entry_key") if row.get("vip_entry_key") not in (None, "") else entry_key
     normalized = _normalize_vip_identity(display_name, entry_key, vip_entry_key)
-    for key in ("rank", "pts", "pmr"):
-        if row.get(key) not in (None, ""):
-            normalized[key] = row[key]
+    normalized.update(_normalize_vip_figures(row))
     players_live = _normalize_vip_players(row, sport, unique_name_to_player_key)
     if players_live:
         normalized["players_live"] = players_live
     return normalized
+
+
+def _normalize_vip_figures(row: dict[str, Any]) -> dict[str, Any]:
+    """Coerce fetched VIP rank/points/PMR to numbers; omit any that do not parse."""
+    figures = {
+        "rank": to_int(row.get("rank")),
+        "points": to_float(row.get("pts")),
+        "pmr": to_float(row.get("pmr")),
+    }
+    return {key: value for key, value in figures.items() if value is not None}
 
 
 def _normalize_vip_players(
@@ -364,18 +381,22 @@ def _normalize_vip_identity(display_name: Any, entry_key: Any, vip_entry_key: An
     return normalized
 
 
+def _slot_player_name(slot: dict[str, Any]) -> str:
+    return str(slot.get("player_name") or slot.get("name") or "").strip()
+
+
 def _normalize_vip_player_slot(
     slot: Any, sport: str, unique_name_to_player_key: dict[str, str]
 ) -> dict[str, Any] | None:
     if not isinstance(slot, dict):
         return None
-    player_name = slot.get("player_name") or slot.get("name")
-    if player_name in (None, ""):
+    player_name = _slot_player_name(slot)
+    if not player_name:
         return None
     roster_slot = slot.get("slot") or slot.get("pos")
     live_slot: dict[str, Any] = {
         "slot": str(roster_slot or ""),
-        "player_name": str(player_name),
+        "player_name": player_name,
     }
     if is_locked_snapshot_slot(slot):
         live_slot["player_name"] = "LOCKED 🔒"
@@ -458,7 +479,7 @@ def _normalize_top_remaining_players(
     for row in rows:
         if not isinstance(row, dict):
             continue
-        mapped = dict(row)
+        mapped = _with_trimmed_name(row, "player_name")
         player_name = mapped.get("player_name")
         player_key = mapped.get("player_key")
         if player_key in (None, "") and player_name not in (None, ""):

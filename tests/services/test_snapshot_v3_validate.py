@@ -503,6 +503,8 @@ def test_collect_known_player_keys_ignores_locked_vip_slots() -> None:
             {"slot": "UTIL", "player_name": "LOCKED 🔒", "is_locked": True, "is_live": False},
             ".is_live is forbidden for locked slot",
         ),
+        ({"slot": "DST", "player_name": "Rams "}, ".player_name must not have leading or trailing whitespace"),
+        ({"slot": "DST", "player_name": " Rams"}, ".player_name must not have leading or trailing whitespace"),
     ],
 )
 def test_validate_v3_envelope_checks_vip_slot_contract(slot_row: dict, expected: str) -> None:
@@ -566,3 +568,29 @@ def test_validate_train_cluster_references_skips_blank_sample_key() -> None:
 def test_validate_train_cluster_references_accepts_matching_sample_key() -> None:
     contest = {"train_clusters": [{"entry_keys": ["e1"], "sample_entries": [{"entry_key": "e1"}]}]}
     assert _validate_train_cluster_references("nba", contest) == []
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("rank", "879"),
+        ("rank", 879.5),
+        ("rank", True),
+        ("points", "28.64"),
+        ("points", float("nan")),
+        ("pmr", "390"),
+        ("pmr", None),
+    ],
+)
+def test_validate_v3_envelope_rejects_non_numeric_vip_figures(field: str, value) -> None:
+    payload = _valid_envelope()
+    payload["sports"]["nba"]["contests"][0]["vip_lineups"] = [{field: value}]
+
+    assert f"sports.nba.contests[0].vip_lineups[0].{field} has invalid type" in validate_v3_envelope(payload)
+
+
+def test_validate_v3_envelope_accepts_numeric_vip_figures() -> None:
+    payload = _valid_envelope()
+    payload["sports"]["nba"]["contests"][0]["vip_lineups"] = [{"rank": 879, "points": 28.64, "pmr": 390.0}]
+
+    assert validate_v3_envelope(payload) == []

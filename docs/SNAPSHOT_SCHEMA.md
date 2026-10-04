@@ -118,6 +118,22 @@ standings row (or one with no resolvable lineup) is omitted from the list,
 never emitted with nulls. The list is absent when no tracked VIP is entered, when no
 VIP matches, or whenever the field-remaining fields are omitted (golf).
 
+## VIP lineup rows
+
+Each `contest.vip_lineups[]` row carries the VIP's identity (`display_name`,
+`entry_key`, `vip_entry_key`) and these figures, which are present for every
+tracked VIP the source reports them for, including VIPs ranked below the
+standings limit:
+
+| Field | Type | Meaning |
+|---|---|---|
+| `rank` | integer, optional | The VIP's current contest rank. |
+| `points` | number, optional | The VIP's current fantasy points. |
+| `pmr` | number, optional | The VIP's minutes remaining (PMR). |
+
+A figure that cannot be parsed is omitted, never emitted as null or a string.
+Player names on every emitted row have no leading or trailing whitespace.
+
 ## VIP lineup slots
 
 Each `contest.vip_lineups[]` row may include `players_live`, the lineup's

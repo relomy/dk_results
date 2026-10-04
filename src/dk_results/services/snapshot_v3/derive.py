@@ -38,7 +38,7 @@ def _sorted_vip_rows(vip_lineups: list[dict[str, Any]]) -> list[dict[str, Any]]:
 def _build_distance_to_cash_entry(
     row: dict[str, Any], cutoff_points: float | None, rank_cutoff: int | None
 ) -> dict[str, Any] | None:
-    current_points = to_float(row.get("pts"))
+    current_points = to_float(row.get("points", row.get("pts")))
     if current_points is None or cutoff_points is None:
         return None
 

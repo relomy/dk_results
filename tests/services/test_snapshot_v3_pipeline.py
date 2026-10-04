@@ -126,9 +126,9 @@ def _bundle_with_vip_lineup() -> dict:
                 "display_name": "vipuser",
                 "entry_key": "e1",
                 "vip_entry_key": "e1",
-                "rank": "55",
-                "pts": 260.75,
-                "pmr": "120",
+                "rank": 55,
+                "points": 260.75,
+                "pmr": 120.0,
                 "players_live": [
                     {
                         "slot": "PG",
@@ -159,7 +159,7 @@ def test_build_snapshot_v3_envelope_surfaces_vip_lineups_and_vip_derived_metrics
 
     contest = envelope["sports"]["nba"]["contests"][0]
     vip = contest["vip_lineups"][0]
-    assert (vip["display_name"], vip["entry_key"], vip["rank"], vip["pts"]) == ("vipuser", "e1", "55", 260.75)
+    assert (vip["display_name"], vip["entry_key"], vip["rank"], vip["points"]) == ("vipuser", "e1", 55, 260.75)
     assert [(s["slot"], s["player_key"], s["salary"], s["is_live"]) for s in vip["players_live"]] == [
         ("PG", "nba:player-a", 8000, True),
         ("SG", "nba:player-b", 7000, False),
