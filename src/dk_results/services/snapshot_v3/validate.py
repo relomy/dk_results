@@ -377,6 +377,8 @@ def _validate_contest_metrics(sport: str, sport_payload: dict[str, Any], contest
     non_cashing = metrics.get("non_cashing")
     if isinstance(non_cashing, dict):
         violations.extend(_validate_non_cashing(sport, non_cashing))
+    if "ownership_summary" in metrics:
+        violations.extend(_validate_ownership_summary(sport, metrics["ownership_summary"]))
     threat = metrics.get("threat")
     if isinstance(threat, dict) and isinstance(threat.get("top_swing_players"), list):
         violations.extend(_validate_top_swing_players(sport, sport_payload, contest, threat["top_swing_players"]))
@@ -415,6 +417,55 @@ def _validate_top_remaining_players(path: str, rows: Any) -> list[str]:
             violations.append(f"{row_path}.player_name is required")
         if not _is_finite_number(row.get("ownership_remaining_pct")):
             violations.append(f"{row_path}.ownership_remaining_pct has invalid type")
+    return violations
+
+
+def _validate_ownership_summary(sport: str, summary: Any) -> list[str]:
+    path = f"sports.{sport}.contests[0].metrics.ownership_summary"
+    if not isinstance(summary, dict):
+        return [f"{path} has invalid type"]
+    violations: list[str] = []
+    if summary.get("source") != "vip_lineup_players":
+        violations.append(f"{path}.source must be vip_lineup_players")
+    if summary.get("scope") != "vip_lineup":
+        violations.append(f"{path}.scope must be vip_lineup")
+    rows = summary.get("per_vip")
+    if not isinstance(rows, list):
+        violations.append(f"{path}.per_vip has invalid type")
+        return violations
+    for index, row in enumerate(rows):
+        row_path = f"{path}.per_vip[{index}]"
+        if not isinstance(row, dict):
+            violations.append(f"{row_path} must be an object")
+            continue
+        violations.extend(_validate_ownership_summary_row(row_path, row))
+    return violations
+
+
+def _validate_ownership_summary_row(path: str, row: dict[str, Any]) -> list[str]:
+    violations: list[str] = []
+    if not _is_non_empty_string(row.get("vip_entry_key")):
+        violations.append(f"{path}.vip_entry_key is required")
+    violations.extend(
+        f"{path}.{field} has invalid type"
+        for field in ("entry_key", "display_name")
+        if field in row and not _is_non_empty_string(row[field])
+    )
+    violations.extend(_validate_ownership_summary_numbers(path, row))
+    if "is_partial" not in row:
+        violations.append(f"{path}.is_partial is required")
+    elif not isinstance(row["is_partial"], bool):
+        violations.append(f"{path}.is_partial has invalid type")
+    return violations
+
+
+def _validate_ownership_summary_numbers(path: str, row: dict[str, Any]) -> list[str]:
+    violations = [f"{path}.total_ownership_pct is required"] if "total_ownership_pct" not in row else []
+    violations.extend(
+        f"{path}.{field} has invalid type"
+        for field in ("total_ownership_pct", "ownership_in_play_pct")
+        if field in row and (not _is_finite_number(row[field]) or row[field] < 0)
+    )
     return violations
 
 
