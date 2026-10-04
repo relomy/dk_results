@@ -86,3 +86,13 @@ def test_zero_vip_golden_carries_field_metrics_and_no_vip_metrics() -> None:
     assert contest["metrics"]["threat"]["field_remaining_pct"] > 0
     assert not {"distance_to_cash", "ownership_summary"} & set(contest["metrics"])
     assert "vip_vs_field_leverage" not in contest["metrics"]["threat"]
+
+
+def test_mlb_golden_has_no_non_cashing_tally_and_no_swing_players() -> None:
+    contest = _committed_contest("mlb")
+
+    assert contest["metrics"]["non_cashing"]["users_not_cashing"] > 0
+    assert "top_remaining_players" not in contest["metrics"]["non_cashing"]
+    assert "top_swing_players" not in contest["metrics"]["threat"]
+    assert contest["metrics"]["threat"]["vip_vs_field_leverage"]
+    assert contest["vip_lineups"]

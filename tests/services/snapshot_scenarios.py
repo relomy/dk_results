@@ -263,7 +263,139 @@ def _zero_vip_bundle() -> dict[str, Any]:
     }
 
 
+def _mlb_bundle() -> dict[str, Any]:
+    """MLB: Game status present, but no non-cashing player tally and so no swing players."""
+    final, live, pregame = "Final", "In Progress", "NYY@BOS 07:10PM ET"
+    pool = [
+        ("Shohei Ohtani", "OF", 6200, "LAD", final, 35.0, 24.0),
+        ("Aaron Judge", "OF", 5900, "NYY", live, 28.5, 9.0),
+        ("Mookie Betts", "SS", 5300, "LAD", final, 22.0, 6.0),
+        ("Juan Soto", "OF", 5600, "NYM", pregame, 18.0, 0.0),
+        ("Gerrit Cole", "SP", 9800, "NYY", live, 31.0, 12.5),
+        ("Corbin Burnes", "SP", 9400, "BAL", pregame, 26.0, 0.0),
+    ]
+    players = [
+        _team_player(name, pos, salary, team, status, own, sport="mlb", fpts=fpts)
+        for name, pos, salary, team, status, own, fpts in pool
+    ]
+    by_name = {p["name"]: p for p in players}
+
+    def slot(label: str, name: str) -> dict[str, Any]:
+        player = by_name[name]
+        return _slot(label, name, player["player_key"], player["salary"], live=player["game_status"] == live)
+
+    return {
+        "sport": "MLB",
+        "contest": {
+            "contest_id": "300300",
+            "name": "MLB $10 Double Up",
+            "sport": "mlb",
+            "contest_type": "classic",
+            "start_time_utc": "2026-09-20T23:05:00Z",
+            "state": "live",
+            "entry_fee": 10,
+            "prize_pool": 900,
+            "currency": "USD",
+            "max_entries": 100,
+            "max_entries_per_user": 3,
+        },
+        "selected_contest_id": "300300",
+        "selection_reason": {"mode": "explicit_id", "criteria": {"contest_id": "300300"}},
+        "players": players,
+        "standings": [
+            _standing(
+                1,
+                "m1",
+                "dingerking",
+                142.5,
+                64.0,
+                payout_cents=2000,
+                is_cashing=True,
+                ownership_remaining_total_pct=44.0,
+                remaining_salary=500,
+            ),
+            _standing(
+                17,
+                "m2",
+                "vipslugger",
+                118.25,
+                88.0,
+                payout_cents=2000,
+                is_cashing=True,
+                ownership_remaining_total_pct=51.5,
+                remaining_salary=0,
+                is_vip=True,
+            ),
+            _standing(
+                18,
+                "m3",
+                "bullpenbaron",
+                118.25,
+                88.0,
+                payout_cents=2000,
+                is_cashing=True,
+                ownership_remaining_total_pct=51.5,
+                remaining_salary=0,
+            ),
+            _standing(61, "m4", "closerzone", 96.0, 140.0, ownership_remaining_total_pct=63.0, remaining_salary=1800),
+        ],
+        "vip_lineups": [
+            {
+                "display_name": "vipslugger",
+                "entry_key": "m2",
+                "vip_entry_key": "m2",
+                "rank": 17,
+                "points": 118.25,
+                "pmr": 88.0,
+                "players_live": [
+                    slot("SP", "Gerrit Cole"),
+                    slot("OF", "Shohei Ohtani"),
+                    slot("OF", "Aaron Judge"),
+                    slot("SS", "Mookie Betts"),
+                    {"slot": "OF", "player_name": "LOCKED \N{LOCK}", "is_locked": True},
+                ],
+            }
+        ],
+        "train_clusters": [
+            {
+                "cluster_id": "5c1b7d0e9a",
+                "cluster_rule": "salary_remaining<=40000_and_same_points_pmr",
+                "user_count": 2,
+                "rank": 17,
+                "points": 118.25,
+                "pmr": 88.0,
+                "lineup_signature": "mlb:gerrit-cole|mlb:mookie-betts|mlb:shohei-ohtani",
+                "entry_keys": ["m2", "m3"],
+            }
+        ],
+        "ownership": {
+            "non_cashing_user_count": 82,
+            "non_cashing_avg_pmr": 151.2,
+            "non_cashing_top_remaining_players": [],
+            "top_remaining_players": [],
+            "watchlist_entries": [
+                {
+                    "entry_key": "m4",
+                    "display_name": "closerzone",
+                    "ownership_remaining_pct": 63.0,
+                    "current_rank": 61,
+                    "current_points": 96.0,
+                    "pmr": 140.0,
+                }
+            ],
+            "ownership_remaining_total_pct": 52.5,
+            "field_remaining_pct": 52.5,
+            "field_remaining_is_partial": False,
+            "vip_remaining_by_entry_key": {"m2": 40.25},
+            "vip_remaining_is_partial_by_entry_key": {"m2": True},
+            "avg_salary_per_player_remaining": 6120.5,
+        },
+        "cash_line": {"cutoff_type": "positions_paid", "rank": 18, "points": 118.25},
+    }
+
+
 SCENARIOS: tuple[Scenario, ...] = (
     Scenario("golf", "GOLF", 300100, _golf_bundle),
     Scenario("zero_vip", "NBA", 300200, _zero_vip_bundle),
+    Scenario("mlb", "MLB", 300300, _mlb_bundle),
 )
