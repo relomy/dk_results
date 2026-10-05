@@ -286,6 +286,12 @@ standings limit:
 A figure that cannot be parsed is omitted, never emitted as null or a string.
 Player names on every emitted row have no leading or trailing whitespace.
 
+The rows are ordered by `rank` ascending, then `vip_entry_key`, then
+`display_name` (both compared as text); a row without a `rank` or
+`vip_entry_key` sorts after the rows that have one. The order is the same on
+every run for the same contest state, regardless of the order in which VIP
+lineups were fetched.
+
 ## VIP lineup slots
 
 Each `contest.vip_lineups[]` row may include `players_live`, the lineup's

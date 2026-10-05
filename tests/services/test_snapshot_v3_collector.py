@@ -839,10 +839,13 @@ def _typed_vip_lineup() -> VipLineup:
     )
 
 
-def _collect_typed_vip_bundle(monkeypatch, tmp_path, *, lineup=None, extra_users=(), standings_limit=None) -> dict:
+def _collect_typed_vip_bundle(
+    monkeypatch, tmp_path, *, lineup=None, lineups=None, extra_users=(), standings_limit=None
+) -> dict:
     monkeypatch.setattr(collector, "SALARY_DIR", str(tmp_path))
     monkeypatch.setattr(collector, "load_vips", lambda: ["vipuser"])
-    monkeypatch.setattr(collector, "fetch_vip_lineups", lambda *a, **k: [lineup or _typed_vip_lineup()])
+    fetched = lineups if lineups is not None else [lineup or _typed_vip_lineup()]
+    monkeypatch.setattr(collector, "fetch_vip_lineups", lambda *a, **k: list(fetched))
     vip_user = SimpleNamespace(
         rank="5",
         player_id="e1",
@@ -892,6 +895,25 @@ def test_collect_snapshot_keeps_typed_vip_lineups_from_the_fetcher(monkeypatch, 
     assert (vip["display_name"], vip["entry_key"], vip["vip_entry_key"]) == ("vipuser", "e1", "e1")
     assert (vip["rank"], vip["points"], vip["pmr"]) == (5, 130.0, 120.0)
     assert "pts" not in vip
+
+
+def _ranked_vip_lineup(user: str, entry_key: str, rank: str) -> VipLineup:
+    lineup = _typed_vip_lineup()
+    lineup.user, lineup.entry_key, lineup.rank = user, entry_key, rank
+    return lineup
+
+
+def test_collect_snapshot_orders_vip_lineups_by_rank_then_vip_entry_key(monkeypatch, tmp_path) -> None:
+    # The fetcher returns lineups in worker-thread completion order.
+    fetched = [
+        _ranked_vip_lineup("slowpoke", "e9", "12"),
+        _ranked_vip_lineup("unranked", "e0", ""),
+        _ranked_vip_lineup("tiedlate", "e5", "3"),
+        _ranked_vip_lineup("tiedearly", "e2", "3"),
+    ]
+    bundle = _collect_typed_vip_bundle(monkeypatch, tmp_path, lineups=fetched)
+
+    assert [vip["vip_entry_key"] for vip in bundle["vip_lineups"]] == ["e2", "e5", "e9", "e0"]
 
 
 def test_collect_snapshot_typed_vip_lineup_slots_carry_salary_and_live_state(monkeypatch, tmp_path) -> None:
