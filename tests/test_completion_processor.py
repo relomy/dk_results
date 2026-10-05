@@ -7,8 +7,10 @@ silent on a second run (idempotency).
 """
 
 import datetime
+import json
 import sqlite3
 import sys
+from pathlib import Path
 
 import pytest
 
@@ -17,7 +19,6 @@ from dk_results.completion_processor import (
     CompletionProcessor,
     CompletionProcessorConfig,
     _canonical_vips,
-    _leaderboard_cash_value,
     _parse_start_date,
     _soft_finish_eligible,
     _soft_finish_event_key,
@@ -289,6 +290,56 @@ def test_soft_finish_summary_announced_once_then_silent():
     assert "Cashing score" in soft[0]
 
 
+def test_soft_finish_names_only_the_vips_who_cashed_in_the_real_leaderboard():
+    leaderboard = json.loads((Path(__file__).parent / "draftkings" / "data" / "leaderboard_194664936.json").read_text())
+    paid_vip, unpaid_vip = (
+        next(row["userName"] for row in leaderboard["leaderBoard"] if row["winningValue"] == value) for value in (10, 0)
+    )
+    conn = _conn_with_table()
+    _insert_contest(conn, dk_id=1, name="Live Contest", start_date="2024-01-01 00:00:00", status="LIVE")
+    sender = RecordingSender()
+    processor = _make_processor(
+        conn,
+        results=FakeContestResults(details={1: _detail(status="LIVE", completed=0)}, leaderboards={1: leaderboard}),
+        sender=sender,
+        presence=FakeVipPresence(VIP_UNKNOWN),
+        config=_make_config(vips=[paid_vip, unpaid_vip]),
+    )
+
+    processor.run(conn)
+
+    (soft,) = [m for m in sender.messages if "soft-finished" in m]
+    assert soft.endswith(f"VIPs cashed (visible rows): {paid_vip}")
+    assert unpaid_vip not in soft
+
+
+def test_soft_finish_does_not_count_a_non_cash_payout_type_as_cashed():
+    ticket_only = {
+        "userName": "FooBar",
+        "timeRemaining": 0,
+        "fantasyPoints": 229,
+        "winnings": [{"payoutType": "TICKET", "description": "cash", "value": 5}],
+    }
+    conn = _conn_with_table()
+    _insert_contest(conn, dk_id=1, name="Live Contest", start_date="2024-01-01 00:00:00", status="LIVE")
+    sender = RecordingSender()
+    processor = _make_processor(
+        conn,
+        results=FakeContestResults(
+            details={1: _detail(status="LIVE", completed=0)},
+            leaderboards={1: _leaderboard_payload(rows=[ticket_only])},
+        ),
+        sender=sender,
+        presence=FakeVipPresence(VIP_UNKNOWN),
+        config=_make_config(vips=["FooBar"]),
+    )
+
+    processor.run(conn)
+
+    (soft,) = [m for m in sender.messages if "soft-finished" in m]
+    assert "VIPs cashed (visible rows): none" in soft
+
+
 def test_soft_finish_resends_updated_when_summary_changes():
     conn = _conn_with_table()
     _insert_contest(conn, dk_id=1, name="Live Contest", start_date="2024-01-01 00:00:00", status="LIVE")
@@ -556,14 +607,6 @@ def test_soft_finish_event_key_is_stable_across_equivalent_numbers():
     a = _soft_finish_event_key(sport_name="NBA", dk_id=1, top_score=123, cashing_score=99, vips_cashed=["FooBar"])
     b = _soft_finish_event_key(sport_name="nba", dk_id=1, top_score=123.00, cashing_score=99.0, vips_cashed=["foobar"])
     assert a == b
-
-
-def test_leaderboard_cash_value_prefers_winning_value_then_sums_cash():
-    assert _leaderboard_cash_value({"winningValue": "50"}) == 50
-    summed = _leaderboard_cash_value(
-        {"winnings": [{"value": 10, "description": "Cash prize"}, {"value": 5, "description": "Ticket"}]}
-    )
-    assert summed == 10
 
 
 def test_canonical_vips_dedupes_case_insensitively_and_sorts():
