@@ -356,8 +356,26 @@ def test_collect_raw_bundle_trims_player_names_in_players_and_top_remaining(monk
 
 
 def test_fetch_leaderboard_payouts_maps_entries() -> None:
-    dk = _FakeDK(leaderboard={"contestStandings": [{"entryKey": "e1", "winningValue": "1.00"}]})
+    dk = _FakeDK(leaderboard={"leaderBoard": [{"entryKey": "e1", "winningValue": "1.00"}]})
     assert _fetch_leaderboard_payouts(dk, 5) == {"e1": 100}
+
+
+def test_fetch_leaderboard_payouts_reads_real_envelope_and_ignores_legacy_keys() -> None:
+    real = {
+        "leader": {"entryKey": "lead", "winningValue": 10},
+        "leaderBoard": [
+            {"entryKey": "5234772200", "winningValue": 10, "winnings": [{"value": 10, "description": "Cash"}]},
+            {"entryKey": "5234800223", "winningValue": 4.28, "winnings": [{"value": 4.28, "description": "Cash"}]},
+            {"entryKey": "5234800224", "winningValue": 0},
+        ],
+    }
+    assert _fetch_leaderboard_payouts(_FakeDK(leaderboard=real), 5) == {
+        "5234772200": 1000,
+        "5234800223": 428,
+        "5234800224": 0,
+    }
+    legacy = {"contestStandings": [{"entryKey": "e1", "winningValue": "1.00"}]}
+    assert _fetch_leaderboard_payouts(_FakeDK(leaderboard=legacy), 5) == {}
 
 
 def test_fetch_leaderboard_payouts_returns_empty_on_error() -> None:
