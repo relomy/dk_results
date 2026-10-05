@@ -19,7 +19,6 @@ from dk_results.services.snapshot_v3.collector import (
     _build_vip_points_by_entry,
     _compute_ownership_remaining_total,
     _fetch_leaderboard_payouts,
-    _leaderboard_row_payout_cents,
     _select_contest,
     collect_raw_bundle,
     collect_snapshot,
@@ -91,38 +90,6 @@ class _FakeContestDB:
 
     def close(self):
         self.closed = True
-
-
-def test_leaderboard_payout_parser_sums_cash_winnings_and_ignores_non_cash() -> None:
-    assert (
-        _leaderboard_row_payout_cents(
-            {
-                "winnings": [
-                    {"payoutType": "CASH", "winningValue": "12.34"},
-                    {"payoutType": "TICKET", "winningValue": "5.00"},
-                    {"payoutType": "CASH", "winningValue": "0.66"},
-                ]
-            }
-        )
-        == 1300
-    )
-
-
-def test_leaderboard_payout_parser_prefers_scalar_winning_value() -> None:
-    assert _leaderboard_row_payout_cents({"winningValue": "3.25", "winnings": [{"winningValue": "99.00"}]}) == 325
-
-
-def test_leaderboard_payout_parser_falls_back_to_payout_field() -> None:
-    assert _leaderboard_row_payout_cents({"payout": "2.50"}) == 250
-
-
-def test_leaderboard_payout_parser_falls_back_to_cash_field() -> None:
-    assert _leaderboard_row_payout_cents({"cash": "1.00"}) == 100
-
-
-def test_leaderboard_payout_parser_returns_none_when_no_cash_found() -> None:
-    assert _leaderboard_row_payout_cents({"winnings": [{"payoutType": "TICKET", "winningValue": "5.00"}]}) is None
-    assert _leaderboard_row_payout_cents({}) is None
 
 
 # --- _build_unique_name_to_player_key_from_vip_lineups --------------------------

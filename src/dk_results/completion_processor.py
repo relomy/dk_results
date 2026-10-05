@@ -33,6 +33,7 @@ from typing import Any, Protocol
 
 from dk_results import discord_announcements
 from dk_results.domain.sport import Sport
+from dk_results.draftkings.leaderboard import leaderboard_cash_cents
 from dk_results.notifications.vip_presence import (
     VIP_ABSENT,
     VIP_PRESENT,
@@ -119,29 +120,6 @@ def _canonical_score_text(value: Any) -> str | None:
     return f"{normalized:.2f}"
 
 
-def _leaderboard_cash_value(row: dict[str, Any]) -> Decimal:
-    winning_value = _to_decimal(row.get("winningValue"))
-    if winning_value is not None:
-        return winning_value
-
-    winnings = row.get("winnings")
-    if not isinstance(winnings, list):
-        return Decimal("0")
-
-    total = Decimal("0")
-    for item in winnings:
-        if not isinstance(item, dict):
-            continue
-        description = str(item.get("description", "")).lower()
-        if "cash" not in description:
-            continue
-        cash = _to_decimal(item.get("value"))
-        if cash is None:
-            continue
-        total += cash
-    return total
-
-
 def _soft_finish_eligible(payload: dict[str, Any]) -> bool:
     leader = payload.get("leader")
     last_winning = payload.get("lastWinningEntry")
@@ -183,6 +161,10 @@ def _resolve_soft_finish_scores(leaderboard_payload: dict[str, Any]) -> tuple[st
     return top_score, cashing_score
 
 
+def _row_cashed(row: dict[str, Any]) -> bool:
+    return (leaderboard_cash_cents(row) or 0) > 0
+
+
 def _resolve_cashed_vips(leaderboard_payload: dict[str, Any], vip_keys: set[str]) -> list[str]:
     cashed_lookup: dict[str, str] = {}
     for row in leaderboard_payload.get("leaderBoard", []):
@@ -193,7 +175,7 @@ def _resolve_cashed_vips(leaderboard_payload: dict[str, Any], vip_keys: set[str]
         key = vip_key(username)
         if not key or key not in vip_keys:
             continue
-        if _leaderboard_cash_value(row) <= 0:
+        if not _row_cashed(row):
             continue
         if key not in cashed_lookup:
             cashed_lookup[key] = username

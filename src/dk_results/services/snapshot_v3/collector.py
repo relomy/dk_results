@@ -8,7 +8,6 @@ import logging
 import os
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
-from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from typing import Any, NamedTuple
 from zoneinfo import ZoneInfo
 
@@ -20,6 +19,7 @@ from dk_results.domain.contest_standings import ContestStandings, parse_contest_
 from dk_results.domain.draftables import Draftables
 from dk_results.domain.sport import Sport
 from dk_results.draftkings import DraftKings as Draftkings
+from dk_results.draftkings.leaderboard import leaderboard_cash_cents
 from dk_results.paths import repo_file
 from dk_results.persistence.contestdatabase import ContestDatabase, ContestRow
 from dk_results.services.snapshot_v3 import sections
@@ -161,55 +161,6 @@ def _contest_row_from_detail(dk_id: int, detail: dict[str, Any]) -> ContestRow:
     )
 
 
-def _dollars_to_cents_half_up(value: Any) -> int | None:
-    if value in (None, ""):
-        return None
-    try:
-        amount = Decimal(str(value))
-    except (InvalidOperation, ValueError):
-        return None
-    cents = (amount * Decimal("100")).quantize(Decimal("1"), rounding=ROUND_HALF_UP)
-    try:
-        return int(cents)
-    except (TypeError, ValueError):
-        return None
-
-
-def _sum_cash_winnings(winnings: list[Any]) -> int | None:
-    cash_total = 0
-    found_cash = False
-    for payout in winnings:
-        if not isinstance(payout, dict):
-            continue
-        payout_kind = _first_not_blank(payout.get("payoutType"), payout.get("description"))
-        if payout_kind is not None and "cash" not in str(payout_kind).lower():
-            continue
-        value = _first_not_blank(payout.get("winningValue"), payout.get("value"), payout.get("amount"))
-        cents = _dollars_to_cents_half_up(value)
-        if cents is not None:
-            cash_total += cents
-            found_cash = True
-    return cash_total if found_cash else None
-
-
-def _leaderboard_row_payout_cents(row: dict[str, Any]) -> int | None:
-    winning_value = _dollars_to_cents_half_up(row.get("winningValue"))
-    if winning_value is not None:
-        return winning_value
-
-    winnings = row.get("winnings")
-    if isinstance(winnings, list):
-        cash_cents = _sum_cash_winnings(winnings)
-        if cash_cents is not None:
-            return cash_cents
-
-    for candidate in (row.get("payout"), row.get("cash")):
-        cents = _dollars_to_cents_half_up(candidate)
-        if cents is not None:
-            return cents
-    return None
-
-
 def _leaderboard_payout_map(payload: dict[str, Any]) -> dict[str, int]:
     results: dict[str, int] = {}
     rows = payload.get("leaderBoard")
@@ -221,7 +172,7 @@ def _leaderboard_payout_map(payload: dict[str, Any]) -> dict[str, int]:
         entry_key = row.get("entryKey") or row.get("entryId") or row.get("entry_id")
         if entry_key in (None, ""):
             continue
-        payout_cents = _leaderboard_row_payout_cents(row)
+        payout_cents = leaderboard_cash_cents(row)
         if payout_cents is None:
             continue
         results[str(entry_key)] = payout_cents
