@@ -654,7 +654,7 @@ def _nfl_scorecards(lineup: str) -> list[dict[str, Any]]:
 def _nfl_leaderboard() -> dict[str, Any]:
     paid = [entry for _rank, entry, *_rest in _NFL_ENTRIES if int(entry[1:]) <= 11]
     return {
-        "contestStandings": [
+        "leaderBoard": [
             {
                 "entryKey": entry,
                 "winnings": [{"payoutType": "CASH", "winningValue": _NFL_CASH_PAYOUTS.get(entry, "100.00")}],

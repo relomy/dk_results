@@ -212,9 +212,7 @@ def _leaderboard_row_payout_cents(row: dict[str, Any]) -> int | None:
 
 def _leaderboard_payout_map(payload: dict[str, Any]) -> dict[str, int]:
     results: dict[str, int] = {}
-    rows = payload.get("contestStandings")
-    if not isinstance(rows, list):
-        rows = payload.get("standings")
+    rows = payload.get("leaderBoard")
     if not isinstance(rows, list):
         return results
     for row in rows:
