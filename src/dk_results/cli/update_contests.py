@@ -287,8 +287,8 @@ def main(argv: list[str] | None = None):
         check_contests_for_completion(conn)
     except sqlite3.Error as sql_error:
         logger.error("SQLite error: %s", sql_error)
-    except Exception as e:
-        logger.error("An unexpected error occurred: %s", e)
+    except Exception:
+        logger.exception("An unexpected error occurred")
 
 
 if __name__ == "__main__":

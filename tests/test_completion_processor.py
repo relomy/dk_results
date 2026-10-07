@@ -630,3 +630,38 @@ def test_contest_sync_logs_a_compact_fetch_line_not_the_raw_payload(caplog):
     assert not [r for r in caplog.records if isinstance(r.msg, dict)]
     fetched = [r.getMessage() for r in caplog.records if r.getMessage().startswith("contest_fetched ")]
     assert fetched == ["contest_fetched dk_id=1 status=COMPLETED completed=1 positions_paid=42"]
+
+
+def test_failing_contest_sync_is_logged_with_traceback_and_contest_id(monkeypatch, caplog):
+    conn = _conn_with_table()
+    _insert_contest(conn, dk_id=1, name="Contest1", start_date="2024-01-01 00:00:00", status="UPCOMING")
+    processor = _make_processor(conn, results=FakeContestResults(details={1: _detail(status="LIVE", completed=0)}))
+
+    def boom(*_args, **_kwargs):
+        raise RuntimeError("sync exploded")
+
+    monkeypatch.setattr(processor, "_sync_contest", boom)
+    with caplog.at_level(logging.ERROR):
+        processor.run(conn)
+
+    errors = [r for r in caplog.records if r.levelno == logging.ERROR]
+    assert len(errors) == 1
+    assert "dk_id=1" in errors[0].getMessage()
+    assert errors[0].exc_info is not None and errors[0].exc_info[0] is RuntimeError
+
+
+def test_contest_detail_request_failure_is_logged_with_traceback(caplog):
+    class _ExplodingResults(FakeContestResults):
+        def get_contest_detail(self, dk_id, timeout=None):
+            raise RuntimeError("connection reset")
+
+    conn = _conn_with_table()
+    _insert_contest(conn, dk_id=1, name="Contest1", start_date="2024-01-01 00:00:00", status="UPCOMING")
+    processor = _make_processor(conn, results=_ExplodingResults())
+
+    with caplog.at_level(logging.ERROR):
+        processor.run(conn)
+
+    errors = [r for r in caplog.records if r.levelno == logging.ERROR]
+    assert len(errors) == 1
+    assert errors[0].exc_info is not None and errors[0].exc_info[0] is RuntimeError

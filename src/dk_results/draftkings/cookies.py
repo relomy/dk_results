@@ -88,13 +88,10 @@ def _export_browser_cookies(browser_spec: str, cookie_file: Path) -> None:
             check=False,
         )
     except OSError as exc:
-        logger.error("could not start yt-dlp: %s", type(exc).__name__)
         raise RuntimeError("could not start yt-dlp; check the project environment") from exc
 
     if not cookie_file.exists():
-        message = _yt_dlp_failure_message(result)
-        logger.error(message)
-        raise RuntimeError(message)
+        raise RuntimeError(_yt_dlp_failure_message(result))
 
 
 def _load_exported_cookies(cookie_file: Path) -> list[Cookie]:
@@ -103,7 +100,6 @@ def _load_exported_cookies(cookie_file: Path) -> list[Cookie]:
     try:
         jar.load(ignore_discard=True, ignore_expires=True)
     except (LoadError, OSError, ValueError) as exc:
-        logger.error("yt-dlp produced an invalid browser cookie export: %s", type(exc).__name__)
         raise RuntimeError("yt-dlp produced an invalid browser cookie export") from exc
     return list(jar)
 

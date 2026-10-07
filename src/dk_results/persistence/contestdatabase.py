@@ -23,10 +23,10 @@ def _sqlite_guard(
         def wrapper(self: "ContestDatabase", *args: Any, **kwargs: Any) -> _T:
             try:
                 return func(self, *args, **kwargs)
-            except sqlite3.Error as err:
+            except sqlite3.Error:
                 if rollback:
                     self.conn.rollback()
-                self.logger.error("sqlite error in %s(): %s", getattr(func, "__name__", func), err.args[0])
+                self.logger.exception("sqlite error in %s()", getattr(func, "__name__", func))
                 return default_factory()
 
         return wrapper
@@ -344,12 +344,8 @@ class ContestDatabase:
                     row[4],
                 )
             return row
-        except sqlite3.Error as err:
-            self.logger.error(
-                "sqlite error in get_live_contest() (%s): %s",
-                self.sqlite_path,
-                err.args[0],
-            )
+        except sqlite3.Error:
+            self.logger.exception("sqlite error in get_live_contest() (%s)", self.sqlite_path)
 
     def get_live_contests(
         self, sports: list[str] | None = None, entry_fee: int = 25, keyword: str = "%"
@@ -393,8 +389,8 @@ class ContestDatabase:
 
             self.logger.debug("returning %d live contests", len(rows))
             return rows
-        except sqlite3.Error as err:
-            self.logger.error("sqlite error in get_live_contests(): %s", err.args[0])
+        except sqlite3.Error:
+            self.logger.exception("sqlite error in get_live_contests()")
             return []
 
     def get_next_upcoming_contest(self, sport: str, entry_fee: int = 25, keyword: str = "%") -> tuple | None:
@@ -426,8 +422,8 @@ class ContestDatabase:
             row = cur.fetchone()
             self.logger.debug("returning %s", row)
             return row if row else None
-        except sqlite3.Error as err:
-            self.logger.error("sqlite error in get_next_upcoming_contest(): %s", err.args[0])
+        except sqlite3.Error:
+            self.logger.exception("sqlite error in get_next_upcoming_contest()")
             return None
 
     def get_next_upcoming_contest_any(self, sport: str) -> tuple | None:
@@ -455,8 +451,8 @@ class ContestDatabase:
             row = cur.fetchone()
             self.logger.debug("returning %s", row)
             return row if row else None
-        except sqlite3.Error as err:
-            self.logger.error("sqlite error in get_next_upcoming_contest_any(): %s", err.args[0])
+        except sqlite3.Error:
+            self.logger.exception("sqlite error in get_next_upcoming_contest_any()")
             return None
 
     def get_incomplete_contests(self) -> list[tuple] | None:
@@ -481,8 +477,8 @@ class ContestDatabase:
             )
             cur.execute(sql)
             return cur.fetchall()
-        except sqlite3.Error as err:
-            self.logger.error("sqlite error in get_incomplete_contests(): %s", err.args[0])
+        except sqlite3.Error:
+            self.logger.exception("sqlite error in get_incomplete_contests()")
             return None
 
     def update_contest(self, dk_id: int, *, positions_paid: int | None, status: str | None, completed: int) -> None:
@@ -508,8 +504,8 @@ class ContestDatabase:
                 completed,
                 cur.rowcount,
             )
-        except sqlite3.Error as err:
-            self.logger.error("sqlite error in update_contest(): %s", err.args[0])
+        except sqlite3.Error:
+            self.logger.exception("sqlite error in update_contest()")
 
     def get_contest_by_id(self, dk_id: int) -> ContestRow | None:
         """
@@ -529,8 +525,8 @@ class ContestDatabase:
             cur.execute(sql, (dk_id,))
             row = cur.fetchone()
             return ContestRow.from_db_row(row) if row is not None else None
-        except sqlite3.Error as err:
-            self.logger.error("sqlite error in get_contest_by_id(): %s", err.args[0])
+        except sqlite3.Error:
+            self.logger.exception("sqlite error in get_contest_by_id()")
             return None
 
     def get_contest_state(self, dk_id: int) -> tuple[str | None, int | None] | None:
@@ -545,8 +541,8 @@ class ContestDatabase:
             status_value = row[0]
             completed_value = row[1]
             return status_value, completed_value
-        except sqlite3.Error as err:
-            self.logger.error("sqlite error in get_contest_state(): %s", err.args[0])
+        except sqlite3.Error:
+            self.logger.exception("sqlite error in get_contest_state()")
             return None
 
     def get_contest_contract_metadata(self, dk_id: int) -> tuple[int | None, int | None, int | None, int | None] | None:
@@ -563,8 +559,8 @@ class ContestDatabase:
             max_entry_count = row[2]
             entry_count = row[3]
             return total_prizes, entries, max_entry_count, entry_count
-        except sqlite3.Error as err:
-            self.logger.error("sqlite error in get_contest_contract_metadata(): %s", err.args[0])
+        except sqlite3.Error:
+            self.logger.exception("sqlite error in get_contest_contract_metadata()")
             return None
 
     def get_live_contest_candidates(
@@ -591,8 +587,8 @@ class ContestDatabase:
             )
             cur.execute(sql, (entry_fee, sport, keyword, limit))
             return cur.fetchall()
-        except sqlite3.Error as err:
-            self.logger.error("sqlite error in get_live_contest_candidates(): %s", err.args[0])
+        except sqlite3.Error:
+            self.logger.exception("sqlite error in get_live_contest_candidates()")
             return []
 
     @_sqlite_guard()

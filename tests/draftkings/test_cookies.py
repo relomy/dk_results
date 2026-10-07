@@ -1,3 +1,4 @@
+import logging
 import os
 import pickle
 import runpy
@@ -250,3 +251,18 @@ def test_get_dk_cookies_reextracts_when_cached_cookies_are_malformed(monkeypatch
     assert cookie_dict == {"a": "1"}
     assert jar.get("a") == "1"
     assert saved["cookies"] == good
+
+
+def test_export_failure_is_raised_without_a_duplicate_error_log(monkeypatch, caplog):
+    class _Result:
+        returncode = 1
+        stderr = "ERROR: could not find chromium cookies database"
+
+    monkeypatch.setattr(cookies_module.subprocess, "run", lambda *_a, **_k: _Result())
+    monkeypatch.delenv("COOKIES_DB_PATH", raising=False)
+
+    with caplog.at_level(logging.ERROR):
+        with pytest.raises(RuntimeError, match="browser cookie database was not found"):
+            cookies_module.get_browser_cookies()
+
+    assert [r for r in caplog.records if r.levelno >= logging.ERROR] == []

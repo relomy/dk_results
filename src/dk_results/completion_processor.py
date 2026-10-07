@@ -466,8 +466,8 @@ class CompletionProcessor:
                         contest_data,
                         sport_choices,
                     )
-            except Exception as error:
-                logger.error(error)
+            except Exception:
+                logger.exception("Failed to sync contest dk_id=%s", dk_id)
 
     @staticmethod
     def _should_skip_contest(
@@ -630,8 +630,8 @@ class CompletionProcessor:
             logger.error("JSON decoding error: %s", val_err)
         except KeyError as key_err:
             logger.error("Key error: %s", key_err)
-        except Exception as req_ex:
-            logger.error("Request error: %s", req_ex)
+        except Exception:
+            logger.exception("Request error")
 
         return None
 

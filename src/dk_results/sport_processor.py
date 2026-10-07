@@ -277,9 +277,8 @@ class SportProcessor:
                 optimized_info.append(row)
             logger.debug("top_player_detail sport=%s events=%s", sport_name, _format_player_events(optimized_players))
             sheet.add_optimal_lineup(optimized_info)
-        except Exception as error:
-            logger.error(error)
-            logger.error("Error in optimal lineup")
+        except Exception:
+            logger.exception("Error in optimal lineup: sport=%s", sport_name)
 
     def _write_standings(
         self,

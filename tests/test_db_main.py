@@ -920,3 +920,25 @@ def test_optimal_lineup_logs_one_debug_line_for_all_player_events(monkeypatch, c
 
     debug = [r.getMessage() for r in caplog.records if r.levelno == logging.DEBUG]
     assert debug == ["top_player_detail sport=NFL events=A (X@Y); B (Z@W)"]
+
+
+def test_optimal_lineup_failure_is_logged_once_with_traceback(monkeypatch, caplog):
+    class _Optimizer:
+        def __init__(self, *_args):
+            pass
+
+        def get_optimal_lineup(self):
+            raise RuntimeError("solver exploded")
+
+    monkeypatch.setattr("dk_results.sport_processor.Optimizer", _Optimizer)
+    processor = _make_processor(_FakeContestDb(), vips=[], nolineups=True)
+
+    with caplog.at_level(logging.ERROR):
+        processor._maybe_write_optimal_lineup(
+            sheet=_FakeSheet(), results=SimpleNamespace(players={}), sport_cls=NFLSport, sport_name="NFL"
+        )
+
+    errors = [r for r in caplog.records if r.levelno == logging.ERROR]
+    assert len(errors) == 1
+    assert "NFL" in errors[0].getMessage()
+    assert errors[0].exc_info is not None and errors[0].exc_info[0] is RuntimeError
