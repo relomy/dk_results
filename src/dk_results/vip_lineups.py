@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import math
 import unicodedata
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
@@ -43,6 +44,9 @@ class VipPlayer:
     stats: str
     # Scorecard facts kept for the snapshot pool; never part of ``to_dict`` (the sheet's shape).
     draftable_id: str | None = None
+    rt_proj_raw: Any = None
+    time_remaining_raw: Any = None
+    time_remaining_unit: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -205,6 +209,16 @@ def _resolve_draftable_id(sc: dict[str, Any]) -> str | None:
     return str(raw).strip() or None
 
 
+def _raw_scorecard_facts(sc: dict[str, Any], projection: dict[str, Any]) -> dict[str, Any]:
+    """The unformatted Scorecard values the snapshot pool needs; the sheet never sees them."""
+    return {
+        "draftable_id": _resolve_draftable_id(sc),
+        "rt_proj_raw": projection.get("realTimeProjection"),
+        "time_remaining_raw": sc.get("timeRemaining"),
+        "time_remaining_unit": str(sc.get("timeRemainingUnit") or ""),
+    }
+
+
 def _build_vip_player(sc: dict[str, Any], player_salary_map: dict[str, int] | None) -> tuple[VipPlayer, int | None]:
     projection = sc.get("projection", {}) or {}
     display_name = sc.get("displayName", "") or "LOCKED 🔒"
@@ -223,7 +237,7 @@ def _build_vip_player(sc: dict[str, Any], player_salary_map: dict[str, int] | No
         time_status=str(sc.get("timeRemaining", "") or ""),
         value_icon=projection.get("valueIcon", "") or "",
         stats=sc.get("statsDescription", "") or "",
-        draftable_id=_resolve_draftable_id(sc),
+        **_raw_scorecard_facts(sc, projection),
     )
     return player, salary_val
 
@@ -403,6 +417,20 @@ def fetch_vip_lineups(
 # ── Scorecard facts for the snapshot pool ─────────────────────────────────────
 
 VALUE_ICONS = frozenset({"fire", "ice"})
+PMR_UNIT = "PMR"
+
+
+def _finite_number(raw: Any) -> float | int | None:
+    """A JSON number, or a numeric string, as sent; None for blank, bool, non-numeric or non-finite."""
+    if isinstance(raw, bool) or raw in (None, ""):
+        return None
+    try:
+        number = float(raw)
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(number):
+        return None
+    return raw if isinstance(raw, (int, float)) else number
 
 
 def _player_facts(player: VipPlayer) -> dict[str, Any]:
@@ -411,6 +439,12 @@ def _player_facts(player: VipPlayer) -> dict[str, Any]:
         facts["stats_text"] = player.stats
     if player.value_icon in VALUE_ICONS:
         facts["value_icon"] = player.value_icon
+    rt_projection = _finite_number(player.rt_proj_raw)
+    if rt_projection is not None:
+        facts["rt_projection"] = rt_projection
+    minutes = _finite_number(player.time_remaining_raw)
+    if minutes is not None and player.time_remaining_unit == PMR_UNIT:
+        facts["time_remaining_minutes"] = minutes
     return facts
 
 

@@ -1561,3 +1561,80 @@ def test_two_vips_holding_one_player_lowest_entry_key_wins_whatever_the_fetch_or
 
     assert rows["Held"]["stats_text"] == "from 100"
     assert rows["Held"]["value_icon"] == "ice"  # first non-empty value per field
+
+
+def test_held_player_gets_unrounded_projection_and_pmr_minutes(monkeypatch, tmp_path) -> None:
+    rows, _, _ = _collect_with_scorecards(
+        monkeypatch,
+        tmp_path,
+        players=_pool(("11", "Held"), ("22", "Unheld")),
+        scorecards={"100": [_sc_row(11, "Held")]},
+    )
+
+    assert rows["Held"]["rt_projection"] == 21.456
+    assert rows["Held"]["time_remaining_minutes"] == 45
+    assert "rt_projection" not in rows["Unheld"] and "time_remaining_minutes" not in rows["Unheld"]
+
+
+def test_zero_projection_and_zero_minutes_are_emitted(monkeypatch, tmp_path) -> None:
+    row = _sc_row(11, "Done", timeRemaining=0, projection={"realTimeProjection": 0, "valueIcon": ""})
+    rows, _, _ = _collect_with_scorecards(
+        monkeypatch, tmp_path, players=_pool(("11", "Done")), scorecards={"100": [row]}
+    )
+
+    assert rows["Done"]["rt_projection"] == 0
+    assert rows["Done"]["time_remaining_minutes"] == 0
+
+
+@pytest.mark.parametrize("raw", ["", None, "n/a", True, float("nan")])
+def test_empty_or_unparseable_projection_is_omitted(monkeypatch, tmp_path, raw) -> None:
+    row = _sc_row(11, "Held", projection={"realTimeProjection": raw})
+    rows, _, _ = _collect_with_scorecards(
+        monkeypatch, tmp_path, players=_pool(("11", "Held")), scorecards={"100": [row]}
+    )
+
+    assert "rt_projection" not in rows["Held"]
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"timeRemainingUnit": "MIN"},
+        {"timeRemainingUnit": ""},
+        {"timeRemaining": ""},
+        {"timeRemaining": "Q4 2:00"},
+        {"timeRemaining": None},
+    ],
+)
+def test_minutes_omitted_unless_a_pmr_number(monkeypatch, tmp_path, overrides) -> None:
+    row = _sc_row(11, "Held", **overrides)
+    rows, _, _ = _collect_with_scorecards(
+        monkeypatch, tmp_path, players=_pool(("11", "Held")), scorecards={"100": [row]}
+    )
+
+    assert "time_remaining_minutes" not in rows["Held"]
+
+
+def test_locked_and_unmatched_rows_contribute_no_projection_or_minutes(monkeypatch, tmp_path) -> None:
+    scorecards = {"100": [_sc_row(11, ""), _sc_row(None, "No Id"), _sc_row(999, "Unmatched")]}
+    rows, _, _ = _collect_with_scorecards(
+        monkeypatch, tmp_path, players=_pool(("11", "Locked"), ("33", "No Id")), scorecards=scorecards
+    )
+
+    for row in rows.values():
+        assert "rt_projection" not in row and "time_remaining_minutes" not in row
+
+
+def test_projection_and_minutes_follow_the_lowest_entry_key_per_field(monkeypatch, tmp_path) -> None:
+    low = _sc_row(11, "Held", timeRemaining="", projection={"realTimeProjection": 5.5})
+    high = _sc_row(11, "Held", timeRemaining=30, projection={"realTimeProjection": 9.9})
+    rows, _, _ = _collect_with_scorecards(
+        monkeypatch,
+        tmp_path,
+        players=_pool(("11", "Held")),
+        scorecards={"100": [low], "200": [high]},
+        delays={"100": 0.2},
+    )
+
+    assert rows["Held"]["rt_projection"] == 5.5
+    assert rows["Held"]["time_remaining_minutes"] == 30

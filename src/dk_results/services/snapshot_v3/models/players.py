@@ -8,6 +8,7 @@ from pydantic import StrictStr, model_validator
 
 from dk_results.services.snapshot_v3.models.base import LooseSection, omittable
 from dk_results.services.snapshot_v3.models.names import PADDED_NAME_MESSAGE, is_padded
+from dk_results.services.snapshot_v3.models.numbers import FiniteFloat
 
 
 class SportPlayer(LooseSection):
@@ -17,7 +18,9 @@ class SportPlayer(LooseSection):
     DraftKings does not supply it. A `name` it carries has no leading or trailing whitespace.
     """
 
+    rt_projection: FiniteFloat = omittable()
     stats_text: StrictStr = omittable()
+    time_remaining_minutes: FiniteFloat = omittable()
     value_icon: Literal["fire", "ice"] = omittable()
 
     @model_validator(mode="after")

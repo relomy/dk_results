@@ -444,9 +444,17 @@
       "additionalProperties":true,
       "description":"One row of a sport payload's `players`.\n\nNot typed field by field yet, except the Scorecard fields below, each omitted when\nDraftKings does not supply it. A `name` it carries has no leading or trailing whitespace.",
       "properties":{
+        "rt_projection":{
+          "title":"Rt Projection",
+          "type":"number"
+        },
         "stats_text":{
           "title":"Stats Text",
           "type":"string"
+        },
+        "time_remaining_minutes":{
+          "title":"Time Remaining Minutes",
+          "type":"number"
         },
         "value_icon":{
           "enum":[

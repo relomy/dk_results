@@ -142,12 +142,26 @@ def build_standings_rows(
     return standings
 
 
+def _pool_enrichment(
+    player: Player,
+    matchups: Mapping[str, str | None] | None,
+    scorecard_facts: Mapping[str, Mapping[str, Any]] | None,
+) -> dict[str, Any]:
+    """Fields joined onto a pool row by the player's draftable ID."""
+    draftable_id = player.draftable_id or ""
+    extra: dict[str, Any] = dict((scorecard_facts or {}).get(draftable_id, {}))
+    matchup = (matchups or {}).get(draftable_id)
+    if matchup:
+        extra["matchup"] = matchup
+    return extra
+
+
 def _player_row(
     player: Player,
     matchups: Mapping[str, str | None] | None,
     scorecard_facts: Mapping[str, Mapping[str, Any]] | None,
 ) -> dict[str, Any]:
-    row: dict[str, Any] = {
+    return {
         "name": player.name,
         "position": player.pos,
         "roster_positions": list(player.roster_pos),
@@ -157,12 +171,8 @@ def _player_row(
         "ownership_pct": float(player.ownership) * 100,
         "fantasy_points": player.fpts,
         "value": player.value,
+        **_pool_enrichment(player, matchups, scorecard_facts),
     }
-    matchup = (matchups or {}).get(player.draftable_id or "")
-    if matchup:
-        row["matchup"] = matchup
-    row.update((scorecard_facts or {}).get(player.draftable_id or "", {}))
-    return row
 
 
 def build_players(

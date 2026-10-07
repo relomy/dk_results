@@ -281,11 +281,13 @@ fetched each cycle; there are no extra requests.
 
 | Field | Type | Meaning |
 |---|---|---|
+| `rt_projection` | number, optional | The player's current real-time projected points, as DraftKings sends it (not rounded; the Google Sheet keeps a two-decimal string). `0` is a real projection and is emitted. |
 | `stats_text` | string, optional | DraftKings' one-line stat summary for the player (for example "1 PaTD, 286 PaYds, 5 RuYds"). |
+| `time_remaining_minutes` | number, optional | The player's **PMR** (minutes remaining). Emitted only when the Scorecard labels the unit as PMR. `0` means their game is finished and is emitted, so "done" is distinct from "unknown" (omitted). |
 | `value_icon` | `fire` or `ice`, optional | DraftKings' hot / cold value marker. |
 
 Each is omitted, never null, when DraftKings does not supply it. An empty,
-missing or unrecognised value is omitted (so a new DraftKings icon cannot fail
+missing, unparseable or unrecognised value is omitted (so a new DraftKings icon cannot fail
 validation). A pool player no tracked VIP holds, a locked slot, a Scorecard row
 without an id, and a row whose id matches no pool player get none of the fields.
 
