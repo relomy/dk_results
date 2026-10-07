@@ -5,7 +5,7 @@ updates, and Discord notifications.
 
 ## Essentials
 
-- Run everything through `uv` (Python `>=3.11,<3.12`); `uv sync` builds the venv.
+- Run everything through `uv` (Python `>=3.13,<3.14`); `uv sync` builds the venv.
 - Source in `src/`, tests in `tests/`.
 - Dependency groups: `test` is installed by default; `quality` contains Ruff,
   Ty, Xenon, and complexity-ratchet.
