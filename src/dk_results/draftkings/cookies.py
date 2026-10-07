@@ -190,13 +190,32 @@ def save_cookies_to_pickle(cookies: Iterable[dict[str, Any]], filename: str = PI
         logger.error(f"Failed to save cookies: {e}")
 
 
+def _cached_cookies_are_usable(cookies: Any) -> bool:
+    """Whether a cached cookie list has the shape cookies_to_jar() relies on."""
+    return isinstance(cookies, list) and all(
+        isinstance(cookie, dict)
+        and isinstance(cookie.get("name"), str)
+        and "value" in cookie
+        and isinstance(cookie.get("domain"), str)
+        and bool(cookie["domain"])
+        for cookie in cookies
+    )
+
+
+def _load_usable_cached_cookies() -> Any:
+    """Load the cookie cache, dropping it if its shape would crash cookies_to_jar()."""
+    cookies = load_cookies_from_pickle()
+    if cookies and not _cached_cookies_are_usable(cookies):
+        logger.warning("Ignoring malformed cached cookies; re-extracting")
+        return None
+    return cookies
+
+
 def get_dk_cookies(
     use_pickle: bool = False, domains: list[str] | None = None
 ) -> tuple[dict[str, str], RequestsCookieJar]:
     """High-level method to get DK cookies (dict + jar), optionally from pickle."""
-    cookies = None
-    if use_pickle:
-        cookies = load_cookies_from_pickle()
+    cookies = _load_usable_cached_cookies() if use_pickle else None
 
     if not cookies:
         cookies = get_browser_cookies(domains)

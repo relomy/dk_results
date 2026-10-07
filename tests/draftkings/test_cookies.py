@@ -172,12 +172,14 @@ def test_load_cookies_from_pickle_invalid(tmp_path, monkeypatch):
     assert cookies_module.load_cookies_from_pickle(str(path)) is None
 
 
-def test_save_cookies_to_pickle_error(monkeypatch):
-    def boom(*_args, **_kwargs):
-        raise OSError("nope")
+def test_save_cookies_to_pickle_error_is_swallowed(tmp_path):
+    # Parent directory does not exist, so Path.open("wb") really fails. Always pass
+    # an explicit tmp path: the default filename is the live dk_auth_cookies.pkl.
+    path = tmp_path / "missing_dir" / "cookies.pkl"
 
-    monkeypatch.setattr("builtins.open", boom)
-    cookies_module.save_cookies_to_pickle([{"name": "a", "value": "1"}])
+    cookies_module.save_cookies_to_pickle([{"name": "a", "value": "1"}], filename=str(path))
+
+    assert not path.exists()
 
 
 def test_save_cookies_to_pickle_success(tmp_path):
@@ -222,3 +224,29 @@ def test_get_dk_cookies_falls_back_and_saves(monkeypatch):
     cookie_dict, jar = cookies_module.get_dk_cookies(use_pickle=True)
     assert cookie_dict == {"a": "1"}
     assert saved["cookies"] == [{"name": "a", "value": "1", "domain": "example.com", "path": "/"}]
+
+
+@pytest.mark.parametrize(
+    "cached",
+    [
+        [{"name": "a", "value": "1"}],
+        [{"name": "a", "value": "1", "domain": None, "path": "/"}],
+        [{"name": "a", "value": "1", "domain": "", "path": "/"}],
+        [{"name": "a", "value": "1", "domain": ".example.com"}, {"name": "b", "value": "2"}],
+        {"name": "a", "value": "1", "domain": ".example.com"},
+        ["not-a-cookie"],
+    ],
+)
+def test_get_dk_cookies_reextracts_when_cached_cookies_are_malformed(monkeypatch, cached):
+    good = [{"name": "a", "value": "1", "domain": ".example.com", "path": "/"}]
+    monkeypatch.setattr(cookies_module, "load_cookies_from_pickle", lambda: cached)
+    monkeypatch.setattr(cookies_module, "get_browser_cookies", lambda *_args, **_kwargs: good)
+
+    saved = {}
+    monkeypatch.setattr(cookies_module, "save_cookies_to_pickle", lambda cookies: saved.update(cookies=cookies))
+
+    cookie_dict, jar = cookies_module.get_dk_cookies(use_pickle=True)
+
+    assert cookie_dict == {"a": "1"}
+    assert jar.get("a") == "1"
+    assert saved["cookies"] == good

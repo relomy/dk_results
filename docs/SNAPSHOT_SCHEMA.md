@@ -2,7 +2,7 @@
 
 Producer-owned reference for the contest metrics in the schema-3 snapshot feed
 (`services/snapshot_v3`). Terms (Game status, Non-cashing, Average salary
-remaining) are defined in `docs/CONTEXT.md`.
+remaining) are defined in `docs/GLOSSARY.md`.
 
 This document covers the metrics the producer has defined so far. Later
 metrics are added here as they ship.
@@ -231,7 +231,7 @@ by this metric.
 the field-remaining fields, or `vip_vs_field_leverage`. A sport with no top
 swing players (for example MLB) still gets `threat` when field remaining is
 available. Terms (Field remaining, Uniqueness delta) are defined in
-`docs/CONTEXT.md`.
+`docs/GLOSSARY.md`.
 
 ### Field remaining
 
