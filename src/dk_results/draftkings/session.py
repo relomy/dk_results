@@ -44,7 +44,6 @@ class AuthSession:
                 if not cookie.expires:
                     continue
 
-        logger.debug("adding all missing cookies to session.cookies")
         session.cookies.update(cookies)
 
         return session

@@ -8,6 +8,7 @@ silent on a second run (idempotency).
 
 import datetime
 import json
+import logging
 import sqlite3
 import sys
 from pathlib import Path
@@ -615,3 +616,17 @@ def test_canonical_vips_dedupes_case_insensitively_and_sorts():
 
 def test_completed_statuses_constant():
     assert COMPLETED_STATUSES == ("COMPLETED", "CANCELLED")
+
+
+def test_contest_sync_logs_a_compact_fetch_line_not_the_raw_payload(caplog):
+    conn = _conn_with_table()
+    _insert_contest(conn, dk_id=1, name="Contest1", start_date="2024-01-01 00:00:00", status="UPCOMING")
+    results = FakeContestResults(details={1: _detail(status="COMPLETED", completed=1, positions_paid=42)})
+    processor = _make_processor(conn, results=results, sender=None, presence=None)
+
+    with caplog.at_level(logging.DEBUG):
+        processor.run(conn)
+
+    assert not [r for r in caplog.records if isinstance(r.msg, dict)]
+    fetched = [r.getMessage() for r in caplog.records if r.getMessage().startswith("contest_fetched ")]
+    assert fetched == ["contest_fetched dk_id=1 status=COMPLETED completed=1 positions_paid=42"]

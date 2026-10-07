@@ -98,7 +98,7 @@ class ContestDatabase:
         """
         self.logger = logger or logging.getLogger(__name__)
         self.sqlite_path = sqlite3_database
-        self.logger.info("Connecting to contests DB %s", self.sqlite_path)
+        self.logger.debug("Connecting to contests DB %s", self.sqlite_path)
         self.conn: sqlite3.Connection = sqlite3.connect(sqlite3_database)
 
     @classmethod

@@ -7,6 +7,7 @@ import os
 import sqlite3
 import time
 from collections import OrderedDict
+from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Any, Callable, Protocol, runtime_checkable
 
@@ -97,6 +98,14 @@ class StandsParseError(Exception):
 
 
 # ── Module ─────────────────────────────────────────────────────────────────────
+
+
+def _format_train_clusters(clusters: Iterable[Any]) -> str:
+    return ",".join(f"{c.user_count}:{c.points}:{c.pmr}" for c in clusters)
+
+
+def _format_player_events(selected_players: Iterable[Any]) -> str:
+    return "; ".join(f"{s.player.name} ({s.player.game_info})" for s in selected_players)
 
 
 class SportProcessor:
@@ -265,13 +274,8 @@ class SportProcessor:
                     float(player.value) if player.value is not None else 0.0,
                     player.ownership,
                 )
-                logger.debug(
-                    "top_player_detail sport=%s name=%r event=%r",
-                    sport_name,
-                    player.name,
-                    player.game_info,
-                )
                 optimized_info.append(row)
+            logger.debug("top_player_detail sport=%s events=%s", sport_name, _format_player_events(optimized_players))
             sheet.add_optimal_lineup(optimized_info)
         except Exception as error:
             logger.error(error)
@@ -473,15 +477,9 @@ class SportProcessor:
             del trains[key]
         sorted_trains = OrderedDict(sorted(trains.items(), key=lambda kv: kv[1].user_count, reverse=True)[:5])
         info: list[list[Any]] = [["Rank", "Users", "Score", "PMR"]]
+        logger.debug("train_clusters top=%s", _format_train_clusters(sorted_trains.values()))
         for cluster in sorted_trains.values():
             row = [cluster.rank, cluster.user_count, cluster.points, cluster.pmr]
-            logger.debug(
-                "train users=%s score=%s pmr=%s lineup=%s",
-                cluster.user_count,
-                cluster.points,
-                cluster.pmr,
-                cluster.lineup,
-            )
             if cluster.lineup:
                 row.extend([player.name for player in cluster.lineup.lineup])
             info.append(row)

@@ -1,3 +1,4 @@
+import logging
 import pickle
 
 from requests.cookies import RequestsCookieJar
@@ -92,3 +93,20 @@ def test_setup_session_skips_cookie_without_expires(monkeypatch):
     result = session.setup_session(jar)
 
     assert result.cookies.get("noexp") == "1"
+
+
+def test_setup_session_is_silent_when_nothing_is_duplicated(monkeypatch, caplog):
+    jar = RequestsCookieJar()
+    jar.set("a", "1", domain="example.com", path="/", expires=1)
+
+    class FakeSession:
+        def __init__(self):
+            self.cookies = RequestsCookieJar()
+
+    monkeypatch.setattr(session_module.requests, "Session", lambda: FakeSession())
+
+    session = session_module.AuthSession.__new__(session_module.AuthSession)
+    with caplog.at_level(logging.DEBUG):
+        session.setup_session(jar)
+
+    assert caplog.records == []

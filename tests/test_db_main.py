@@ -4,6 +4,7 @@ import logging
 from argparse import Namespace
 from collections import OrderedDict
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -862,3 +863,60 @@ def test_select_live_contests_omits_idle_line_when_every_sport_is_live(caplog):
         db_main.select_live_contests(_Processor(), ["NBA"], {"NBA": object})
 
     assert _selection_messages(caplog) == ["contest_selection selected=NBA no_live=0 requested=1"]
+
+
+def test_write_train_info_logs_one_debug_line_for_all_clusters(monkeypatch, caplog):
+    clusters = {
+        1: SimpleNamespace(user_count=5, rank=1, points=101.5, pmr=1.5, lineup=None),
+        2: SimpleNamespace(user_count=3, rank=2, points=102.5, pmr=1.5, lineup=None),
+        3: SimpleNamespace(user_count=2, rank=3, points=103.5, pmr=1.5, lineup=None),
+    }
+
+    class _Finder:
+        def __init__(self, _users):
+            pass
+
+        def get_total_users(self):
+            return 10
+
+        def get_total_users_above_salary(self, _limit):
+            return 10
+
+        def get_users_above_salary_spent(self, _limit):
+            return dict(clusters)
+
+    monkeypatch.setattr("dk_results.sport_processor.TrainFinder", _Finder)
+    sheet = _FakeSheet()
+    processor = _make_processor(_FakeContestDb(), vips=[], sheet=sheet)
+
+    with caplog.at_level(logging.DEBUG):
+        processor._write_train_info(sheet, SimpleNamespace(users=[object()]))
+
+    debug = [r.getMessage() for r in caplog.records if r.levelno == logging.DEBUG]
+    assert debug == ["train_clusters top=5:101.5:1.5,3:102.5:1.5,2:103.5:1.5"]
+
+
+def test_optimal_lineup_logs_one_debug_line_for_all_player_events(monkeypatch, caplog):
+    def _pick(slot, name, event):
+        player = SimpleNamespace(name=name, salary=1, fpts=2.0, value=1.5, ownership=3.0, game_info=event)
+        return SimpleNamespace(slot=slot, player=player)
+
+    picks = [_pick("QB", "A", "X@Y"), _pick("RB", "B", "Z@W")]
+
+    class _Optimizer:
+        def __init__(self, *_args):
+            pass
+
+        def get_optimal_lineup(self):
+            return list(picks)
+
+    monkeypatch.setattr("dk_results.sport_processor.Optimizer", _Optimizer)
+    processor = _make_processor(_FakeContestDb(), vips=[], nolineups=True)
+
+    with caplog.at_level(logging.DEBUG):
+        processor._maybe_write_optimal_lineup(
+            sheet=_FakeSheet(), results=SimpleNamespace(players={}), sport_cls=NFLSport, sport_name="NFL"
+        )
+
+    debug = [r.getMessage() for r in caplog.records if r.levelno == logging.DEBUG]
+    assert debug == ["top_player_detail sport=NFL events=A (X@Y); B (Z@W)"]

@@ -513,7 +513,13 @@ class CompletionProcessor:
             entries,
             positions_paid,
         )
-        logger.debug(contest_data)
+        logger.debug(
+            "contest_fetched dk_id=%s status=%s completed=%s positions_paid=%s",
+            dk_id,
+            contest_data["status"],
+            contest_data["completed"],
+            contest_data["positions_paid"],
+        )
         new_status = contest_data["status"]
         new_completed = contest_data["completed"]
         if positions_paid != contest_data["positions_paid"] or status != new_status or completed != new_completed:

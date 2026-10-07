@@ -360,13 +360,12 @@ def _log_top_showdown_captains(
         return
     sorted_captains = dict(sorted(showdown_captains.items(), key=lambda item: item[1], reverse=True))
     top_ten_cpts = list(sorted_captains)[:10]
-    logger.debug("Top 10 captains:")
-    for cpt in top_ten_cpts:
-        num_users = len(users)
-        percent = float(showdown_captains[cpt] / num_users) * 100
-        message = "{}: {:0.2f}% [{}/{}]".format(cpt, percent, showdown_captains[cpt], num_users)
-        logger.debug(message)
-        print(message)
+    num_users = len(users)
+    summary = "; ".join(
+        f"{cpt}={showdown_captains[cpt] / num_users * 100:0.2f}% [{showdown_captains[cpt]}/{num_users}]"
+        for cpt in top_ten_cpts
+    )
+    logger.info("top_captains %s", summary)
 
 
 def _parse_standings_rows(

@@ -663,3 +663,11 @@ def test_ensure_schema_migrates_preexisting_database_file(tmp_path):
         assert db.get_cash_line(1) == (25, 142.5)
     finally:
         db.close()
+
+
+def test_connecting_is_logged_at_debug_not_info(caplog):
+    with caplog.at_level(logging.DEBUG):
+        ContestDatabase(":memory:")
+
+    connecting = [r for r in caplog.records if "Connecting to contests DB" in r.getMessage()]
+    assert [r.levelno for r in connecting] == [logging.DEBUG]
