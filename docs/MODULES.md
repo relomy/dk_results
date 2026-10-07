@@ -6,7 +6,7 @@ A survey of the codebase through the lens of the **codebase-design** skill: a
 swapped without editing in place), **adapters** (concrete things at a seam),
 **leverage** (what callers gain), and **locality** (where change concentrates).
 
-See `docs/CONTEXT.md` for the shared vocabulary and the canonical entries for
+See `docs/GLOSSARY.md` for the shared vocabulary and the canonical entries for
 `Draft Group Filter`, `ContestStandings`, and `SportProcessor`.
 
 ## Architecture at a glance
@@ -37,7 +37,7 @@ testable and the HTTP/Sheets/Discord edges substitutable.
 
 ## 1. Orchestration
 
-### SportProcessor — `sport_processor.py` *(deep, canonical in CONTEXT.md)*
+### SportProcessor — `sport_processor.py` *(deep, canonical in GLOSSARY.md)*
 The workflow spine. `SportProcessor.run(sport_name, sport_cls) -> int` hides the
 entire "find live contest → download rows → parse standings → compute analytics
 → write sheet → announce bonuses" pipeline behind one call.
@@ -76,7 +76,7 @@ fetch is injectable. `load_vips()` and `build_vip_entries()` round out the inter
 | Module | Interface | Depth / role |
 |---|---|---|
 | `domain/sport.py` | `Sport` base + ~22 sport subclasses; registry fns `iter_sports`, `get_sport_choices`, `get_sport`, `require_sport`, `get_lineup_range` | Deep: a large sport taxonomy behind small lookup fns. **Seam:** registry is *discovered dynamically* from subclasses (`_build_sport_registry`) — read-only `Mapping`. |
-| `domain/contest_standings.py` | `parse_contest_standings(salary_rows, standings_rows, …) -> ContestStandings`; `players_to_values` | Deep pure parser (canonical in CONTEXT.md). Contest metadata stays with callers. |
+| `domain/contest_standings.py` | `parse_contest_standings(salary_rows, standings_rows, …) -> ContestStandings`; `players_to_values` | Deep pure parser (canonical in GLOSSARY.md). Contest metadata stays with callers. |
 | `domain/lineup.py` | `parse_lineup_string`, `Lineup`, `LockedSlot`, `normalize_name`, `LineupParseError` | Parsing + value object; validates roster slots. |
 | `domain/player.py` | `Player` | Athlete value object, per-sport aware. |
 | `domain/draftables.py` | `Draftables.from_payload`, `matchups_by_draftable_id` | Draftables adapter: draftable ID → `Matchup` from the draftables payload; pure, no I/O. |
@@ -126,7 +126,7 @@ A clean pipeline, each stage a small module:
 |---|---|---|
 | `lobby/fetch.py` | `get_dk_lobby`, `get_lobby_response`, `requests_fetch_json` | Fetch raw lobby JSON. |
 | `lobby/parsing.py` | `get_contests_from_response`, `build_draft_group_start_map`, `log_draft_group_event` | Response → `Contest` objects. |
-| `lobby/draft_group_filter.py` | `filter_draft_groups(groups, sport) -> list[int]` | Sport-specific qualification (canonical in CONTEXT.md). |
+| `lobby/draft_group_filter.py` | `filter_draft_groups(groups, sport) -> list[int]` | Sport-specific qualification (canonical in GLOSSARY.md). |
 | `lobby/contest_filter.py` | `is_double_up_contest`, `filter_double_ups`, `largest_by_entries` | Double-up selection. |
 | `lobby/double_ups.py` | `get_double_ups`, `get_stats` | Higher-level double-up queries. |
 | `lobby/formatting.py` | `format_discord_messages(contests)` | Presentation. |

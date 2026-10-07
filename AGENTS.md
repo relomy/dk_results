@@ -38,4 +38,4 @@ When triaging an issue or changing its triage label, read `docs/agents/triage-la
 
 ### Domain docs
 
-Before exploring an unfamiliar area or making a design/refactor decision, read `docs/agents/domain.md`; it directs you to `docs/CONTEXT.md` and relevant ADRs for this single-context repo.
+Before exploring an unfamiliar area or making a design/refactor decision, read `docs/agents/domain.md`; it directs you to `docs/GLOSSARY.md` and relevant ADRs for this single-context repo.
