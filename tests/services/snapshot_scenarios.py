@@ -287,6 +287,8 @@ def _mlb_bundle() -> dict[str, Any]:
         for name, pos, salary, team, status, own, fpts in pool
     ]
     by_name = {p["name"]: p for p in players}
+    # Scorecard fields: one held player carries them, the others (like Juan Soto) omit them
+    by_name["Aaron Judge"].update({"stats_text": "1 HR, 2 RBI, 1 R", "value_icon": "fire"})
 
     def slot(label: str, name: str) -> dict[str, Any]:
         player = by_name[name]

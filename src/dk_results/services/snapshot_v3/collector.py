@@ -34,7 +34,7 @@ from dk_results.services.snapshot_v3.normalize import (
     to_int,
     to_utc_iso,
 )
-from dk_results.vip_lineups import build_vip_entries, fetch_vip_lineups, load_vips
+from dk_results.vip_lineups import build_vip_entries, fetch_vip_lineups, load_vips, scorecard_facts_by_draftable_id
 
 logger = logging.getLogger(__name__)
 
@@ -782,9 +782,10 @@ def _fetch_vip_lineups_for_contest(
     vips: list[str],
     vip_entries: dict[str, dict[str, Any]],
     player_salary_map: dict[str, int],
-) -> list[dict[str, Any]]:
+) -> tuple[list[dict[str, Any]], dict[str, dict[str, Any]]]:
+    """Fetch the VIP lineups as dict rows, plus the pool facts their Scorecards carry by draftable id."""
     if not draft_group:
-        return []
+        return [], {}
     lineups = fetch_vip_lineups(
         int(dk_id),
         int(draft_group),
@@ -794,7 +795,7 @@ def _fetch_vip_lineups_for_contest(
         player_salary_map=player_salary_map,
     )
     # The fetcher returns typed VipLineup objects; normalization works on dict rows.
-    return [lineup.to_dict() for lineup in lineups]
+    return [lineup.to_dict() for lineup in lineups], scorecard_facts_by_draftable_id(lineups)
 
 
 def _build_source_metrics(
@@ -804,6 +805,7 @@ def _build_source_metrics(
     vip_lookup: set[str],
     vip_points_by_entry: dict[str, float | None],
     matchups: dict[str, str | None],
+    scorecard_facts: dict[str, dict[str, Any]],
     standings_limit: int,
 ) -> dict[str, Any]:
     full_standings = sections.build_standings_rows(
@@ -815,7 +817,7 @@ def _build_source_metrics(
     standings, truncation = _apply_truncation(full_standings, standings_limit)
     vip_remaining_by_entry_key = _compute_vip_remaining_by_entry_key(full_standings)
     return {
-        "players": sections.build_players(results, matchups=matchups),
+        "players": sections.build_players(results, matchups=matchups, scorecard_facts=scorecard_facts),
         "ownership_remaining_total": _compute_ownership_remaining_total(full_standings),
         "field_remaining": _compute_field_remaining(full_standings, results.users),
         "vip_remaining_by_entry_key": vip_remaining_by_entry_key,
@@ -897,7 +899,9 @@ def _collect_source_snapshot(
 
         vip_entries = build_vip_entries(results.vip_list)
         player_salary_map = {name: player.salary for name, player in results.players.items()}
-        vip_lineups = _fetch_vip_lineups_for_contest(dk, dk_id, draft_group, vips, vip_entries, player_salary_map)
+        vip_lineups, scorecard_facts = _fetch_vip_lineups_for_contest(
+            dk, dk_id, draft_group, vips, vip_entries, player_salary_map
+        )
 
         vip_lookup = {vip.name for vip in results.vip_list}
         vip_points_by_entry = _build_vip_points_by_entry(vip_lineups, results.vip_list)
@@ -908,6 +912,7 @@ def _collect_source_snapshot(
             vip_lookup=vip_lookup,
             vip_points_by_entry=vip_points_by_entry,
             matchups=matchups,
+            scorecard_facts=scorecard_facts,
             standings_limit=standings_limit,
         )
 

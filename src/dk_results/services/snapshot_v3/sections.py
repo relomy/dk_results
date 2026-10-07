@@ -142,7 +142,11 @@ def build_standings_rows(
     return standings
 
 
-def _player_row(player: Player, matchups: Mapping[str, str | None] | None) -> dict[str, Any]:
+def _player_row(
+    player: Player,
+    matchups: Mapping[str, str | None] | None,
+    scorecard_facts: Mapping[str, Mapping[str, Any]] | None,
+) -> dict[str, Any]:
     row: dict[str, Any] = {
         "name": player.name,
         "position": player.pos,
@@ -157,19 +161,24 @@ def _player_row(player: Player, matchups: Mapping[str, str | None] | None) -> di
     matchup = (matchups or {}).get(player.draftable_id or "")
     if matchup:
         row["matchup"] = matchup
+    row.update((scorecard_facts or {}).get(player.draftable_id or "", {}))
     return row
 
 
 def build_players(
-    results: ContestStandings, *, matchups: Mapping[str, str | None] | None = None
+    results: ContestStandings,
+    *,
+    matchups: Mapping[str, str | None] | None = None,
+    scorecard_facts: Mapping[str, Mapping[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
     """Build the sorted player rows for the snapshot.
 
     ``matchups`` maps draftable ID to Matchup (from draftables). ``matchup`` is
     present only when a player's Matchup is known; it is never filled from
-    ``game_status``.
+    ``game_status``. ``scorecard_facts`` maps draftable ID to the facts the VIP
+    Scorecards carry for that player; they are merged onto the matching row.
     """
-    players = [_player_row(player, matchups) for player in results.players.values()]
+    players = [_player_row(player, matchups, scorecard_facts) for player in results.players.values()]
     players.sort(
         key=lambda item: (
             item["position"] or "",

@@ -442,8 +442,21 @@
     },
     "SportPlayer":{
       "additionalProperties":true,
-      "description":"One row of a sport payload's `players`.\n\nNot typed field by field yet, but a `name` it carries has no leading or trailing whitespace.",
-      "properties":{},
+      "description":"One row of a sport payload's `players`.\n\nNot typed field by field yet, except the Scorecard fields below, each omitted when\nDraftKings does not supply it. A `name` it carries has no leading or trailing whitespace.",
+      "properties":{
+        "stats_text":{
+          "title":"Stats Text",
+          "type":"string"
+        },
+        "value_icon":{
+          "enum":[
+            "fire",
+            "ice"
+          ],
+          "title":"Value Icon",
+          "type":"string"
+        }
+      },
       "title":"SportPlayer",
       "type":"object"
     },
