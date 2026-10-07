@@ -11,6 +11,7 @@ NOISY_LIBRARY_LOGGERS = (
     "charset_normalizer",
     "google_auth_httplib2",
     "dfs_common.sheets",
+    "botocore",
 )
 _HANDLER_MARKER = "_dk_results_configured_handler"
 
