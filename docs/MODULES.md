@@ -21,10 +21,10 @@ Root shims (dkcontests.py, db_main.py, …)      thin sys.path adapters → cli.
   Domain (pure): sport, player, user, contest, lineup, contest_standings,
                  bonus_rules, dfs_sheet_domain
   Lobby pkg:     fetch → parsing → draft_group_filter → contest_filter →
-                 double_ups → formatting
+                 formatting
   Analytics:     optimizer (LP), trainfinder (clustering)
   Snapshot:      services/snapshot_v3, commands/export_fixture, vip_lineups
-  Bot:           bot/discord_bot, discord_rest, botinterface
+  Bot:           bot/discord_bot, discord_rest
   Cross-cutting: config, logging, paths, discord_announcements
 ```
 
@@ -128,7 +128,6 @@ A clean pipeline, each stage a small module:
 | `lobby/parsing.py` | `get_contests_from_response`, `build_draft_group_start_map`, `log_draft_group_event` | Response → `Contest` objects. |
 | `lobby/draft_group_filter.py` | `filter_draft_groups(groups, sport) -> list[int]` | Sport-specific qualification (canonical in GLOSSARY.md). |
 | `lobby/contest_filter.py` | `is_double_up_contest`, `filter_double_ups`, `largest_by_entries` | Double-up selection. |
-| `lobby/double_ups.py` | `get_double_ups`, `get_stats` | Higher-level double-up queries. |
 | `lobby/formatting.py` | `format_discord_messages(contests)` | Presentation. |
 | `lobby/common.py` | `valid_date`, `get_salary_date`, `is_time_between` | Shared date helpers. |
 
@@ -140,7 +139,6 @@ A clean pipeline, each stage a small module:
 |---|---|---|
 | `bot/discord_bot.py` | `main()` + discord.py commands (`contests`, `live`, `upcoming`, `health`, …) | Long-running Discord bot (entry point). |
 | `bot/discord_rest.py` | `DiscordRest` | REST webhook sender — a `BonusSenderPort`-shaped adapter. |
-| `bot/botinterface.py` | `BotInterface` | Abstraction over bot messaging. |
 
 ---
 

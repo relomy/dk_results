@@ -116,7 +116,7 @@ Notes:
 - Output is byte-stable for tests (`sort_keys`, fixed separators, stable ordering) and omits unavailable optional sections rather than emitting legacy/raw compatibility fields.
 - Export output uses a snapshot envelope: `schema_version`, `snapshot_at`, `generated_at`, and `sports` keyed by sport code.
 - Each sport snapshot uses the schema-3 contract sections: `status`, `updated_at`, `primary_contest`, `contests`, and `players`.
- - Cookies/auth handling follows existing project mechanisms (`dk_results/draftkings/dksession.py`, `pickled_cookies_works.txt`); no credentials are printed in logs.
+ - Cookies/auth handling follows existing project mechanisms (`dk_results/draftkings/session.py`, `dk_results/draftkings/cookies.py`, `pickled_cookies_works.txt`); no credentials are printed in logs.
 
 Optional `db_main.py` addendum export for integration testing:
 
