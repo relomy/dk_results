@@ -229,9 +229,13 @@
           "roster_positions":[
             "OF"
           ],
+          "rt_projection":31.25,
           "salary":5900,
+          "stats_text":"1 HR, 2 RBI, 1 R",
           "team":"NYY",
-          "value":1.53
+          "time_remaining_minutes":0,
+          "value":1.53,
+          "value_icon":"fire"
         },
         {
           "fantasy_points":6.0,

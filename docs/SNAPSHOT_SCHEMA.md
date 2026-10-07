@@ -38,8 +38,8 @@ Beyond field types, the models reject an envelope (and fail the build) when:
 - a player name has leading or trailing whitespace. This covers every emitted
   player name: VIP `players_live[].player_name`, `players[].name`,
   `metrics.non_cashing.top_remaining_players[].player_name` and
-  `metrics.threat.top_swing_players[].player_name`. (`players[]` is still a
-  loose section, so only its `name` is checked);
+  `metrics.threat.top_swing_players[].player_name`. (`players[]` is still mostly a
+  loose section: only its `name` and the Scorecard fields are checked);
 - `metrics.non_cashing.users_not_cashing` is below 1;
 - `metrics.distance_to_cash.per_vip` or `metrics.ownership_summary.per_vip` is
   empty (the metric is omitted instead);
@@ -269,6 +269,41 @@ ranked below the standings limit still gets a row. A VIP with no matching
 standings row (or one with no resolvable lineup) is omitted from the list,
 never emitted with nulls. The list is absent when no tracked VIP is entered, when no
 VIP matches, or whenever the field-remaining fields are omitted (golf).
+
+## Contest player pool: Scorecard fields
+
+`players[]` rows gain optional fields taken from the tracked VIPs'
+**Scorecards** (DraftKings' per-entry roster readout; see the glossary). A
+Scorecard is fetched per entry, but these are facts about the player, identical
+whichever entry holds them, so they live on the pool row the dashboard already
+joins lineup rows to, not on each VIP slot. They reuse the Scorecards already
+fetched each cycle; there are no extra requests.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `rt_projection` | number, optional | The player's current real-time projected points, as DraftKings sends it (not rounded; the Google Sheet keeps a two-decimal string). `0` is a real projection and is emitted. |
+| `stats_text` | string, optional | DraftKings' one-line stat summary for the player (for example "1 PaTD, 286 PaYds, 5 RuYds"). |
+| `time_remaining_minutes` | number, optional | The player's **PMR** (minutes remaining). Emitted only when the Scorecard labels the unit as PMR. `0` means their game is finished and is emitted, so "done" is distinct from "unknown" (omitted). |
+| `value_icon` | `fire` or `ice`, optional | DraftKings' hot / cold value marker. |
+
+Each is omitted, never null, when DraftKings does not supply it. An empty,
+missing, unparseable or unrecognised value is omitted (so a new DraftKings icon cannot fail
+validation). A pool player no tracked VIP holds, a locked slot, a Scorecard row
+without an id, and a row whose id matches no pool player get none of the fields.
+
+When several VIPs hold the same player, Scorecards are read in ascending VIP
+entry key order and the first non-empty value per field wins, independent of
+fetch order.
+
+**Provenance of a pool row.** Name, position, roster positions, salary, team and
+`game_status` come from the salary data; `ownership_pct`, `fantasy_points` and
+`value` from standings; `matchup` from draftables (matched by draftable id);
+the Scorecard fields from the VIP Scorecards, matched by draftable id. The
+draftable id is a join key only and is not emitted.
+
+**Limitation (Showdown).** A pool row stands for one draftable. A Scorecard row
+for a different draftable of the same player (a Captain versus Flex of one
+Showdown player, whose projections differ) does not match and is omitted.
 
 ## VIP lineup rows
 
