@@ -8,9 +8,15 @@ Run before reporting any change complete. Use the full suite when the change is
 broad; the relevant subset when it's narrow.
 
 - `uv run pytest` — the repository-wide test command.
-- `uv run ruff format --check .`
-- `uv run ruff check .`
-- `uv run ty check`
+- `uv run --group quality ruff format --check .`
+- `uv run --group quality ruff check .`
+- `uv run --group quality ty check`
+- `uv run --group quality xenon --max-absolute B src` — the complexity floor.
+- `uv run --group quality complexity-ratchet --base origin/main --worktree` —
+  complexity regressions against `origin/main`.
+
+The `quality` group is not installed by default, so these fail with
+`Failed to spawn` without `--group quality`.
 
 After changing the snapshot contract models
 (`src/dk_results/services/snapshot_v3/models/`), regenerate the committed
@@ -49,12 +55,8 @@ To add a scenario, write one bundle builder and add one `Scenario` entry to
 
 ## dfs-common is a git dependency
 
-`dfs-common` is sourced from the private `relomy/dfs-common` GitHub repo in
-`[tool.uv.sources]`, tracking its `main` branch:
-
-```toml
-dfs-common = { git = "https://github.com/relomy/dfs-common", branch = "main" }
-```
+`dfs-common` is sourced from the private `relomy/dfs-common` GitHub repo, pinned
+to a release tag in `[tool.uv.sources]`.
 
 No sibling `../dfs_common` checkout is required — `uv sync` clones the
 dependency directly over HTTPS. This requires non-interactive GitHub read
@@ -74,12 +76,13 @@ sibling directory.
 
 ## Explicit dependency refreshes
 
-The `pyproject.toml` source declaration expresses policy ("follow `main`").
-`uv.lock` records the exact commit that was resolved and tested. Routine
-`uv sync` / `uv run pytest` do **not** silently advance that commit — they
-install whatever is already locked.
+The `pyproject.toml` source tag decides which `dfs-common` release this repo
+uses, and `uv.lock` records the exact commit it resolved to. Routine
+`uv sync` / `uv run pytest` install whatever is already locked, so a new
+release is never picked up silently.
 
-To pick up new `dfs-common` commits, refresh the lock entry explicitly:
+To take a new `dfs-common` release, bump its `tag` in `[tool.uv.sources]`,
+then refresh the lock entry:
 
 ```bash
 uv lock --upgrade-package dfs-common
@@ -87,9 +90,9 @@ uv sync
 uv run pytest
 ```
 
-Commit the resulting `uv.lock` diff once the refreshed dependency has been
-tested — that diff is meaningful (a new shared-library revision), not noise,
-and should go through normal review.
+Commit the `pyproject.toml` and `uv.lock` diff once the new release has been
+tested — it is a new shared-library revision, not noise, and should go through
+normal review. `complexity-ratchet` is pinned by tag the same way.
 
 ## Locked verification
 
