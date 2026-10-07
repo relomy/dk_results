@@ -85,6 +85,17 @@ def build_default_processor(*, write_optimal_lineup: bool = True) -> SportProces
     )
 
 
+def _log_contest_selection(selected: Mapping[str, int], idle: list[str], *, requested: int) -> None:
+    logger.info(
+        "contest_selection selected=%s no_live=%d requested=%d",
+        ",".join(selected) or "none",
+        len(idle),
+        requested,
+    )
+    if idle:
+        logger.debug("contest_selection idle=%s", ",".join(idle))
+
+
 def select_live_contests(
     processor: SportProcessor,
     sport_names: list[str],
@@ -93,14 +104,20 @@ def select_live_contests(
     """Run each sport through the processor; the database decides which are live.
 
     A sport with no live contest (or unavailable/unparseable standings) is
-    skipped, so one bad sport degrades that sport only.
+    skipped, so one bad sport degrades that sport only. Idle sports are the
+    normal case, so they are reported in one summary line (and one DEBUG line
+    naming them) rather than logged individually.
     """
     selected: dict[str, int] = {}
+    idle: list[str] = []
     for sport_name in sport_names:
         try:
             selected[sport_name] = processor.run(sport_name, choices[sport_name])
-        except (NoLiveContestError, StandingsUnavailableError, StandsParseError):
+        except NoLiveContestError:
+            idle.append(sport_name)
+        except (StandingsUnavailableError, StandsParseError):
             continue
+    _log_contest_selection(selected, idle, requested=len(sport_names))
     return selected
 
 

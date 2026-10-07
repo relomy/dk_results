@@ -1,4 +1,5 @@
 import logging
+from types import SimpleNamespace
 
 import pytest
 from dfs_common.sheets import NumberFormat
@@ -585,3 +586,29 @@ def test_parse_without_id_column_leaves_draftable_id_unset():
     player = standings.players["Jadan Baugh"]
     assert player.draftable_id is None
     assert player.salary == 6000
+
+
+def test_top_showdown_captains_are_one_info_line_and_not_printed(caplog, capsys):
+    from dk_results.domain import contest_standings as contest_standings_module
+
+    logger = logging.getLogger("test.captains")
+    with caplog.at_level(logging.DEBUG):
+        contest_standings_module._log_top_showdown_captains(
+            SimpleNamespace(name="NFLShowdown"), [object()] * 4, {"A": 3, "B": 1}, logger
+        )
+
+    assert capsys.readouterr().out == ""
+    assert [(r.levelno, r.getMessage()) for r in caplog.records] == [
+        (logging.INFO, "top_captains A=75.00% [3/4]; B=25.00% [1/4]")
+    ]
+
+
+def test_top_showdown_captains_logs_nothing_for_other_sports(caplog):
+    from dk_results.domain import contest_standings as contest_standings_module
+
+    with caplog.at_level(logging.DEBUG):
+        contest_standings_module._log_top_showdown_captains(
+            SimpleNamespace(name="NFL"), [object()], {"A": 1}, logging.getLogger("test.captains")
+        )
+
+    assert caplog.records == []

@@ -466,8 +466,8 @@ class CompletionProcessor:
                         contest_data,
                         sport_choices,
                     )
-            except Exception as error:
-                logger.error(error)
+            except Exception:
+                logger.exception("Failed to sync contest dk_id=%s", dk_id)
 
     @staticmethod
     def _should_skip_contest(
@@ -475,7 +475,7 @@ class CompletionProcessor:
     ) -> bool:
         if positions_paid is None or draft_group not in skip_draft_groups:
             return False
-        logger.debug("dk_id: {} positions_paid: {}".format(dk_id, positions_paid))
+        logger.debug("dk_id: %s positions_paid: %s", dk_id, positions_paid)
         logger.debug(
             "skipping %s because we've already updated %d [skipped draft groups %s]",
             name,
@@ -513,7 +513,13 @@ class CompletionProcessor:
             entries,
             positions_paid,
         )
-        logger.debug(contest_data)
+        logger.debug(
+            "contest_fetched dk_id=%s status=%s completed=%s positions_paid=%s",
+            dk_id,
+            contest_data["status"],
+            contest_data["completed"],
+            contest_data["positions_paid"],
+        )
         new_status = contest_data["status"]
         new_completed = contest_data["completed"]
         if positions_paid != contest_data["positions_paid"] or status != new_status or completed != new_completed:
@@ -621,11 +627,11 @@ class CompletionProcessor:
                     "positions_paid": positions_paid,
                 }
         except ValueError as val_err:
-            logger.error(f"JSON decoding error: {val_err}")
+            logger.error("JSON decoding error: %s", val_err)
         except KeyError as key_err:
-            logger.error(f"Key error: {key_err}")
-        except Exception as req_ex:
-            logger.error(f"Request error: {req_ex}")
+            logger.error("Key error: %s", key_err)
+        except Exception:
+            logger.exception("Request error")
 
         return None
 

@@ -6,6 +6,7 @@ module covers what remains here: config loading, sender wiring, processor
 assembly, and ``main()``.
 """
 
+import logging
 import runpy
 import sqlite3
 import sys
@@ -413,3 +414,16 @@ def test_module_main_executes(monkeypatch):
     finally:
         if existing is not None:
             sys.modules["dk_results.cli.update_contests"] = existing
+
+
+def test_main_logs_unexpected_error_with_traceback(monkeypatch, caplog):
+    def boom(_path):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(update_contests.sqlite3, "connect", boom)
+    with caplog.at_level(logging.ERROR):
+        update_contests.main()
+
+    errors = [r for r in caplog.records if r.levelno == logging.ERROR]
+    assert len(errors) == 1
+    assert errors[0].exc_info is not None and errors[0].exc_info[0] is RuntimeError

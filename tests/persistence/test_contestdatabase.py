@@ -663,3 +663,55 @@ def test_ensure_schema_migrates_preexisting_database_file(tmp_path):
         assert db.get_cash_line(1) == (25, 142.5)
     finally:
         db.close()
+
+
+def test_connecting_is_logged_at_debug_not_info(caplog):
+    with caplog.at_level(logging.DEBUG):
+        ContestDatabase(":memory:")
+
+    connecting = [r for r in caplog.records if "Connecting to contests DB" in r.getMessage()]
+    assert [r.levelno for r in connecting] == [logging.DEBUG]
+
+
+_SQLITE_ERROR_CALLS = {
+    "get_live_contest": lambda db: db.get_live_contest("NBA"),
+    "get_live_contests": lambda db: db.get_live_contests(["NBA"]),
+    "get_next_upcoming_contest": lambda db: db.get_next_upcoming_contest("NBA"),
+    "get_next_upcoming_contest_any": lambda db: db.get_next_upcoming_contest_any("NBA"),
+    "get_incomplete_contests": lambda db: db.get_incomplete_contests(),
+    "update_contest": lambda db: db.update_contest(1, positions_paid=1, status="LIVE", completed=0),
+    "get_contest_by_id": lambda db: db.get_contest_by_id(1),
+    "get_contest_state": lambda db: db.get_contest_state(1),
+    "get_contest_contract_metadata": lambda db: db.get_contest_contract_metadata(1),
+    "get_live_contest_candidates": lambda db: db.get_live_contest_candidates("NBA"),
+    "get_cash_line": lambda db: db.get_cash_line(1),
+}
+
+
+@pytest.mark.parametrize("method", list(_SQLITE_ERROR_CALLS))
+def test_sqlite_errors_are_logged_once_with_a_traceback(method, caplog):
+    class BoomCursor:
+        def execute(self, *_a, **_k):
+            raise sqlite3.Error("boom")
+
+    class BoomConn:
+        def cursor(self):
+            return BoomCursor()
+
+        def rollback(self):
+            return None
+
+        def commit(self):
+            return None
+
+    db = ContestDatabase.from_connection(BoomConn())  # type: ignore[arg-type]
+    with caplog.at_level(logging.ERROR):
+        _SQLITE_ERROR_CALLS[method](db)
+
+    errors = [r for r in caplog.records if r.levelno == logging.ERROR]
+    assert len(errors) == 1
+    # get_live_contests delegates per sport, so the failing inner call is the one that logs.
+    logged_by = {"get_live_contests": "get_live_contest()"}.get(method, method)
+    assert logged_by in errors[0].getMessage()
+    assert errors[0].exc_info is not None
+    assert errors[0].exc_info[0] is sqlite3.Error
