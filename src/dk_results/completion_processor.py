@@ -475,7 +475,7 @@ class CompletionProcessor:
     ) -> bool:
         if positions_paid is None or draft_group not in skip_draft_groups:
             return False
-        logger.debug("dk_id: {} positions_paid: {}".format(dk_id, positions_paid))
+        logger.debug("dk_id: %s positions_paid: %s", dk_id, positions_paid)
         logger.debug(
             "skipping %s because we've already updated %d [skipped draft groups %s]",
             name,
@@ -621,11 +621,11 @@ class CompletionProcessor:
                     "positions_paid": positions_paid,
                 }
         except ValueError as val_err:
-            logger.error(f"JSON decoding error: {val_err}")
+            logger.error("JSON decoding error: %s", val_err)
         except KeyError as key_err:
-            logger.error(f"Key error: {key_err}")
+            logger.error("Key error: %s", key_err)
         except Exception as req_ex:
-            logger.error(f"Request error: {req_ex}")
+            logger.error("Request error: %s", req_ex)
 
         return None
 
