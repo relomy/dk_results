@@ -353,15 +353,17 @@ def test_process_sport_persists_none_cash_line_when_positions_paid_missing(tmp_p
 
 def test_process_sport_handles_no_live_contest(caplog):
     processor = _make_processor(_FakeContestDbNoLive(), vips=["UserA"])
-    with caplog.at_level(logging.INFO):
+    with caplog.at_level(logging.DEBUG):
         with pytest.raises(NoLiveContestError):
             processor.run("NFL", NFLSport)
 
     assert len(_event_messages(caplog, "vip_detection")) == 0
     assert len(_event_messages(caplog, "vip_fetch")) == 0
     assert len(_event_messages(caplog, "vip_sheet_write")) == 0
-    warning_msgs = [r.message for r in caplog.records if r.levelno == logging.WARNING]
-    assert any("no live contests" in m.lower() for m in warning_msgs)
+    # Idle sports are the normal case on a 5-minute schedule: the processor stays
+    # silent and select_live_contests reports them in one line.
+    assert [r for r in caplog.records if r.levelno >= logging.WARNING] == []
+    assert not [r for r in caplog.records if "no live contests" in r.getMessage().lower()]
 
 
 def test_process_sport_emits_no_vip_events_for_standings_skip(tmp_path, caplog):
@@ -813,3 +815,50 @@ def test_write_snapshot_payload_is_byte_stable(tmp_path):
         "  }\n"
         "}\n"
     )
+
+
+def _selection_messages(caplog):
+    return [r.getMessage() for r in caplog.records if r.name == db_main.logger.name]
+
+
+def test_select_live_contests_logs_one_summary_instead_of_a_warning_per_idle_sport(caplog):
+    class _Processor:
+        def run(self, sport_name, sport_cls):
+            if sport_name == "NFL":
+                return 123
+            raise NoLiveContestError(sport_name)
+
+    names = ["NBA", "NFL", "NHL"]
+    with caplog.at_level(logging.DEBUG):
+        selected = db_main.select_live_contests(_Processor(), names, dict.fromkeys(names, object))
+
+    assert selected == {"NFL": 123}
+    assert [r for r in caplog.records if r.levelno >= logging.WARNING] == []
+    assert _selection_messages(caplog) == [
+        "contest_selection selected=NFL no_live=2 requested=3",
+        "contest_selection idle=NBA,NHL",
+    ]
+    assert [r.levelname for r in caplog.records if r.name == db_main.logger.name] == ["INFO", "DEBUG"]
+
+
+def test_select_live_contests_summary_when_nothing_is_live(caplog):
+    class _Processor:
+        def run(self, sport_name, sport_cls):
+            raise NoLiveContestError(sport_name)
+
+    names = ["NBA", "NFL"]
+    with caplog.at_level(logging.INFO):
+        assert db_main.select_live_contests(_Processor(), names, dict.fromkeys(names, object)) == {}
+
+    assert _selection_messages(caplog) == ["contest_selection selected=none no_live=2 requested=2"]
+
+
+def test_select_live_contests_omits_idle_line_when_every_sport_is_live(caplog):
+    class _Processor:
+        def run(self, sport_name, sport_cls):
+            return 1
+
+    with caplog.at_level(logging.DEBUG):
+        db_main.select_live_contests(_Processor(), ["NBA"], {"NBA": object})
+
+    assert _selection_messages(caplog) == ["contest_selection selected=NBA no_live=0 requested=1"]

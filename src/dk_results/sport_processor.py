@@ -146,7 +146,6 @@ class SportProcessor:
         """
         result = self._db.get_live_contest(sport_cls.name, sport_cls.sheet_min_entry_fee, sport_cls.keyword)
         if not result:
-            logger.warning("There are no live contests for %s! Moving on.", sport_name)
             raise NoLiveContestError(sport_name)
 
         dk_id, name, draft_group, positions_paid, _start_date = result
