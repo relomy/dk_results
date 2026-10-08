@@ -242,6 +242,15 @@ def test_build_completion_processor_wires_collaborators(monkeypatch, memory_conn
     assert processor._config.vips == ["FooBar"]
 
 
+def test_build_completion_processor_wires_dashboard_origin(monkeypatch, memory_conn):
+    monkeypatch.setattr(update_contests, "DASHBOARD_BASE_URL", "https://dashboard.example")
+    monkeypatch.setattr(update_contests, "DraftKings", lambda: object())
+
+    processor = update_contests._build_completion_processor(memory_conn)
+
+    assert processor._config.dashboard_base_url == "https://dashboard.example"
+
+
 def test_build_completion_processor_uses_stub_results_when_client_init_fails(monkeypatch, memory_conn):
     conn = memory_conn
 

@@ -177,6 +177,7 @@ def _make_config(
     sport_choices=None,
     spreadsheet_id=None,
     sheet_gid_map=None,
+    dashboard_base_url=None,
     notifications_enabled=True,
 ):
     return CompletionProcessorConfig(
@@ -187,6 +188,7 @@ def _make_config(
         spreadsheet_id=spreadsheet_id,
         sheet_gid_map=sheet_gid_map or {},
         vips=vips or [],
+        dashboard_base_url=dashboard_base_url,
         notifications_enabled=notifications_enabled,
     )
 
@@ -564,7 +566,11 @@ def test_get_contest_data_success_and_bad_status():
 
 def test_format_contest_announcement_relative_time_and_sheet_link():
     conn = _conn_with_table()
-    config = _make_config(spreadsheet_id="test-sheet", sheet_gid_map={"NBA": 123})
+    config = _make_config(
+        spreadsheet_id="test-sheet",
+        sheet_gid_map={"NBA": 123},
+        dashboard_base_url="https://dashboard.example",
+    )
     processor = _make_processor(conn, results=FakeContestResults(), sender=None, presence=None, config=config)
 
     now = datetime.datetime.now().replace(microsecond=0)
@@ -575,6 +581,7 @@ def test_format_contest_announcement_relative_time_and_sheet_link():
 
     assert "(⏳ 13m)" in msg
     assert "🔗 DK: [123]" in msg
+    assert "📈 Dashboard: [NBA](<https://dashboard.example/live/nba>) |" in msg
     assert "📊 Sheet: [NBA]" in msg
 
 

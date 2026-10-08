@@ -25,6 +25,7 @@ if TYPE_CHECKING:
     from dk_results.domain.contest import Contest
 
 DEFAULT_SPORT_EMOJI = "🏟️"
+DEFAULT_DASHBOARD_BASE_URL: str | None = None
 
 SPORT_EMOJI: dict[str, str] = {
     "CFB": "🏈",
@@ -74,6 +75,13 @@ def sheet_link(spreadsheet_id: str | None, sheet_gid_map: Mapping[str, int], she
     return f"<https://docs.google.com/spreadsheets/d/{spreadsheet_id}/edit#gid={gid}>"
 
 
+def dashboard_link(sport_name: str, dashboard_base_url: str | None = DEFAULT_DASHBOARD_BASE_URL) -> str | None:
+    """Build a Discord-safe dk_dashboard Live-view link for a sport key."""
+    if not dashboard_base_url or not dashboard_base_url.strip():
+        return None
+    return f"<{dashboard_base_url.rstrip('/')}/live/{sport_name.lower()}>"
+
+
 def _contest_url(dk_id: int) -> str:
     return f"<https://www.draftkings.com/contest/gamecenter/{dk_id}#/>"
 
@@ -100,15 +108,23 @@ def relative_time_from_seconds(seconds_remaining: int) -> str:
     return "".join(parts)
 
 
-def dk_and_sheet_parts(dk_id: int, sport_name: str, sheet_link_url: str | None) -> tuple[str, str]:
-    """Return the (DK, Sheet) detail-line strings, unbulleted.
+def dk_and_sheet_parts(
+    dk_id: int,
+    sport_name: str,
+    sheet_link_url: str | None,
+    dashboard_base_url: str | None = DEFAULT_DASHBOARD_BASE_URL,
+) -> tuple[str, str]:
+    """Return the (DK, Dashboard-and-Sheet) detail-line strings, unbulleted.
 
     Shared by :func:`build_milestone_announcement`'s two-line layout and any
     caller (e.g. the bot's `!live` command) that wants to lay them out
     differently, such as joined onto one line.
     """
     sheet_part = f"📊 Sheet: [{sport_name}]({sheet_link_url})" if sheet_link_url else "📊 Sheet: n/a"
-    return f"🔗 DK: [{dk_id}]({_contest_url(dk_id)})", sheet_part
+    dashboard_url = dashboard_link(sport_name, dashboard_base_url)
+    dashboard_part = f"📈 Dashboard: [{sport_name}]({dashboard_url})"
+    links_part = f"{dashboard_part} | {sheet_part}" if sheet_link_url and dashboard_url else sheet_part
+    return f"🔗 DK: [{dk_id}]({_contest_url(dk_id)})", links_part
 
 
 def _header(prefix: str, sport_name: str, contest_name: str, emoji_map: Mapping[str, str] | None = None) -> str:
@@ -128,6 +144,7 @@ def build_milestone_announcement(
     dk_id: int,
     relative_time: str | None = None,
     sheet_link_url: str | None = None,
+    dashboard_base_url: str | None = DEFAULT_DASHBOARD_BASE_URL,
     emoji_map: Mapping[str, str] | None = None,
     vip_presence: str | None = None,
 ) -> str:
@@ -144,7 +161,7 @@ def build_milestone_announcement(
     """
     header = _header(prefix, sport_name, contest_name, emoji_map)
     relative_part = f" (⏳ {relative_time})" if relative_time else ""
-    dk_part, sheet_part = dk_and_sheet_parts(dk_id, sport_name, sheet_link_url)
+    dk_part, sheet_part = dk_and_sheet_parts(dk_id, sport_name, sheet_link_url, dashboard_base_url)
     detail_lines = [
         f"🕒 {start_date}{relative_part}",
         dk_part,
@@ -167,6 +184,7 @@ def build_soft_finish_announcement(
     is_update: bool = False,
     relative_time: str | None = None,
     sheet_link_url: str | None = None,
+    dashboard_base_url: str | None = DEFAULT_DASHBOARD_BASE_URL,
     emoji_map: Mapping[str, str] | None = None,
 ) -> str:
     """Build the soft-finish announcement: milestone chrome plus a cash summary."""
@@ -179,6 +197,7 @@ def build_soft_finish_announcement(
         dk_id=dk_id,
         relative_time=relative_time,
         sheet_link_url=sheet_link_url,
+        dashboard_base_url=dashboard_base_url,
         emoji_map=emoji_map,
     )
     vip_text = ", ".join(vips_cashed) if vips_cashed else "none"

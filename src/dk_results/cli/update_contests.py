@@ -13,7 +13,7 @@ from dfs_common import contests, state
 from dk_results.bot.discord_rest import DiscordRest
 from dk_results.completion_processor import CompletionProcessor, CompletionProcessorConfig
 from dk_results.config import load_and_apply_settings
-from dk_results.discord_announcements import SPORT_EMOJI
+from dk_results.discord_announcements import DEFAULT_DASHBOARD_BASE_URL, SPORT_EMOJI
 from dk_results.domain.sport import Sport, get_sport_choices
 from dk_results.draftkings import DraftKings
 from dk_results.logging import configure_logging
@@ -27,6 +27,7 @@ logger = logging.getLogger(__name__)
 # constants
 DISCORD_NOTIFICATIONS_ENABLED = "true"
 SPREADSHEET_ID: str | None = None
+DASHBOARD_BASE_URL: str | None = DEFAULT_DASHBOARD_BASE_URL
 SHEET_GIDS_FILE = str(repo_file("sheet_gids.yaml"))
 CONTEST_WARNING_MINUTES = 25
 WARNING_SCHEDULE_FILE_ENV = "CONTEST_WARNING_SCHEDULE_FILE"
@@ -156,6 +157,7 @@ def _init_runtime() -> None:
     """Initialize settings and configuration-derived values for one run."""
     global DISCORD_NOTIFICATIONS_ENABLED
     global SPREADSHEET_ID
+    global DASHBOARD_BASE_URL
     global SHEET_GIDS_FILE
     global CONTEST_WARNING_MINUTES
     global _DEFAULT_WARNING_SCHEDULE
@@ -165,6 +167,7 @@ def _init_runtime() -> None:
     load_and_apply_settings()
     DISCORD_NOTIFICATIONS_ENABLED = os.getenv("DISCORD_NOTIFICATIONS_ENABLED", "true")
     SPREADSHEET_ID = os.getenv("SPREADSHEET_ID")
+    DASHBOARD_BASE_URL = os.getenv("DASHBOARD_BASE_URL")
     SHEET_GIDS_FILE = os.getenv("SHEET_GIDS_FILE", str(repo_file("sheet_gids.yaml")))
     CONTEST_WARNING_MINUTES = int(os.getenv("CONTEST_WARNING_MINUTES", "25"))
     _DEFAULT_WARNING_SCHEDULE = [CONTEST_WARNING_MINUTES]
@@ -256,6 +259,7 @@ def _build_completion_processor(conn) -> CompletionProcessor:
         spreadsheet_id=SPREADSHEET_ID,
         sheet_gid_map=SHEET_GID_MAP,
         vips=vips,
+        dashboard_base_url=DASHBOARD_BASE_URL,
         notifications_enabled=notifications_enabled,
     )
 
