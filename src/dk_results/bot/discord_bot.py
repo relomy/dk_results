@@ -11,6 +11,7 @@ from dfs_common import state
 from discord.ext import commands
 
 from dk_results.config import load_and_apply_settings
+from dk_results.discord_announcements import DEFAULT_DASHBOARD_BASE_URL
 from dk_results.discord_announcements import build_milestone_announcement as _shared_build_milestone_announcement
 from dk_results.discord_announcements import dk_and_sheet_parts as _shared_dk_and_sheet_parts
 from dk_results.discord_announcements import relative_time_from_seconds as _shared_relative_time
@@ -29,6 +30,7 @@ COMMAND_PREFIX = "!"
 BOT_TOKEN: str | None = None
 START_TIME = time.time()
 SPREADSHEET_ID: str | None = None
+DASHBOARD_BASE_URL: str | None = DEFAULT_DASHBOARD_BASE_URL
 SHEET_GIDS_FILE = str(repo_file("sheet_gids.yaml"))
 DISCORD_LOG_FILE: str | None = None
 
@@ -116,6 +118,7 @@ def _init_runtime() -> None:
     """Initialize configuration-derived values before constructing the bot."""
     global BOT_TOKEN
     global SPREADSHEET_ID
+    global DASHBOARD_BASE_URL
     global SHEET_GIDS_FILE
     global DISCORD_LOG_FILE
     global SHEET_GID_MAP
@@ -124,6 +127,7 @@ def _init_runtime() -> None:
     load_and_apply_settings()
     BOT_TOKEN = os.getenv("DISCORD_BOT_TOKEN")
     SPREADSHEET_ID = os.getenv("SPREADSHEET_ID")
+    DASHBOARD_BASE_URL = os.getenv("DASHBOARD_BASE_URL")
     SHEET_GIDS_FILE = os.getenv("SHEET_GIDS_FILE", str(repo_file("sheet_gids.yaml")))
     DISCORD_LOG_FILE = os.getenv("DISCORD_LOG_FILE")
     SHEET_GID_MAP = _load_sheet_gid_map()
@@ -296,6 +300,7 @@ async def contests(ctx: commands.Context, sport: str | None = None) -> None:
         start_date=str(start_date),
         dk_id=dk_id,
         sheet_link_url=sheet_link,
+        dashboard_base_url=DASHBOARD_BASE_URL,
         vip_presence=_vip_presence_for_contest(dk_id),
     )
     await ctx.send(message)
@@ -351,19 +356,24 @@ def _format_live_contest_block(
     """Format one contest's `!live` block.
 
     Deviates from the shared `build_milestone_announcement` chrome
-    (bot-side seam, ADR candidate pending): DK and Sheet links are joined
-    onto one line, and the elapsed-time-since-start is shown alongside the
-    start date. Cash bullets are computed first so the VIP-presence bullet
-    can be suppressed once they're available (contest-level redundancy: a
-    VIP with a cash-status bullet is already known to be present).
+    (bot-side seam, ADR candidate pending): the elapsed-time-since-start is
+    shown alongside the start date. When a Sheet link is available, the
+    Dashboard-and-Sheet links appear on their own line after the DraftKings
+    link. Cash bullets are computed first so the VIP-presence bullet can be
+    suppressed once they're available (contest-level redundancy: a VIP with a
+    cash-status bullet is already known to be present).
     """
     cash_bullets = _format_vip_cash_bullets(vip_statuses, cash_line, positions_paid)
     sheet_link = _sheet_link(sport)
-    dk_part, sheet_part = _shared_dk_and_sheet_parts(dk_id, sport, sheet_link)
+    dk_part, sheet_part = _shared_dk_and_sheet_parts(dk_id, sport, sheet_link, DASHBOARD_BASE_URL)
     header = f"Live: {_shared_sport_emoji(sport)} {sport} — {name}"
     elapsed = _format_time_since(str(start_date))
     time_line = f"🕒 {start_date} ({elapsed})" if elapsed else f"🕒 {start_date}"
-    lines = [header, f"• {time_line}", f"• {dk_part} | {sheet_part}"]
+    lines = [header, f"• {time_line}", f"• {dk_part}"]
+    if sheet_link:
+        lines.append(f"• {sheet_part}")
+    else:
+        lines[-1] = f"• {dk_part} | {sheet_part}"
     if not cash_bullets:
         presence = _vip_presence_for_contest(dk_id)
         if presence is not None:

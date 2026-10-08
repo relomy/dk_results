@@ -73,6 +73,7 @@ class CompletionProcessorConfig:
     spreadsheet_id: str | None
     sheet_gid_map: Mapping[str, int]
     vips: list[str]
+    dashboard_base_url: str | None = discord_announcements.DEFAULT_DASHBOARD_BASE_URL
     # Whether milestone announcements may be sent this run. Resolved explicitly
     # at the composition root (from ``DISCORD_NOTIFICATIONS_ENABLED``) and
     # independent of whether a sender is wired: "off" is a deliberate state, so a
@@ -763,6 +764,7 @@ class CompletionProcessor:
             dk_id=dk_id,
             relative_time=self._relative_time(start_date),
             sheet_link_url=self._sheet_link(sport_name),
+            dashboard_base_url=self._config.dashboard_base_url,
             emoji_map=self._config.sport_emoji,
         )
 
@@ -789,5 +791,6 @@ class CompletionProcessor:
             is_update=is_update,
             relative_time=self._relative_time(start_date),
             sheet_link_url=self._sheet_link(sport_name),
+            dashboard_base_url=self._config.dashboard_base_url,
             emoji_map=self._config.sport_emoji,
         )

@@ -10,6 +10,7 @@ from dk_results.discord_announcements import (
     build_double_up_found_announcement,
     build_milestone_announcement,
     build_soft_finish_announcement,
+    dashboard_link,
     dk_and_sheet_parts,
     relative_time_from_seconds,
     sheet_link,
@@ -49,9 +50,19 @@ def test_relative_time_from_seconds_formats_compact_duration():
 
 
 def test_dk_and_sheet_parts_with_sheet_link():
-    dk_part, sheet_part = dk_and_sheet_parts(1, "NBA", "<https://sheet.example/1>")
+    dk_part, sheet_part = dk_and_sheet_parts(1, "NBA", "<https://sheet.example/1>", "https://dashboard.example")
     assert dk_part == "🔗 DK: [1](<https://www.draftkings.com/contest/gamecenter/1#/>)"
-    assert sheet_part == "📊 Sheet: [NBA](<https://sheet.example/1>)"
+    assert sheet_part == (
+        "📈 Dashboard: [NBA](<https://dashboard.example/live/nba>) | 📊 Sheet: [NBA](<https://sheet.example/1>)"
+    )
+
+
+def test_dashboard_link_uses_configured_origin_and_direct_variant_route():
+    assert dashboard_link("NFLShowdown", "https://dashboard.example/") == (
+        "<https://dashboard.example/live/nflshowdown>"
+    )
+    assert dashboard_link("PGAMain", "https://dashboard.example") == "<https://dashboard.example/live/pgamain>"
+    assert dashboard_link("NBA", "") is None
 
 
 def test_dk_and_sheet_parts_no_sheet_link():
@@ -77,12 +88,14 @@ def test_build_milestone_announcement_full_chrome():
         dk_id=123,
         relative_time="13m",
         sheet_link_url="<https://docs.google.com/spreadsheets/d/sheet/edit#gid=1>",
+        dashboard_base_url="https://dashboard.example",
     )
     assert msg == (
         "Contest started: 🏀 NBA — Test Contest\n"
         "• 🕒 2026-01-01 00:00:00 (⏳ 13m)\n"
         "• 🔗 DK: [123](<https://www.draftkings.com/contest/gamecenter/123#/>)\n"
-        "• 📊 Sheet: [NBA](<https://docs.google.com/spreadsheets/d/sheet/edit#gid=1>)"
+        "• 📈 Dashboard: [NBA](<https://dashboard.example/live/nba>) | "
+        "📊 Sheet: [NBA](<https://docs.google.com/spreadsheets/d/sheet/edit#gid=1>)"
     )
 
 
@@ -141,12 +154,14 @@ def test_build_milestone_announcement_vip_presence_default_unchanged():
         dk_id=123,
         relative_time="13m",
         sheet_link_url="<https://docs.google.com/spreadsheets/d/sheet/edit#gid=1>",
+        dashboard_base_url="https://dashboard.example",
     )
     assert msg == (
         "Contest started: 🏀 NBA — Test Contest\n"
         "• 🕒 2026-01-01 00:00:00 (⏳ 13m)\n"
         "• 🔗 DK: [123](<https://www.draftkings.com/contest/gamecenter/123#/>)\n"
-        "• 📊 Sheet: [NBA](<https://docs.google.com/spreadsheets/d/sheet/edit#gid=1>)"
+        "• 📈 Dashboard: [NBA](<https://dashboard.example/live/nba>) | "
+        "📊 Sheet: [NBA](<https://docs.google.com/spreadsheets/d/sheet/edit#gid=1>)"
     )
     assert "VIP" not in msg
 
@@ -165,6 +180,22 @@ def test_build_soft_finish_announcement_appends_cash_summary():
     assert "• 🏆 Top score: 229.00" in msg
     assert "• 💵 Cashing score: 185.50" in msg
     assert "• ⭐ VIPs cashed (visible rows): FooBar" in msg
+
+
+def test_build_soft_finish_announcement_includes_dashboard_with_sheet_link():
+    msg = build_soft_finish_announcement(
+        sport_name="NBA",
+        contest_name="Test Contest",
+        start_date="2026-01-01 00:00:00",
+        dk_id=1,
+        top_score="229.00",
+        cashing_score="185.50",
+        vips_cashed=[],
+        sheet_link_url="<https://sheet.example/nba>",
+        dashboard_base_url="https://dashboard.example",
+    )
+
+    assert "• 📈 Dashboard: [NBA](<https://dashboard.example/live/nba>) | " in msg
 
 
 def test_build_soft_finish_announcement_update_marker_and_no_vips():

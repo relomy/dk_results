@@ -176,6 +176,40 @@ async def test_contests_returns_live_contest_with_vip_present(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_contests_links_dashboard_before_sheet(monkeypatch):
+    monkeypatch.setattr(discord_bot, "DASHBOARD_BASE_URL", "https://dashboard.example/")
+    monkeypatch.setattr(discord_bot, "_sport_choices", lambda: {"nba": DummySport})
+    monkeypatch.setattr(
+        discord_bot,
+        "_fetch_live_contest",
+        lambda sport_cls: (1, "Contest", None, None, "2000-01-01"),
+    )
+    monkeypatch.setattr(discord_bot, "_sheet_link", lambda _sport: "<https://sheet.example/nba>")
+    monkeypatch.setattr(discord_bot, "_vip_presence_for_contest", lambda _dk_id: None)
+
+    ctx = FakeCtx()
+    await discord_bot.contests(_ctx(ctx), "nba")
+
+    assert ctx.sent[0].endswith(
+        "• 📈 Dashboard: [NBA](<https://dashboard.example/live/nba>) | 📊 Sheet: [NBA](<https://sheet.example/nba>)"
+    )
+
+
+def test_live_contest_block_keeps_draftkings_link_separate_from_dashboard_and_sheet(monkeypatch):
+    monkeypatch.setattr(discord_bot, "DASHBOARD_BASE_URL", "https://dashboard.example/")
+    monkeypatch.setattr(discord_bot, "_sheet_link", lambda _sport: "<https://sheet.example/nba>")
+    monkeypatch.setattr(discord_bot, "_format_time_since", lambda _start_date: None)
+    monkeypatch.setattr(discord_bot, "_vip_presence_for_contest", lambda _dk_id: None)
+
+    msg = discord_bot._format_live_contest_block(1, "Contest", "2000-01-01", "NBA", None, [], None)
+
+    assert msg.endswith(
+        "• 🔗 DK: [1](<https://www.draftkings.com/contest/gamecenter/1#/>)\n"
+        "• 📈 Dashboard: [NBA](<https://dashboard.example/live/nba>) | 📊 Sheet: [NBA](<https://sheet.example/nba>)"
+    )
+
+
+@pytest.mark.asyncio
 async def test_live_lists_all_live_contests(monkeypatch):
     monkeypatch.setattr(discord_bot, "_sport_choices", lambda: {"nba": DummySport, "nfl": DummySportTwo})
     monkeypatch.setattr(discord_bot, "_sheet_link", lambda _sport: None)
