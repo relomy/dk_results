@@ -1638,3 +1638,18 @@ def test_projection_and_minutes_follow_the_lowest_entry_key_per_field(monkeypatc
 
     assert rows["Held"]["rt_projection"] == 5.5
     assert rows["Held"]["time_remaining_minutes"] == 30
+
+
+@pytest.mark.parametrize(
+    ("raw_state", "completed", "start", "expected"),
+    [
+        ("LIVE", 0, None, "live"),
+        ("Unstarted", 0, "2099-01-01T00:00:00Z", "upcoming"),
+        ("Unstarted", 0, "2020-01-01T00:00:00Z", "live"),
+        (None, 0, "2099-01-01T00:00:00Z", "upcoming"),
+        (None, 0, None, "live"),
+        ("Unstarted", 1, "2099-01-01T00:00:00Z", "completed"),
+    ],
+)
+def test_normalize_contest_state_always_returns_a_string(raw_state, completed, start, expected) -> None:
+    assert collector._normalize_contest_state(raw_state, completed, start) == expected
