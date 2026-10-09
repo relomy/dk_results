@@ -1,17 +1,14 @@
 import datetime
 import logging
-import os
 import sqlite3
 import time
 from pathlib import Path
 
 import discord  # noqa: E402
-import yaml
 from dfs_common import state
 from discord.ext import commands
 
-from dk_results.config import load_and_apply_settings
-from dk_results.discord_announcements import DEFAULT_DASHBOARD_BASE_URL
+from dk_results.config import RuntimeSettings, load_runtime_settings
 from dk_results.discord_announcements import build_milestone_announcement as _shared_build_milestone_announcement
 from dk_results.discord_announcements import dk_and_sheet_parts as _shared_dk_and_sheet_parts
 from dk_results.discord_announcements import relative_time_from_seconds as _shared_relative_time
@@ -27,52 +24,15 @@ from dk_results.persistence.notification_store import NotificationStore
 logger = logging.getLogger(__name__)
 
 COMMAND_PREFIX = "!"
-BOT_TOKEN: str | None = None
 START_TIME = time.time()
-SPREADSHEET_ID: str | None = None
-DASHBOARD_BASE_URL: str | None = DEFAULT_DASHBOARD_BASE_URL
-SHEET_GIDS_FILE = str(repo_file("sheet_gids.yaml"))
-DISCORD_LOG_FILE: str | None = None
 
 
 SportType = type[Sport]
 
 
-def _load_sheet_gid_map() -> dict[str, int]:
-    """Load a sheet title -> gid map from the configured YAML file."""
-    if not SHEET_GIDS_FILE:
-        logger.info("SHEET_GIDS_FILE not set; sheet links disabled.")
-        return {}
-    path = Path(SHEET_GIDS_FILE)
-    if not path.is_absolute():
-        path = repo_file(SHEET_GIDS_FILE)
-    if not path.is_file():
-        logger.info("Sheet gid map not found at %s; sheet links disabled.", path)
-        return {}
-    try:
-        data = yaml.safe_load(path.read_text()) or {}
-    except Exception:
-        logger.warning("Failed to load sheet gid map from %s", path)
-        return {}
-    if not isinstance(data, dict):
-        logger.warning("Sheet gid map at %s did not contain a dict.", path)
-        return {}
-    gids: dict[str, int] = {}
-    for key, value in data.items():
-        if isinstance(key, str) and isinstance(value, int):
-            gids[key] = value
-        else:
-            logger.debug("Skipping invalid gid entry %r -> %r", key, value)
-    logger.info("Loaded %d sheet gid entries from %s", len(gids), path)
-    return gids
-
-
-SHEET_GID_MAP: dict[str, int] = {}
-
-
-def _sheet_link(sheet_title: str) -> str | None:
+def _sheet_link(settings: RuntimeSettings, sheet_title: str) -> str | None:
     """Return a Discord-safe Google Sheets link for a sheet title."""
-    link = _shared_sheet_link(SPREADSHEET_ID, SHEET_GID_MAP, sheet_title)
+    link = _shared_sheet_link(settings.spreadsheet_id, settings.sheet_gid_map, sheet_title)
     if link is None:
         logger.debug("No Discord sheet link available for sheet title %s.", sheet_title)
     return link
@@ -83,9 +43,9 @@ def _sport_sheet_title(sport_cls: SportType) -> str:
     return getattr(sport_cls, "sheet_name", None) or sport_cls.name
 
 
-def _configure_discord_log_file() -> None:
+def _configure_discord_log_file(settings: RuntimeSettings) -> None:
     """Configure file logging for the Discord bot."""
-    log_path = Path(DISCORD_LOG_FILE) if DISCORD_LOG_FILE else repo_file("logs", "discord_bot.log")
+    log_path = Path(settings.discord_log_file) if settings.discord_log_file else repo_file("logs", "discord_bot.log")
     try:
         log_path.parent.mkdir(parents=True, exist_ok=True)
         handler = logging.FileHandler(log_path, mode="a")
@@ -97,43 +57,6 @@ def _configure_discord_log_file() -> None:
         logger.info("Discord bot file logging initialized at %s", log_path)
     except Exception:
         logger.exception("Failed to initialize Discord bot file logging.")
-
-
-def _channel_id_from_env() -> int | None:
-    """Return the allowed Discord channel ID, if configured."""
-    raw_channel_id = os.getenv("DISCORD_CHANNEL_ID")
-    if not raw_channel_id:
-        return None
-    try:
-        return int(raw_channel_id)
-    except ValueError:
-        logger.warning("DISCORD_CHANNEL_ID is not a valid integer: %s", raw_channel_id)
-        return None
-
-
-ALLOWED_CHANNEL_ID: int | None = None
-
-
-def _init_runtime() -> None:
-    """Initialize configuration-derived values before constructing the bot."""
-    global BOT_TOKEN
-    global SPREADSHEET_ID
-    global DASHBOARD_BASE_URL
-    global SHEET_GIDS_FILE
-    global DISCORD_LOG_FILE
-    global SHEET_GID_MAP
-    global ALLOWED_CHANNEL_ID
-
-    load_and_apply_settings()
-    BOT_TOKEN = os.getenv("DISCORD_BOT_TOKEN")
-    SPREADSHEET_ID = os.getenv("SPREADSHEET_ID")
-    DASHBOARD_BASE_URL = os.getenv("DASHBOARD_BASE_URL")
-    SHEET_GIDS_FILE = os.getenv("SHEET_GIDS_FILE", str(repo_file("sheet_gids.yaml")))
-    DISCORD_LOG_FILE = os.getenv("DISCORD_LOG_FILE")
-    SHEET_GID_MAP = _load_sheet_gid_map()
-    ALLOWED_CHANNEL_ID = _channel_id_from_env()
-    configure_logging()
-    _configure_discord_log_file()
 
 
 def _sport_choices() -> dict[str, SportType]:
@@ -232,12 +155,12 @@ def _system_uptime_seconds() -> float | None:
         return None
 
 
-async def limit_to_channel(ctx: commands.Context) -> bool:
+async def limit_to_channel(settings: RuntimeSettings, ctx: commands.Context) -> bool:
     """Restrict commands to a single configured channel when set."""
-    if ALLOWED_CHANNEL_ID is None:
+    if settings.allowed_channel_id is None:
         return True
     channel = getattr(ctx, "channel", None)
-    return bool(channel and channel.id == ALLOWED_CHANNEL_ID)
+    return bool(channel and channel.id == settings.allowed_channel_id)
 
 
 async def on_ready(user: object) -> None:
@@ -269,7 +192,7 @@ async def sankayadead(ctx: commands.Context) -> None:
     await ctx.send("ya man")
 
 
-async def contests(ctx: commands.Context, sport: str | None = None) -> None:
+async def contests(settings: RuntimeSettings, ctx: commands.Context, sport: str | None = None) -> None:
     """Show one live contest for the requested sport."""
     choices = _sport_choices()
     if not sport:
@@ -292,7 +215,7 @@ async def contests(ctx: commands.Context, sport: str | None = None) -> None:
         return
 
     dk_id, name, _, _, start_date = contest
-    sheet_link = _sheet_link(_sport_sheet_title(sport_choice))
+    sheet_link = _sheet_link(settings, _sport_sheet_title(sport_choice))
     message = _shared_build_milestone_announcement(
         prefix="Live",
         sport_name=sport_choice.name,
@@ -300,7 +223,7 @@ async def contests(ctx: commands.Context, sport: str | None = None) -> None:
         start_date=str(start_date),
         dk_id=dk_id,
         sheet_link_url=sheet_link,
-        dashboard_base_url=DASHBOARD_BASE_URL,
+        dashboard_base_url=settings.dashboard_base_url,
         vip_presence=_vip_presence_for_contest(dk_id),
     )
     await ctx.send(message)
@@ -345,6 +268,7 @@ def _fetch_live_contests_with_cash_status(
 
 
 def _format_live_contest_block(
+    settings: RuntimeSettings,
     dk_id: int,
     name: str,
     start_date: str,
@@ -364,8 +288,8 @@ def _format_live_contest_block(
     cash-status bullet is already known to be present).
     """
     cash_bullets = _format_vip_cash_bullets(vip_statuses, cash_line, positions_paid)
-    sheet_link = _sheet_link(sport)
-    dk_part, sheet_part = _shared_dk_and_sheet_parts(dk_id, sport, sheet_link, DASHBOARD_BASE_URL)
+    sheet_link = _sheet_link(settings, sport)
+    dk_part, sheet_part = _shared_dk_and_sheet_parts(dk_id, sport, sheet_link, settings.dashboard_base_url)
     header = f"Live: {_shared_sport_emoji(sport)} {sport} — {name}"
     elapsed = _format_time_since(str(start_date))
     time_line = f"🕒 {start_date} ({elapsed})" if elapsed else f"🕒 {start_date}"
@@ -381,7 +305,7 @@ def _format_live_contest_block(
     return "\n".join([*lines, *cash_bullets])
 
 
-async def live(ctx: commands.Context) -> None:
+async def live(settings: RuntimeSettings, ctx: commands.Context) -> None:
     """Show all live contests across supported sports."""
     choices = _sport_choices()
     allowed_sports: list[str] = [sport_cls.name for sport_cls in choices.values()]
@@ -398,7 +322,7 @@ async def live(ctx: commands.Context) -> None:
 
     blocks = [
         _format_live_contest_block(
-            dk_id, name, start_date, sport, cash_lines[dk_id], vip_statuses[dk_id], positions_paid
+            settings, dk_id, name, start_date, sport, cash_lines[dk_id], vip_statuses[dk_id], positions_paid
         )
         for dk_id, name, _, positions_paid, start_date, sport in rows
     ]
@@ -467,7 +391,7 @@ async def sports(ctx: commands.Context) -> None:
     await ctx.send(f"Supported sports: {allowed}")
 
 
-def create_bot() -> commands.Bot:
+def create_bot(settings: RuntimeSettings) -> commands.Bot:
     """Construct a Discord application after Runtime bootstrap."""
     intents = discord.Intents.default()
     intents.message_content = True
@@ -476,12 +400,23 @@ def create_bot() -> commands.Bot:
     async def handle_ready() -> None:
         await on_ready(application.user)
 
-    application.add_check(limit_to_channel)
+    # discord.py inspects registered callbacks' signatures, so the settings are
+    # closed over rather than added as a command parameter.
+    async def handle_limit_to_channel(ctx: commands.Context) -> bool:
+        return await limit_to_channel(settings, ctx)
+
+    async def handle_contests(ctx: commands.Context, sport: str | None = None) -> None:
+        await contests(settings, ctx, sport)
+
+    async def handle_live(ctx: commands.Context) -> None:
+        await live(settings, ctx)
+
+    application.add_check(handle_limit_to_channel)
     application.event(handle_ready)
     application.event(on_command_error)
     application.command(name="sankayadead")(sankayadead)
-    application.command(name="contests")(contests)
-    application.command(name="live")(live)
+    application.command(name="contests")(handle_contests)
+    application.command(name="live")(handle_live)
     application.command(name="upcoming")(upcoming)
     application.command(name="health")(health)
     application.command(name="help")(help_command)
@@ -491,10 +426,12 @@ def create_bot() -> commands.Bot:
 
 def main() -> None:
     """Start the Discord bot process."""
-    _init_runtime()
-    if not BOT_TOKEN:
+    settings = load_runtime_settings()
+    configure_logging()
+    _configure_discord_log_file(settings)
+    if not settings.bot_token:
         raise RuntimeError("DISCORD_BOT_TOKEN is not set. Set it before starting the Discord bot.")
-    create_bot().run(BOT_TOKEN)
+    create_bot(settings).run(settings.bot_token)
 
 
 if __name__ == "__main__":
