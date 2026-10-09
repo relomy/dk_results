@@ -202,7 +202,10 @@ Sample config files are provided to copy/adapt:
 
 Configuration-dependent executables call `dk_results.config.load_and_apply_settings()`
 at startup. It loads the repository `.env` without overriding a non-empty process
-environment value, then applies `config.json` defaults.
+environment value, then applies `config.json` defaults. `update_contests` and the
+Discord bot call `dk_results.config.load_runtime_settings()`, which runs that
+bootstrap and returns one `RuntimeSettings` (including the parsed sheet-gid and
+warning-schedule YAML).
 
 Google Sheets access uses the shared `dfs_common` helpers that expect a
 `client_secret.json` service account file located in the repository root. The guard in
