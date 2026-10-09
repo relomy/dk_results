@@ -179,12 +179,11 @@ def _leaderboard_payout_map(payload: dict[str, Any]) -> dict[str, int]:
     return results
 
 
-def _normalize_contest_state(raw_state: Any, completed: Any) -> str | None:
+def _normalize_contest_state(raw_state: Any, completed: Any, start_time_utc: str | None = None) -> str:
+    """Map DK's contest status to the contract's state; unknown statuses fall back to the start time."""
     if completed in (1, True, "1", "true", "True"):
         return "completed"
     text = str(raw_state or "").strip().lower()
-    if not text:
-        return None
     if text in {"live", "in progress", "in_progress", "started"}:
         return "live"
     if text in {"completed", "complete", "final"}:
@@ -193,7 +192,13 @@ def _normalize_contest_state(raw_state: Any, completed: Any) -> str | None:
         return "cancelled"
     if text in {"scheduled", "upcoming", "open"}:
         return "upcoming"
-    return None
+    if start_time_utc:
+        try:
+            start = datetime.datetime.fromisoformat(start_time_utc.replace("Z", "+00:00"))
+        except ValueError:
+            return "live"
+        return "upcoming" if start > datetime.datetime.now(datetime.timezone.utc) else "live"
+    return "live"
 
 
 def _derive_composite_player_key(sport: str, row: dict[str, Any]) -> str | None:
@@ -701,6 +706,7 @@ def _assemble_source_bundle(
     truncation: dict[str, Any],
 ) -> dict[str, Any]:
     """Assemble the raw source-snapshot dict from already-computed pieces (pure)."""
+    start_time_utc = to_utc_iso(resolved.start_date)
     return {
         "sport": sport_cls.name,
         "contest": {
@@ -708,10 +714,10 @@ def _assemble_source_bundle(
             "name": resolved.contest_name,
             "sport": sport_cls.name.lower(),
             "draft_group": draft_group,
-            "start_time_utc": to_utc_iso(resolved.start_date),
+            "start_time_utc": start_time_utc,
             "is_primary": True,
             "contest_type": "classic",
-            "state": _normalize_contest_state(resolved.contest_state, resolved.contest_completed),
+            "state": _normalize_contest_state(resolved.contest_state, resolved.contest_completed, start_time_utc),
             "entry_fee": resolved.entry_fee,
             "currency": "USD",
             "entries": resolved.max_entries,
