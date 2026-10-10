@@ -287,7 +287,15 @@ def main(argv: list[str] | None = None):
     _build_parser().parse_args(argv_list)
     try:
         contests.init_schema(state.contests_db_path())
-        conn = sqlite3.connect(_contests_db_path())
+        db_path = _contests_db_path()
+        # dfs_common's init_schema does not know our columns (e.g. completed_at); ensure them
+        # before the completion job writes, since dkcontests may not have run yet (ADR-0015).
+        schema_db = ContestDatabase(db_path)
+        try:
+            schema_db.ensure_schema()
+        finally:
+            schema_db.close()
+        conn = sqlite3.connect(db_path)
         check_contests_for_completion(conn)
     except sqlite3.Error as sql_error:
         logger.error("SQLite error: %s", sql_error)
