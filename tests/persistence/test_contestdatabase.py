@@ -186,8 +186,9 @@ def test_compare_contests_filters_existing(contest_db):
 def test_insert_contests_writes_rows(contest_db):
     contests = [Contest.from_lobby(_contest_payload(303), "NBA")]
     contest_db.insert_contests(contests)
-    rows = list(contest_db.conn.execute("SELECT dk_id FROM contests"))
-    assert rows == [(303,)]
+    rows = list(contest_db.conn.execute("SELECT dk_id, start_date FROM contests"))
+    expected_start = datetime.datetime.fromtimestamp(1700000000).strftime("%Y-%m-%d %H:%M:%S")
+    assert rows == [(303, expected_start)]
 
 
 def test_sync_draft_group_start_dates_empty_input(contest_db):
