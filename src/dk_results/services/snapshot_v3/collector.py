@@ -198,7 +198,12 @@ def _normalize_contest_state(raw_state: Any, completed: Any) -> str | None:
 
 
 def _completed_at_for(resolved: _ResolvedContest, state: str | None) -> str | None:
-    """The stored ``completed_at``, only for a genuinely completed (never cancelled) contest."""
+    """The stored ``completed_at``, only for a genuinely completed (never cancelled) contest.
+
+    ``update_contest`` never stamps ``CANCELLED``; this guard is defence in depth against a
+    hand-edited database. ``state`` alone cannot exclude cancelled contests, because they
+    carry ``completed=1`` and normalise to ``"completed"``.
+    """
     cancelled = str(resolved.contest_state or "").strip().lower() in {"cancelled", "canceled"}
     return None if state != "completed" or cancelled else resolved.completed_at
 

@@ -19,3 +19,4 @@ A completed contest would otherwise never reach the feed, because selection filt
 - The window republishes near-identical snapshots each cycle until it closes. The window length is the knob.
 - `completed_at` is the producer's observation time, so it lags DraftKings' actual end by up to one `CompletionProcessor` cycle.
 - The `completed_at` column is added by `ContestDatabase.ensure_schema`, not by dfs-common's `init_schema`. `update_contests` therefore calls `ensure_schema` right after `init_schema`, so the completion job cannot write before the column exists even if `dkcontests` has not yet run on a legacy database.
+- The feed path does not call `ensure_schema`. Until `update_contests` or `dkcontests` has run once on a legacy database, the feed's completed-contest fallback logs a SQLite error each cycle and publishes nothing for it. It self-heals after that first run.

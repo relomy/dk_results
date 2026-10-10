@@ -20,7 +20,13 @@ _UTC_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
 
 
 def _format_utc(moment: datetime.datetime) -> str:
-    """Render a tz-aware moment as the fixed-width UTC text used for ``completed_at``."""
+    """Render a tz-aware moment as the fixed-width UTC text used for ``completed_at``.
+
+    Raises ``ValueError`` for a naive moment: ``astimezone()`` would silently read it as
+    host-local time and shift both the stamp and the window cutoff by the UTC offset.
+    """
+    if moment.tzinfo is None:
+        raise ValueError("completed_at moments must be timezone-aware")
     return moment.astimezone(datetime.timezone.utc).strftime(_UTC_FORMAT)
 
 

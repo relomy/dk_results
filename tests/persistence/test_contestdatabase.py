@@ -877,3 +877,15 @@ def test_contest_completed_at_is_none_without_a_stamp(contest_db, status):
 
 def test_contest_completed_at_is_none_for_an_unknown_contest(contest_db):
     assert contest_db.get_contest_completed_at(999) is None
+
+
+def test_update_contest_rejects_naive_now(contest_db):
+    with pytest.raises(ValueError):
+        contest_db.update_contest(
+            1, positions_paid=1, status="COMPLETED", completed=1, now=datetime.datetime(2026, 10, 5, 4, 0)
+        )
+
+
+def test_get_recently_completed_contest_rejects_naive_now(contest_db):
+    with pytest.raises(ValueError):
+        contest_db.get_recently_completed_contest("NBA", entry_fee=5, now=datetime.datetime(2026, 10, 5, 4, 0))
