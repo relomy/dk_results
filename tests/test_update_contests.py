@@ -329,6 +329,17 @@ def test_check_contests_for_completion_delegates_to_processor(monkeypatch, memor
 # ── main() ───────────────────────────────────────────────────────────────────
 
 
+class _StubSchemaDb:
+    def __init__(self, path):
+        self.path = path
+
+    def ensure_schema(self):
+        pass
+
+    def close(self):
+        pass
+
+
 def test_main_handles_sqlite_error_without_state_dir(monkeypatch):
     def boom(_path):
         raise sqlite3.Error("boom")
@@ -355,6 +366,7 @@ def test_main_uses_dfs_common_schema_init(monkeypatch):
 
     monkeypatch.setattr(update_contests.state, "contests_db_path", fake_db_path)
     monkeypatch.setattr(update_contests.contests, "init_schema", fake_init_schema)
+    monkeypatch.setattr(update_contests, "ContestDatabase", _StubSchemaDb)
     monkeypatch.setattr(update_contests.sqlite3, "connect", lambda _p: FakeConn())
     monkeypatch.setattr(update_contests, "check_contests_for_completion", lambda _c: None)
 
@@ -378,6 +390,7 @@ def test_main_happy_path(monkeypatch):
     monkeypatch.setenv("DFS_STATE_DIR", "/tmp")
     monkeypatch.setattr(update_contests.state, "contests_db_path", lambda: "/tmp/contests.db")
     monkeypatch.setattr(update_contests.contests, "init_schema", lambda _p: None)
+    monkeypatch.setattr(update_contests, "ContestDatabase", _StubSchemaDb)
 
     update_contests.main()
 
@@ -436,3 +449,30 @@ def test_main_logs_unexpected_error_with_traceback(monkeypatch, caplog):
     errors = [r for r in caplog.records if r.levelno == logging.ERROR]
     assert len(errors) == 1
     assert errors[0].exc_info is not None and errors[0].exc_info[0] is RuntimeError
+
+
+def test_main_migrates_a_legacy_contests_table_to_have_completed_at(monkeypatch, tmp_path):
+    db_path = tmp_path / "contests.db"
+    legacy = sqlite3.connect(db_path)
+    legacy.execute(
+        'CREATE TABLE "contests" ("dk_id" INTEGER PRIMARY KEY, "sport" varchar(10) NOT NULL, '
+        '"name" varchar(50) NOT NULL, "start_date" datetime NOT NULL, "draft_group" INTEGER NOT NULL, '
+        '"total_prizes" INTEGER NOT NULL, "entries" INTEGER NOT NULL, "positions_paid" INTEGER, '
+        '"entry_fee" INTEGER NOT NULL, "entry_count" INTEGER NOT NULL, "max_entry_count" INTEGER NOT NULL, '
+        '"completed" INTEGER NOT NULL DEFAULT 0, "status" TEXT)'
+    )
+    legacy.commit()
+    legacy.close()
+
+    monkeypatch.setattr(update_contests.state, "contests_db_path", lambda: db_path)
+    monkeypatch.setattr(update_contests.contests, "init_schema", lambda _p: None)
+    monkeypatch.setattr(update_contests, "check_contests_for_completion", lambda _c: None)
+
+    update_contests.main()
+
+    check = sqlite3.connect(db_path)
+    try:
+        columns = {row[1] for row in check.execute('PRAGMA table_info("contests")')}
+    finally:
+        check.close()
+    assert "completed_at" in columns

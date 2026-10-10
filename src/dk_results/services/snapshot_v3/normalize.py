@@ -40,6 +40,11 @@ def to_utc_iso(value: datetime.datetime | str | None) -> str | None:
     return value.replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
+def completed_at_field(completed_at: object) -> dict[str, str]:
+    """The ``completed_at`` contest key, omitted (never null) when there is no stamp."""
+    return {"completed_at": str(completed_at)} if completed_at else {}
+
+
 def to_float(value: Any) -> float | None:
     if isinstance(value, (int, float)):
         return float(value)

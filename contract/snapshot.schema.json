@@ -33,6 +33,7 @@
       "description":"One DraftKings contest with its standings, VIP lineups and metrics.",
       "properties":{
         "completed_at":{
+          "description":"ISO-8601 UTC timestamp (YYYY-MM-DDTHH:MM:SSZ, the snapshot_at format) of when the producer first observed the contest completed.",
           "title":"Completed At",
           "type":"string"
         },
