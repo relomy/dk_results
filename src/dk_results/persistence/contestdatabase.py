@@ -249,7 +249,7 @@ class ContestDatabase:
                 contest.sport,
                 contest.id,
                 contest.name,
-                contest.start_dt,
+                contest.start_dt.isoformat(sep=" "),
                 contest.draft_group,
                 contest.total_prizes,
                 contest.entries,

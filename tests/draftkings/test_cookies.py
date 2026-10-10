@@ -2,6 +2,7 @@ import logging
 import os
 import pickle
 import runpy
+import sys
 from http.cookiejar import Cookie
 
 import pytest
@@ -16,6 +17,8 @@ def test_importing_cookies_does_not_load_dotenv(monkeypatch):
         "dotenv.load_dotenv",
         lambda *_args, **_kwargs: calls.__setitem__("dotenv", calls["dotenv"] + 1),
     )
+
+    monkeypatch.delitem(sys.modules, "dk_results.draftkings.cookies")
 
     runpy.run_module("dk_results.draftkings.cookies", run_name="cookies_import_probe")
 
