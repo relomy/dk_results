@@ -67,10 +67,12 @@ def write_snapshot_payload(path: pathlib.Path, payload: dict[str, Any]) -> None:
     path.write_text(to_stable_json(payload), encoding="utf-8")
 
 
-def build_default_processor(*, write_optimal_lineup: bool = True) -> SportProcessor:
+def build_default_processor(
+    *, write_optimal_lineup: bool = True, contest_db: ContestDatabase | None = None
+) -> SportProcessor:
     """Construct the production SportProcessor with its real ports and config."""
     return SportProcessor(
-        contest_db=ContestDatabase(str(state.contests_db_path())),
+        contest_db=contest_db if contest_db is not None else ContestDatabase(str(state.contests_db_path())),
         dk=DraftKings(),
         sheet_factory=lambda sport: build_dfs_sheet_service(sport),
         bonus_sender=_build_bonus_sender(),
@@ -96,6 +98,29 @@ def _log_contest_selection(selected: Mapping[str, int], idle: list[str], *, requ
         logger.debug("contest_selection idle=%s", ",".join(idle))
 
 
+def _partition_live_contests(
+    processor: SportProcessor,
+    sport_names: list[str],
+    choices: Mapping[str, SportType],
+) -> tuple[dict[str, int], list[str]]:
+    """Run each sport through the processor; return (selected, idle) sports.
+
+    Only a sport with no live contest is idle. A sport whose standings were
+    unavailable/unparseable is neither selected nor idle, so one bad sport
+    degrades that sport only.
+    """
+    selected: dict[str, int] = {}
+    idle: list[str] = []
+    for sport_name in sport_names:
+        try:
+            selected[sport_name] = processor.run(sport_name, choices[sport_name])
+        except NoLiveContestError:
+            idle.append(sport_name)
+        except (StandingsUnavailableError, StandsParseError):
+            continue
+    return selected, idle
+
+
 def select_live_contests(
     processor: SportProcessor,
     sport_names: list[str],
@@ -108,17 +133,30 @@ def select_live_contests(
     normal case, so they are reported in one summary line (and one DEBUG line
     naming them) rather than logged individually.
     """
-    selected: dict[str, int] = {}
-    idle: list[str] = []
-    for sport_name in sport_names:
-        try:
-            selected[sport_name] = processor.run(sport_name, choices[sport_name])
-        except NoLiveContestError:
-            idle.append(sport_name)
-        except (StandingsUnavailableError, StandsParseError):
-            continue
+    selected, idle = _partition_live_contests(processor, sport_names, choices)
     _log_contest_selection(selected, idle, requested=len(sport_names))
     return selected
+
+
+def _recently_completed_selection(
+    contest_db: ContestDatabase,
+    idle: list[str],
+    choices: Mapping[str, SportType],
+    now: datetime.datetime | None,
+) -> dict[str, int]:
+    """Map each idle sport to its primary contest completed inside the completion window."""
+    now = now or datetime.datetime.now(datetime.timezone.utc)
+    filled: dict[str, int] = {}
+    for sport_name in idle:
+        sport_cls = choices[sport_name]
+        row = contest_db.get_recently_completed_contest(
+            sport_cls.name, sport_cls.sheet_min_entry_fee, sport_cls.keyword, now=now
+        )
+        if row:
+            filled[sport_name] = row[0]
+    if filled:
+        logger.info("contest_selection completed_in_window=%s", ",".join(filled))
+    return filled
 
 
 def build_live_snapshot(
@@ -126,16 +164,25 @@ def build_live_snapshot(
     *,
     standings_limit: int = DEFAULT_STANDINGS_LIMIT,
     processor: SportProcessor | None = None,
+    contest_db: ContestDatabase | None = None,
+    now: datetime.datetime | None = None,
 ) -> dict[str, Any] | None:
     """Select live contests via the DB-driven processor and build a multi-sport
     snapshot envelope. Returns ``None`` when no contest was selected.
+
+    A sport with no live contest is filled from its primary ``COMPLETED``
+    contest still inside the completion window (ADR-0015); a live contest in
+    the same sport always wins. ``now`` (tz-aware) exists for testing.
 
     This is the build step the snapshot feed reuses; it does not reimplement
     snapshot shaping (``build_snapshot_payload`` owns that).
     """
     choices = get_sport_choices()
-    processor = processor if processor is not None else build_default_processor()
-    selected = select_live_contests(processor, sport_names, choices)
+    contest_db = contest_db or ContestDatabase(str(state.contests_db_path()))
+    processor = processor if processor is not None else build_default_processor(contest_db=contest_db)
+    selected, idle = _partition_live_contests(processor, sport_names, choices)
+    _log_contest_selection(selected, idle, requested=len(sport_names))
+    selected = {**selected, **_recently_completed_selection(contest_db, idle, choices, now)}
     if not selected:
         return None
     return build_snapshot_payload(selected, standings_limit=standings_limit)

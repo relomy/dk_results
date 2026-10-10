@@ -1638,3 +1638,34 @@ def test_projection_and_minutes_follow_the_lowest_entry_key_per_field(monkeypatc
 
     assert rows["Held"]["rt_projection"] == 5.5
     assert rows["Held"]["time_remaining_minutes"] == 30
+
+
+def test_collect_reads_standings_and_draftables_for_a_completed_contest(monkeypatch, tmp_path) -> None:
+    """A completed contest (the completion-window fallback) is read like a live one."""
+    monkeypatch.setattr(collector, "SALARY_DIR", str(tmp_path))
+    users = [_field_user(1, "e1", 0.10), _field_user(2, "e2", 0.20)]
+    results = SimpleNamespace(
+        vip_list=[],
+        players={},
+        users=users,
+        non_cashing_users=0,
+        non_cashing_avg_pmr=None,
+        min_rank=0,
+        min_cash_pts=0.0,
+        non_cashing_players={},
+    )
+    monkeypatch.setattr(collector, "load_vips", lambda: [])
+    monkeypatch.setattr(collector, "parse_contest_standings", lambda *a, **k: results)
+    monkeypatch.setattr(collector, "fetch_vip_lineups", lambda *a, **k: [])
+    row = ContestRow(
+        dk_id=321, name="C", draft_group=8, positions_paid=10, start_date="2026-01-04", entry_fee=5, entries=100
+    )
+    db = _FakeContestDB(by_id=row, state=("COMPLETED", 1))
+    dk = _FakeDK(standings_rows=[["header"], ["row"]], leaderboard={})
+
+    raw = collector._collect_source_snapshot(sport="NBA", contest_id=321, dk=dk, contest_db=db)
+
+    assert raw["contest"]["state"] == "completed"
+    assert [row["entry_key"] for row in raw["standings"]] == ["e1", "e2"]
+    assert dk.draftables_requests == [8]
+    assert dk.salary_path is not None
