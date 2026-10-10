@@ -454,7 +454,7 @@ def test_get_incomplete_contests_error_returns_none():
 def test_update_contest_writes_fields(contest_db):
     _insert_contest(contest_db, dk_id=1, positions_paid=None, status="LIVE", completed=0)
 
-    contest_db.update_contest(1, positions_paid=42, status="COMPLETED", completed=1)
+    contest_db.update_contest(1, positions_paid=42, status="COMPLETED", completed=1, now=_T0)
 
     assert contest_db.get_contest_state(1) == ("COMPLETED", 1)
     row = contest_db.get_contest_by_id(1)
@@ -475,7 +475,7 @@ def test_update_contest_handles_error(caplog):
 
     db = ContestDatabase.from_connection(BoomConn())  # type: ignore[arg-type]
     with caplog.at_level(logging.ERROR):
-        db.update_contest(1, positions_paid=1, status="LIVE", completed=0)
+        db.update_contest(1, positions_paid=1, status="LIVE", completed=0, now=_T0)
     assert any("update_contest" in rec.message for rec in caplog.records)
 
 
@@ -679,7 +679,7 @@ _SQLITE_ERROR_CALLS = {
     "get_next_upcoming_contest": lambda db: db.get_next_upcoming_contest("NBA"),
     "get_next_upcoming_contest_any": lambda db: db.get_next_upcoming_contest_any("NBA"),
     "get_incomplete_contests": lambda db: db.get_incomplete_contests(),
-    "update_contest": lambda db: db.update_contest(1, positions_paid=1, status="LIVE", completed=0),
+    "update_contest": lambda db: db.update_contest(1, positions_paid=1, status="LIVE", completed=0, now=_T0),
     "get_contest_by_id": lambda db: db.get_contest_by_id(1),
     "get_contest_state": lambda db: db.get_contest_state(1),
     "get_contest_contract_metadata": lambda db: db.get_contest_contract_metadata(1),

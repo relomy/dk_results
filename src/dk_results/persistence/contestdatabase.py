@@ -545,7 +545,7 @@ class ContestDatabase:
         positions_paid: int | None,
         status: str | None,
         completed: int,
-        now: datetime.datetime | None = None,
+        now: datetime.datetime,
     ) -> None:
         """
         Update the mutable state fields for a single contest.
@@ -559,7 +559,7 @@ class ContestDatabase:
             positions_paid (int | None): Number of paid positions.
             status (str | None): Contest status string.
             completed (int): Completion flag (0 or 1).
-            now (datetime | None): Observation time for the stamp; defaults to the current UTC time.
+            now (datetime): Tz-aware observation time used for the ``completed_at`` stamp.
         """
         cur = self.conn.cursor()
         sql = (
@@ -567,7 +567,7 @@ class ContestDatabase:
             "completed_at=CASE WHEN ?=1 THEN COALESCE(completed_at, ?) ELSE completed_at END "
             "WHERE dk_id=?"
         )
-        stamp = _format_utc(now if now is not None else datetime.datetime.now(datetime.timezone.utc))
+        stamp = _format_utc(now)
         try:
             cur.execute(sql, (positions_paid, status, completed, int(status == COMPLETED_STATUS), stamp, dk_id))
             self.conn.commit()
