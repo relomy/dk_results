@@ -10,6 +10,19 @@ from dk_results.domain.contest import Contest
 
 _T = TypeVar("_T")
 
+COMPLETED_STATUS = "COMPLETED"
+
+# How long after its completed-at a COMPLETED contest stays in the snapshot
+# feed for a sport with no live contest (ADR-0015).
+COMPLETION_WINDOW = datetime.timedelta(hours=18)
+
+_UTC_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
+
+
+def _format_utc(moment: datetime.datetime) -> str:
+    """Render a tz-aware moment as the fixed-width UTC text used for ``completed_at``."""
+    return moment.astimezone(datetime.timezone.utc).strftime(_UTC_FORMAT)
+
 
 def _sqlite_guard(
     default_factory: Callable[[], _T] = lambda: None, *, rollback: bool = False
@@ -142,7 +155,8 @@ class ContestDatabase:
             "entry_count"   INTEGER NOT NULL,
             "max_entry_count"       INTEGER NOT NULL,
             "completed"     INTEGER NOT NULL DEFAULT 0,
-            "status"        TEXT
+            "status"        TEXT,
+            "completed_at"  TEXT
         );
         """
         self.conn.execute(sql)
@@ -165,6 +179,8 @@ class ContestDatabase:
             cur.execute('ALTER TABLE "contests" ADD COLUMN "cash_line_rank" INTEGER')
         if "cash_line_points" not in existing_columns:
             cur.execute('ALTER TABLE "contests" ADD COLUMN "cash_line_points" REAL')
+        if "completed_at" not in existing_columns:
+            cur.execute('ALTER TABLE "contests" ADD COLUMN "completed_at" TEXT')
 
     def _create_vip_cash_status_table(self) -> None:
         """Create the vip_cash_status table if it does not exist."""
@@ -393,6 +409,47 @@ class ContestDatabase:
             self.logger.exception("sqlite error in get_live_contests()")
             return []
 
+    def get_recently_completed_contest(
+        self,
+        sport: str,
+        entry_fee: int = 25,
+        keyword: str = "%",
+        *,
+        now: datetime.datetime,
+    ) -> tuple | None:
+        """
+        Get the primary ``COMPLETED`` contest for a sport whose ``completed_at``
+        is inside the completion window, using the same preference as
+        ``get_live_contest``. Cancelled contests and contests completed before
+        ``completed_at`` existed (NULL) never match.
+
+        Returns:
+            tuple | None: (dk_id, name, draft_group, positions_paid, start_date) if found, else None.
+        """
+        cur = self.conn.cursor()
+        try:
+            cutoff = _format_utc(now - COMPLETION_WINDOW)
+            base_sql = (
+                "SELECT dk_id, name, draft_group, positions_paid, start_date "
+                "FROM contests "
+                "WHERE sport=? "
+                "  AND name LIKE ? "
+                "  AND status=? "
+                "  AND completed_at IS NOT NULL "
+                "  AND completed_at > ? "
+            )
+            ordering = " ORDER BY entry_fee DESC, entries DESC, start_date DESC, dk_id DESC LIMIT 1"
+            args = (sport, keyword, COMPLETED_STATUS, cutoff)
+            cur.execute(base_sql + "  AND entry_fee >= ?" + ordering, (*args, entry_fee))
+            row = cur.fetchone()
+            if row:
+                return row
+            cur.execute(base_sql + "  AND entry_fee < ?" + ordering, (*args, entry_fee))
+            return cur.fetchone()
+        except sqlite3.Error:
+            self.logger.exception("sqlite error in get_recently_completed_contest() (%s)", self.sqlite_path)
+            return None
+
     def get_next_upcoming_contest(self, sport: str, entry_fee: int = 25, keyword: str = "%") -> tuple | None:
         """
         Get the next upcoming contest matching the criteria.
@@ -481,20 +538,38 @@ class ContestDatabase:
             self.logger.exception("sqlite error in get_incomplete_contests()")
             return None
 
-    def update_contest(self, dk_id: int, *, positions_paid: int | None, status: str | None, completed: int) -> None:
+    def update_contest(
+        self,
+        dk_id: int,
+        *,
+        positions_paid: int | None,
+        status: str | None,
+        completed: int,
+        now: datetime.datetime | None = None,
+    ) -> None:
         """
         Update the mutable state fields for a single contest.
+
+        The first time the status is ``COMPLETED`` the contest is stamped with
+        ``completed_at`` (UTC, ``now``); the stamp never changes afterwards.
+        ``CANCELLED`` and other statuses are never stamped.
 
         Args:
             dk_id (int): Contest to update.
             positions_paid (int | None): Number of paid positions.
             status (str | None): Contest status string.
             completed (int): Completion flag (0 or 1).
+            now (datetime | None): Observation time for the stamp; defaults to the current UTC time.
         """
         cur = self.conn.cursor()
-        sql = "UPDATE contests SET positions_paid=?, status=?, completed=? WHERE dk_id=?"
+        sql = (
+            "UPDATE contests SET positions_paid=?, status=?, completed=?, "
+            "completed_at=CASE WHEN ?=1 THEN COALESCE(completed_at, ?) ELSE completed_at END "
+            "WHERE dk_id=?"
+        )
+        stamp = _format_utc(now if now is not None else datetime.datetime.now(datetime.timezone.utc))
         try:
-            cur.execute(sql, (positions_paid, status, completed, dk_id))
+            cur.execute(sql, (positions_paid, status, completed, int(status == COMPLETED_STATUS), stamp, dk_id))
             self.conn.commit()
             self.logger.info(
                 "contest_update contest_id=%s positions_paid=%s status=%r completed=%s rows=%d",

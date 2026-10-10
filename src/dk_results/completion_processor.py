@@ -26,7 +26,7 @@ import datetime
 import hashlib
 import json
 import logging
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from typing import Any, Protocol
@@ -247,7 +247,9 @@ class CompletionProcessor:
         presence: PresenceOracle | None,
         bonus_sender: BonusSenderPort | None,
         config: CompletionProcessorConfig,
+        clock: Callable[[], datetime.datetime] | None = None,
     ) -> None:
+        self._clock = clock or (lambda: datetime.datetime.now(datetime.timezone.utc))
         self._db = contest_db
         self._results = results
         self._presence = presence
@@ -529,6 +531,7 @@ class CompletionProcessor:
                 positions_paid=contest_data["positions_paid"],
                 status=new_status,
                 completed=new_completed,
+                now=self._clock(),
             )
         else:
             skip_draft_groups.append(draft_group)
