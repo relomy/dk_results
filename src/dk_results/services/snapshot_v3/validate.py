@@ -54,6 +54,12 @@ def _prefix_contract_path(sport: str, message: str) -> str:
     return message.replace("contest.", f"sports.{sport}.contests[0].")
 
 
+def _validate_contest_completed_at(sport: str, contest: dict[str, Any]) -> list[str]:
+    if "completed_at" not in contest or _is_valid_timestamp(contest["completed_at"]):
+        return []
+    return [f"sports.{sport}.contests[0].completed_at must be a valid ISO timestamp"]
+
+
 def _validate_contest_required_fields(sport: str, contest: dict[str, Any]) -> list[str]:
     violations: list[str] = []
     required_fields: dict[str, type] = {
@@ -80,6 +86,7 @@ def _validate_contest_required_fields(sport: str, contest: dict[str, Any]) -> li
         violations.append(f"sports.{sport}.contests[0].start_time must be a valid ISO timestamp")
     if contest.get("max_entries_per_user") is not None and not _has_type(contest["max_entries_per_user"], int):
         violations.append(f"sports.{sport}.contests[0].max_entries_per_user has invalid type")
+    violations.extend(_validate_contest_completed_at(sport, contest))
     return violations
 
 

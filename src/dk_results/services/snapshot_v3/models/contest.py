@@ -30,6 +30,7 @@ class Contest(ContractModel):
     max_entries_per_user: StrictInt | None
     entry_fee_cents: StrictInt
     prize_pool_cents: StrictInt
+    completed_at: StrictStr = omittable()
     positions_paid: Annotated[StrictInt, Field(ge=1)] = omittable()
     standings: list[StandingsRow]
     vip_lineups: list[VipLineupRow]

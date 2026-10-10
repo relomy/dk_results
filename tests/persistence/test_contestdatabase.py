@@ -685,6 +685,7 @@ _SQLITE_ERROR_CALLS = {
     "get_contest_contract_metadata": lambda db: db.get_contest_contract_metadata(1),
     "get_live_contest_candidates": lambda db: db.get_live_contest_candidates("NBA"),
     "get_cash_line": lambda db: db.get_cash_line(1),
+    "get_contest_completed_at": lambda db: db.get_contest_completed_at(1),
 }
 
 
@@ -857,3 +858,22 @@ def test_ensure_schema_adds_completed_at_to_preexisting_database_file(tmp_path):
         assert db.get_recently_completed_contest("NBA", now=_T0) is not None
     finally:
         db.close()
+
+
+def test_contest_completed_at_reads_the_stored_stamp_in_snapshot_format(contest_db):
+    _insert_contest(contest_db, dk_id=1)
+    _complete(contest_db, 1, _T0)
+
+    assert contest_db.get_contest_completed_at(1) == "2026-10-10T12:00:00Z"
+
+
+@pytest.mark.parametrize("status", ["LIVE", "CANCELLED"])
+def test_contest_completed_at_is_none_without_a_stamp(contest_db, status):
+    _insert_contest(contest_db, dk_id=1)
+    _complete(contest_db, 1, _T0, status=status)
+
+    assert contest_db.get_contest_completed_at(1) is None
+
+
+def test_contest_completed_at_is_none_for_an_unknown_contest(contest_db):
+    assert contest_db.get_contest_completed_at(999) is None
