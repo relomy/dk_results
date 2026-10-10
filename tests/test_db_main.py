@@ -1046,3 +1046,25 @@ def test_build_live_snapshot_does_not_fill_a_sport_whose_live_standings_were_una
 
     assert payload is None
     assert calls == []
+
+
+def test_build_live_snapshot_fills_an_idle_sport_but_not_one_with_unavailable_standings(monkeypatch):
+    calls = _capture_selection(monkeypatch)
+    db = _completed_db(sport="NFL", dk_id=900)
+    db.conn.execute(
+        "INSERT INTO contests (dk_id, sport, name, start_date, draft_group, total_prizes, entries, "
+        "entry_fee, entry_count, max_entry_count) VALUES (901, 'NBA', 'Main', '2024-01-01 00:00:00', 1, 1000, "
+        "100, 50, 0, 1)"
+    )
+    db.conn.commit()
+    db.update_contest(901, positions_paid=10, status="COMPLETED", completed=1, now=_NOW)
+
+    class _NflUnavailableNbaIdle:
+        def run(self, sport_name, sport_cls):
+            if sport_name == "NFL":
+                raise StandingsUnavailableError(sport_name)
+            raise NoLiveContestError(sport_name)
+
+    db_main.build_live_snapshot(["NFL", "NBA"], processor=_NflUnavailableNbaIdle(), contest_db=db, now=_NOW)
+
+    assert calls == [{"NBA": 901}]

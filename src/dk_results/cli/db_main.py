@@ -138,7 +138,7 @@ def select_live_contests(
     return selected
 
 
-def _recently_completed_selection(
+def _recently_completed_contest_ids(
     contest_db: ContestDatabase,
     idle: list[str],
     choices: Mapping[str, SportType],
@@ -182,7 +182,7 @@ def build_live_snapshot(
     processor = processor if processor is not None else build_default_processor(contest_db=contest_db)
     selected, idle = _partition_live_contests(processor, sport_names, choices)
     _log_contest_selection(selected, idle, requested=len(sport_names))
-    selected = {**selected, **_recently_completed_selection(contest_db, idle, choices, now)}
+    selected = {**selected, **_recently_completed_contest_ids(contest_db, idle, choices, now)}
     if not selected:
         return None
     return build_snapshot_payload(selected, standings_limit=standings_limit)
