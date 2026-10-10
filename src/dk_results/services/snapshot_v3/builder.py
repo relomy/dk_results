@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from dk_results.services.snapshot_v3.derive import bundle_has_game_status
+from dk_results.services.snapshot_v3.normalize import completed_at_field
 
 
 def _money_to_cents(value: Any) -> int | None:
@@ -55,11 +56,6 @@ def _cash_line_metric(cash_line: dict[str, Any]) -> dict[str, Any] | None:
     return {"cutoff_type": cutoff_type, **cutoffs}
 
 
-def _completed_at_field(raw_contest: dict[str, Any]) -> dict[str, str]:
-    completed_at = raw_contest.get("completed_at")
-    return {"completed_at": str(completed_at)} if completed_at else {}
-
-
 def _build_contest(raw_bundle: dict[str, Any], derived: dict[str, Any], generated_at: str) -> dict[str, Any]:
     raw_contest = dict(raw_bundle.get("contest") or {})
     sport = str(raw_contest.get("sport") or raw_bundle.get("sport") or "").lower()
@@ -83,7 +79,7 @@ def _build_contest_fields(
         }
     )
     fields.update(_positions_paid_field(raw_contest))
-    fields.update(_completed_at_field(raw_contest))
+    fields.update(completed_at_field(raw_contest.get("completed_at")))
     return fields
 
 

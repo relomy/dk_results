@@ -25,6 +25,7 @@ from dk_results.persistence.contestdatabase import ContestDatabase, ContestRow
 from dk_results.services.snapshot_v3 import sections
 from dk_results.services.snapshot_v3.constants import DEFAULT_STANDINGS_LIMIT
 from dk_results.services.snapshot_v3.normalize import (
+    completed_at_field,
     is_live_from_slot,
     is_locked_snapshot_slot,
     normalize_name,
@@ -196,12 +197,10 @@ def _normalize_contest_state(raw_state: Any, completed: Any) -> str | None:
     return None
 
 
-def _completed_at_field(resolved: _ResolvedContest, state: str | None) -> dict[str, str]:
+def _completed_at_for(resolved: _ResolvedContest, state: str | None) -> str | None:
     """The stored ``completed_at``, only for a genuinely completed (never cancelled) contest."""
     cancelled = str(resolved.contest_state or "").strip().lower() in {"cancelled", "canceled"}
-    if state != "completed" or cancelled or not resolved.completed_at:
-        return {}
-    return {"completed_at": str(resolved.completed_at)}
+    return None if state != "completed" or cancelled else resolved.completed_at
 
 
 def _derive_composite_player_key(sport: str, row: dict[str, Any]) -> str | None:
@@ -727,7 +726,7 @@ def _assemble_source_bundle(
             "is_primary": True,
             "contest_type": "classic",
             "state": state,
-            **_completed_at_field(resolved, state),
+            **completed_at_field(_completed_at_for(resolved, state)),
             "entry_fee": resolved.entry_fee,
             "currency": "USD",
             "entries": resolved.max_entries,
