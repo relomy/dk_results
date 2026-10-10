@@ -271,6 +271,28 @@ def _zero_vip_bundle() -> dict[str, Any]:
     }
 
 
+def _completed_nba_bundle() -> dict[str, Any]:
+    """NBA contest that finished: state ``completed`` plus the producer's ``completed_at`` stamp."""
+    bundle = deepcopy(_zero_vip_bundle())
+    contest_id = "300500"
+    bundle["contest"].update(
+        {
+            "contest_id": contest_id,
+            "name": "NBA $5 Double Up (Final)",
+            "state": "completed",
+            "completed_at": "2026-10-05T04:12:30Z",
+        }
+    )
+    bundle["selected_contest_id"] = contest_id
+    bundle["selection_reason"] = {"mode": "explicit_id", "criteria": {"contest_id": contest_id}}
+    for player in bundle["players"]:
+        player["game_status"] = "Final"
+    for row in bundle["standings"]:
+        row["ownership_remaining_total_pct"] = 0.0
+        row["remaining_salary"] = 0
+    return bundle
+
+
 def _mlb_bundle() -> dict[str, Any]:
     """MLB: Game status present, but no non-cashing player tally and so no swing players."""
     final, live, pregame = "Final", "In Progress", "NYY@BOS 07:10PM ET"
@@ -455,6 +477,9 @@ class _NflContestDatabase:
         return None
 
     def get_contest_contract_metadata(self, _dk_id: int) -> None:
+        return None
+
+    def get_contest_completed_at(self, _dk_id: int) -> None:
         return None
 
 
@@ -711,5 +736,6 @@ SCENARIOS: tuple[Scenario, ...] = (
     Scenario("golf", "GOLF", 300100, _golf_bundle),
     Scenario("zero_vip", "NBA", 300200, _zero_vip_bundle),
     Scenario("mlb", "MLB", 300300, _mlb_bundle),
+    Scenario("completed_nba", "NBA", 300500, _completed_nba_bundle),
     Scenario("nfl_mid_slate", "NFL", 300400, _nfl_mid_slate_bundle),
 )

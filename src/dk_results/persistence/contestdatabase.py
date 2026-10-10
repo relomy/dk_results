@@ -678,6 +678,21 @@ class ContestDatabase:
         self.conn.commit()
 
     @_sqlite_guard()
+    def get_contest_completed_at(self, dk_id: int) -> str | None:
+        """
+        Fetch the stored ``completed_at`` stamp (UTC text) for a contest.
+
+        Returns:
+            str | None: The stamp, or None when the contest is unknown, was never
+                stamped (not completed, cancelled, or completed before the column
+                existed) or on SQLite error.
+        """
+        cur = self.conn.cursor()
+        cur.execute('SELECT "completed_at" FROM "contests" WHERE "dk_id"=? LIMIT 1', (dk_id,))
+        row = cur.fetchone()
+        return row[0] if row is not None and row[0] else None
+
+    @_sqlite_guard()
     def get_cash_line(self, dk_id: int) -> tuple[int | None, float | None] | None:
         """
         Fetch the persisted cash line for a contest.

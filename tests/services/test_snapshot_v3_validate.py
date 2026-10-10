@@ -107,6 +107,20 @@ def test_validate_v3_envelope_enforces_contest_required_fields_and_types() -> No
         )
 
 
+def test_validate_v3_envelope_accepts_a_completed_at_timestamp() -> None:
+    payload = _valid_envelope()
+    payload["sports"]["nba"]["contests"][0]["completed_at"] = "2026-02-25T09:30:00Z"
+    assert validate_v3_envelope(payload) == []
+
+
+@pytest.mark.parametrize("bad_value", ["not-a-timestamp", "", 12, None])
+def test_validate_v3_envelope_rejects_a_malformed_or_null_completed_at(bad_value) -> None:
+    payload = _valid_envelope()
+    payload["sports"]["nba"]["contests"][0]["completed_at"] = bad_value
+    violations = validate_v3_envelope(payload)
+    assert any("contests[0].completed_at" in violation for violation in violations)
+
+
 def test_validate_v3_envelope_requires_exactly_one_contest() -> None:
     payload = _valid_envelope()
     payload["sports"]["nba"]["contests"] = []

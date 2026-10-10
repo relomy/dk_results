@@ -55,6 +55,11 @@ def _cash_line_metric(cash_line: dict[str, Any]) -> dict[str, Any] | None:
     return {"cutoff_type": cutoff_type, **cutoffs}
 
 
+def _completed_at_field(raw_contest: dict[str, Any]) -> dict[str, str]:
+    completed_at = raw_contest.get("completed_at")
+    return {"completed_at": str(completed_at)} if completed_at else {}
+
+
 def _build_contest(raw_bundle: dict[str, Any], derived: dict[str, Any], generated_at: str) -> dict[str, Any]:
     raw_contest = dict(raw_bundle.get("contest") or {})
     sport = str(raw_contest.get("sport") or raw_bundle.get("sport") or "").lower()
@@ -78,6 +83,7 @@ def _build_contest_fields(
         }
     )
     fields.update(_positions_paid_field(raw_contest))
+    fields.update(_completed_at_field(raw_contest))
     return fields
 
 
