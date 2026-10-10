@@ -45,6 +45,8 @@ Beyond field types, the models reject an envelope (and fail the build) when:
   empty (the metric is omitted instead);
 - `metrics.non_cashing.top_remaining_players` has more than 10 rows;
 - `contest.positions_paid` is below 1;
+- `contest.completed_at` is present but not a valid ISO timestamp (the validator
+  also rejects `null`);
 - `metrics.non_cashing.users_not_cashing` exceeds `max_entries` minus
   `positions_paid` (see below);
 - a `cash_line` has neither cutoff, or lacks the cutoff its `cutoff_type`
@@ -150,6 +152,24 @@ the guard for that.
 
 Omitted when DraftKings reports no payout positions. It bounds the non-cashing
 count (see `contest.metrics.non_cashing`).
+
+## `contest.completed_at`
+
+| | |
+|---|---|
+| Type | string, optional: ISO-8601 UTC in the `snapshot_at` format (`YYYY-MM-DDTHH:MM:SSZ`) |
+| Location | `sports.<sport>.contests[0]` |
+| Meaning | The moment the producer first observed DraftKings reporting the contest `COMPLETED`. |
+
+`completed_at` is the producer's **observation time**, not DraftKings' end time:
+it lags the real end by up to one `CompletionProcessor` cycle, so do not trust it
+beyond that precision. It is stamped once, read from the contest database, and is
+identical on every later snapshot of the same contest, so it is safe to order
+completed contests by it.
+
+The key is **omitted, never null**, for contests that are not completed,
+cancelled contests, and contests that completed before the stamp was recorded.
+Adding it is an additive change.
 
 ## `contest.live_metrics.cash_line`
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from dk_results.services.snapshot_v3.derive import bundle_has_game_status
+from dk_results.services.snapshot_v3.normalize import completed_at_field
 
 
 def _money_to_cents(value: Any) -> int | None:
@@ -78,6 +79,7 @@ def _build_contest_fields(
         }
     )
     fields.update(_positions_paid_field(raw_contest))
+    fields.update(completed_at_field(raw_contest.get("completed_at")))
     return fields
 
 

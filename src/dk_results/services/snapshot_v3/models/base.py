@@ -15,13 +15,13 @@ class _OmittableMarker:
         schema.pop("default", None)
 
 
-def omittable() -> Any:
+def omittable(description: str | None = None) -> Any:
     """Declare an optional field that is omitted when absent, never null.
 
     The field is not required and a null value is rejected. Fields the contract
     explicitly allows to be null are declared required as ``T | None`` instead.
     """
-    return Field(default=None, json_schema_extra=_OmittableMarker())
+    return Field(default=None, description=description, json_schema_extra=_OmittableMarker())
 
 
 class ContractModel(BaseModel):

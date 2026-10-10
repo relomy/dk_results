@@ -25,6 +25,7 @@ from dk_results.persistence.contestdatabase import ContestDatabase, ContestRow
 from dk_results.services.snapshot_v3 import sections
 from dk_results.services.snapshot_v3.constants import DEFAULT_STANDINGS_LIMIT
 from dk_results.services.snapshot_v3.normalize import (
+    completed_at_field,
     is_live_from_slot,
     is_locked_snapshot_slot,
     normalize_name,
@@ -194,6 +195,17 @@ def _normalize_contest_state(raw_state: Any, completed: Any) -> str | None:
     if text in {"scheduled", "upcoming", "open"}:
         return "upcoming"
     return None
+
+
+def _completed_at_for(resolved: _ResolvedContest, state: str | None) -> str | None:
+    """The stored ``completed_at``, only for a genuinely completed (never cancelled) contest.
+
+    ``update_contest`` never stamps ``CANCELLED``; this guard is defence in depth against a
+    hand-edited database. ``state`` alone cannot exclude cancelled contests, because they
+    carry ``completed=1`` and normalise to ``"completed"``.
+    """
+    cancelled = str(resolved.contest_state or "").strip().lower() in {"cancelled", "canceled"}
+    return None if state != "completed" or cancelled else resolved.completed_at
 
 
 def _derive_composite_player_key(sport: str, row: dict[str, Any]) -> str | None:
@@ -468,6 +480,7 @@ class _ResolvedContest:
     prize_pool: Any
     max_entries: Any
     max_entries_per_user: Any
+    completed_at: str | None = None
 
 
 def _resolve_selected_contest(
@@ -498,6 +511,7 @@ def _resolve_contest_db_overrides(contest_db: ContestDatabase | None, selected: 
     prize_pool = selected.prize_pool if selected.prize_pool not in (None, "") else None
     max_entries = selected.entries
     max_entries_per_user = selected.max_entries_per_user if selected.max_entries_per_user not in (None, "") else None
+    completed_at: str | None = None
     if contest_db is None:
         return {
             "contest_state": contest_state,
@@ -505,11 +519,13 @@ def _resolve_contest_db_overrides(contest_db: ContestDatabase | None, selected: 
             "prize_pool": prize_pool,
             "max_entries": max_entries,
             "max_entries_per_user": max_entries_per_user,
+            "completed_at": completed_at,
         }
 
     state_row = contest_db.get_contest_state(int(selected.dk_id))
     if state_row:
         contest_state, contest_completed = state_row
+    completed_at = contest_db.get_contest_completed_at(int(selected.dk_id))
     contract_metadata = contest_db.get_contest_contract_metadata(int(selected.dk_id))
     if contract_metadata:
         prize_pool, contest_capacity, per_user_limit, _db_entry_count = contract_metadata
@@ -523,6 +539,7 @@ def _resolve_contest_db_overrides(contest_db: ContestDatabase | None, selected: 
         "prize_pool": prize_pool,
         "max_entries": max_entries,
         "max_entries_per_user": max_entries_per_user,
+        "completed_at": completed_at,
     }
 
 
@@ -563,6 +580,7 @@ def _select_contest(
         prize_pool=overrides["prize_pool"],
         max_entries=overrides["max_entries"],
         max_entries_per_user=overrides["max_entries_per_user"],
+        completed_at=overrides["completed_at"],
     )
 
 
@@ -701,6 +719,7 @@ def _assemble_source_bundle(
     truncation: dict[str, Any],
 ) -> dict[str, Any]:
     """Assemble the raw source-snapshot dict from already-computed pieces (pure)."""
+    state = _normalize_contest_state(resolved.contest_state, resolved.contest_completed)
     return {
         "sport": sport_cls.name,
         "contest": {
@@ -711,7 +730,8 @@ def _assemble_source_bundle(
             "start_time_utc": to_utc_iso(resolved.start_date),
             "is_primary": True,
             "contest_type": "classic",
-            "state": _normalize_contest_state(resolved.contest_state, resolved.contest_completed),
+            "state": state,
+            **completed_at_field(_completed_at_for(resolved, state)),
             "entry_fee": resolved.entry_fee,
             "currency": "USD",
             "entries": resolved.max_entries,

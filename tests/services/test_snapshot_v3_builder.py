@@ -98,3 +98,20 @@ def test_builder_places_live_metrics_and_metrics_and_omits_unavailable_sections(
     contest_without_metrics = payload_without_metrics["contests"][0]
     assert "live_metrics" not in contest_without_metrics
     assert "metrics" not in contest_without_metrics
+
+
+def _build_contest(raw: dict) -> dict:
+    payload = build_sport_payload(raw, derived={}, generated_at="2026-02-25T10:11:12Z")
+    return payload["contests"][0]
+
+
+def test_builder_copies_completed_at_when_the_bundle_has_it() -> None:
+    raw = _raw_bundle_seed()
+    raw["contest"]["state"] = "completed"
+    raw["contest"]["completed_at"] = "2026-02-25T09:30:00Z"
+
+    assert _build_contest(raw)["completed_at"] == "2026-02-25T09:30:00Z"
+
+
+def test_builder_omits_completed_at_when_the_bundle_lacks_it() -> None:
+    assert "completed_at" not in _build_contest(_raw_bundle_seed())

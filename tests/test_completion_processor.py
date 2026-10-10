@@ -41,7 +41,8 @@ CREATE TABLE contests (
     entry_count INTEGER NOT NULL,
     max_entry_count INTEGER NOT NULL,
     completed INTEGER NOT NULL DEFAULT 0,
-    status TEXT
+    status TEXT,
+    completed_at TEXT
 );
 """
 
@@ -193,8 +194,9 @@ def _make_config(
     )
 
 
-def _make_processor(conn, *, results, sender=None, presence=None, config=None):
+def _make_processor(conn, *, results, sender=None, presence=None, config=None, clock=None):
     return CompletionProcessor(
+        clock=clock,
         contest_db=ContestDatabase.from_connection(conn),
         results=results,
         presence=presence,
@@ -486,6 +488,34 @@ def test_state_sync_updates_db_without_sender():
     assert db.get_contest_state(1) == ("COMPLETED", 1)
     row = db.get_contest_by_id(1)
     assert row is not None and row.positions_paid == 42
+
+
+def test_completed_contest_is_stamped_with_the_processor_clock_and_never_moved():
+    conn = _conn_with_table()
+    _insert_contest(conn, dk_id=1, name="Contest1", start_date="2024-01-01 00:00:00", status="LIVE")
+    fixed = datetime.datetime(2026, 10, 10, 12, 0, tzinfo=datetime.timezone.utc)
+    results = FakeContestResults(details={1: _detail(status="COMPLETED", completed=1, positions_paid=42)})
+    _make_processor(conn, results=results, clock=lambda: fixed).run(conn)
+
+    # A later run observes the same COMPLETED status; the stamp must not move.
+    later = fixed + datetime.timedelta(hours=10)
+    results = FakeContestResults(details={1: _detail(status="COMPLETED", completed=1, positions_paid=43)})
+    _make_processor(conn, results=results, clock=lambda: later).run(conn)
+
+    db = ContestDatabase.from_connection(conn)
+    assert db.get_recently_completed_contest("NBA", now=fixed + datetime.timedelta(hours=1)) is not None
+    assert db.get_recently_completed_contest("NBA", now=fixed + datetime.timedelta(hours=19)) is None
+
+
+def test_cancelled_contest_is_not_stamped_by_the_processor():
+    conn = _conn_with_table()
+    _insert_contest(conn, dk_id=1, name="Contest1", start_date="2024-01-01 00:00:00", status="LIVE")
+    results = FakeContestResults(details={1: _detail(status="CANCELLED", completed=1)})
+    _make_processor(conn, results=results).run(conn)
+
+    db = ContestDatabase.from_connection(conn)
+    assert db.get_contest_state(1) == ("CANCELLED", 1)
+    assert db.get_recently_completed_contest("NBA", now=datetime.datetime.now(datetime.timezone.utc)) is None
 
 
 def test_unavailable_results_are_skipped_gracefully():

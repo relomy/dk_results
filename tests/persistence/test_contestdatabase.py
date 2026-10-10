@@ -454,7 +454,7 @@ def test_get_incomplete_contests_error_returns_none():
 def test_update_contest_writes_fields(contest_db):
     _insert_contest(contest_db, dk_id=1, positions_paid=None, status="LIVE", completed=0)
 
-    contest_db.update_contest(1, positions_paid=42, status="COMPLETED", completed=1)
+    contest_db.update_contest(1, positions_paid=42, status="COMPLETED", completed=1, now=_T0)
 
     assert contest_db.get_contest_state(1) == ("COMPLETED", 1)
     row = contest_db.get_contest_by_id(1)
@@ -475,7 +475,7 @@ def test_update_contest_handles_error(caplog):
 
     db = ContestDatabase.from_connection(BoomConn())  # type: ignore[arg-type]
     with caplog.at_level(logging.ERROR):
-        db.update_contest(1, positions_paid=1, status="LIVE", completed=0)
+        db.update_contest(1, positions_paid=1, status="LIVE", completed=0, now=_T0)
     assert any("update_contest" in rec.message for rec in caplog.records)
 
 
@@ -679,12 +679,13 @@ _SQLITE_ERROR_CALLS = {
     "get_next_upcoming_contest": lambda db: db.get_next_upcoming_contest("NBA"),
     "get_next_upcoming_contest_any": lambda db: db.get_next_upcoming_contest_any("NBA"),
     "get_incomplete_contests": lambda db: db.get_incomplete_contests(),
-    "update_contest": lambda db: db.update_contest(1, positions_paid=1, status="LIVE", completed=0),
+    "update_contest": lambda db: db.update_contest(1, positions_paid=1, status="LIVE", completed=0, now=_T0),
     "get_contest_by_id": lambda db: db.get_contest_by_id(1),
     "get_contest_state": lambda db: db.get_contest_state(1),
     "get_contest_contract_metadata": lambda db: db.get_contest_contract_metadata(1),
     "get_live_contest_candidates": lambda db: db.get_live_contest_candidates("NBA"),
     "get_cash_line": lambda db: db.get_cash_line(1),
+    "get_contest_completed_at": lambda db: db.get_contest_completed_at(1),
 }
 
 
@@ -715,3 +716,176 @@ def test_sqlite_errors_are_logged_once_with_a_traceback(method, caplog):
     assert logged_by in errors[0].getMessage()
     assert errors[0].exc_info is not None
     assert errors[0].exc_info[0] is sqlite3.Error
+
+
+# ── Completed contests and the completion window ─────────────────────────────
+
+_T0 = datetime.datetime(2026, 10, 10, 12, 0, tzinfo=datetime.timezone.utc)
+
+
+def _complete(db: ContestDatabase, dk_id: int, at: datetime.datetime, status: str = "COMPLETED") -> None:
+    db.update_contest(dk_id, positions_paid=10, status=status, completed=1, now=at)
+
+
+def test_completed_contest_is_selected_inside_the_window(contest_db):
+    _insert_contest(contest_db, dk_id=1, name="Main", start_date="2024-01-01 00:00:00")
+    _complete(contest_db, 1, _T0)
+
+    row = contest_db.get_recently_completed_contest("NBA", now=_T0 + datetime.timedelta(hours=17))
+
+    assert row is not None
+    assert row[0] == 1
+
+
+def test_completed_contest_leaves_the_window_after_eighteen_hours(contest_db):
+    _insert_contest(contest_db, dk_id=1)
+    _complete(contest_db, 1, _T0)
+
+    assert contest_db.get_recently_completed_contest("NBA", now=_T0 + datetime.timedelta(hours=19)) is None
+
+
+def test_completed_stamp_is_written_once_and_survives_repeated_updates(contest_db):
+    _insert_contest(contest_db, dk_id=1)
+    _complete(contest_db, 1, _T0)
+    _complete(contest_db, 1, _T0 + datetime.timedelta(hours=10))
+
+    # A moved stamp (T0+10h) would still be inside the window at T0+19h.
+    assert contest_db.get_recently_completed_contest("NBA", now=_T0 + datetime.timedelta(hours=19)) is None
+    assert contest_db.get_recently_completed_contest("NBA", now=_T0 + datetime.timedelta(hours=1)) is not None
+
+
+def test_cancelled_contest_is_never_selected_as_completed(contest_db):
+    _insert_contest(contest_db, dk_id=1)
+    _complete(contest_db, 1, _T0, status="CANCELLED")
+
+    assert contest_db.get_recently_completed_contest("NBA", now=_T0) is None
+
+
+def test_contest_completed_before_the_column_existed_is_never_selected(contest_db):
+    _insert_contest(contest_db, dk_id=1, completed=1, status="COMPLETED")
+
+    assert contest_db.get_recently_completed_contest("NBA", now=_T0) is None
+
+
+def test_non_completed_status_does_not_stamp(contest_db):
+    _insert_contest(contest_db, dk_id=1)
+    contest_db.update_contest(1, positions_paid=1, status="LIVE", completed=0, now=_T0)
+
+    assert contest_db.get_recently_completed_contest("NBA", now=_T0) is None
+
+
+def test_recently_completed_prefers_entry_fee_at_or_above_minimum(contest_db):
+    _insert_contest(contest_db, dk_id=1, entry_fee=10, entries=900)
+    _insert_contest(contest_db, dk_id=2, entry_fee=30, entries=100)
+    _complete(contest_db, 1, _T0)
+    _complete(contest_db, 2, _T0)
+
+    row = contest_db.get_recently_completed_contest("NBA", entry_fee=25, now=_T0)
+
+    assert row is not None and row[0] == 2
+
+
+def test_recently_completed_falls_back_below_minimum_and_orders_by_entries(contest_db):
+    _insert_contest(contest_db, dk_id=1, entry_fee=10, entries=100)
+    _insert_contest(contest_db, dk_id=2, entry_fee=10, entries=500)
+    _complete(contest_db, 1, _T0)
+    _complete(contest_db, 2, _T0)
+
+    row = contest_db.get_recently_completed_contest("NBA", entry_fee=25, now=_T0)
+
+    assert row is not None and row[0] == 2
+
+
+def test_recently_completed_is_per_sport_and_honours_keyword(contest_db):
+    _insert_contest(contest_db, dk_id=1, sport="NBA", name="Double Up")
+    _insert_contest(contest_db, dk_id=2, sport="NFL", name="Double Up")
+    _complete(contest_db, 1, _T0)
+    _complete(contest_db, 2, _T0)
+
+    nfl = contest_db.get_recently_completed_contest("NFL", now=_T0)
+    assert nfl is not None and nfl[0] == 2
+    assert contest_db.get_recently_completed_contest("NBA", keyword="%Nope%", now=_T0) is None
+
+
+def test_recently_completed_returns_live_row_shape(contest_db):
+    _insert_contest(contest_db, dk_id=1, name="Main", draft_group=77, start_date="2024-01-01 00:00:00")
+    _complete(contest_db, 1, _T0)
+
+    assert contest_db.get_recently_completed_contest("NBA", now=_T0) == (
+        1,
+        "Main",
+        77,
+        10,
+        "2024-01-01 00:00:00",
+    )
+
+
+def test_ensure_schema_adds_completed_at_to_preexisting_database_file(tmp_path):
+    db_path = str(tmp_path / "contests.db")
+    legacy_conn = sqlite3.connect(db_path)
+    legacy_conn.execute(
+        """
+        CREATE TABLE "contests" (
+            "dk_id" INTEGER PRIMARY KEY,
+            "sport" varchar(10) NOT NULL,
+            "name"  varchar(50) NOT NULL,
+            "start_date"    datetime NOT NULL,
+            "draft_group"   INTEGER NOT NULL,
+            "total_prizes"  INTEGER NOT NULL,
+            "entries"       INTEGER NOT NULL,
+            "positions_paid"        INTEGER,
+            "entry_fee"     INTEGER NOT NULL,
+            "entry_count"   INTEGER NOT NULL,
+            "max_entry_count"       INTEGER NOT NULL,
+            "completed"     INTEGER NOT NULL DEFAULT 0,
+            "status"        TEXT
+        );
+        """
+    )
+    legacy_conn.execute(
+        "INSERT INTO contests (dk_id, sport, name, start_date, draft_group, total_prizes, entries, "
+        "entry_fee, entry_count, max_entry_count) VALUES (1, 'NBA', 'Contest', '2024-01-01 00:00:00', "
+        "1, 1000, 100, 25, 0, 1)"
+    )
+    legacy_conn.commit()
+    legacy_conn.close()
+
+    db = ContestDatabase(db_path)
+    try:
+        db.ensure_schema()
+        db.ensure_schema()  # idempotent
+        _complete(db, 1, _T0)
+        assert db.get_recently_completed_contest("NBA", now=_T0) is not None
+    finally:
+        db.close()
+
+
+def test_contest_completed_at_reads_the_stored_stamp_in_snapshot_format(contest_db):
+    _insert_contest(contest_db, dk_id=1)
+    _complete(contest_db, 1, _T0)
+
+    assert contest_db.get_contest_completed_at(1) == "2026-10-10T12:00:00Z"
+
+
+@pytest.mark.parametrize("status", ["LIVE", "CANCELLED"])
+def test_contest_completed_at_is_none_without_a_stamp(contest_db, status):
+    _insert_contest(contest_db, dk_id=1)
+    _complete(contest_db, 1, _T0, status=status)
+
+    assert contest_db.get_contest_completed_at(1) is None
+
+
+def test_contest_completed_at_is_none_for_an_unknown_contest(contest_db):
+    assert contest_db.get_contest_completed_at(999) is None
+
+
+def test_update_contest_rejects_naive_now(contest_db):
+    with pytest.raises(ValueError):
+        contest_db.update_contest(
+            1, positions_paid=1, status="COMPLETED", completed=1, now=datetime.datetime(2026, 10, 5, 4, 0)
+        )
+
+
+def test_get_recently_completed_contest_rejects_naive_now(contest_db):
+    with pytest.raises(ValueError):
+        contest_db.get_recently_completed_contest("NBA", entry_fee=5, now=datetime.datetime(2026, 10, 5, 4, 0))
