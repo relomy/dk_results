@@ -1,4 +1,7 @@
+import pytest
+
 from dk_results.services.snapshot_v3.pipeline import build_snapshot_v3_envelope
+from tests.services.snapshot_scenarios import PRODUCER_COMMIT
 
 
 def test_build_snapshot_v3_envelope_normalizes_generated_at_and_orders_sports(monkeypatch) -> None:
@@ -179,3 +182,37 @@ def test_build_snapshot_v3_envelope_surfaces_vip_lineups_and_vip_derived_metrics
     ]
     vip_counts = {row["player_key"]: row["vip_count"] for row in contest["metrics"]["threat"]["top_swing_players"]}
     assert vip_counts == {"nba:player-a": 1, "nba:player-c": 0}
+
+
+def test_build_snapshot_v3_envelope_stamps_producer_commit() -> None:
+    sha = PRODUCER_COMMIT
+
+    envelope = build_snapshot_v3_envelope(
+        {"NBA": 188080404},
+        generated_at="2026-03-01T12:34:56Z",
+        producer_commit=sha,
+        collector=lambda *, sport, contest_id, standings_limit: _bundle_with_vip_lineup(),
+    )
+
+    assert envelope["producer_commit"] == sha
+
+
+def test_build_snapshot_v3_envelope_producer_commit_defaults_to_null() -> None:
+    envelope = build_snapshot_v3_envelope(
+        {"NBA": 188080404},
+        generated_at="2026-03-01T12:34:56Z",
+        collector=lambda *, sport, contest_id, standings_limit: _bundle_with_vip_lineup(),
+    )
+
+    assert "producer_commit" in envelope
+    assert envelope["producer_commit"] is None
+
+
+def test_build_snapshot_v3_envelope_rejects_malformed_producer_commit() -> None:
+    with pytest.raises(ValueError, match="producer_commit"):
+        build_snapshot_v3_envelope(
+            {"NBA": 188080404},
+            generated_at="2026-03-01T12:34:56Z",
+            producer_commit="not-a-sha",
+            collector=lambda *, sport, contest_id, standings_limit: _bundle_with_vip_lineup(),
+        )

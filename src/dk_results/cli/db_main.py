@@ -55,10 +55,12 @@ def _build_bonus_sender() -> WebhookSender | None:
 def build_snapshot_payload(
     selected_contests: dict[str, int],
     standings_limit: int = DEFAULT_STANDINGS_LIMIT,
+    producer_commit: str | None = None,
 ) -> dict[str, Any]:
     return build_snapshot_v3_envelope(
         {sport: contest_id for sport, contest_id in selected_contests.items()},
         standings_limit=standings_limit,
+        producer_commit=producer_commit,
     )
 
 
@@ -163,6 +165,7 @@ def build_live_snapshot(
     sport_names: list[str],
     *,
     standings_limit: int = DEFAULT_STANDINGS_LIMIT,
+    producer_commit: str | None = None,
     processor: SportProcessor | None = None,
     contest_db: ContestDatabase | None = None,
     now: datetime.datetime | None = None,
@@ -185,7 +188,7 @@ def build_live_snapshot(
     selected = {**selected, **_recently_completed_contest_ids(contest_db, idle, choices, now)}
     if not selected:
         return None
-    return build_snapshot_payload(selected, standings_limit=standings_limit)
+    return build_snapshot_payload(selected, standings_limit=standings_limit, producer_commit=producer_commit)
 
 
 def main() -> None:

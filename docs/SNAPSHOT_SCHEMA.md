@@ -142,6 +142,26 @@ the guard for that.
   count/average PMR remain available. Remaining salary (a user's cap minus
   revealed salaries) and train detection retain their separate meanings.
 
+## `producer_commit`
+
+| | |
+|---|---|
+| Type | string or `null`, required: a full 40-character lowercase hex SHA |
+| Location | the envelope's top level |
+| Meaning | The dk_results commit that built the snapshot: the **producer commit**. |
+
+The snapshot feed resolves it once per run: `DK_RESULTS_COMMIT` when set to a
+valid SHA (for deploys without git metadata), otherwise `git rev-parse HEAD` in
+the producer's checkout. The key is always present and is `null`, never omitted,
+when the commit cannot be told: git is unavailable or fails, or the checkout has
+uncommitted changes to tracked files (a snapshot built from edited code was not
+built by that commit). Callers that build an envelope without passing a commit
+also get `null`. The day manifest does not carry it. Adding it is an additive
+change.
+
+The goldens in `contract/goldens/` carry the fixed placeholder
+`0123456789abcdef0123456789abcdef01234567`.
+
 ## `contest.positions_paid`
 
 | | |

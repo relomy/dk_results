@@ -722,6 +722,18 @@
       "title":"Generated At",
       "type":"string"
     },
+    "producer_commit":{
+      "anyOf":[
+        {
+          "pattern":"^[0-9a-f]{40}$",
+          "type":"string"
+        },
+        {
+          "type":"null"
+        }
+      ],
+      "title":"Producer Commit"
+    },
     "schema_version":{
       "const":3,
       "title":"Schema Version",
@@ -743,6 +755,7 @@
     "schema_version",
     "snapshot_at",
     "generated_at",
+    "producer_commit",
     "sports"
   ],
   "title":"SnapshotEnvelope",

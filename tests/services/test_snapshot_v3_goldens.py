@@ -64,6 +64,13 @@ def test_every_committed_golden_belongs_to_a_scenario() -> None:
     )
 
 
+@pytest.mark.parametrize("scenario", SCENARIOS, ids=attrgetter("name"))
+def test_every_golden_carries_the_placeholder_producer_commit(scenario: Scenario) -> None:
+    envelope = json.loads(_golden_path(scenario.name).read_text())
+
+    assert envelope["producer_commit"] == "0123456789abcdef0123456789abcdef01234567"
+
+
 def test_golf_golden_has_no_game_status_and_omits_every_remaining_figure() -> None:
     envelope = json.loads(_golden_path("golf").read_text())
     (payload,) = envelope["sports"].values()

@@ -1,5 +1,6 @@
 {
   "generated_at":"2026-10-04T12:00:00Z",
+  "producer_commit":"0123456789abcdef0123456789abcdef01234567",
   "schema_version":3,
   "snapshot_at":"2026-10-04T12:00:00Z",
   "sports":{

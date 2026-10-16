@@ -20,6 +20,7 @@ from dk_results.services.snapshot_v3 import collector
 from dk_results.services.snapshot_v3.pipeline import build_snapshot_v3_envelope
 
 GENERATED_AT = "2026-10-04T12:00:00Z"
+PRODUCER_COMMIT = "0123456789abcdef0123456789abcdef01234567"
 
 
 @dataclass(frozen=True)
@@ -37,6 +38,7 @@ def build_envelope(scenario: Scenario) -> dict[str, Any]:
     return build_snapshot_v3_envelope(
         {scenario.sport: scenario.contest_id},
         generated_at=GENERATED_AT,
+        producer_commit=PRODUCER_COMMIT,
         collector=lambda **_: deepcopy(scenario.bundle()),
     )
 

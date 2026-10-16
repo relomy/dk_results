@@ -114,6 +114,8 @@ externally-scheduled `main()` on the existing Pi scheduler. See ADR-0007.
   out (bucket-side, not code).
   _Avoid_: local snapshot state on the Pi (there is none — the object store is
   the source of truth).
+- **Producer commit** — the dk_results commit that built a snapshot artifact, or unknown when it cannot be told (such as a checkout with uncommitted changes).
+  _Avoid_: producer version, build ID.
 - **Completed at** — the UTC moment the producer first observed DraftKings reporting a contest `COMPLETED`; it never changes afterwards. An observation time, not DraftKings' real end time, and unset for contests that are not completed, cancelled contests, and contests completed before it was recorded. A contest in the snapshot feed carries it only once completed.
   _Avoid_: end time, finished at (they suggest DraftKings' own clock); the snapshot's `generated_at`.
 - **Completion window** — how long after its completed at a completed contest stays in the snapshot feed for a sport with no live contest, so the **Final standings** remain landable. A live contest in the same sport replaces it immediately.
