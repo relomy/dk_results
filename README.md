@@ -55,7 +55,9 @@ Sports default to every supported sport; the database decides which have live
 contests, and a failure in one sport degrades that sport only. Configuration
 comes from the environment — the bucket name from `R2_BUCKET`, credentials and
 endpoint from `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`. No
-secret is committed.
+secret is committed. Each snapshot is stamped with its producer commit: set
+`DK_RESULTS_COMMIT` to a full SHA on a deploy without git metadata, otherwise it
+is read from the checkout (`null` when the checkout has uncommitted changes).
 
 Behavior notes:
 - Uploads are ordered `snapshots/<name>.json` → `manifest/<date>.json` →

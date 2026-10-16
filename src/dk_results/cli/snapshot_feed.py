@@ -15,6 +15,8 @@ from __future__ import annotations
 
 import argparse
 import logging
+import os
+import subprocess
 from collections.abc import Sequence
 
 from dk_results.cli.db_main import build_live_snapshot
@@ -23,7 +25,9 @@ from dk_results.domain.sport import get_sport_choices
 from dk_results.feed.pipeline import run_feed
 from dk_results.feed.r2 import R2ObjectStore
 from dk_results.logging import configure_logging
+from dk_results.paths import repo_file
 from dk_results.services.snapshot_v3.constants import DEFAULT_STANDINGS_LIMIT
+from dk_results.services.snapshot_v3.producer_commit import resolve_producer_commit
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +52,19 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _run_git(args: list[str]) -> str:
+    """Run git in the producer's own checkout, whatever the working directory."""
+    result = subprocess.run(
+        ["git", *args],
+        cwd=repo_file(),
+        capture_output=True,
+        text=True,
+        check=True,
+        timeout=30,
+    )
+    return result.stdout
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     load_and_apply_settings()
 
@@ -57,7 +74,8 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     sport_names = list(args.sport) if args.sport else list(get_sport_choices())
 
-    snapshot = build_live_snapshot(sport_names, standings_limit=args.standings_limit)
+    producer_commit = resolve_producer_commit(os.environ, _run_git)
+    snapshot = build_live_snapshot(sport_names, standings_limit=args.standings_limit, producer_commit=producer_commit)
     if snapshot is None:
         logger.info("feed skipped: no live contests selected; latest pointer left intact")
         return 0

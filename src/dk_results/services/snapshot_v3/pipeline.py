@@ -70,6 +70,7 @@ def build_snapshot_v3_envelope(
     *,
     standings_limit: int = DEFAULT_STANDINGS_LIMIT,
     generated_at: str | None = None,
+    producer_commit: str | None = None,
     collector: Callable[..., dict[str, Any] | CollectedSnapshot] | None = None,
 ) -> dict[str, Any]:
     resolved_generated_at = _resolved_generated_at(generated_at)
@@ -89,6 +90,7 @@ def build_snapshot_v3_envelope(
         "schema_version": SCHEMA_VERSION,
         "snapshot_at": resolved_generated_at,
         "generated_at": resolved_generated_at,
+        "producer_commit": producer_commit,
         "sports": sports,
     }
 

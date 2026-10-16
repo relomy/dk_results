@@ -559,7 +559,7 @@ def test_main_snapshot_out_writes_opt_in_envelope(monkeypatch, tmp_path):
 
     monkeypatch.setattr(db_main, "SportProcessor", _FakeSportProcessor)
 
-    def _fake_snapshot(selected_contests, *, standings_limit: int, generated_at=None):
+    def _fake_snapshot(selected_contests, *, standings_limit: int, generated_at=None, producer_commit=None):
         assert selected_contests == {"NFL": 111, "GOLF": 222}
         return {
             "schema_version": 3,
@@ -978,7 +978,7 @@ class _LiveFor:
 def _capture_selection(monkeypatch) -> list[dict[str, int]]:
     calls: list[dict[str, int]] = []
 
-    def _fake(selected_contests, *, standings_limit):
+    def _fake(selected_contests, *, standings_limit, producer_commit=None):
         calls.append(dict(selected_contests))
         return {"sports": {}}
 

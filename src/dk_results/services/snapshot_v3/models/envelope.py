@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
-from pydantic import StrictStr, ValidationError
+from pydantic import StrictStr, StringConstraints, ValidationError
 
 from dk_results.services.snapshot_v3.models.base import ContractModel, LooseSection
 from dk_results.services.snapshot_v3.models.contest import Contest
@@ -35,12 +35,16 @@ class SportPayload(ContractModel):
     contests: list[Contest]
 
 
+ProducerCommit = Annotated[StrictStr, StringConstraints(pattern=r"^[0-9a-f]{40}$")]
+
+
 class SnapshotEnvelope(ContractModel):
     """A schema-3 live snapshot, keyed by lowercase sport name."""
 
     schema_version: Literal[3]
     snapshot_at: StrictStr
     generated_at: StrictStr
+    producer_commit: ProducerCommit | None
     sports: dict[str, SportPayload]
 
 
