@@ -95,10 +95,10 @@ def build_snapshot_v3_envelope(
         "presence_warnings": [],
     }
 
-    # Shape and the hand-written validator block publishing; presence rules only record warnings.
-    # The contract models check shape first. The hand-written validator, which
-    # covers what the models don't type yet plus cross-field coherence, runs only
-    # once they pass, so one fault is reported once.
+    # Shape and the hand-written validator block publishing. The contract models check shape
+    # first; the validator, which covers what the models don't type yet plus cross-field
+    # coherence, runs only once they pass, so one fault is reported once. Presence rules never
+    # block: they only record warnings.
     violations = contract_violations(envelope) or validate_v3_envelope(envelope)
     if violations:
         joined = ",".join(violations)
