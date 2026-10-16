@@ -7,6 +7,7 @@ from typing import Annotated, Any, Literal
 
 from pydantic import StrictStr, StringConstraints, ValidationError
 
+from dk_results.services.snapshot_v3.constants import PRODUCER_COMMIT_PATTERN
 from dk_results.services.snapshot_v3.models.base import ContractModel, LooseSection
 from dk_results.services.snapshot_v3.models.contest import Contest
 from dk_results.services.snapshot_v3.models.players import SportPlayer
@@ -35,7 +36,7 @@ class SportPayload(ContractModel):
     contests: list[Contest]
 
 
-ProducerCommit = Annotated[StrictStr, StringConstraints(pattern=r"^[0-9a-f]{40}$")]
+ProducerCommit = Annotated[StrictStr, StringConstraints(pattern=f"^{PRODUCER_COMMIT_PATTERN}$")]
 
 
 class SnapshotEnvelope(ContractModel):

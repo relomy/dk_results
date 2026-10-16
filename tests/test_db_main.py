@@ -1068,3 +1068,18 @@ def test_build_live_snapshot_fills_an_idle_sport_but_not_one_with_unavailable_st
     db_main.build_live_snapshot(["NFL", "NBA"], processor=_NflUnavailableNbaIdle(), contest_db=db, now=_NOW)
 
     assert calls == [{"NBA": 901}]
+
+
+def test_build_snapshot_payload_forwards_the_producer_commit_to_the_envelope_builder(monkeypatch):
+    captured: dict = {}
+
+    def _fake(selected_contests, *, standings_limit, producer_commit):
+        captured.update(selected=selected_contests, producer_commit=producer_commit)
+        return {}
+
+    monkeypatch.setattr(db_main, "build_snapshot_v3_envelope", _fake)
+    sha = "0123456789abcdef0123456789abcdef01234567"
+
+    db_main.build_snapshot_payload({"NBA": 1}, producer_commit=sha)
+
+    assert captured == {"selected": {"NBA": 1}, "producer_commit": sha}

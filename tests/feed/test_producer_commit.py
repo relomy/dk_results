@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dk_results.services.snapshot_v3.producer_commit import resolve_producer_commit
+from dk_results.feed.producer_commit import resolve_producer_commit
 
 HEAD_SHA = "0123456789abcdef0123456789abcdef01234567"
 OTHER_SHA = "fedcba9876543210fedcba9876543210fedcba98"
@@ -38,7 +38,7 @@ def test_valid_environment_override_wins_without_running_git() -> None:
 
 
 def test_invalid_environment_override_is_ignored() -> None:
-    for bad in ("", "abc123", OTHER_SHA.upper(), OTHER_SHA + "0", "g" * 40):
+    for bad in ("", "abc123", OTHER_SHA.upper(), OTHER_SHA + "0", "g" * 40, f" {OTHER_SHA}\n"):
         assert resolve_producer_commit({"DK_RESULTS_COMMIT": bad}, clean_git()) == HEAD_SHA
 
 

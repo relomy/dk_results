@@ -1,6 +1,7 @@
 import pytest
 
 from dk_results.services.snapshot_v3.pipeline import build_snapshot_v3_envelope
+from tests.services.snapshot_scenarios import PRODUCER_COMMIT
 
 
 def test_build_snapshot_v3_envelope_normalizes_generated_at_and_orders_sports(monkeypatch) -> None:
@@ -184,7 +185,7 @@ def test_build_snapshot_v3_envelope_surfaces_vip_lineups_and_vip_derived_metrics
 
 
 def test_build_snapshot_v3_envelope_stamps_producer_commit() -> None:
-    sha = "0123456789abcdef0123456789abcdef01234567"
+    sha = PRODUCER_COMMIT
 
     envelope = build_snapshot_v3_envelope(
         {"NBA": 188080404},

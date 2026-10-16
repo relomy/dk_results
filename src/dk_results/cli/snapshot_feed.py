@@ -23,11 +23,11 @@ from dk_results.cli.db_main import build_live_snapshot
 from dk_results.config import load_and_apply_settings
 from dk_results.domain.sport import get_sport_choices
 from dk_results.feed.pipeline import run_feed
+from dk_results.feed.producer_commit import resolve_producer_commit
 from dk_results.feed.r2 import R2ObjectStore
 from dk_results.logging import configure_logging
 from dk_results.paths import repo_file
 from dk_results.services.snapshot_v3.constants import DEFAULT_STANDINGS_LIMIT
-from dk_results.services.snapshot_v3.producer_commit import resolve_producer_commit
 
 logger = logging.getLogger(__name__)
 

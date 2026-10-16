@@ -37,12 +37,32 @@ def test_feed_stamps_the_snapshot_with_the_resolved_producer_commit(
     assert [call["producer_commit"] for call in feed_calls] == [ENV_SHA]
 
 
-def test_feed_resolves_the_producer_commit_from_the_checkout_when_no_override_is_set(
+def test_feed_resolves_the_producer_commit_once_per_run_from_the_checkout(
     feed_calls: list[dict[str, Any]], monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    head = "0123456789abcdef0123456789abcdef01234567"
+    git_calls: list[list[str]] = []
+
+    def _run_git(args: list[str]) -> str:
+        git_calls.append(args)
+        return f"{head}\n" if args == ["rev-parse", "HEAD"] else ""
+
     monkeypatch.delenv("DK_RESULTS_COMMIT", raising=False)
+    monkeypatch.setattr(snapshot_feed, "_run_git", _run_git)
+
+    assert snapshot_feed.main(["-s", "NBA", "NFL"]) == 0
+
+    assert [call["producer_commit"] for call in feed_calls] == [head]
+    assert git_calls == [["rev-parse", "HEAD"], ["status", "--porcelain", "--untracked-files=no"]]
+
+
+def test_feed_stamps_null_when_git_fails(feed_calls: list[dict[str, Any]], monkeypatch: pytest.MonkeyPatch) -> None:
+    def _run_git(args: list[str]) -> str:
+        raise FileNotFoundError("git")
+
+    monkeypatch.delenv("DK_RESULTS_COMMIT", raising=False)
+    monkeypatch.setattr(snapshot_feed, "_run_git", _run_git)
 
     assert snapshot_feed.main(["-s", "NBA"]) == 0
 
-    (commit,) = (call["producer_commit"] for call in feed_calls)
-    assert commit is None or (len(commit) == 40 and commit == commit.lower())
+    assert [call["producer_commit"] for call in feed_calls] == [None]
