@@ -7,9 +7,30 @@ import pytest
 from discord.ext import commands
 
 from dk_results.bot import discord_bot
+from dk_results.config import RuntimeSettings
 from dk_results.persistence.contestdatabase import VipCashStatus
 
 os.environ.setdefault("DFS_STATE_DIR", "/tmp")
+
+
+def _settings(**overrides) -> RuntimeSettings:
+    values = {
+        "spreadsheet_id": None,
+        "dfs_state_dir": None,
+        "sheet_gids_file": "sheet_gids.yaml",
+        "sheet_gid_map": {},
+        "discord_notifications_enabled": True,
+        "contest_warning_minutes": 25,
+        "warning_schedule_file": "contest_warning_schedules.yaml",
+        "warning_schedules": {"default": [25]},
+        "default_warning_schedule": [25],
+        "dashboard_base_url": None,
+        "bot_token": None,
+        "discord_log_file": None,
+        "allowed_channel_id": None,
+    }
+    values.update(overrides)
+    return RuntimeSettings(**values)
 
 
 class FakeCtx:
@@ -98,7 +119,6 @@ def test_module_main_executes(monkeypatch, tmp_path):
     captured = {}
     monkeypatch.setenv("DISCORD_BOT_TOKEN", "tok")
     monkeypatch.setenv("DISCORD_LOG_FILE", str(tmp_path / "discord.log"))
-    monkeypatch.setattr(discord_bot, "BOT_TOKEN", "tok")
 
     def fake_run(self, token):
         captured["token"] = token
@@ -115,7 +135,7 @@ async def test_contests_requires_sport(monkeypatch):
     monkeypatch.setattr(discord_bot, "_sport_choices", lambda: {"nba": DummySport})
 
     ctx = FakeCtx()
-    await discord_bot.contests(_ctx(ctx))
+    await discord_bot.contests(_settings(), _ctx(ctx))
 
     assert ctx.sent == ["Pick a sport: NBA"]
 
@@ -125,7 +145,7 @@ async def test_contests_unknown_sport(monkeypatch):
     monkeypatch.setattr(discord_bot, "_sport_choices", lambda: {"nba": DummySport})
 
     ctx = FakeCtx()
-    await discord_bot.contests(_ctx(ctx), "nfl")
+    await discord_bot.contests(_settings(), _ctx(ctx), "nfl")
 
     assert ctx.sent == ["Unknown sport 'nfl'. Allowed options: NBA"]
 
@@ -138,11 +158,11 @@ async def test_contests_returns_live_contest(monkeypatch):
         "_fetch_live_contest",
         lambda sport_cls: (1, "Contest", None, None, "2000-01-01"),
     )
-    monkeypatch.setattr(discord_bot, "_sheet_link", lambda _sport: None)
+    monkeypatch.setattr(discord_bot, "_sheet_link", lambda _settings, _sport: None)
     monkeypatch.setattr(discord_bot, "_vip_presence_for_contest", lambda _dk_id: None)
 
     ctx = FakeCtx()
-    await discord_bot.contests(_ctx(ctx), "nba")
+    await discord_bot.contests(_settings(), _ctx(ctx), "nba")
 
     assert ctx.sent == [
         "Live: 🏀 NBA — Contest\n"
@@ -160,11 +180,11 @@ async def test_contests_returns_live_contest_with_vip_present(monkeypatch):
         "_fetch_live_contest",
         lambda sport_cls: (1, "Contest", None, None, "2000-01-01"),
     )
-    monkeypatch.setattr(discord_bot, "_sheet_link", lambda _sport: None)
+    monkeypatch.setattr(discord_bot, "_sheet_link", lambda _settings, _sport: None)
     monkeypatch.setattr(discord_bot, "_vip_presence_for_contest", lambda _dk_id: "present")
 
     ctx = FakeCtx()
-    await discord_bot.contests(_ctx(ctx), "nba")
+    await discord_bot.contests(_settings(), _ctx(ctx), "nba")
 
     assert ctx.sent == [
         "Live: 🏀 NBA — Contest\n"
@@ -177,18 +197,17 @@ async def test_contests_returns_live_contest_with_vip_present(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_contests_links_dashboard_before_sheet(monkeypatch):
-    monkeypatch.setattr(discord_bot, "DASHBOARD_BASE_URL", "https://dashboard.example/")
     monkeypatch.setattr(discord_bot, "_sport_choices", lambda: {"nba": DummySport})
     monkeypatch.setattr(
         discord_bot,
         "_fetch_live_contest",
         lambda sport_cls: (1, "Contest", None, None, "2000-01-01"),
     )
-    monkeypatch.setattr(discord_bot, "_sheet_link", lambda _sport: "<https://sheet.example/nba>")
+    monkeypatch.setattr(discord_bot, "_sheet_link", lambda _settings, _sport: "<https://sheet.example/nba>")
     monkeypatch.setattr(discord_bot, "_vip_presence_for_contest", lambda _dk_id: None)
 
     ctx = FakeCtx()
-    await discord_bot.contests(_ctx(ctx), "nba")
+    await discord_bot.contests(_settings(dashboard_base_url="https://dashboard.example/"), _ctx(ctx), "nba")
 
     assert ctx.sent[0].endswith(
         "• 📈 Dashboard: [NBA](<https://dashboard.example/live/nba>) | 📊 Sheet: [NBA](<https://sheet.example/nba>)"
@@ -196,12 +215,13 @@ async def test_contests_links_dashboard_before_sheet(monkeypatch):
 
 
 def test_live_contest_block_keeps_draftkings_link_separate_from_dashboard_and_sheet(monkeypatch):
-    monkeypatch.setattr(discord_bot, "DASHBOARD_BASE_URL", "https://dashboard.example/")
-    monkeypatch.setattr(discord_bot, "_sheet_link", lambda _sport: "<https://sheet.example/nba>")
+    monkeypatch.setattr(discord_bot, "_sheet_link", lambda _settings, _sport: "<https://sheet.example/nba>")
     monkeypatch.setattr(discord_bot, "_format_time_since", lambda _start_date: None)
     monkeypatch.setattr(discord_bot, "_vip_presence_for_contest", lambda _dk_id: None)
 
-    msg = discord_bot._format_live_contest_block(1, "Contest", "2000-01-01", "NBA", None, [], None)
+    msg = discord_bot._format_live_contest_block(
+        _settings(dashboard_base_url="https://dashboard.example/"), 1, "Contest", "2000-01-01", "NBA", None, [], None
+    )
 
     assert msg.endswith(
         "• 🔗 DK: [1](<https://www.draftkings.com/contest/gamecenter/1#/>)\n"
@@ -212,7 +232,7 @@ def test_live_contest_block_keeps_draftkings_link_separate_from_dashboard_and_sh
 @pytest.mark.asyncio
 async def test_live_lists_all_live_contests(monkeypatch):
     monkeypatch.setattr(discord_bot, "_sport_choices", lambda: {"nba": DummySport, "nfl": DummySportTwo})
-    monkeypatch.setattr(discord_bot, "_sheet_link", lambda _sport: None)
+    monkeypatch.setattr(discord_bot, "_sheet_link", lambda _settings, _sport: None)
     monkeypatch.setattr(discord_bot, "_vip_presence_for_contest", lambda _dk_id: None)
     monkeypatch.setattr(discord_bot, "_format_time_since", lambda _start_date: None)
 
@@ -242,7 +262,7 @@ async def test_live_lists_all_live_contests(monkeypatch):
     monkeypatch.setattr(discord_bot, "ContestDatabase", FakeContestDatabase)
 
     ctx = FakeCtx()
-    await discord_bot.live(_ctx(ctx))
+    await discord_bot.live(_settings(), _ctx(ctx))
 
     assert captured["sports"] == ["NBA", "NFL"]
     assert captured.get("closed") is True
@@ -259,7 +279,7 @@ async def test_live_lists_all_live_contests(monkeypatch):
 @pytest.mark.asyncio
 async def test_live_shows_vip_presence_per_contest(monkeypatch):
     monkeypatch.setattr(discord_bot, "_sport_choices", lambda: {"nba": DummySport, "nfl": DummySportTwo})
-    monkeypatch.setattr(discord_bot, "_sheet_link", lambda _sport: None)
+    monkeypatch.setattr(discord_bot, "_sheet_link", lambda _settings, _sport: None)
     monkeypatch.setattr(discord_bot, "_format_time_since", lambda _start_date: None)
 
     def fake_presence(dk_id):
@@ -289,7 +309,7 @@ async def test_live_shows_vip_presence_per_contest(monkeypatch):
     monkeypatch.setattr(discord_bot, "ContestDatabase", FakeContestDatabase)
 
     ctx = FakeCtx()
-    await discord_bot.live(_ctx(ctx))
+    await discord_bot.live(_settings(), _ctx(ctx))
 
     assert ctx.sent == [
         "Live: 🏀 NBA — ContestA\n"
@@ -306,7 +326,7 @@ async def test_live_shows_vip_presence_per_contest(monkeypatch):
 @pytest.mark.asyncio
 async def test_live_shows_vip_cash_bullets(monkeypatch):
     monkeypatch.setattr(discord_bot, "_sport_choices", lambda: {"nba": DummySport})
-    monkeypatch.setattr(discord_bot, "_sheet_link", lambda _sport: None)
+    monkeypatch.setattr(discord_bot, "_sheet_link", lambda _settings, _sport: None)
     monkeypatch.setattr(discord_bot, "_format_time_since", lambda _start_date: None)
     # Presence stubbed to a real verdict to prove it's suppressed once cash bullets render.
     monkeypatch.setattr(discord_bot, "_vip_presence_for_contest", lambda _dk_id: "present")
@@ -333,7 +353,7 @@ async def test_live_shows_vip_cash_bullets(monkeypatch):
     monkeypatch.setattr(discord_bot, "ContestDatabase", FakeContestDatabase)
 
     ctx = FakeCtx()
-    await discord_bot.live(_ctx(ctx))
+    await discord_bot.live(_settings(), _ctx(ctx))
 
     assert ctx.sent == [
         "Live: 🏀 NBA — ContestA\n"
@@ -347,7 +367,7 @@ async def test_live_shows_vip_cash_bullets(monkeypatch):
 @pytest.mark.asyncio
 async def test_live_shows_elapsed_time_since_start(monkeypatch):
     monkeypatch.setattr(discord_bot, "_sport_choices", lambda: {"nba": DummySport})
-    monkeypatch.setattr(discord_bot, "_sheet_link", lambda _sport: None)
+    monkeypatch.setattr(discord_bot, "_sheet_link", lambda _settings, _sport: None)
     monkeypatch.setattr(discord_bot, "_vip_presence_for_contest", lambda _dk_id: None)
     monkeypatch.setattr(discord_bot, "_format_time_since", lambda _start_date: "started 2h13m ago")
 
@@ -370,7 +390,7 @@ async def test_live_shows_elapsed_time_since_start(monkeypatch):
     monkeypatch.setattr(discord_bot, "ContestDatabase", FakeContestDatabase)
 
     ctx = FakeCtx()
-    await discord_bot.live(_ctx(ctx))
+    await discord_bot.live(_settings(), _ctx(ctx))
 
     assert ctx.sent == [
         "Live: 🏀 NBA — ContestA\n"
@@ -429,41 +449,22 @@ async def test_live_no_contests(monkeypatch):
     monkeypatch.setattr(discord_bot, "ContestDatabase", FakeContestDatabase)
 
     ctx = FakeCtx()
-    await discord_bot.live(_ctx(ctx))
+    await discord_bot.live(_settings(), _ctx(ctx))
 
     assert ctx.sent == ["No live contests found."]
 
 
 @pytest.mark.asyncio
 async def test_limit_to_channel_allows_when_not_set(monkeypatch):
-    monkeypatch.setattr(discord_bot, "ALLOWED_CHANNEL_ID", None)
     ctx = FakeCtx()
-    assert await discord_bot.limit_to_channel(_ctx(ctx)) is True
+    assert await discord_bot.limit_to_channel(_settings(), _ctx(ctx)) is True
 
 
 @pytest.mark.asyncio
 async def test_limit_to_channel_blocks_other_channels(monkeypatch):
-    monkeypatch.setattr(discord_bot, "ALLOWED_CHANNEL_ID", 123)
     ctx = FakeCtx()
     ctx.channel.id = 999
-    assert await discord_bot.limit_to_channel(_ctx(ctx)) is False
-
-
-def test_channel_id_from_env_valid(monkeypatch):
-    monkeypatch.setenv("DISCORD_CHANNEL_ID", "12345")
-    assert discord_bot._channel_id_from_env() == 12345
-
-
-def test_channel_id_from_env_invalid(monkeypatch, caplog):
-    captured = []
-    monkeypatch.setattr(
-        discord_bot.logger,
-        "warning",
-        lambda message, *args: captured.append(message % args if args else message),
-    )
-    monkeypatch.setenv("DISCORD_CHANNEL_ID", "abc")
-    assert discord_bot._channel_id_from_env() is None
-    assert any("not a valid integer" in msg for msg in captured)
+    assert await discord_bot.limit_to_channel(_settings(allowed_channel_id=123), _ctx(ctx)) is False
 
 
 @pytest.mark.asyncio
@@ -472,7 +473,7 @@ async def test_contests_no_contest_found(monkeypatch):
     monkeypatch.setattr(discord_bot, "_fetch_live_contest", lambda sport_cls: None)
 
     ctx = FakeCtx()
-    await discord_bot.contests(_ctx(ctx), "nba")
+    await discord_bot.contests(_settings(), _ctx(ctx), "nba")
 
     assert ctx.sent == ["No live contest found for NBA."]
 
@@ -520,7 +521,6 @@ async def test_on_command_error_logs_wrapped_traceback(caplog):
 
 def test_main_requires_token(monkeypatch):
     monkeypatch.setenv("DISCORD_BOT_TOKEN", "")
-    monkeypatch.setattr(discord_bot, "BOT_TOKEN", None)
     with pytest.raises(RuntimeError):
         discord_bot.main()
 
@@ -584,64 +584,19 @@ async def test_upcoming_lists_next_per_sport(monkeypatch):
     ]
 
 
-def test_load_sheet_gid_map_requires_env(monkeypatch):
-    monkeypatch.setattr(discord_bot, "SHEET_GIDS_FILE", "")
-    assert discord_bot._load_sheet_gid_map() == {}
+def test_sheet_link_requires_spreadsheet_id():
+    settings = _settings(spreadsheet_id=None, sheet_gid_map={"NBA": 123})
+    assert discord_bot._sheet_link(settings, "NBA") is None
 
 
-def test_load_sheet_gid_map_missing_file(tmp_path, monkeypatch):
-    monkeypatch.setattr(discord_bot, "SHEET_GIDS_FILE", str(tmp_path / "missing.yaml"))
-    assert discord_bot._load_sheet_gid_map() == {}
+def test_sheet_link_missing_gid():
+    settings = _settings(spreadsheet_id="sheet", sheet_gid_map={"NBA": 123})
+    assert discord_bot._sheet_link(settings, "NFL") is None
 
 
-def test_load_sheet_gid_map_invalid_yaml(tmp_path, monkeypatch):
-    path = tmp_path / "gids.yaml"
-    path.write_text("bad")
-    monkeypatch.setattr(discord_bot, "SHEET_GIDS_FILE", str(path))
-
-    def boom(_text):
-        raise RuntimeError("boom")
-
-    monkeypatch.setattr(discord_bot.yaml, "safe_load", boom)
-    assert discord_bot._load_sheet_gid_map() == {}
-
-
-def test_load_sheet_gid_map_non_dict(tmp_path, monkeypatch):
-    path = tmp_path / "gids.yaml"
-    path.write_text("- 1")
-    monkeypatch.setattr(discord_bot, "SHEET_GIDS_FILE", str(path))
-    monkeypatch.setattr(discord_bot.yaml, "safe_load", lambda _text: ["not-dict"])
-    assert discord_bot._load_sheet_gid_map() == {}
-
-
-def test_load_sheet_gid_map_filters_invalid_entries(tmp_path, monkeypatch):
-    path = tmp_path / "gids.yaml"
-    path.write_text("ignored")
-    monkeypatch.setattr(discord_bot, "SHEET_GIDS_FILE", str(path))
-    monkeypatch.setattr(
-        discord_bot.yaml,
-        "safe_load",
-        lambda _text: {"NBA": 10, 1: "bad", "NFL": "oops"},
-    )
-    assert discord_bot._load_sheet_gid_map() == {"NBA": 10}
-
-
-def test_sheet_link_requires_spreadsheet_id(monkeypatch):
-    monkeypatch.setattr(discord_bot, "SPREADSHEET_ID", None)
-    monkeypatch.setattr(discord_bot, "SHEET_GID_MAP", {"NBA": 123})
-    assert discord_bot._sheet_link("NBA") is None
-
-
-def test_sheet_link_missing_gid(monkeypatch):
-    monkeypatch.setattr(discord_bot, "SPREADSHEET_ID", "sheet")
-    monkeypatch.setattr(discord_bot, "SHEET_GID_MAP", {"NBA": 123})
-    assert discord_bot._sheet_link("NFL") is None
-
-
-def test_sheet_link_builds_url(monkeypatch):
-    monkeypatch.setattr(discord_bot, "SPREADSHEET_ID", "sheet")
-    monkeypatch.setattr(discord_bot, "SHEET_GID_MAP", {"NBA": 123})
-    assert discord_bot._sheet_link("NBA") == "<https://docs.google.com/spreadsheets/d/sheet/edit#gid=123>"
+def test_sheet_link_builds_url():
+    settings = _settings(spreadsheet_id="sheet", sheet_gid_map={"NBA": 123})
+    assert discord_bot._sheet_link(settings, "NBA") == "<https://docs.google.com/spreadsheets/d/sheet/edit#gid=123>"
 
 
 def test_sport_sheet_title_prefers_sheet_name():
@@ -662,7 +617,7 @@ def test_configure_discord_log_file_handles_exception(monkeypatch):
             raise RuntimeError("boom")
 
     monkeypatch.setattr(discord_bot.logging, "FileHandler", BoomHandler)
-    discord_bot._configure_discord_log_file()
+    discord_bot._configure_discord_log_file(_settings())
 
 
 def test_sport_choices_uses_the_built_in_registry():
@@ -834,7 +789,7 @@ async def test_contests_invalid_sport_config(monkeypatch):
 
     ctx.send = _send
 
-    await discord_bot.contests(ctx, "nba")
+    await discord_bot.contests(_settings(), ctx, "nba")
     assert ctx.sent == ["Invalid sport configuration."]
 
 
@@ -879,6 +834,34 @@ def test_main_runs_bot(monkeypatch):
     def fake_run(_self, token):
         captured["token"] = token
 
-    monkeypatch.setattr(discord_bot, "create_bot", lambda: type("Bot", (), {"run": fake_run})())
+    def fake_create_bot(settings):
+        captured["settings"] = settings
+        return type("Bot", (), {"run": fake_run})()
+
+    monkeypatch.setattr(discord_bot, "create_bot", fake_create_bot)
     discord_bot.main()
     assert captured["token"] == "tok"
+    assert captured["settings"].bot_token == "tok"
+
+
+@pytest.mark.asyncio
+async def test_create_bot_registered_commands_use_the_injected_settings(monkeypatch):
+    monkeypatch.setattr(discord_bot, "_sport_choices", lambda: {"nba": DummySport})
+    monkeypatch.setattr(discord_bot, "_fetch_live_contest", lambda sport_cls: (1, "Contest", None, None, "2000-01-01"))
+    monkeypatch.setattr(discord_bot, "_vip_presence_for_contest", lambda _dk_id: None)
+    settings = _settings(
+        spreadsheet_id="sheet",
+        sheet_gid_map={"NBA": 123},
+        allowed_channel_id=123,
+    )
+
+    bot = discord_bot.create_bot(settings)
+
+    ctx = FakeCtx()
+    ctx.channel.id = 123
+    await bot.get_command("contests").callback(_ctx(ctx), "nba")
+    assert "https://docs.google.com/spreadsheets/d/sheet/edit#gid=123" in ctx.sent[0]
+
+    other = FakeCtx()
+    other.channel.id = 999
+    assert [await check(_ctx(other)) for check in bot._checks] == [False]

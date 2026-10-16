@@ -166,7 +166,7 @@ exposes `main()`. Root-level scripts (`dkcontests.py`, `db_main.py`,
 
 | Module | Interface | Role |
 |---|---|---|
-| `config.py` | `load_settings`, `apply_environment_defaults`, `load_and_apply_settings` | Settings from `dfs_common`. |
+| `config.py` | `RuntimeSettings`, `load_runtime_settings`, `load_settings`, `apply_environment_defaults`, `load_and_apply_settings` | Env > `config.json` > default settings via `dfs_common.config.resolve_settings`; `load_runtime_settings` also parses the sheet-gid and warning-schedule YAML. |
 | `logging.py` | `configure_logging(level_override)` | Central logging for every entry point. |
 | `paths.py` | `find_repo_root`, `repo_root`, `repo_file` | Repo-root-relative path resolution. |
 | `persistence/contestdatabase.py` | `ContestDatabase`: `create_table`, `compare_contests`, `insert_contests`, `sync_draft_group_start_dates`, `get_live_contest(s)`, `get_next_upcoming_contest(_any)`, `get_contest_*` | SQLite persistence for contests — deep data-access module, injected into `SportProcessor`. |
