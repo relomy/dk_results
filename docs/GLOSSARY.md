@@ -119,3 +119,7 @@ externally-scheduled `main()` on the existing Pi scheduler. See ADR-0007.
 - **Completed at** — the UTC moment the producer first observed DraftKings reporting a contest `COMPLETED`; it never changes afterwards. An observation time, not DraftKings' real end time, and unset for contests that are not completed, cancelled contests, and contests completed before it was recorded. A contest in the snapshot feed carries it only once completed.
   _Avoid_: end time, finished at (they suggest DraftKings' own clock); the snapshot's `generated_at`.
 - **Completion window** — how long after its completed at a completed contest stays in the snapshot feed for a sport with no live contest, so the **Final standings** remain landable. A live contest in the same sport replaces it immediately.
+- **Presence rule** — an expectation that a snapshot field is filled, always or in a given game state (a cashing row has a payout; an in-progress player has stats). Strict before merge (the goldens test fails on any warning); never blocks publishing a live snapshot.
+  _Avoid_: required field (the schema's term), null check.
+- **Presence warning** — a presence rule a published snapshot artifact broke, recorded in the artifact itself.
+  _Avoid_: validation error (those block publishing).
