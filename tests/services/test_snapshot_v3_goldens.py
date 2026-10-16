@@ -55,6 +55,16 @@ def test_rebuilt_envelope_matches_the_committed_golden(scenario: Scenario) -> No
     )
 
 
+@pytest.mark.parametrize("scenario", SCENARIOS, ids=attrgetter("name"))
+def test_no_golden_carries_a_presence_warning(scenario: Scenario) -> None:
+    """Presence rules are strict here and soft at runtime: a blank the rules expect filled fails CI."""
+    rebuilt = build_envelope(scenario)
+    committed = json.loads(_golden_path(scenario.name).read_text())
+
+    assert rebuilt["presence_warnings"] == []
+    assert committed["presence_warnings"] == []
+
+
 def test_every_committed_golden_belongs_to_a_scenario() -> None:
     committed = {path.stem for path in GOLDENS_DIR.glob("*.json")}
 

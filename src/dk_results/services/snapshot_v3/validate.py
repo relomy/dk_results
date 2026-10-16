@@ -7,6 +7,7 @@ from datetime import datetime
 from itertools import filterfalse
 from typing import Any
 
+from dk_results.analytics.game_status import classify_game_status
 from dk_results.services.snapshot_v3.contracts import (
     SCHEMA_VERSION,
     validate_distance_to_cash_rows,
@@ -673,3 +674,71 @@ def _validate_vip_vs_field_leverage(path: str, rows: Any) -> list[str]:
         )
         violations.extend(_validate_partial_flag(row_path, row))
     return violations
+
+
+# --- Presence rules -------------------------------------------------------------------------------
+# Expectations that a field is filled in a given state. Unlike the checks above they never block
+# publishing: a broken rule is recorded as a presence warning, a ``{"path", "rule"}`` object.
+
+RULE_CASHING_ROW_HAS_PAYOUT = "cashing_row_has_payout"
+RULE_UNLOCKED_VIP_SLOT_HAS_PLAYER_KEY = "unlocked_vip_slot_has_player_key"
+RULE_IN_PROGRESS_PLAYER_HAS_STATS = "in_progress_player_has_stats"
+_IN_PROGRESS_PLAYER_FIELDS = ("stats_text", "rt_projection")
+
+
+def _presence_warning(path: str, rule: str) -> dict[str, str]:
+    return {"path": path, "rule": rule}
+
+
+def _dict_rows(rows: Any) -> list[tuple[int, dict[str, Any]]]:
+    return [(index, row) for index, row in enumerate(rows) if isinstance(row, dict)] if isinstance(rows, list) else []
+
+
+def _cashing_row_warnings(contest_path: str, contest: dict[str, Any]) -> list[dict[str, str]]:
+    return [
+        _presence_warning(f"{contest_path}.standings[{index}].payout_cents", RULE_CASHING_ROW_HAS_PAYOUT)
+        for index, row in _dict_rows(contest.get("standings"))
+        if row.get("is_cashing") is True and row.get("payout_cents") is None
+    ]
+
+
+def _unlocked_slot_warnings(contest_path: str, contest: dict[str, Any]) -> list[dict[str, str]]:
+    warnings = []
+    for vip_index, vip in _dict_rows(contest.get("vip_lineups")):
+        for slot_index, slot in _dict_rows(vip.get("players_live")):
+            if slot.get("is_locked") is not True and slot.get("player_key") is None:
+                path = f"{contest_path}.vip_lineups[{vip_index}].players_live[{slot_index}].player_key"
+                warnings.append(_presence_warning(path, RULE_UNLOCKED_VIP_SLOT_HAS_PLAYER_KEY))
+    return warnings
+
+
+def _in_progress_player_warnings(sport: str, players: Any) -> list[dict[str, str]]:
+    return [
+        _presence_warning(f"sports.{sport}.players[{index}].{field}", RULE_IN_PROGRESS_PLAYER_HAS_STATS)
+        for index, player in _dict_rows(players)
+        if classify_game_status(player.get("game_status")).in_play is True
+        for field in _IN_PROGRESS_PLAYER_FIELDS
+        if player.get(field) is None
+    ]
+
+
+def _sport_presence_warnings(sport: str, sport_payload: dict[str, Any]) -> list[dict[str, str]]:
+    warnings = _in_progress_player_warnings(sport, sport_payload.get("players"))
+    for index, contest in _dict_rows(sport_payload.get("contests")):
+        contest_path = f"sports.{sport}.contests[{index}]"
+        warnings.extend(_cashing_row_warnings(contest_path, contest))
+        warnings.extend(_unlocked_slot_warnings(contest_path, contest))
+    return warnings
+
+
+def presence_warnings(payload: dict[str, Any]) -> list[dict[str, str]]:
+    """Presence rules a snapshot breaks, one ``{"path", "rule"}`` per blank field; never blocks publishing."""
+    sports = payload.get("sports")
+    if not isinstance(sports, dict):
+        return []
+    return [
+        warning
+        for sport, sport_payload in sports.items()
+        if isinstance(sport_payload, dict)
+        for warning in _sport_presence_warnings(str(sport), sport_payload)
+    ]

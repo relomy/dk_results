@@ -216,3 +216,36 @@ def test_build_snapshot_v3_envelope_rejects_malformed_producer_commit() -> None:
             producer_commit="not-a-sha",
             collector=lambda *, sport, contest_id, standings_limit: _bundle_with_vip_lineup(),
         )
+
+
+def _build_with(bundle: dict) -> dict:
+    return build_snapshot_v3_envelope(
+        {"NBA": 188080404},
+        generated_at="2026-03-01T12:34:56Z",
+        collector=lambda *, sport, contest_id, standings_limit: bundle,
+    )
+
+
+def test_a_broken_presence_rule_publishes_with_the_warning_recorded() -> None:
+    # Player C is in progress and carries neither stats text nor a projection.
+    envelope = _build_with(_bundle_with_vip_lineup())
+
+    assert envelope["presence_warnings"] == [
+        {"path": "sports.nba.players[0].stats_text", "rule": "in_progress_player_has_stats"},
+        {"path": "sports.nba.players[0].rt_projection", "rule": "in_progress_player_has_stats"},
+    ]
+
+
+def test_presence_warnings_are_an_empty_list_when_no_rule_is_broken() -> None:
+    bundle = _bundle_with_vip_lineup()
+    bundle["players"][0].update({"stats_text": "12 pts", "rt_projection": 30.5})
+
+    assert _build_with(bundle)["presence_warnings"] == []
+
+
+def test_a_shape_violation_still_raises_even_when_a_presence_rule_is_also_broken() -> None:
+    bundle = _bundle_with_vip_lineup()
+    bundle["contest"]["state"] = 12
+
+    with pytest.raises(ValueError, match="Snapshot v3 validation failed"):
+        _build_with(bundle)

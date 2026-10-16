@@ -1,5 +1,6 @@
 {
   "generated_at":"2026-10-04T12:00:00Z",
+  "presence_warnings":[],
   "producer_commit":"0123456789abcdef0123456789abcdef01234567",
   "schema_version":3,
   "snapshot_at":"2026-10-04T12:00:00Z",
@@ -276,7 +277,9 @@
           "roster_positions":[
             "SP"
           ],
+          "rt_projection":13.75,
           "salary":9800,
+          "stats_text":"12.5 fantasy points",
           "team":"NYY",
           "value":1.28
         },
