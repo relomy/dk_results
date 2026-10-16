@@ -55,6 +55,16 @@ def test_rebuilt_envelope_matches_the_committed_golden(scenario: Scenario) -> No
     )
 
 
+@pytest.mark.parametrize("scenario", SCENARIOS, ids=attrgetter("name"))
+def test_no_golden_carries_a_presence_warning(scenario: Scenario) -> None:
+    """Presence rules are strict here and soft at runtime: a blank the rules expect filled fails CI."""
+    rebuilt = build_envelope(scenario)
+    committed = json.loads(_golden_path(scenario.name).read_text())
+
+    assert rebuilt["presence_warnings"] == []
+    assert committed["presence_warnings"] == []
+
+
 def test_every_committed_golden_belongs_to_a_scenario() -> None:
     committed = {path.stem for path in GOLDENS_DIR.glob("*.json")}
 
@@ -62,6 +72,26 @@ def test_every_committed_golden_belongs_to_a_scenario() -> None:
         f"contract/goldens/ and the scenario registry disagree; regenerate with `{REGENERATE_COMMAND}` "
         "and delete goldens of removed scenarios."
     )
+
+
+@pytest.mark.parametrize("scenario", SCENARIOS, ids=attrgetter("name"))
+def test_every_golden_carries_the_placeholder_producer_commit(scenario: Scenario) -> None:
+    envelope = json.loads(_golden_path(scenario.name).read_text())
+
+    assert envelope["producer_commit"] == "0123456789abcdef0123456789abcdef01234567"
+
+
+def test_the_goldens_exercise_the_unlocked_vip_slot_presence_rule() -> None:
+    """Rule 2 only guards a golden that has an unlocked VIP slot to check."""
+    unlocked_slots = [
+        slot
+        for scenario in SCENARIOS
+        for vip in _committed_contest(scenario.name)["vip_lineups"]
+        for slot in vip["players_live"]
+        if not slot.get("is_locked")
+    ]
+
+    assert unlocked_slots and all(slot.get("player_key") for slot in unlocked_slots)
 
 
 def test_golf_golden_has_no_game_status_and_omits_every_remaining_figure() -> None:

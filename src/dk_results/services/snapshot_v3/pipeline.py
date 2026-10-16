@@ -21,7 +21,7 @@ from dk_results.services.snapshot_v3.derive import (
 from dk_results.services.snapshot_v3.models.envelope import contract_violations
 from dk_results.services.snapshot_v3.normalize import to_utc_iso
 from dk_results.services.snapshot_v3.serialize import normalize_rfc3339_utc_seconds
-from dk_results.services.snapshot_v3.validate import validate_v3_envelope
+from dk_results.services.snapshot_v3.validate import collect_presence_warnings, validate_v3_envelope
 
 
 def normalize_sport_name(raw: str) -> str:
@@ -70,6 +70,7 @@ def build_snapshot_v3_envelope(
     *,
     standings_limit: int = DEFAULT_STANDINGS_LIMIT,
     generated_at: str | None = None,
+    producer_commit: str | None = None,
     collector: Callable[..., dict[str, Any] | CollectedSnapshot] | None = None,
 ) -> dict[str, Any]:
     resolved_generated_at = _resolved_generated_at(generated_at)
@@ -89,15 +90,20 @@ def build_snapshot_v3_envelope(
         "schema_version": SCHEMA_VERSION,
         "snapshot_at": resolved_generated_at,
         "generated_at": resolved_generated_at,
+        "producer_commit": producer_commit,
         "sports": sports,
+        # Empty until the presence rules run below; the contract requires the field.
+        "presence_warnings": [],
     }
 
-    # The contract models check shape first. The hand-written validator, which
-    # covers what the models don't type yet plus cross-field coherence, runs only
-    # once they pass, so one fault is reported once.
+    # Shape and the hand-written validator block publishing. The contract models check shape
+    # first; the validator, which covers what the models don't type yet plus cross-field
+    # coherence, runs only once they pass, so one fault is reported once. Presence rules never
+    # block: they only record warnings.
     violations = contract_violations(envelope) or validate_v3_envelope(envelope)
     if violations:
         joined = ",".join(violations)
         raise ValueError(f"Snapshot v3 validation failed: {joined}")
 
+    envelope["presence_warnings"] = collect_presence_warnings(envelope)
     return envelope

@@ -20,6 +20,7 @@ from dk_results.services.snapshot_v3 import collector
 from dk_results.services.snapshot_v3.pipeline import build_snapshot_v3_envelope
 
 GENERATED_AT = "2026-10-04T12:00:00Z"
+PRODUCER_COMMIT = "0123456789abcdef0123456789abcdef01234567"
 
 
 @dataclass(frozen=True)
@@ -37,6 +38,7 @@ def build_envelope(scenario: Scenario) -> dict[str, Any]:
     return build_snapshot_v3_envelope(
         {scenario.sport: scenario.contest_id},
         generated_at=GENERATED_AT,
+        producer_commit=PRODUCER_COMMIT,
         collector=lambda **_: deepcopy(scenario.bundle()),
     )
 
@@ -147,6 +149,7 @@ def _golf_bundle() -> dict[str, Any]:
 def _team_player(
     name: str, position: str, salary: int, team: str, status: str, own: float, *, sport: str, fpts: float = 0.0
 ) -> dict[str, Any]:
+    live_facts = {"stats_text": f"{fpts} fantasy points", "rt_projection": round(fpts * 1.1, 2)}
     return {
         "name": name,
         "player_key": f"{sport}:{name.lower().replace(' ', '-')}",
@@ -158,6 +161,8 @@ def _team_player(
         "ownership_pct": own,
         "fantasy_points": fpts,
         "value": round(fpts / (salary / 1000), 2) if salary else 0.0,
+        # An in-progress player always carries its Scorecard stats and real-time projection.
+        **(live_facts if status == "In Progress" else {}),
     }
 
 
@@ -271,6 +276,28 @@ def _zero_vip_bundle() -> dict[str, Any]:
     }
 
 
+def _completed_nba_bundle() -> dict[str, Any]:
+    """NBA contest that finished: state ``completed`` plus the producer's ``completed_at`` stamp."""
+    bundle = deepcopy(_zero_vip_bundle())
+    contest_id = "300500"
+    bundle["contest"].update(
+        {
+            "contest_id": contest_id,
+            "name": "NBA $5 Double Up (Final)",
+            "state": "completed",
+            "completed_at": "2026-10-05T04:12:30Z",
+        }
+    )
+    bundle["selected_contest_id"] = contest_id
+    bundle["selection_reason"] = {"mode": "explicit_id", "criteria": {"contest_id": contest_id}}
+    for player in bundle["players"]:
+        player["game_status"] = "Final"
+    for row in bundle["standings"]:
+        row["ownership_remaining_total_pct"] = 0.0
+        row["remaining_salary"] = 0
+    return bundle
+
+
 def _mlb_bundle() -> dict[str, Any]:
     """MLB: Game status present, but no non-cashing player tally and so no swing players."""
     final, live, pregame = "Final", "In Progress", "NYY@BOS 07:10PM ET"
@@ -287,7 +314,7 @@ def _mlb_bundle() -> dict[str, Any]:
         for name, pos, salary, team, status, own, fpts in pool
     ]
     by_name = {p["name"]: p for p in players}
-    # Scorecard fields: one held player carries them, the others (like Juan Soto) omit them
+    # Aaron Judge also carries the full set of Scorecard fields; players not in progress (like Juan Soto) omit them
     by_name["Aaron Judge"].update(
         {"rt_projection": 31.25, "stats_text": "1 HR, 2 RBI, 1 R", "time_remaining_minutes": 0, "value_icon": "fire"}
     )
@@ -427,9 +454,11 @@ class _NflDraftKings:
     def download_salary_csv(self, _sport: str, _draft_group: int, path: str) -> None:
         with open(path, "w", newline="", encoding="utf-8") as handle:
             writer = csv.writer(handle)
-            writer.writerow(["Position", "Name", "Roster Position", "Salary", "Game Info", "TeamAbbrev"])
+            writer.writerow(["Position", "Name", "ID", "Roster Position", "Salary", "Game Info", "TeamAbbrev"])
             for name, (pos, salary, team, status, _own, _fpts) in _NFL_POOL.items():
-                writer.writerow([pos, name, _NFL_FLEX_ELIGIBLE.get(pos, pos), salary, status, team])
+                writer.writerow(
+                    [pos, name, _nfl_draftable_id(name), _NFL_FLEX_ELIGIBLE.get(pos, pos), salary, status, team]
+                )
 
     def download_contest_rows(self, *_args: Any, **_kwargs: Any) -> list[list[str]]:
         return self._standings_rows
@@ -455,6 +484,9 @@ class _NflContestDatabase:
         return None
 
     def get_contest_contract_metadata(self, _dk_id: int) -> None:
+        return None
+
+    def get_contest_completed_at(self, _dk_id: int) -> None:
         return None
 
 
@@ -564,11 +596,12 @@ _NFL_LINEUPS: dict[str, tuple[str, ...]] = {
         "Derrick Henry",
         "Rams",
     ),
+    # Holds every player still in progress that no other VIP does, so each reaches the pool with Scorecard facts.
     "G": (
-        "Josh Allen",
+        "Patrick Mahomes",
         "Derrick Henry",
         "James Cook",
-        "Justin Jefferson",
+        "Ladd McConkey",
         "Ja'Marr Chase",
         "CeeDee Lamb",
         "Sam LaPorta",
@@ -605,6 +638,10 @@ _NFL_ENTRIES = (
 )
 _NFL_STANDINGS_LIMIT = 6
 _NFL_CASH_PAYOUTS = {"e10": "50.00", "e11": "50.00"}  # tied at the line: positions 10 and 11 share one $100 payout
+
+
+def _nfl_draftable_id(name: str) -> str:
+    return str(9000 + list(_NFL_POOL).index(name))
 
 
 def _nfl_lineup_string(lineup: str) -> str:
@@ -646,6 +683,8 @@ def _nfl_scorecards(lineup: str) -> list[dict[str, Any]]:
             {
                 "rosterPosition": slot,
                 "displayName": _NFL_PADDED_DST.get(name, name),
+                "draftableId": _nfl_draftable_id(name),
+                "statsDescription": f"{fpts} fantasy points",
                 "score": fpts,
                 "percentDrafted": own,
                 "timeRemaining": "0" if status == _NFL_FINAL else "35",
@@ -711,5 +750,6 @@ SCENARIOS: tuple[Scenario, ...] = (
     Scenario("golf", "GOLF", 300100, _golf_bundle),
     Scenario("zero_vip", "NBA", 300200, _zero_vip_bundle),
     Scenario("mlb", "MLB", 300300, _mlb_bundle),
+    Scenario("completed_nba", "NBA", 300500, _completed_nba_bundle),
     Scenario("nfl_mid_slate", "NFL", 300400, _nfl_mid_slate_bundle),
 )

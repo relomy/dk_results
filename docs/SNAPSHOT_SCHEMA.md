@@ -17,7 +17,8 @@ where the two disagree on shape, the schema wins.
 The schema is generated from the pydantic models in
 `src/dk_results/services/snapshot_v3/models/` (one module per contest section).
 The feed validates every envelope against them before the hand-written
-validator runs; a failure stops the build and nothing is uploaded. The schema
+validator runs; a failure stops the build and nothing is uploaded. Presence
+rules run last and only record [`presence_warnings`](#presence_warnings). The schema
 is never edited by hand; after changing the models, regenerate and commit it:
 
 ```bash
@@ -45,6 +46,8 @@ Beyond field types, the models reject an envelope (and fail the build) when:
   empty (the metric is omitted instead);
 - `metrics.non_cashing.top_remaining_players` has more than 10 rows;
 - `contest.positions_paid` is below 1;
+- `contest.completed_at` is present but not a valid ISO timestamp (the validator
+  also rejects `null`);
 - `metrics.non_cashing.users_not_cashing` exceeds `max_entries` minus
   `positions_paid` (see below);
 - a `cash_line` has neither cutoff, or lacks the cutoff its `cutoff_type`
@@ -140,6 +143,26 @@ the guard for that.
   count/average PMR remain available. Remaining salary (a user's cap minus
   revealed salaries) and train detection retain their separate meanings.
 
+## `producer_commit`
+
+| | |
+|---|---|
+| Type | string or `null`, required: a full 40-character lowercase hex SHA |
+| Location | the envelope's top level |
+| Meaning | The dk_results commit that built the snapshot: the **producer commit**. |
+
+The snapshot feed resolves it once per run: `DK_RESULTS_COMMIT` when set to a
+valid SHA (for deploys without git metadata), otherwise `git rev-parse HEAD` in
+the producer's checkout. The key is always present and is `null`, never omitted,
+when the commit cannot be told: git is unavailable or fails, or the checkout has
+uncommitted changes to tracked files (a snapshot built from edited code was not
+built by that commit). Callers that build an envelope without passing a commit
+also get `null`. The day manifest does not carry it. Adding it is an additive
+change.
+
+The goldens in `contract/goldens/` carry the fixed placeholder
+`0123456789abcdef0123456789abcdef01234567`.
+
 ## `contest.positions_paid`
 
 | | |
@@ -150,6 +173,24 @@ the guard for that.
 
 Omitted when DraftKings reports no payout positions. It bounds the non-cashing
 count (see `contest.metrics.non_cashing`).
+
+## `contest.completed_at`
+
+| | |
+|---|---|
+| Type | string, optional: ISO-8601 UTC in the `snapshot_at` format (`YYYY-MM-DDTHH:MM:SSZ`) |
+| Location | `sports.<sport>.contests[0]` |
+| Meaning | The moment the producer first observed DraftKings reporting the contest `COMPLETED`. |
+
+`completed_at` is the producer's **observation time**, not DraftKings' end time:
+it lags the real end by up to one `CompletionProcessor` cycle, so do not trust it
+beyond that precision. It is stamped once, read from the contest database, and is
+identical on every later snapshot of the same contest, so it is safe to order
+completed contests by it.
+
+The key is **omitted, never null**, for contests that are not completed,
+cancelled contests, and contests that completed before the stamp was recorded.
+Adding it is an additive change.
 
 ## `contest.live_metrics.cash_line`
 
@@ -383,6 +424,32 @@ Omitted per row when:
 The pre-v3 `ownership_in_play_source` field is not emitted. **Behavior change
 from pre-v3:** the old producer counted pre-game players as in play; they are
 now excluded.
+
+## `presence_warnings`
+
+A required top-level list of the presence rules the snapshot broke; `[]` when
+none did. Each item is `{"path", "rule"}`: `path` is the dotted path of the blank
+field (the same form the validator's messages use, e.g.
+`sports.mlb.players[4].stats_text`) and `rule` is the rule id below. One item per
+blank field.
+
+Presence rules are strict before merge and soft at runtime (ADR-0016). The
+goldens test fails when any golden carries a warning, so a code bug that leaves
+a field blank is caught before merge. At runtime a broken rule never stops
+a snapshot from publishing: it is recorded here, because some blanks come from
+DraftKings. Shape and type checks (the contract models and the hand-written
+validator) are unchanged and still block publishing. Build order: shape check,
+hand-written validator, then the presence rules.
+
+| Rule id | Condition | Field expected filled |
+|---|---|---|
+| `cashing_row_has_payout` | a `contest.standings[]` row has `is_cashing: true` | that row's `payout_cents` is a number, not null |
+| `unlocked_vip_slot_has_player_key` | a `contest.vip_lineups[].players_live[]` slot is not locked (`is_locked` is not `true`) | the slot's `player_key` |
+| `in_progress_player_has_stats` | a `players[]` row's Game status is in play (`In Progress`, `Delayed` or `Suspended`) | the row's `stats_text` and `rt_projection`, one warning each |
+
+These stay unruled because their blanks are legitimate: `vip_lineups`,
+`train_clusters`, golf `team`, `is_locked`, `time_remaining_minutes`,
+`value_icon`.
 
 ## Breaking changes
 

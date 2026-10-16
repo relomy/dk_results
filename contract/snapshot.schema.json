@@ -32,6 +32,11 @@
       "additionalProperties":false,
       "description":"One DraftKings contest with its standings, VIP lineups and metrics.",
       "properties":{
+        "completed_at":{
+          "description":"ISO-8601 UTC timestamp (YYYY-MM-DDTHH:MM:SSZ, the snapshot_at format) of when the producer first observed the contest completed.",
+          "title":"Completed At",
+          "type":"string"
+        },
         "contest_id":{
           "title":"Contest Id",
           "type":"string"
@@ -357,6 +362,26 @@
       "description":"The `contest.ownership_watchlist` section.",
       "properties":{},
       "title":"OwnershipWatchlist",
+      "type":"object"
+    },
+    "PresenceWarning":{
+      "additionalProperties":false,
+      "description":"A presence rule the snapshot broke: the field left blank and the rule that expected it filled.",
+      "properties":{
+        "path":{
+          "title":"Path",
+          "type":"string"
+        },
+        "rule":{
+          "title":"Rule",
+          "type":"string"
+        }
+      },
+      "required":[
+        "path",
+        "rule"
+      ],
+      "title":"PresenceWarning",
       "type":"object"
     },
     "PrimaryContest":{
@@ -717,6 +742,25 @@
       "title":"Generated At",
       "type":"string"
     },
+    "presence_warnings":{
+      "items":{
+        "$ref":"#/$defs/PresenceWarning"
+      },
+      "title":"Presence Warnings",
+      "type":"array"
+    },
+    "producer_commit":{
+      "anyOf":[
+        {
+          "pattern":"^[0-9a-f]{40}$",
+          "type":"string"
+        },
+        {
+          "type":"null"
+        }
+      ],
+      "title":"Producer Commit"
+    },
     "schema_version":{
       "const":3,
       "title":"Schema Version",
@@ -738,7 +782,9 @@
     "schema_version",
     "snapshot_at",
     "generated_at",
-    "sports"
+    "producer_commit",
+    "sports",
+    "presence_warnings"
   ],
   "title":"SnapshotEnvelope",
   "type":"object"

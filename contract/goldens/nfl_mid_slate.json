@@ -1,5 +1,7 @@
 {
   "generated_at":"2026-10-04T12:00:00Z",
+  "presence_warnings":[],
+  "producer_commit":"0123456789abcdef0123456789abcdef01234567",
   "schema_version":3,
   "snapshot_at":"2026-10-04T12:00:00Z",
   "sports":{
@@ -12,7 +14,7 @@
           "currency":"USD",
           "entry_fee_cents":5000,
           "live_metrics":{
-            "avg_salary_per_player_remaining":6476.71,
+            "avg_salary_per_player_remaining":6477.33,
             "cash_line":{
               "cutoff_type":"rank",
               "points_cutoff":128.02,
@@ -100,8 +102,8 @@
                   "display_name":"vip_at_line",
                   "entry_key":"e10",
                   "is_partial":true,
-                  "ownership_in_play_pct":26.5,
-                  "total_ownership_pct":113.5,
+                  "ownership_in_play_pct":51.0,
+                  "total_ownership_pct":105.0,
                   "vip_entry_key":"e10"
                 },
                 {
@@ -126,7 +128,7 @@
             },
             "threat":{
               "field_remaining_is_partial":true,
-              "field_remaining_pct":57.77,
+              "field_remaining_pct":59.0,
               "field_remaining_scope":"contest_field",
               "field_remaining_source":"contest_standings_mean",
               "leverage_semantics":"positive=unique",
@@ -165,43 +167,43 @@
                   "ownership_remaining_pct":44.44,
                   "player_key":"nfl:patrick-mahomes:kc:7600:qb",
                   "player_name":"Patrick Mahomes",
-                  "vip_count":0
+                  "vip_count":1
                 }
               ],
               "vip_vs_field_leverage":[
                 {
                   "display_name":"EmpireMaker2",
                   "entry_key":"e08",
-                  "field_remaining_pct":57.77,
+                  "field_remaining_pct":59.0,
                   "is_partial":true,
-                  "uniqueness_delta_pct":10.77,
+                  "uniqueness_delta_pct":12.0,
                   "vip_entry_key":"e08",
                   "vip_remaining_pct":47.0
                 },
                 {
                   "display_name":"vip_at_line",
                   "entry_key":"e10",
-                  "field_remaining_pct":57.77,
+                  "field_remaining_pct":59.0,
                   "is_partial":true,
-                  "uniqueness_delta_pct":31.27,
+                  "uniqueness_delta_pct":8.0,
                   "vip_entry_key":"e10",
-                  "vip_remaining_pct":26.5
+                  "vip_remaining_pct":51.0
                 },
                 {
                   "display_name":"vip_below_a",
                   "entry_key":"e13",
-                  "field_remaining_pct":57.77,
+                  "field_remaining_pct":59.0,
                   "is_partial":true,
-                  "uniqueness_delta_pct":-20.73,
+                  "uniqueness_delta_pct":-19.5,
                   "vip_entry_key":"e13",
                   "vip_remaining_pct":78.5
                 },
                 {
                   "display_name":"vip_below_b",
                   "entry_key":"e17",
-                  "field_remaining_pct":57.77,
+                  "field_remaining_pct":59.0,
                   "is_partial":true,
-                  "uniqueness_delta_pct":-33.23,
+                  "uniqueness_delta_pct":-32.0,
                   "vip_entry_key":"e17",
                   "vip_remaining_pct":91.0
                 }
@@ -285,15 +287,15 @@
                 "pmr":600.0
               },
               {
-                "current_points":141.0,
-                "current_rank":8,
-                "display_name":"EmpireMaker2",
-                "entry_key":"e08",
-                "ownership_remaining_pct":47.0,
-                "pmr":480.0
+                "current_points":128.02,
+                "current_rank":10,
+                "display_name":"vip_at_line",
+                "entry_key":"e10",
+                "ownership_remaining_pct":51.0,
+                "pmr":510.0
               }
             ],
-            "ownership_remaining_total_pct":57.775
+            "ownership_remaining_total_pct":59.0
           },
           "positions_paid":10,
           "prize_pool_cents":100000,
@@ -403,13 +405,13 @@
               "user_count":2
             },
             {
-              "cluster_id":"1701cc3a5412",
+              "cluster_id":"3436174489ee",
               "cluster_rule":"salary_remaining<=40000_and_same_points_pmr",
               "entry_keys":[
                 "e10",
                 "e11"
               ],
-              "lineup_signature":"Josh Allen|Derrick Henry|James Cook|Ja'Marr Chase|Justin Jefferson|LOCKED \ud83d\udd12|Sam LaPorta|LOCKED \ud83d\udd12|Jets",
+              "lineup_signature":"Patrick Mahomes|Derrick Henry|James Cook|Ja'Marr Chase|LOCKED \ud83d\udd12|Ladd McConkey|Sam LaPorta|LOCKED \ud83d\udd12|Jets",
               "pmr":510.0,
               "points":128.02,
               "rank":10,
@@ -504,10 +506,10 @@
               "entry_key":"e10",
               "players_live":[
                 {
-                  "is_live":false,
-                  "player_key":"nfl:josh-allen:buf:7800:qb",
-                  "player_name":"Josh Allen",
-                  "salary":7800,
+                  "is_live":true,
+                  "player_key":"nfl:patrick-mahomes:kc:7600:qb",
+                  "player_name":"Patrick Mahomes",
+                  "salary":7600,
                   "slot":"QB"
                 },
                 {
@@ -525,10 +527,10 @@
                   "slot":"RB"
                 },
                 {
-                  "is_live":false,
-                  "player_key":"nfl:justin-jefferson:min:7900:wr",
-                  "player_name":"Justin Jefferson",
-                  "salary":7900,
+                  "is_live":true,
+                  "player_key":"nfl:ladd-mcconkey:lac:5400:wr",
+                  "player_name":"Ladd McConkey",
+                  "salary":5400,
                   "slot":"WR"
                 },
                 {
@@ -732,7 +734,9 @@
           "roster_positions":[
             "DST"
           ],
+          "rt_projection":9.0,
           "salary":2800,
+          "stats_text":"9.0 fantasy points",
           "team":"NYJ",
           "value":3.2142857142857144
         },
@@ -746,7 +750,9 @@
           "roster_positions":[
             "DST"
           ],
+          "rt_projection":7.0,
           "salary":3200,
+          "stats_text":"7.0 fantasy points",
           "team":"LAR",
           "value":2.1875
         },
@@ -774,7 +780,9 @@
           "roster_positions":[
             "QB"
           ],
+          "rt_projection":21.5,
           "salary":7800,
+          "stats_text":"21.5 fantasy points",
           "team":"BUF",
           "value":2.7564102564102564
         },
@@ -788,7 +796,9 @@
           "roster_positions":[
             "QB"
           ],
+          "rt_projection":14.2,
           "salary":7600,
+          "stats_text":"14.2 fantasy points",
           "team":"KC",
           "value":1.868421052631579
         },
@@ -803,7 +813,9 @@
             "RB",
             "FLEX"
           ],
+          "rt_projection":8.1,
           "salary":7100,
+          "stats_text":"8.1 fantasy points",
           "team":"ATL",
           "value":1.1408450704225352
         },
@@ -818,7 +830,9 @@
             "RB",
             "FLEX"
           ],
+          "rt_projection":25.4,
           "salary":7400,
+          "stats_text":"25.4 fantasy points",
           "team":"BAL",
           "value":3.432432432432432
         },
@@ -833,7 +847,9 @@
             "RB",
             "FLEX"
           ],
+          "rt_projection":11.3,
           "salary":6000,
+          "stats_text":"11.3 fantasy points",
           "team":"BUF",
           "value":1.8833333333333335
         },
@@ -863,7 +879,9 @@
             "TE",
             "FLEX"
           ],
+          "rt_projection":10.2,
           "salary":4600,
+          "stats_text":"10.2 fantasy points",
           "team":"DET",
           "value":2.217391304347826
         },
@@ -878,7 +896,9 @@
             "TE",
             "FLEX"
           ],
+          "rt_projection":6.8,
           "salary":5600,
+          "stats_text":"6.8 fantasy points",
           "team":"KC",
           "value":1.2142857142857144
         },
@@ -893,7 +913,9 @@
             "WR",
             "FLEX"
           ],
+          "rt_projection":14.6,
           "salary":7500,
+          "stats_text":"14.6 fantasy points",
           "team":"DET",
           "value":1.9466666666666665
         },
@@ -923,7 +945,9 @@
             "WR",
             "FLEX"
           ],
+          "rt_projection":12.2,
           "salary":8400,
+          "stats_text":"12.2 fantasy points",
           "team":"CIN",
           "value":1.4523809523809523
         },
@@ -938,7 +962,9 @@
             "WR",
             "FLEX"
           ],
+          "rt_projection":18.7,
           "salary":7900,
+          "stats_text":"18.7 fantasy points",
           "team":"MIN",
           "value":2.3670886075949364
         },
@@ -953,7 +979,9 @@
             "WR",
             "FLEX"
           ],
+          "rt_projection":7.5,
           "salary":5400,
+          "stats_text":"7.5 fantasy points",
           "team":"LAC",
           "value":1.3888888888888888
         },
@@ -968,7 +996,9 @@
             "WR",
             "FLEX"
           ],
+          "rt_projection":9.4,
           "salary":7200,
+          "stats_text":"9.4 fantasy points",
           "team":"LAR",
           "value":1.3055555555555556
         }
