@@ -364,6 +364,26 @@
       "title":"OwnershipWatchlist",
       "type":"object"
     },
+    "PresenceWarning":{
+      "additionalProperties":false,
+      "description":"A presence rule the snapshot broke: the field left blank and the rule that expected it filled.",
+      "properties":{
+        "path":{
+          "title":"Path",
+          "type":"string"
+        },
+        "rule":{
+          "title":"Rule",
+          "type":"string"
+        }
+      },
+      "required":[
+        "path",
+        "rule"
+      ],
+      "title":"PresenceWarning",
+      "type":"object"
+    },
     "PrimaryContest":{
       "additionalProperties":false,
       "description":"The contest the sport payload is built around.",
@@ -722,6 +742,13 @@
       "title":"Generated At",
       "type":"string"
     },
+    "presence_warnings":{
+      "items":{
+        "$ref":"#/$defs/PresenceWarning"
+      },
+      "title":"Presence Warnings",
+      "type":"array"
+    },
     "producer_commit":{
       "anyOf":[
         {
@@ -756,7 +783,8 @@
     "snapshot_at",
     "generated_at",
     "producer_commit",
-    "sports"
+    "sports",
+    "presence_warnings"
   ],
   "title":"SnapshotEnvelope",
   "type":"object"

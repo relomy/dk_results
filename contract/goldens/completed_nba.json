@@ -1,5 +1,6 @@
 {
   "generated_at":"2026-10-04T12:00:00Z",
+  "presence_warnings":[],
   "producer_commit":"0123456789abcdef0123456789abcdef01234567",
   "schema_version":3,
   "snapshot_at":"2026-10-04T12:00:00Z",
@@ -168,7 +169,9 @@
           "roster_positions":[
             "PG"
           ],
+          "rt_projection":34.38,
           "salary":11500,
+          "stats_text":"31.25 fantasy points",
           "team":"DAL",
           "value":2.72
         },
@@ -182,7 +185,9 @@
           "roster_positions":[
             "SF"
           ],
+          "rt_projection":24.2,
           "salary":9800,
+          "stats_text":"22.0 fantasy points",
           "team":"BOS",
           "value":2.24
         },
@@ -224,7 +229,9 @@
           "roster_positions":[
             "SG"
           ],
+          "rt_projection":15.95,
           "salary":5400,
+          "stats_text":"14.5 fantasy points",
           "team":"BOS",
           "value":2.69
         }

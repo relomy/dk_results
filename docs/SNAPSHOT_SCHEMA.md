@@ -17,7 +17,8 @@ where the two disagree on shape, the schema wins.
 The schema is generated from the pydantic models in
 `src/dk_results/services/snapshot_v3/models/` (one module per contest section).
 The feed validates every envelope against them before the hand-written
-validator runs; a failure stops the build and nothing is uploaded. The schema
+validator runs; a failure stops the build and nothing is uploaded. Presence
+rules run last and only record [`presence_warnings`](#presence_warnings). The schema
 is never edited by hand; after changing the models, regenerate and commit it:
 
 ```bash
@@ -423,6 +424,32 @@ Omitted per row when:
 The pre-v3 `ownership_in_play_source` field is not emitted. **Behavior change
 from pre-v3:** the old producer counted pre-game players as in play; they are
 now excluded.
+
+## `presence_warnings`
+
+A required top-level list of the presence rules the snapshot broke; `[]` when
+none did. Each item is `{"path", "rule"}`: `path` is the dotted path of the blank
+field (the same form the validator's messages use, e.g.
+`sports.mlb.players[4].stats_text`) and `rule` is the rule id below. One item per
+blank field.
+
+Presence rules are strict before merge and soft at runtime (ADR-0016). The
+goldens test fails when any golden carries a warning, so a code bug that leaves
+a field blank is caught before merge. At runtime a broken rule never stops
+a snapshot from publishing: it is recorded here, because some blanks come from
+DraftKings. Shape and type checks (the contract models and the hand-written
+validator) are unchanged and still block publishing. Build order: shape check,
+hand-written validator, then the presence rules.
+
+| Rule id | Condition | Field expected filled |
+|---|---|---|
+| `cashing_row_has_payout` | a `contest.standings[]` row has `is_cashing: true` | that row's `payout_cents` is a number, not null |
+| `unlocked_vip_slot_has_player_key` | a `contest.vip_lineups[].players_live[]` slot is not locked (`is_locked` is not `true`) | the slot's `player_key` |
+| `in_progress_player_has_stats` | a `players[]` row's Game status is in play (`In Progress`, `Delayed` or `Suspended`) | the row's `stats_text` and `rt_projection`, one warning each |
+
+These stay unruled because their blanks are legitimate: `vip_lineups`,
+`train_clusters`, golf `team`, `is_locked`, `time_remaining_minutes`,
+`value_icon`.
 
 ## Breaking changes
 

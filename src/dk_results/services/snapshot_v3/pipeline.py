@@ -21,7 +21,7 @@ from dk_results.services.snapshot_v3.derive import (
 from dk_results.services.snapshot_v3.models.envelope import contract_violations
 from dk_results.services.snapshot_v3.normalize import to_utc_iso
 from dk_results.services.snapshot_v3.serialize import normalize_rfc3339_utc_seconds
-from dk_results.services.snapshot_v3.validate import validate_v3_envelope
+from dk_results.services.snapshot_v3.validate import presence_warnings, validate_v3_envelope
 
 
 def normalize_sport_name(raw: str) -> str:
@@ -92,8 +92,10 @@ def build_snapshot_v3_envelope(
         "generated_at": resolved_generated_at,
         "producer_commit": producer_commit,
         "sports": sports,
+        "presence_warnings": [],
     }
 
+    # Shape and the hand-written validator block publishing; presence rules only record warnings.
     # The contract models check shape first. The hand-written validator, which
     # covers what the models don't type yet plus cross-field coherence, runs only
     # once they pass, so one fault is reported once.
@@ -102,4 +104,5 @@ def build_snapshot_v3_envelope(
         joined = ",".join(violations)
         raise ValueError(f"Snapshot v3 validation failed: {joined}")
 
+    envelope["presence_warnings"] = presence_warnings(envelope)
     return envelope

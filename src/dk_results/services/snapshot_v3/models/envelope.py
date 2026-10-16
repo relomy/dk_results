@@ -39,6 +39,13 @@ class SportPayload(ContractModel):
 ProducerCommit = Annotated[StrictStr, StringConstraints(pattern=f"^{PRODUCER_COMMIT_PATTERN}$")]
 
 
+class PresenceWarning(ContractModel):
+    """A presence rule the snapshot broke: the field left blank and the rule that expected it filled."""
+
+    path: StrictStr
+    rule: StrictStr
+
+
 class SnapshotEnvelope(ContractModel):
     """A schema-3 live snapshot, keyed by lowercase sport name."""
 
@@ -47,6 +54,7 @@ class SnapshotEnvelope(ContractModel):
     generated_at: StrictStr
     producer_commit: ProducerCommit | None
     sports: dict[str, SportPayload]
+    presence_warnings: list[PresenceWarning]
 
 
 def _format_location(location: Sequence[int | str]) -> str:
