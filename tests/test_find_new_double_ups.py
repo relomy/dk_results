@@ -466,6 +466,16 @@ def test_filter_draft_groups_nfl_showdown_drops_morning_groups_sharing_a_start_m
     assert filter_draft_groups(groups, NFLShowdownSport) == [3]
 
 
+def test_filter_draft_groups_nfl_showdown_drops_night_groups_sharing_a_start_minute():
+    """Monday doubleheader shape: two Featured Showdowns at 20:20 are both dropped."""
+    groups = [
+        _showdown_group(1, "20:20", suffix="(DAL @ GB)"),
+        _showdown_group(2, "20:20", suffix="(MIA @ NO)"),
+    ]
+
+    assert filter_draft_groups(groups, NFLShowdownSport) == []
+
+
 def test_filter_draft_groups_sport_without_start_windows_accepts_any_start():
     class OpenSport(Sport):
         name = "TEST"
