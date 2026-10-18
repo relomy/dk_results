@@ -1,5 +1,7 @@
 # NFLShowdownSport requires a 6:00 PM ET start floor
 
+_Amended by [ADR-0017](0017-nflshowdown-start-time-windows.md): the 6:00 PM floor became two start-time windows._
+
 `NFLShowdownSport` matched any `Featured`, `GameTypeId=96` draft group with an
 ordinary suffix. Live DraftKings data (pulled 2026-09-17) showed this is
 broader than intended: DraftKings tags one `Featured` Showdown *per game
