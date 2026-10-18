@@ -2,6 +2,17 @@ import re
 from collections.abc import Iterator, Mapping
 from datetime import date, time
 from types import MappingProxyType
+from typing import NamedTuple
+
+
+class StartWindow(NamedTuple):
+    """Half-open ``[start, end)`` time-of-day range in ET; ``end=None`` runs to end of day."""
+
+    start: time
+    end: time | None = None
+
+    def contains(self, value: time) -> bool:
+        return value >= self.start and (self.end is None or value < self.end)
 
 
 class Sport:
@@ -36,7 +47,9 @@ class Sport:
     _suffix_patterns_cache_key: tuple[str | None, ...] | None = None
 
     contest_restraint_day: date | None = None
-    contest_restraint_time: time | None = None
+    # Start-time constraint: None -> any start time passes; otherwise the start
+    # must fall inside at least one window.
+    start_windows: tuple[StartWindow, ...] | None = None
     contest_restraint_type_id: int | None = None
     contest_restraint_game_type_id: int | None = None
 
@@ -197,7 +210,7 @@ class NFLShowdownSport(Sport):
     # (see test_filter_draft_groups_nfl_showdown_super_bowl_suffix) — a 6:00
     # PM floor keeps every single-game primetime/marquee window while still
     # excluding every standard Sunday day window (never later than ~16:25).
-    contest_restraint_time = time(18, 0)
+    start_windows = (StartWindow(time(18, 0)),)
     contest_restraint_game_type_id = 96
 
 

@@ -22,6 +22,7 @@ from dk_results.domain.sport import (
     PGAShowdownSport,
     PGAWeekendSport,
     Sport,
+    StartWindow,
 )
 from dk_results.lobby.common import get_salary_date, is_time_between, valid_date
 from dk_results.lobby.draft_group_filter import filter_draft_groups, get_featured_draft_group_ids
@@ -240,7 +241,7 @@ def test_filter_draft_groups_filters():
     class DummySport(Sport):
         name = "TEST"
         suffixes = (r"\(Main\)",)
-        contest_restraint_time = datetime.time(18, 0)
+        start_windows = (StartWindow(datetime.time(18, 0)),)
         contest_restraint_game_type_id = 99
 
     response = {
@@ -394,6 +395,33 @@ def test_filter_draft_groups_nfl_showdown():
 
     result = filter_draft_groups(response["DraftGroups"], NFLShowdownSport)
     assert result == [12]
+
+
+def _showdown_group(draft_group_id, start):
+    return {
+        "DraftGroupTag": "Featured",
+        "ContestStartTimeSuffix": "(DAL @ GB)",
+        "DraftGroupId": draft_group_id,
+        "StartDateEst": f"2026-10-18T{start}:00.000-04:00",
+        "ContestTypeId": 96,
+        "GameTypeId": 96,
+    }
+
+
+def test_filter_draft_groups_nfl_showdown_start_boundary_at_18_00():
+    groups = [_showdown_group(1, "17:59"), _showdown_group(2, "18:00")]
+
+    assert filter_draft_groups(groups, NFLShowdownSport) == [2]
+
+
+def test_filter_draft_groups_sport_without_start_windows_accepts_any_start():
+    class OpenSport(Sport):
+        name = "TEST"
+        contest_restraint_game_type_id = 96
+
+    groups = [_showdown_group(1, "00:05"), _showdown_group(2, "09:30"), _showdown_group(3, "23:59")]
+
+    assert filter_draft_groups(groups, OpenSport) == [1, 2, 3]
 
 
 def test_filter_draft_groups_nfl_showdown_super_bowl_suffix():
