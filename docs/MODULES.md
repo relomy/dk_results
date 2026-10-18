@@ -6,7 +6,7 @@ A survey of the codebase through the lens of the **codebase-design** skill: a
 swapped without editing in place), **adapters** (concrete things at a seam),
 **leverage** (what callers gain), and **locality** (where change concentrates).
 
-See `docs/GLOSSARY.md` for the shared vocabulary and the canonical entries for
+See `GLOSSARY.md` for the shared vocabulary and the canonical entries for
 `Draft Group Filter`, `ContestStandings`, and `SportProcessor`.
 
 ## Architecture at a glance
