@@ -397,10 +397,10 @@ def test_filter_draft_groups_nfl_showdown():
     assert result == [12]
 
 
-def _showdown_group(draft_group_id, start):
+def _showdown_group(draft_group_id, start, suffix="(DAL @ GB)"):
     return {
         "DraftGroupTag": "Featured",
-        "ContestStartTimeSuffix": "(DAL @ GB)",
+        "ContestStartTimeSuffix": suffix,
         "DraftGroupId": draft_group_id,
         "StartDateEst": f"2026-10-18T{start}:00.000-04:00",
         "ContestTypeId": 96,
@@ -412,6 +412,58 @@ def test_filter_draft_groups_nfl_showdown_start_boundary_at_18_00():
     groups = [_showdown_group(1, "17:59"), _showdown_group(2, "18:00")]
 
     assert filter_draft_groups(groups, NFLShowdownSport) == [2]
+
+
+def test_filter_draft_groups_nfl_showdown_admits_morning_international_game():
+    """2026-10-18 lobby: HOU vs JAX in London, draft group 154948, Sun 9:30AM ET."""
+    groups = [_showdown_group(154948, "09:30", suffix="(HOU vs JAX)")]
+
+    assert filter_draft_groups(groups, NFLShowdownSport) == [154948]
+
+
+def test_filter_draft_groups_nfl_showdown_midday_upper_bound_exclusive_at_13_00():
+    """12:30 (Thanksgiving) is admitted; 13:00 (Sunday 1:00 PM window) is rejected."""
+    groups = [_showdown_group(1, "12:30"), _showdown_group(2, "13:00", suffix="(CHI @ ATL)")]
+
+    assert filter_draft_groups(groups, NFLShowdownSport) == [1]
+
+
+def test_filter_draft_groups_nfl_showdown_morning_lower_bound_inclusive_at_06_00():
+    groups = [_showdown_group(1, "05:59"), _showdown_group(2, "06:00")]
+
+    assert filter_draft_groups(groups, NFLShowdownSport) == [2]
+
+
+def test_filter_draft_groups_nfl_showdown_rejects_sunday_day_window_featured():
+    """2026-10-18 lobby: 13:00 CHI @ ATL (154949) and 16:25 BUF @ LV (154957); 16:05 is the other Sunday window."""
+    groups = [
+        _showdown_group(154949, "13:00", suffix="(CHI @ ATL)"),
+        _showdown_group(154955, "16:05", suffix="(SEA @ LAR)"),
+        _showdown_group(154957, "16:25", suffix="(BUF @ LV)"),
+    ]
+
+    assert filter_draft_groups(groups, NFLShowdownSport) == []
+
+
+def test_filter_draft_groups_nfl_showdown_full_2026_10_18_lobby_keeps_morning_and_night_only():
+    groups = [
+        _showdown_group(154948, "09:30", suffix="(HOU vs JAX)"),
+        _showdown_group(154949, "13:00", suffix="(CHI @ ATL)"),
+        _showdown_group(154957, "16:25", suffix="(BUF @ LV)"),
+        _showdown_group(154959, "20:20", suffix="(DAL @ GB)"),
+    ]
+
+    assert filter_draft_groups(groups, NFLShowdownSport) == [154948, 154959]
+
+
+def test_filter_draft_groups_nfl_showdown_drops_morning_groups_sharing_a_start_minute():
+    groups = [
+        _showdown_group(1, "09:30", suffix="(HOU vs JAX)"),
+        _showdown_group(2, "09:30", suffix="(MIA vs NO)"),
+        _showdown_group(3, "20:20"),
+    ]
+
+    assert filter_draft_groups(groups, NFLShowdownSport) == [3]
 
 
 def test_filter_draft_groups_sport_without_start_windows_accepts_any_start():
