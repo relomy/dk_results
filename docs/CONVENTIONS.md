@@ -18,8 +18,8 @@ Agents read files whole, so no committed file may exceed 5,000 tokens, where
 tokens = bytes / 4 (20,000 bytes; exactly at budget passes).
 `scripts/check-token-budget.sh` enforces it on staged files as a pre-commit
 hook (enable it as in `docs/TESTING.md`, "Git hooks") and on a PR's changed
-files in CI, so `--no-verify` does not bypass it. The script is canonical here;
-relomy/dk_dashboard keeps a byte-identical copy, so change it here first.
+files in CI, so `--no-verify` does not bypass it. relomy/dk_dashboard carries
+a port of the script; keep their behaviour in sync.
 
 ### Splitting an over-budget file
 

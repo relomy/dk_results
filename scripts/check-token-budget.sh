@@ -1,8 +1,7 @@
 #!/bin/sh
 # Token budget check: no committed file may exceed its token budget.
 #
-# Canonical copy: relomy/dk_results scripts/check-token-budget.sh.
-# relomy/dk_dashboard keeps a byte-identical copy; change it here first.
+# relomy/dk_dashboard carries a port of this script; keep behaviour in sync.
 #
 # Usage: check-token-budget.sh            check the staged files (pre-commit)
 #        check-token-budget.sh PATH...    check these repo-root-relative paths (CI)
@@ -79,6 +78,6 @@ for path in "$@"; do
 done
 if [ "$failed" -ne 0 ]; then
   echo "Token budget exceeded (tokens = bytes / 4)." >&2
-  echo "See the Token budget section linked from AGENTS.md." >&2
+  echo "See docs/CONVENTIONS.md#token-budget" >&2
 fi
 exit "$failed"
