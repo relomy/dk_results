@@ -26,6 +26,9 @@ from dk_results.services.snapshot_v3.contest_selection import (
     _ResolvedContest,
 )
 from dk_results.services.snapshot_v3.source_bundle import (
+    FieldRemaining as FieldRemaining,  # re-exported: public name from the original path
+)
+from dk_results.services.snapshot_v3.source_bundle import (
     _assemble_source_bundle,
     _build_source_metrics,
     _build_vip_points_by_entry,
