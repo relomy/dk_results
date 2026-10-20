@@ -108,6 +108,19 @@ serialization seams. Its public orchestration surface is
   It closes only a `ContestDatabase` it opened itself. It reads the draft group's
   draftables once per sport to give each player's `matchup` (matched by draftable
   ID, `domain/draftables.py`); a failed read logs one warning and leaves `matchup` out.
+- **Validation split:** `validate.py` is the interface: `validate_v3_envelope`
+  (the blocking check) and `collect_presence_warnings` (non-blocking), with
+  `PresenceRule` and `PresenceWarningRow` re-exported from `presence_rules.py`.
+  It dispatches per sport and delegates to sibling modules:
+  - `validate_shape.py`: sport payload and contest shape (required fields,
+    section rows, VIP lineup slots, id coherence, train-cluster references).
+  - `validate_metrics.py`: the `metrics` section (distance to cash, non-cashing,
+    ownership summary, threat, field remaining, VIP leverage) and the known
+    player-key scan behind the top-swing check.
+  - `validate_values.py`: the value predicates both share.
+  - `presence_rules.py`: the **Presence rule** checks behind
+    `collect_presence_warnings`.
+  Tests patch `pipeline.validate_v3_envelope`; none patch these modules.
 - **Depth:** high — the package keeps external collection at the boundary and
   exposes one schema-3 generation path.
 
