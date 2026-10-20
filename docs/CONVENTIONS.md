@@ -38,6 +38,24 @@ Split along a real seam, not at an arbitrary line count.
   compatibility gate and must remain in that file.
 - **Anything else**: split into smaller files along its natural sections.
 
+A split is a pure move: no behaviour change, assertions moved and never
+edited. Prove it with the working tree against the base before opening the PR,
+and paste the output into the PR's evidence:
+
+```bash
+uv run scripts/check-pure-move.py              # --base REF; default origin/main
+```
+
+It runs pytest on both trees (the base from `git archive`, on this venv) and
+exits 1 when the head collects fewer tests, when a base assertion in `tests/`
+is missing from the head, when a `src/` function changed or lost covered
+lines, or when a test fails in either tree. Assertions (`assert`,
+`pytest.raises`/`warns`/`approx`, mock `assert_*` calls) are compared as
+`ast.unparse` text, so reformatting passes and edits don't. Functions are matched by qualified name plus a hash of their
+AST, so they may move between files; module-level lines such as imports are
+not compared. Exit 2 means it could not run, for example an unknown ref or a
+collection error.
+
 ### Generated files
 
 Files no one authors by hand (`uv.lock`, `contract/snapshot.schema.json`,
