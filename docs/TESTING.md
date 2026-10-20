@@ -12,7 +12,9 @@ git config core.hooksPath .githooks
 
 The `pre-commit` hook runs the token budget check (`docs/CONVENTIONS.md`,
 "Token budget") on staged files. It needs only git and POSIX sh, so it works
-before `uv sync`. CI runs the same script on a PR's changed files.
+before `uv sync`. CI runs the same script on a PR's changed files, as the
+standalone `token-budget` job in `.github/workflows/ci.yml` (not part of
+`verify`).
 
 ## Completion checks
 

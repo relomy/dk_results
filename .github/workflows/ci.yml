@@ -10,6 +10,27 @@ on:
       - master
 
 jobs:
+  # Same script as the pre-commit hook, on the PR's changed files, so a skipped
+  # or uninstalled hook can't let an oversized file in.
+  # Its own job: needs only git and POSIX sh, so no Python, uv or secrets.
+  token-budget:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Token Budget
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          git diff --name-only -z --diff-filter=ACMR "$BASE_SHA...HEAD" |
+            xargs -0 sh scripts/check-token-budget.sh --paths
+
   verify:
     strategy:
       matrix:
@@ -26,16 +47,6 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
-      # Same script as the pre-commit hook, on the PR's changed files, so a skipped
-      # or uninstalled hook can't let an oversized file in.
-      - name: Token Budget
-        if: github.event_name == 'pull_request'
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-        run: |
-          git diff --name-only -z --diff-filter=ACMR "$BASE_SHA...HEAD" |
-            xargs -0 sh scripts/check-token-budget.sh --paths
 
       - name: Require dfs-common checkout token
         env:
