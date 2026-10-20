@@ -1,10 +1,8 @@
 """collect_raw_bundle: the raw bundle shape and its VIP name-to-player-key mapping."""
 
-from dk_results.services.snapshot_v3.collector import (
-    _build_unique_name_to_player_key_from_vip_lineups,
-    collect_raw_bundle,
-)
+from dk_results.services.snapshot_v3.collector import collect_raw_bundle
 from dk_results.services.snapshot_v3.derive import derive_threat
+from dk_results.services.snapshot_v3.vip_normalize import _build_unique_name_to_player_key_from_vip_lineups
 
 
 def test_build_unique_name_to_player_key_maps_single_source() -> None:

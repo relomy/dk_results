@@ -83,12 +83,25 @@ schema-3 JSON envelope consumed by downstream systems. The package is split into
 collection, derivation, contract building, normalization, validation, and stable
 serialization seams. Its public orchestration surface is
 `pipeline.build_snapshot_v3_envelope`.
-- **Collection split:** `collector.py` keeps IO and contest selection at the
-  boundary; `sections.py` holds the pure per-section builders
-  (`build_standings_rows`, `build_players`, `build_top_remaining_players`,
-  `build_watchlist`, `build_cash_line`, `build_train_clusters`) that turn a parsed
-  `ContestStandings` into snapshot sections, so the collector reads as an
-  IO → parse → delegate → assemble orchestrator.
+- **Collection split:** `collector.py` keeps the IO (DraftKings, `ContestDatabase`,
+  salary and standings files) and the orchestration, and delegates to pure sibling
+  modules, so it reads as an IO → parse → delegate → assemble orchestrator:
+  - `contest_selection.py`: the selection reason, the candidate summary, the
+    `ContestRow` built from a DraftKings contest detail when the DB misses, the
+    contest-state normalization and the **Completed at** guard. The reads that
+    resolve the contest stay in `collector._select_contest`.
+  - `sections.py`: the per-section builders (`build_standings_rows`,
+    `build_players`, `build_top_remaining_players`, `build_watchlist`,
+    `build_cash_line`, `build_train_clusters`) that turn a parsed
+    `ContestStandings` into snapshot sections.
+  - `source_bundle.py`: **ownership remaining**, **field remaining** and per-VIP
+    remaining over the full standings, standings truncation, and the raw
+    source-bundle assembly.
+  - `vip_normalize.py`: `collect_snapshot`'s normalization step: VIP lineup rows,
+    and a `player_key` for players, VIP slots and top-remaining rows.
+  Tests patch the IO names on `collector` (`SALARY_DIR`, `load_vips`,
+  `fetch_vip_lineups`, `parse_contest_standings`, `Draftkings`, `state`,
+  `_collect_source_snapshot`); only `collector` uses them, so keep them there.
 - **Collector seam:** reads DraftKings and `ContestDatabase` behind injectable
   `dk`/`contest_db` (both default to the real objects, so production callers pass
   neither) and returns a frozen `CollectedSnapshot` bundle for derive and build.

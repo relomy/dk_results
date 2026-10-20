@@ -2,11 +2,11 @@
 
 from types import SimpleNamespace
 
-from dk_results.services.snapshot_v3.collector import (
+from dk_results.services.snapshot_v3.collector import _fetch_leaderboard_payouts
+from dk_results.services.snapshot_v3.source_bundle import (
     _apply_truncation,
     _build_vip_points_by_entry,
     _compute_ownership_remaining_total,
-    _fetch_leaderboard_payouts,
 )
 from tests.services.snapshot_v3_collector_fakes import _FakeDK
 

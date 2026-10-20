@@ -185,7 +185,7 @@ The scheduled job that publishes snapshot artifacts to the object store the dash
 The canonical schema-3 multi-sport JSON envelope produced for downstream consumers. Rollback restores a known-good artifact or producer version; it does not require runtime compatibility with retired schemas.
 
 **Snapshot collector**:
-The collect step of the snapshot pipeline: resolves one contest and gathers its DraftKings and `ContestDatabase` data into one frozen bundle for derive and build. Module: `services/snapshot_v3/collector.py`.
+The collect step of the snapshot pipeline: resolves one contest and gathers its DraftKings and `ContestDatabase` data into one frozen bundle for derive and build. Module: `services/snapshot_v3/collector.py` (IO and orchestration); its pure parts are in `contest_selection.py`, `sections.py`, `source_bundle.py` and `vip_normalize.py`.
 
 **Object store**:
 The keyed JSON store the feed loads into and the dashboard reads from. Modules: `feed/object_store.py`, `feed/r2.py`.
