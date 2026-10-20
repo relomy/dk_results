@@ -53,5 +53,4 @@ tests/services/snapshot_scenarios.py token-budget=7042
 tests/services/test_snapshot_v3_validate.py token-budget=7365
 tests/test_completion_processor.py token-budget=6778
 tests/test_db_main.py token-budget=9077
-tests/test_dkcontests.py token-budget=6306
 tests/test_export_fixture.py token-budget=7370
