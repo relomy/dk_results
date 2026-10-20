@@ -2,6 +2,18 @@
 
 How to run this repo's checks, and how the `dfs-common` dependency is resolved.
 
+## Git hooks
+
+Enable the repository's versioned hooks once per clone:
+
+```bash
+git config core.hooksPath .githooks
+```
+
+The `pre-commit` hook runs the token budget check (`docs/CONVENTIONS.md`,
+"Token budget") on staged files. It needs only git and POSIX sh, so it works
+before `uv sync`. CI runs the same script on a PR's changed files.
+
 ## Completion checks
 
 Run before reporting any change complete. Use the full suite when the change is

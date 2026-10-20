@@ -12,6 +12,9 @@ updates, and Discord notifications.
 - `dfs-common` is a private git dependency; read `docs/TESTING.md` when a `uv`
   command fails while building the venv.
 - Changes under `src/dk_results/services/snapshot_v3/` update `docs/SNAPSHOT_SCHEMA.md`, the exported `contract/snapshot.schema.json` and the goldens in `contract/goldens/` in the same PR; relomy/dk_dashboard checks itself against the feed.
+- **Token budget**: no file may exceed 5,000 tokens (bytes / 4). When the
+  pre-commit hook or CI blocks a file, read
+  [Token budget](docs/CONVENTIONS.md#token-budget) for how to split it.
 
 ## Further instructions
 

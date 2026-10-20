@@ -27,3 +27,36 @@
 # with the python modules ``pickle``, ``dbm.*``,
 # ``shelve``, ``marshal``, ``anydbm``, & ``bsddb``
 # (among others).
+
+# Generated files
+# ===============
+# Not authored by hand or by agents: skipped by the token budget check
+# (scripts/check-token-budget.sh) and collapsed in GitHub diffs.
+uv.lock                     linguist-generated
+contract/snapshot.schema.json linguist-generated
+contract/goldens/*.json     linguist-generated
+
+# Token budget grandfathering
+# ===========================
+# Files that were over the 5000-token budget when the check was added, each
+# held at its size then (tokens = bytes / 4, rounded up). They may shrink but
+# never grow; once a file is split under 5000 tokens, delete its line.
+GLOSSARY.md token-budget=6478
+docs/SNAPSHOT_SCHEMA.md token-budget=6092
+docs/plans/2026-02-06-dfs-common.md token-budget=5890
+src/dk_results/completion_processor.py token-budget=7764
+src/dk_results/persistence/contestdatabase.py token-budget=7197
+src/dk_results/services/snapshot_v3/collector.py token-budget=9876
+src/dk_results/services/snapshot_v3/validate.py token-budget=7936
+src/dk_results/sport_processor.py token-budget=5355
+tests/bot/test_discord_bot.py token-budget=7243
+tests/domain/test_contest_standings.py token-budget=6069
+tests/persistence/test_contestdatabase.py token-budget=7441
+tests/services/snapshot_scenarios.py token-budget=7042
+tests/services/test_snapshot_v3_collector.py token-budget=17076
+tests/services/test_snapshot_v3_validate.py token-budget=7365
+tests/test_completion_processor.py token-budget=6778
+tests/test_db_main.py token-budget=9077
+tests/test_dkcontests.py token-budget=6306
+tests/test_export_fixture.py token-budget=7370
+tests/test_find_new_double_ups.py token-budget=7546
