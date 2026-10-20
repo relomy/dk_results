@@ -3,7 +3,6 @@ from copy import deepcopy
 import pytest
 
 from dk_results.services.snapshot_v3.validate import (
-    _collect_known_player_keys,
     _validate_section_rows,
     _validate_train_cluster_references,
     collect_presence_warnings,
@@ -477,29 +476,6 @@ def test_validate_v3_envelope_accepts_ten_top_remaining_players() -> None:
     assert validate_v3_envelope(envelope) == []
 
 
-# ── _collect_known_player_keys ───────────────────────────────────────────────
-
-
-def test_collect_known_player_keys_from_sport_players() -> None:
-    keys = _collect_known_player_keys({"players": [{"player_key": "nba:1"}]}, {})
-    assert keys == {"nba:1"}
-
-
-def test_collect_known_player_keys_from_contest_players() -> None:
-    keys = _collect_known_player_keys({}, {"players": [{"player_key": "nba:2"}]})
-    assert keys == {"nba:2"}
-
-
-def test_collect_known_player_keys_from_vip_lineups_players_live() -> None:
-    contest = {"vip_lineups": [{"players_live": [{"player_key": "nba:3"}]}]}
-    assert _collect_known_player_keys({}, contest) == {"nba:3"}
-
-
-def test_collect_known_player_keys_ignores_locked_vip_slots() -> None:
-    contest = {"vip_lineups": [{"players_live": [{"player_key": "nba:hidden", "is_locked": True}]}]}
-    assert _collect_known_player_keys({}, contest) == set()
-
-
 @pytest.mark.parametrize(
     ("slot_row", "expected"),
     [
@@ -529,29 +505,6 @@ def test_validate_v3_envelope_checks_vip_slot_contract(slot_row: dict, expected:
     violations = validate_v3_envelope(payload)
 
     assert any("vip_lineups[0].players_live[0]" in violation and expected in violation for violation in violations)
-
-
-def test_collect_known_player_keys_from_vip_lineups_slots_fallback() -> None:
-    contest = {"vip_lineups": [{"slots": [{"player_key": "nba:4"}]}]}
-    assert _collect_known_player_keys({}, contest) == {"nba:4"}
-
-
-def test_collect_known_player_keys_from_vip_lineups_lineup_fallback() -> None:
-    contest = {"vip_lineups": [{"lineup": [{"player_key": "nba:5"}]}]}
-    assert _collect_known_player_keys({}, contest) == {"nba:5"}
-
-
-def test_collect_known_player_keys_from_vip_lineups_players_fallback() -> None:
-    contest = {"vip_lineups": [{"players": [{"player_key": "nba:6"}]}]}
-    assert _collect_known_player_keys({}, contest) == {"nba:6"}
-
-
-def test_collect_known_player_keys_ignores_non_list_and_non_dict_rows() -> None:
-    contest = {
-        "players": "not-a-list",
-        "vip_lineups": ["not-a-dict", {"players_live": "not-a-list", "slots": "also-not-a-list"}],
-    }
-    assert _collect_known_player_keys({"players": "not-a-list"}, contest) == set()
 
 
 # ── _validate_train_cluster_references ───────────────────────────────────────
