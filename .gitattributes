@@ -47,7 +47,6 @@ src/dk_results/persistence/contestdatabase.py token-budget=7197
 src/dk_results/services/snapshot_v3/collector.py token-budget=9876
 src/dk_results/services/snapshot_v3/validate.py token-budget=7936
 src/dk_results/sport_processor.py token-budget=5355
-tests/bot/test_discord_bot.py token-budget=7243
 tests/domain/test_contest_standings.py token-budget=6069
 tests/persistence/test_contestdatabase.py token-budget=7441
 tests/services/snapshot_scenarios.py token-budget=7042
