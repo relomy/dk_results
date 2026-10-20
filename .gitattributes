@@ -41,7 +41,6 @@ contract/goldens/*.json     linguist-generated
 # Files that were over the 5000-token budget when the check was added, each
 # held at its size then (tokens = bytes / 4, rounded up). They may shrink but
 # never grow; once a file is split under 5000 tokens, delete its line.
-GLOSSARY.md token-budget=6478
 docs/SNAPSHOT_SCHEMA.md token-budget=6092
 docs/plans/2026-02-06-dfs-common.md token-budget=5890
 src/dk_results/completion_processor.py token-budget=7764
