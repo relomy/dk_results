@@ -51,7 +51,6 @@ tests/bot/test_discord_bot.py token-budget=7243
 tests/domain/test_contest_standings.py token-budget=6069
 tests/persistence/test_contestdatabase.py token-budget=7441
 tests/services/snapshot_scenarios.py token-budget=7042
-tests/services/test_snapshot_v3_collector.py token-budget=17076
 tests/services/test_snapshot_v3_validate.py token-budget=7365
 tests/test_completion_processor.py token-budget=6778
 tests/test_db_main.py token-budget=9077
