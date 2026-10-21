@@ -13,14 +13,14 @@ is read through `ContestDatabase`; the only external DraftKings edge is
 The package splits the workflow into collaborators that `CompletionProcessor`
 builds from its own dependencies:
 
-- `processor`: `CompletionProcessor`, which runs warnings, the contest-state
-  sync loop and soft-finish in order.
+- `processor`: `CompletionProcessor`, which runs warnings, contest-state sync
+  and soft-finish in order.
 - `ports`: `PresenceOracle`, `CompletionProcessorConfig` and the `Now` clock.
 - `announcer`: `MilestoneAnnouncer`, the suppression policy plus send + record.
 - `messages`: the message text (pure functions).
 - `warnings`: `WarningScheduler`, starting-soon warnings.
-- `sync`: `ContestSync`, one contest's DraftKings state written back, and its
-  live / completed transition.
+- `sync`: `ContestSync`, each incomplete contest's DraftKings state written
+  back, and its live / completed transition.
 - `soft_finish`: `SoftFinishAnnouncer` and its summary helpers.
 
 The suppression policy differs by milestone. Warning and live require a
@@ -32,12 +32,8 @@ policy: only ``absent`` suppresses, and any ``unknown`` allows the send.
 `VipPresence` stays a pure verdict provider.
 """
 
-from dk_results.completion_processor.messages import _parse_start_date as _parse_start_date
 from dk_results.completion_processor.ports import CompletionProcessorConfig as CompletionProcessorConfig
 from dk_results.completion_processor.ports import Now as Now
 from dk_results.completion_processor.ports import PresenceOracle as PresenceOracle
 from dk_results.completion_processor.processor import CompletionProcessor as CompletionProcessor
-from dk_results.completion_processor.soft_finish import _canonical_vips as _canonical_vips
-from dk_results.completion_processor.soft_finish import _soft_finish_eligible as _soft_finish_eligible
-from dk_results.completion_processor.soft_finish import _soft_finish_event_key as _soft_finish_event_key
 from dk_results.completion_processor.sync import COMPLETED_STATUSES as COMPLETED_STATUSES

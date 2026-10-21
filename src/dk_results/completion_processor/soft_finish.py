@@ -78,17 +78,6 @@ def _soft_finish_eligible(payload: dict[str, Any]) -> bool:
     return True
 
 
-def _canonical_vips(vips_cashed: list[str]) -> list[str]:
-    unique: dict[str, str] = {}
-    for name in vips_cashed:
-        cleaned = str(name).strip()
-        key = vip_key(cleaned)
-        if not key or key in unique:
-            continue
-        unique[key] = cleaned
-    return sorted(unique.values(), key=lambda vip: vip.lower())
-
-
 def _resolve_soft_finish_scores(leaderboard_payload: dict[str, Any]) -> tuple[str, str] | None:
     leader = leaderboard_payload.get("leader", {})
     last_winning = leaderboard_payload.get("lastWinningEntry", {})
@@ -117,7 +106,7 @@ def _resolve_cashed_vips(leaderboard_payload: dict[str, Any], vip_keys: set[str]
             continue
         if key not in cashed_lookup:
             cashed_lookup[key] = username
-    return _canonical_vips(list(cashed_lookup.values()))
+    return sorted(cashed_lookup.values(), key=lambda vip: vip.lower())
 
 
 def _soft_finish_event_key(
