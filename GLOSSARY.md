@@ -145,7 +145,7 @@ _Avoid_: the redundant `dotenv` package; per-entry-point dotenv setup; import-ti
 ### Contest completion & notifications
 
 **CompletionProcessor**:
-The workflow that advances each tracked contest and announces its milestones (warning, live, completed, soft-finish), and owns when a milestone announcement is suppressed (ADR-0008). Module: `completion_processor.py`.
+The workflow that advances each tracked contest and announces its milestones (warning, live, completed, soft-finish), and owns when a milestone announcement is suppressed (ADR-0008). Module: `completion_processor/` (package).
 
 **Notification event**:
 The identity of a single announcement about a contest, used to keep announcing idempotent. One per milestone: starting-soon warning, live, completed, soft-finish.
