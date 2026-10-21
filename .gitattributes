@@ -42,7 +42,6 @@ contract/goldens/*.json     linguist-generated
 # held at its size then (tokens = bytes / 4, rounded up). They may shrink but
 # never grow; once a file is split under 5000 tokens, delete its line.
 docs/SNAPSHOT_SCHEMA.md token-budget=6092
-src/dk_results/completion_processor.py token-budget=7764
 src/dk_results/persistence/contestdatabase.py token-budget=7197
 src/dk_results/sport_processor.py token-budget=5355
 tests/domain/test_contest_standings.py token-budget=6069
