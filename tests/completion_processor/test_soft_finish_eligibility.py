@@ -28,8 +28,7 @@ SPOILED = {
 
 def test_soft_finish_announces_a_well_formed_final_leaderboard(run_soft_finish, leaderboard):
     messages = run_soft_finish(payload=leaderboard()).messages
-    assert len(messages) == 1
-    assert "soft-finished" in messages[0]
+    assert [m.splitlines()[0] for m in messages] == ["Contest soft-finished: 🏀 NBA — Main Slate"]
 
 
 @pytest.mark.parametrize("spoiled", SPOILED.values(), ids=SPOILED.keys())

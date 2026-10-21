@@ -53,9 +53,7 @@ def soft_finish_pair(
 @pytest.mark.parametrize("skip", SOFT_FINISH_SKIPS.values(), ids=SOFT_FINISH_SKIPS.keys())
 def test_soft_finish_moves_on_to_the_next_sport(soft_finish_pair, skip):
     messages = soft_finish_pair(**skip)
-    assert len(messages) == 1
-    assert messages[0].startswith("Contest soft-finished: ")
-    assert "MLB — Second" in messages[0]
+    assert [m.splitlines()[0] for m in messages] == ["Contest soft-finished: 🏟️ MLB — Second"]
 
 
 def test_soft_finish_logs_a_vip_absent_skip(soft_finish_pair, caplog):
@@ -89,6 +87,4 @@ def warning_pair(conn, sender, sports, scenario, clock_at, insert_contest, detai
 @pytest.mark.parametrize("nba_start", [None, "not a date"], ids=["no-upcoming-contest", "unparseable-start-date"])
 def test_warnings_move_on_to_the_next_sport(warning_pair, nba_start):
     messages = warning_pair(nba_start=nba_start)
-    assert len(messages) == 1
-    assert messages[0].startswith("Contest starting soon (25m): ")
-    assert "MLB — Second" in messages[0]
+    assert [m.splitlines()[0] for m in messages] == ["Contest starting soon (25m): 🏟️ MLB — Second"]
