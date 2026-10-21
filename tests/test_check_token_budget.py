@@ -148,8 +148,8 @@ def test_grandfathered_file_fails_once_it_grows_past_its_budget(repo: Repo) -> N
 @pytest.mark.parametrize(
     ("path", "recipe_fact"),
     [
-        ("src/pkg/engine.py", "package"),
-        ("tests/test_engine.py", "helper module"),
+        ("src/pkg/engine.py", "package of the same name"),
+        ("tests/test_engine.py", "conftest.py"),
         ("docs/GUIDE.md", "H2"),
         ("src/lib/shifts.ts", "barrel"),
         ("src/components/Rail.tsx", "barrel"),

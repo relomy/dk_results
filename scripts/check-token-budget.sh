@@ -20,14 +20,14 @@ attr() {
 recipe() {
   case $1 in
     test_*.py | */test_*.py | *_test.py | conftest.py | */conftest.py)
-      echo "  Python test: split by behaviour under test into several test_*.py files."
-      echo "  Move shared fakes and builders into a helper module whose name does not"
-      echo "  start with test_, so pytest does not collect it."
+      echo "  Python test: turn it into a test directory, tests/<area>/test_<behaviour>.py,"
+      echo "  with shared fakes and builders as fixtures in conftest.py."
+      echo "  See docs/CONVENTIONS.md#token-budget"
       ;;
     *.py)
-      echo "  Python module: turn it into a package (or sibling modules) along its seams."
-      echo "  Re-export the public names from the original import path so callers do"
-      echo "  not change. Names that tests monkeypatch stay in the module they patch."
+      echo "  Python module: turn it into a package of the same name; __init__.py"
+      echo "  re-exports the public names."
+      echo "  See docs/CONVENTIONS.md#token-budget"
       ;;
     *.test.ts | *.test.tsx | *.spec.ts | *.spec.tsx)
       echo "  TS test: split by top-level describe into several *.test.ts(x) files."
