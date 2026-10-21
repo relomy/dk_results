@@ -1,23 +1,9 @@
 # dk_results — Module Inventory
 
-A survey of the codebase through the lens of the **codebase-design** skill: a
-*module* is anything with an interface and an implementation; we care about
-**depth** (behaviour behind a small interface), **seams** (where behaviour can be
-swapped without editing in place), **adapters** (concrete things at a seam),
-**leverage** (what callers gain), and **locality** (where change concentrates).
-
-This file is canonical for module interfaces and policy detail; `GLOSSARY.md`
-holds only the domain terms (definition, module, words to avoid).
-
-## Vocabulary
-
-- **Module** — any unit with an interface and implementation (function, class, package).
-- **Interface** — everything a caller must know: types, invariants, error modes, ordering, config.
-- **Depth** — leverage at the interface: large behaviour behind a small interface.
-- **Seam** — where an interface lives; a place behaviour can be altered without editing in place.
-- **Adapter** — a concrete thing satisfying an interface at a seam.
-- **Leverage** — what callers get from depth (simpler call sites).
-- **Locality** — what maintainers get from depth (changes concentrated in one place).
+Module boundaries, interfaces and deepening candidates, in the vocabulary of the
+**codebase-design** skill (module, interface, depth, seam, adapter, leverage,
+locality). This file is canonical for module interfaces and policy detail;
+`GLOSSARY.md` holds the domain terms.
 
 ## Architecture at a glance
 
@@ -28,14 +14,6 @@ Root shims (dkcontests.py, db_main.py, …)      thin sys.path adapters → cli.
             ├─ DkPort  ──── draftkings/client.py + session.py + cookies.py
             ├─ SheetPort ── sheets/dfs_sheet_service → repository → dfs_common
             └─ BonusSenderPort ── bot/discord_rest, dfs_common WebhookSender
-  Domain (pure): sport, player, user, contest, lineup, contest_standings,
-                 bonus_rules, dfs_sheet_domain
-  Lobby pkg:     fetch → parsing → draft_group_filter → contest_filter →
-                 formatting
-  Analytics:     optimizer (LP), trainfinder (clustering)
-  Snapshot:      services/snapshot_v3, commands/export_fixture, vip_lineups
-  Bot:           bot/discord_bot, discord_rest
-  Cross-cutting: config, logging, paths, discord_announcements
 ```
 
 The dependency arrows point downward toward pure, dependency-light modules. The
@@ -57,9 +35,9 @@ entire "find live contest → download rows → parse standings → compute anal
   (local-substitutable): read to find the live contest (`get_live_contest`), and
   written each run with the parsed standings' cash line and `VipCashStatus` rows —
   its only write path into that table (ADR-0011).
-- **Interface also includes** its error modes as control flow:
-  `NoLiveContestError`, `StandingsUnavailableError`, `StandsParseError` signal
-  "skip this sport"; `SportProcessorConfig` (frozen) carries filesystem/limit config.
+- **Error modes as control flow:** `NoLiveContestError`,
+  `StandingsUnavailableError`, `StandsParseError` signal "skip this sport";
+  `SportProcessorConfig` (frozen) carries filesystem/limit config.
 - **Depth:** high — the biggest leverage-per-interface unit in the repo.
 
 ### CompletionProcessor — `completion_processor/`
@@ -76,40 +54,31 @@ DraftKings.
   (resolved at the CLI edge from `DISCORD_NOTIFICATIONS_ENABLED`), independent of
   whether a sender is wired: a disabled run still constructs the processor and
   syncs contest state but short-circuits every send.
-- **Package:** `__init__` re-exports the public names. `processor.py` builds the
-  collaborators from its own dependencies and runs warnings → sync loop →
-  soft-finish; `ports.py` holds `PresenceOracle`, the config and the `Now` clock
-  (`now(tz)`, default `system_now`); `announcer.py` (`MilestoneAnnouncer`) owns
-  the suppression policy, send and record; `messages.py` is the message text
-  (pure functions); `warnings.py` (`WarningScheduler`), `sync.py` (`ContestSync`:
-  state write-back plus the live/completed transition) and `soft_finish.py`
-  (`SoftFinishAnnouncer`) each own one milestone.
+- **Package:** `processor.py` builds the collaborators from its own
+  dependencies and runs warnings → sync loop → soft-finish; `ports.py` holds
+  `PresenceOracle`, the config and the `Now` clock (`now(tz)`, default
+  `system_now`); `announcer.py` (`MilestoneAnnouncer`) owns the suppression
+  policy, send and record; `messages.py` is pure message text; `warnings.py`,
+  `sync.py` (state write-back plus the live/completed transition) and
+  `soft_finish.py` each own one milestone.
 
 ### Snapshot v3 — `services/snapshot_v3/`
 Collects current DraftKings data, derives analytics, and builds the deterministic
-schema-3 JSON envelope consumed by downstream systems. The package is split into
-collection, derivation, contract building, normalization, validation, and stable
-serialization seams. Its public orchestration surface is
-`pipeline.build_snapshot_v3_envelope`.
-- **Collection split:** `collector.py` keeps the IO (DraftKings, `ContestDatabase`,
-  salary and standings files) and the orchestration, and delegates to pure sibling
-  modules, so it reads as an IO → parse → delegate → assemble orchestrator:
-  - `contest_selection.py`: the selection reason, the candidate summary, the
-    `ContestRow` built from a DraftKings contest detail when the DB misses, the
-    contest-state normalization and the **Completed at** guard. The reads that
-    resolve the contest stay in `collector._select_contest`.
-  - `sections.py`: the per-section builders (`build_standings_rows`,
-    `build_players`, `build_top_remaining_players`, `build_watchlist`,
-    `build_cash_line`, `build_train_clusters`) that turn a parsed
-    `ContestStandings` into snapshot sections.
-  - `source_bundle.py`: **ownership remaining**, **field remaining** and per-VIP
-    remaining over the full standings, standings truncation, and the raw
-    source-bundle assembly.
-  - `vip_normalize.py`: `collect_snapshot`'s normalization step: VIP lineup rows,
-    and a `player_key` for players, VIP slots and top-remaining rows.
-  Tests patch the IO names on `collector` (`SALARY_DIR`, `load_vips`,
-  `fetch_vip_lineups`, `parse_contest_standings`, `Draftkings`, `state`,
-  `_collect_source_snapshot`); only `collector` uses them, so keep them there.
+schema-3 JSON envelope consumed by downstream systems. Its public orchestration
+surface is `pipeline.build_snapshot_v3_envelope`.
+- **Collection split:** `collector.py` keeps the IO (DraftKings,
+  `ContestDatabase`, salary and standings files) and the orchestration, and
+  delegates to pure sibling modules: `contest_selection.py` (selection reason,
+  candidate summary, the `ContestRow` built from a DraftKings contest detail when
+  the DB misses, contest-state normalization, the **Completed at** guard; the
+  reads that resolve the contest stay in `collector._select_contest`),
+  `sections.py` (per-section builders from a parsed `ContestStandings`),
+  `source_bundle.py` (**ownership remaining**, **field remaining**, standings
+  truncation, raw source-bundle assembly) and `vip_normalize.py` (VIP lineup
+  rows and `player_key`). Tests patch the IO names on `collector` (`SALARY_DIR`,
+  `load_vips`, `fetch_vip_lineups`, `parse_contest_standings`, `Draftkings`,
+  `state`, `_collect_source_snapshot`); only `collector` uses them, so keep them
+  there.
 - **Collector seam:** reads DraftKings and `ContestDatabase` behind injectable
   `dk`/`contest_db` (both default to the real objects, so production callers pass
   neither) and returns a frozen `CollectedSnapshot` bundle for derive and build.
@@ -117,18 +86,13 @@ serialization seams. Its public orchestration surface is
   draftables once per sport to give each player's `matchup` (matched by draftable
   ID, `domain/draftables.py`); a failed read logs one warning and leaves `matchup` out.
 - **Validation split:** `validate.py` is the interface: `validate_v3_envelope`
-  (the blocking check) and `collect_presence_warnings` (non-blocking), with
-  `PresenceRule` and `PresenceWarningRow` re-exported from `presence_rules.py`.
-  It dispatches per sport and delegates to sibling modules:
-  - `validate_shape.py`: sport payload and contest shape (required fields,
-    section rows, VIP lineup slots, id coherence, train-cluster references).
-  - `validate_metrics.py`: the `metrics` section (distance to cash, non-cashing,
-    ownership summary, threat, field remaining, VIP leverage) and the known
-    player-key scan behind the top-swing check.
-  - `validate_values.py`: the value predicates both share.
-  - `presence_rules.py`: the **Presence rule** checks behind
-    `collect_presence_warnings`.
-  Tests patch `pipeline.validate_v3_envelope`; none patch these modules.
+  (blocking) and `collect_presence_warnings` (non-blocking), with `PresenceRule`
+  and `PresenceWarningRow` re-exported from `presence_rules.py`. It dispatches per
+  sport to `validate_shape.py` (payload and contest shape, id coherence),
+  `validate_metrics.py` (the `metrics` section and the known player-key scan),
+  `validate_values.py` (shared predicates) and `presence_rules.py` (the
+  **Presence rule** checks). Tests patch `pipeline.validate_v3_envelope`; none
+  patch these modules.
 - **Depth:** high — the package keeps external collection at the boundary and
   exposes one schema-3 generation path.
 
@@ -143,13 +107,13 @@ fetch is injectable. `load_vips()` and `build_vip_entries()` round out the inter
 
 | Module | Interface | Depth / role |
 |---|---|---|
-| `domain/sport.py` | `Sport` base + ~22 sport subclasses; registry fns `iter_sports`, `get_sport_choices`, `get_sport`, `require_sport`, `get_lineup_range` | Deep: a large sport taxonomy behind small lookup fns. **Seam:** registry is *discovered dynamically* from subclasses (`_build_sport_registry`) — read-only `Mapping`. |
+| `domain/sport.py` | `Sport` base + ~22 sport subclasses; registry fns `iter_sports`, `get_sport_choices`, `get_sport`, `require_sport`, `get_lineup_range` | Deep: a large sport taxonomy behind small lookup fns. **Seam:** the registry is discovered from subclasses (`_build_sport_registry`) as a read-only `Mapping`. |
 | `domain/contest_standings.py` | `parse_contest_standings(salary_rows, standings_rows, …) -> ContestStandings`; `players_to_values` | Deep pure parser. Contest metadata stays with callers. Cash line `(min_rank, min_cash_pts)` from `_update_cash_stats` (ADR-0011). |
 | `domain/lineup.py` | `parse_lineup_string`, `Lineup`, `LockedSlot`, `normalize_name`, `LineupParseError` | Parsing + value object; validates roster slots. |
 | `domain/player.py` | `Player` | Athlete value object, per-sport aware. |
 | `domain/draftables.py` | `Draftables.from_payload`, `matchups_by_draftable_id` | Draftables adapter: draftable ID → `Matchup` from the draftables payload; pure, no I/O. |
 | `domain/user.py` | `User` | DK user value object. |
-| `domain/contest.py` | `Contest.from_lobby(dk_dict, sport)`, `is_double_up` / `is_guaranteed` / `is_starred`, `start_dt`; `get_dt_from_timestamp` | Frozen lobby-row DTO, validated once at the payload boundary, read unchanged by `contest_filter`, `double_ups`, `formatting`; maps DraftKings' terse keys (`sd`, `n`, `dg`, …) to readable fields. |
+| `domain/contest.py` | `Contest.from_lobby(dk_dict, sport)`, `is_double_up` / `is_guaranteed` / `is_starred`, `start_dt`; `get_dt_from_timestamp` | Frozen lobby-row DTO (see GLOSSARY **Contest**); maps DraftKings' terse keys (`sd`, `n`, `dg`, …) to readable fields. |
 | `domain/bonus_rules.py` | `parse_bonus_counts(sport, stats_description)` | Pure per-sport parsing rules (golf/nba/mlb/soc). |
 | `domain/dfs_sheet_domain.py` | `end_col_for_sport`, `data/header/lineup_range_for_sport`, `build_values_for_vip_lineup` | Pure sheet-range + value formatting; no I/O. |
 
@@ -162,7 +126,7 @@ fetch is injectable. `load_vips()` and `build_vip_entries()` round out the inter
 | `draftkings/client.py` | `DraftKings`: `get_leaderboard`, `get_contest_detail`, `get_lobby_contests`, `get_draftables`, `get_entry`, `get_contest_entrants_page`, `download_contest_rows`, `download_salary_csv`, `clone_auth_to` | Deep HTTP client — the concrete **`DkPort` adapter**. |
 | `draftkings/leaderboard.py` | `leaderboard_cash_cents(row) -> int \| None` | The one payout decoder, used by the snapshot collector and `CompletionProcessor`: the row's `winningValue`, then its `winnings[]` cash items (a non-cash `payoutType` never counts), then a top-level `payout`/`cash`. |
 | `draftkings/session.py` | `AuthSession`: `get_session`, `setup_session`, `cj_from_pickle` | Authenticated `requests.Session` construction. |
-| `draftkings/cookies.py` | `get_dk_cookies`, `get_browser_cookies`, `cookies_to_dict/_jar`, `load/save_cookies_to_pickle` | Cookie acquisition/persistence seam under AuthSession. |
+| `draftkings/cookies.py` | `get_dk_cookies`, `get_browser_cookies`, `load/save_cookies_to_pickle` | Cookie acquisition/persistence seam under AuthSession. |
 
 ---
 
@@ -173,17 +137,15 @@ fetch is injectable. `load_vips()` and `build_vip_entries()` round out the inter
 | `sheets/dfs_sheet_service.py` | `DfsSheetService`: `clear_standings/lineups`, `write_players/column(s)`, `add_contest_details/last_updated/min_cash/non_cashing_info/train_info/optimal_lineup`, `write_vip_lineups`, `get_players`, `find_sheet_id` | Deep service — the concrete **`SheetPort` adapter**. |
 | `sheets/dfs_sheet_repository.py` | `DfsSheetRepository` | Thin wrapper over `dfs_common` SheetClient (data-access seam). |
 | `sheets/sheets_service.py` | `build_dfs_sheet_service`, `make_sheet_client`, `fetch_sheet_gids` | Factory / composition root so entry points need one import. |
-| `domain/dfs_sheet_domain.py` | *(see Domain)* | Pure formatting used by the service. |
 
 **Format plan.** A values-builder returns `CellFormat(row, col, number_format)`
-entries (`dfs_common.sheets.NumberFormat`, e.g. `CURRENCY`) with its value grid;
-`SheetClient.write_values_with_format` writes both in one call, every write.
-First used for the VIP lineup panel's Salary cells (`build_values_for_vip_lineup`;
-#86, relomy/dfs-common#9), then the standings grid's Salary column
-(`players_to_values`; #89), then Own (`PERCENT`), Pts and Value (`DECIMAL(1)`) in
-both (#90). PGA/GOLF standings rows and the VIP lineup footer have no Value cell, so
-no Value entry. A `NumberFormat` only renders numeric cells, so `VipPlayer.pts`/
-`.value` and `VipLineup.pts` carry raw numbers, not `f"{...:.2f}"` strings.
+entries (`dfs_common.sheets.NumberFormat`) with its value grid, and
+`SheetClient.write_values_with_format` writes both in one call, every write. It
+covers the VIP lineup panel (`build_values_for_vip_lineup`) and the standings
+grid (`players_to_values`): Salary, Own, Pts and Value. PGA/GOLF standings rows
+and the VIP lineup footer have no Value cell. A `NumberFormat` only renders
+numeric cells, so `VipPlayer.pts`/`.value` and `VipLineup.pts` carry raw numbers,
+not formatted strings.
 
 ---
 
@@ -191,7 +153,7 @@ no Value entry. A `NumberFormat` only renders numeric cells, so `VipPlayer.pts`/
 
 | Module | Interface | Notes |
 |---|---|---|
-| `analytics/optimizer.py` | `Optimizer(sport_obj, players: dict[str, Player], logger=None, solver=None)` (solver defaults to `PulpCbcSolver`); `get_optimal_lineup() -> list[SelectedPlayer] \| None` | Orchestrator over the `LineupSolver` port (ADR-0004). `SelectedPlayer(player, slot)` is frozen and never mutates the shared `Player`; the salary cap comes from `Sport.salary_cap`. |
+| `analytics/optimizer.py` | `Optimizer(sport_obj, players: dict[str, Player], logger=None, solver=None)` (solver defaults to `PulpCbcSolver`); `get_optimal_lineup() -> list[SelectedPlayer] \| None` | Orchestrator over the `LineupSolver` port. `SelectedPlayer(player, slot)` is frozen and never mutates the shared `Player`; the salary cap comes from `Sport.salary_cap`. |
 | `analytics/game_status.py` | `classify_game_status(text) -> GameStatus(remaining, in_play)`, `sport_has_game_status(statuses)`, `UNKNOWN` | Single place that decides which DraftKings game-info texts mean a player is still to score or live; shared by every snapshot "remaining" metric. |
 | `analytics/trainfinder.py` | `TrainFinder`: `get_total_users`, `get_total_users_above_salary`, `get_users_above_salary_spent` | Clusters users by salary spent ("trains"). |
 
@@ -224,17 +186,15 @@ A clean pipeline, each stage a small module:
 ## 8. CLI & command adapters
 
 **`cli/` — thin adapters** that parse arguments and wire the deep modules; each
-exposes `main()`. Root-level scripts (`dkcontests.py`, `db_main.py`,
-`find_new_double_ups.py`, `update_contests.py`, `draftables.py`,
-`export_fixture.py`, `generate_sheet_gids.py`) are one-import
-`sys.path` shims delegating to their `cli/` counterpart.
+exposes `main()`. The root-level scripts of the same names (`dkcontests.py`,
+`db_main.py`, …) are one-import `sys.path` shims delegating to their `cli/`
+counterpart.
 
 - `cli/db_main.py` — snapshot payload build/write (`build_snapshot_payload`, `write_snapshot_payload`).
 - `cli/update_contests.py` — **large**: contest-completion polling, VIP-presence tracking, soft-finish + bonus announcements, and its own SQLite helpers. A functional module carrying a lot of DB + notification logic (see notes).
 - `cli/find_new_double_ups.py` — `process_sport`, upsert, Discord notify.
 - `cli/dkcontests.py` — contest discovery + cron-line generation.
 - `cli/export_fixture.py` — argparse front for `commands/export_fixture.py`.
-- `cli/generate_sheet_gids.py`, `cli/draftables.py`.
 
 **`commands/export_fixture.py`** — the actual export logic behind the CLI:
 `run_export_fixture`, `run_export_bundle`, `run_publish_snapshot`.
@@ -257,22 +217,17 @@ exposes `main()`. Root-level scripts (`dkcontests.py`, `db_main.py`,
 
 ## Notes for architecture work (per the *improve-codebase-architecture* skill)
 
-Deletion-test candidates — modules whose removal would *concentrate* complexity
-back into callers, i.e. worth keeping/deepening — versus surfaces worth
-tightening:
+Deletion-test candidates: modules whose removal would concentrate complexity
+back into callers (worth keeping or deepening), and surfaces worth tightening.
 
-1. **`analytics/optimizer.py` — interface already tightened; preserve it.**
-   `Optimizer` exposes only `get_optimal_lineup()`. The LP construction and solve
-   live in `PulpCbcSolver` (`analytics/lineup_solver.py`) behind the
-   `LineupSolver` port, where the construction steps are private (ADR-0004).
-2. **`services/snapshot_v3/` — preserve the contract seams.** Collection,
-   derivation, building, normalization, validation, and serialization are kept
-   as separate modules behind `build_snapshot_v3_envelope`; extend those seams
-   rather than introducing another snapshot generation surface.
+1. **`analytics/optimizer.py` — preserve the tightened interface.** `Optimizer`
+   exposes only `get_optimal_lineup()`; the LP construction is private to
+   `PulpCbcSolver` behind the `LineupSolver` port (ADR-0004).
+2. **`services/snapshot_v3/` — preserve the contract seams.** Extend the
+   collection, derivation, building, normalization, validation and serialization
+   modules behind `build_snapshot_v3_envelope` rather than adding another
+   snapshot generation surface.
 3. **`cli/update_contests.py` — a CLI carrying domain logic.** Contest-completion
    detection, VIP-presence, soft-finish announcements, and SQLite helpers live in
    an "adapter" tier. Its DB/notification logic could move into a deep module
    (mirroring how `SportProcessor` extracted the sheet pipeline), leaving the CLI thin.
-4. **Ports are the healthy pattern to preserve.** `DkPort`, `SheetPort`,
-   `BonusSenderPort`, and `DkHttpPort` are the repo's best seams — keep new
-   external-edge behaviour behind protocols rather than concrete imports.
