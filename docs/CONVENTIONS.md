@@ -77,6 +77,11 @@ collection error.
   into collaborator classes: land a tests-only PR first that pins behaviour
   (message contents, stored values, loop and boundary cases), then the refactor
   PR, which leaves those tests unchanged.
+- **Mutation check**: before any split that is not a pure move, run
+  `uv run --group quality scripts/mutate-file.sh <src-file> <test paths...>`
+  (about 10 s for a small module). Add assertions until every survivor is log
+  text or explained. Paste the before and after `mutation score` lines into the
+  tests PR's evidence.
 - **Docs**: update `docs/MODULES.md` for any split.
 
 ### Generated files
