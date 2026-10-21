@@ -62,7 +62,7 @@ entire "find live contest → download rows → parse standings → compute anal
   "skip this sport"; `SportProcessorConfig` (frozen) carries filesystem/limit config.
 - **Depth:** high — the biggest leverage-per-interface unit in the repo.
 
-### CompletionProcessor — `completion_processor.py`
+### CompletionProcessor — `completion_processor/`
 `CompletionProcessor.run(conn) -> None` advances each tracked contest and
 announces its milestones. Reads its work list from `ContestDatabase`, not from
 DraftKings.
@@ -76,6 +76,14 @@ DraftKings.
   (resolved at the CLI edge from `DISCORD_NOTIFICATIONS_ENABLED`), independent of
   whether a sender is wired: a disabled run still constructs the processor and
   syncs contest state but short-circuits every send.
+- **Package:** `__init__` re-exports the public names. `processor.py` builds the
+  collaborators from its own dependencies and runs warnings → sync loop →
+  soft-finish; `ports.py` holds `PresenceOracle`, the config and the `Now` clock
+  (`now(tz)`, default `system_now`); `announcer.py` (`MilestoneAnnouncer`) owns
+  the suppression policy, send and record; `messages.py` is the message text
+  (pure functions); `warnings.py` (`WarningScheduler`), `sync.py` (`ContestSync`:
+  state write-back plus the live/completed transition) and `soft_finish.py`
+  (`SoftFinishAnnouncer`) each own one milestone.
 
 ### Snapshot v3 — `services/snapshot_v3/`
 Collects current DraftKings data, derives analytics, and builds the deterministic
