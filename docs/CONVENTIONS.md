@@ -1,11 +1,5 @@
 # Code Conventions
 
-## Change philosophy
-
-- Make the smallest safe change that solves the request.
-- Prefer existing code and seams before adding abstractions.
-- Keep unrelated refactors out of the change.
-
 ## Boundaries
 
 - Keep edits in this repository.
