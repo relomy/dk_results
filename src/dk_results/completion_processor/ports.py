@@ -17,11 +17,6 @@ if TYPE_CHECKING:
 Now = Callable[[datetime.tzinfo | None], datetime.datetime]
 
 
-def system_now(tz: datetime.tzinfo | None = None) -> datetime.datetime:
-    """The default `Now`; resolves ``datetime`` at call time, so tests can freeze it."""
-    return datetime.datetime.now(tz)
-
-
 class PresenceOracle(Protocol):
     """The presence-verdict provider the processor consults for suppression."""
 

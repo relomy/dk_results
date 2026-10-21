@@ -3,9 +3,9 @@
 `fetch_contest_state` reads a contest's detail through `ContestResultsPort` and
 normalizes it to ``{"completed", "status", "entries", "positions_paid"}`` (or
 ``None`` when the read fails or the contest is not live or finished).
-`ContestSync` compares that with the stored row and updates it, tells the run
-loop which draft groups need no further fetch this run, and announces a
-contest's live / completed transition.
+`ContestSync` walks the incomplete contests, compares each with the stored row
+and updates it, skips the draft groups that need no further fetch this run, and
+announces a contest's live / completed transition.
 """
 
 from __future__ import annotations
@@ -76,6 +76,45 @@ class ContestSync:
         self._config = config
         self._announcer = announcer
         self._clock = clock
+
+    def run(self, store: NotificationStore, *, announce: bool) -> None:
+        """Sync every incomplete contest, announcing transitions when ``announce`` (needs a sender).
+
+        A contest whose sync or announcement fails is logged and does not stop the rest.
+        """
+        incomplete_contests = self._db.get_incomplete_contests()
+
+        if not incomplete_contests:
+            return
+
+        logger.debug("found %i incomplete contests", len(incomplete_contests))
+
+        skip_draft_groups: list[int] = []
+
+        for (
+            dk_id,
+            draft_group,
+            entries,
+            positions_paid,
+            status,
+            completed,
+            name,
+            start_date,
+            sport_name,
+        ) in incomplete_contests:
+            if self.should_skip(dk_id, draft_group, positions_paid, name, skip_draft_groups):
+                continue
+
+            try:
+                contest_data = self.sync(
+                    dk_id, draft_group, entries, positions_paid, status, completed, name, start_date, skip_draft_groups
+                )
+                if contest_data is not None and announce:
+                    self.announce_transitions(
+                        store, dk_id, name, start_date, sport_name, status, completed, contest_data
+                    )
+            except Exception:
+                logger.exception("Failed to sync contest dk_id=%s", dk_id)
 
     @staticmethod
     def should_skip(

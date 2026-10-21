@@ -55,12 +55,12 @@ DraftKings.
   whether a sender is wired: a disabled run still constructs the processor and
   syncs contest state but short-circuits every send.
 - **Package:** `processor.py` builds the collaborators from its own
-  dependencies and runs warnings → sync loop → soft-finish; `ports.py` holds
+  dependencies and runs warnings → sync → soft-finish; `ports.py` holds
   `PresenceOracle`, the config and the `Now` clock (`now(tz)`, default
-  `system_now`); `announcer.py` (`MilestoneAnnouncer`) owns the suppression
-  policy, send and record; `messages.py` is pure message text; `warnings.py`,
-  `sync.py` (state write-back plus the live/completed transition) and
-  `soft_finish.py` each own one milestone.
+  `datetime.datetime.now`); `announcer.py` (`MilestoneAnnouncer`) owns the
+  suppression policy, send and record; `messages.py` is pure message text;
+  `warnings.py`, `sync.py` (state write-back plus the live/completed
+  transition) and `soft_finish.py` each own one milestone.
 
 ### Snapshot v3 — `services/snapshot_v3/`
 Collects current DraftKings data, derives analytics, and builds the deterministic
