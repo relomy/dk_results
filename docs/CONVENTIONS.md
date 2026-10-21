@@ -57,6 +57,29 @@ AST, so they may move between files; module-level lines such as imports are
 not compared. Exit 2 means it could not run, for example an unknown ref or a
 collection error.
 
+#### Source splits
+
+- **Coverage first**: before moving source, add characterization tests through
+  the public interface until the file's line and branch coverage is complete or
+  every gap is explained. Tests land first; for a pure move, in a separate first
+  commit.
+- **Pure move**: keep public entry points in the original module, re-export
+  public names (`from .x import Y as Y`), leave monkeypatched names where tests
+  patch them, and keep moved helpers' names (a rename changes
+  `check-pure-move`'s key). Run
+  `uv run scripts/check-pure-move.py --base HEAD~1` on the move commit alone so
+  every moved function matches. It compares line coverage only; compare
+  `--cov-branch` totals too.
+- **Complexity ratchet**: `complexity-ratchet` keys functions by module path, so
+  a function above complexity 10 (tests included) moved to a new module reads as
+  new and fails. Keep those in the original file.
+- **Over-budget class**: methods that leave the class are reported changed
+  (`check-pure-move` keys `Class.method`), so this is not a pure move. Refactor
+  into collaborator classes: land a tests-only PR first that pins behaviour
+  (message contents, stored values, loop and boundary cases), then the refactor
+  PR, which leaves those tests unchanged.
+- **Docs**: update `docs/MODULES.md` for any split.
+
 ### Generated files
 
 Files no one authors by hand (`uv.lock`, `contract/snapshot.schema.json`,
