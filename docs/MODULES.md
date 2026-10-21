@@ -253,10 +253,10 @@ Deletion-test candidates — modules whose removal would *concentrate* complexit
 back into callers, i.e. worth keeping/deepening — versus surfaces worth
 tightening:
 
-1. **`analytics/optimizer.py` — tighten a shallow interface.** Only
-   `get_optimal_lineup()` is needed by callers; the LP-construction steps are
-   public. Making them private shrinks the interface without losing behaviour
-   (a textbook "hide more complexity inside").
+1. **`analytics/optimizer.py` — interface already tightened; preserve it.**
+   `Optimizer` exposes only `get_optimal_lineup()`. The LP construction and solve
+   live in `PulpCbcSolver` (`analytics/lineup_solver.py`) behind the
+   `LineupSolver` port, where the construction steps are private (ADR-0004).
 2. **`services/snapshot_v3/` — preserve the contract seams.** Collection,
    derivation, building, normalization, validation, and serialization are kept
    as separate modules behind `build_snapshot_v3_envelope`; extend those seams
