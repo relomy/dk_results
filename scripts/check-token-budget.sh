@@ -1,8 +1,6 @@
 #!/bin/sh
 # Token budget check: no committed file may exceed its token budget.
 #
-# relomy/dk_dashboard carries a port of this script; keep behaviour in sync.
-#
 # Usage: check-token-budget.sh            check the staged files (pre-commit)
 #        check-token-budget.sh PATH...    check these repo-root-relative paths (CI)
 #
