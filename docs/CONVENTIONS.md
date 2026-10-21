@@ -1,11 +1,5 @@
 # Code Conventions
 
-## Change philosophy
-
-- Make the smallest safe change that solves the request.
-- Prefer existing code and seams before adding abstractions.
-- Keep unrelated refactors out of the change.
-
 ## Boundaries
 
 - Keep edits in this repository.
@@ -25,13 +19,11 @@ files in CI (the `token-budget` job in `.github/workflows/ci.yml`), so
 
 Split along a real seam, not at an arbitrary line count.
 
-- **Python module**: turn it into a package, or sibling modules, and re-export
-  the public names from the original import path so callers don't change.
-  Names that tests monkeypatch (for example `collector.load_vips`) must stay in
-  the module the tests patch.
-- **Python test file**: split by behaviour under test into several `test_*.py`
-  files. Move shared fakes and builders into a helper module whose name does
-  not start with `test_`, so pytest doesn't collect it.
+- **Python module**: turn it into a package of the same name laid out per
+  `CODING_STANDARDS.md` (Module layout); `__init__.py` re-exports the original
+  public names.
+- **Python test file**: turn it into a test directory per
+  `CODING_STANDARDS.md`.
 - **Markdown**: split by H2 into linked pages, or move content that isn't the
   doc's job to the doc that owns it. Sections that tools read stay put:
   `## Breaking changes` in `docs/SNAPSHOT_SCHEMA.md` is read by the schema
@@ -62,9 +54,9 @@ collection error.
   the public interface until the file's line and branch coverage is complete or
   every gap is explained. Tests land first; for a pure move, in a separate first
   commit.
-- **Pure move**: keep public entry points in the original module, re-export
-  public names (`from .x import Y as Y`), leave monkeypatched names where tests
-  patch them, and keep moved helpers' names (a rename changes
+- **Pure move**: keep public entry points in the original module, leave
+  patched names where tests patch them (for example `collector.load_vips`), and
+  keep moved helpers' names (a rename changes
   `check-pure-move`'s key). Run
   `uv run scripts/check-pure-move.py --base HEAD~1` on the move commit alone so
   every moved function matches. It compares line coverage only; compare
@@ -74,9 +66,14 @@ collection error.
   new and fails. Keep those in the original file.
 - **Over-budget class**: methods that leave the class are reported changed
   (`check-pure-move` keys `Class.method`), so this is not a pure move. Refactor
-  into collaborator classes: land a tests-only PR first that pins behaviour
-  (message contents, stored values, loop and boundary cases), then the refactor
-  PR, which leaves those tests unchanged.
+  into collaborators (`CODING_STANDARDS.md`): land a tests-only PR first that
+  pins behaviour (message contents, stored values, loop and boundary cases),
+  then the refactor PR, which leaves those tests unchanged.
+- **Mutation check**: before any split that is not a pure move, run
+  `uv run --group quality scripts/mutate-file.sh <src-file> <test paths...>`
+  (about 10 s for a small module). Add assertions until every survivor is log
+  text or explained. Paste the before and after `mutation score` lines into the
+  tests PR's evidence.
 - **Docs**: update `docs/MODULES.md` for any split.
 
 ### Generated files

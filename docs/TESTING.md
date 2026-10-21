@@ -28,6 +28,9 @@ broad; the relevant subset when it's narrow.
 - `uv run --group quality xenon --max-absolute B src` — the complexity floor.
 - `uv run --group quality complexity-ratchet --base origin/main --worktree` —
   complexity regressions against `origin/main`.
+- `uv run --group quality scripts/mutate-file.sh SRC_FILE TEST_PATH...` —
+  mutmut on one file; a pre-refactor check, not a completion check
+  ([Source splits](CONVENTIONS.md#source-splits)).
 
 The `quality` group is not installed by default, so these fail with
 `Failed to spawn` without `--group quality`.

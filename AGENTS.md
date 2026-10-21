@@ -22,8 +22,8 @@ Read these when the task calls for them:
 
 - **Testing & verification** — `docs/TESTING.md`: the checks to run before
   reporting a change complete, and the `dfs-common` build gotcha.
-- **Code conventions** — `docs/CONVENTIONS.md`: change size, seams, and
-  repository boundaries.
+- **Code conventions** — `docs/CONVENTIONS.md`: repository boundaries and
+  splitting an over-budget file.
 - **Delivery workflow** — `docs/WORKFLOW.md`: commit message format and handoff
   report.
 

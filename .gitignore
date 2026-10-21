@@ -164,3 +164,7 @@ dmypy.json
 .agents/
 .codex/
 .claude/
+
+# mutation testing (scripts/mutate-file.sh)
+mutants/
+setup.cfg
