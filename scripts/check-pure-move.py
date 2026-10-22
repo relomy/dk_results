@@ -6,7 +6,7 @@ Usage: uv run scripts/check-pure-move.py [--base REF]    (REF defaults to origin
 Compares the working tree (head) with REF (base), whose tree is extracted with
 `git archive` into a temporary directory. Both run on this venv.
 
-  tests       pytest's collected test count: head must not be lower.
+  tests       pytest's collected test count (from the coverage run): head must not be lower.
   assertions  every assertion in tests/, normalised with ast.unparse so layout and
               comments don't matter: head must still hold each base assertion
               (moved, not edited). Added assertions are listed but allowed.
@@ -37,8 +37,10 @@ import sys
 import tarfile
 import tempfile
 from collections import Counter
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
+from xml.etree import ElementTree
 
 # Calls that assert: pytest.raises(...), approx(...), mock.assert_called_once_with(...).
 ASSERTING_CALLS = {"raises", "warns", "approx", "deprecated_call"}
@@ -81,12 +83,6 @@ def _pytest(tree: Path, args: list[str], env: dict[str, str], exit_ok: tuple[int
         tail = "\n".join((result.stdout + result.stderr).splitlines()[-15:])
         raise CheckError(f"pytest {' '.join(args)} failed in {tree}:\n{tail}")
     return result.stdout
-
-
-def _collected(tree: Path, env: dict[str, str]) -> int:
-    out = _pytest(tree, ["--collect-only", "-q"], env)
-    match = re.search(r"^(\d+)(?:/\d+)? tests? collected", out, re.MULTILINE)
-    return int(match.group(1)) if match else 0
 
 
 def _python_files(tree: Path, top: str) -> list[Path]:
@@ -138,12 +134,17 @@ def _functions(node: ast.AST, prefix: str = "") -> list[tuple[int, int, str]]:
     return found
 
 
-def _coverage(tree: Path, env: dict[str, str], workdir: Path) -> tuple[Counter[str], dict[str, str], list[str]]:
-    """Covered lines per function key, where each function is, and the failing tests."""
+def _coverage(tree: Path, env: dict[str, str], workdir: Path) -> tuple[int, Counter[str], dict[str, str], list[str]]:
+    """Tests run, covered lines per function key, where each function is, and the failing tests."""
     report = workdir / "coverage.json"
+    junit = workdir / "junit.xml"
     env = {**env, "COVERAGE_FILE": str(workdir / ".coverage")}
     # Exit 1 is failing tests: still a coverage report, and the failures are a finding.
-    out = _pytest(tree, ["-q", "--cov=src", f"--cov-report=json:{report}"], env, exit_ok=(0, 1))
+    # A collection error exits 2, so the junit count is every collected test.
+    args = ["-q", "--cov=src", f"--cov-report=json:{report}", f"--junitxml={junit}"]
+    out = _pytest(tree, args, env, exit_ok=(0, 1))
+    suite = ElementTree.parse(junit).getroot().find("testsuite")
+    tests = int(suite.get("tests", "0")) if suite is not None else 0
     failing = re.findall(r"^(?:FAILED|ERROR) (\S+)", out, re.MULTILINE)
     covered: Counter[str] = Counter()
     where: dict[str, str] = {}
@@ -156,14 +157,15 @@ def _coverage(tree: Path, env: dict[str, str], workdir: Path) -> tuple[Counter[s
             owners = [(start, key) for start, end, key in spans if start <= line <= end]
             if owners:
                 covered[max(owners)[1]] += 1
-    return covered, where, failing
+    return tests, covered, where, failing
 
 
 def _measure(tree: Path, workdir: Path) -> Measurement:
     env = _pytest_env()
     workdir.mkdir()
     found, where = _assertions(tree)
-    return Measurement(_collected(tree, env), found, where, *_coverage(tree, env, workdir))
+    tests, covered, function_at, failing = _coverage(tree, env, workdir)
+    return Measurement(tests, found, where, covered, function_at, failing)
 
 
 def _short(text: str, limit: int = 160) -> str:
@@ -224,8 +226,11 @@ def main(argv: list[str] | None = None) -> int:
         with tempfile.TemporaryDirectory(prefix="pure-move-") as tmp:
             base_tree = Path(tmp) / "base"
             _extract(args.base, root, base_tree)
-            base = _measure(base_tree, Path(tmp) / "base-run")
-            head = _measure(root, Path(tmp) / "head-run")
+            # The trees share nothing, so both pytest runs go at once.
+            with ThreadPoolExecutor(2) as pool:
+                base_run = pool.submit(_measure, base_tree, Path(tmp) / "base-run")
+                head_run = pool.submit(_measure, root, Path(tmp) / "head-run")
+                base, head = base_run.result(), head_run.result()
     except CheckError as exc:
         print(f"pure-move check could not run: {exc}", file=sys.stderr)
         return 2
