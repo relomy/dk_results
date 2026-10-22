@@ -134,6 +134,10 @@ def _functions(node: ast.AST, prefix: str = "") -> list[tuple[int, int, str]]:
     return found
 
 
+def _tests_run(junit: Path) -> int:
+    return sum(int(suite.get("tests", "0")) for suite in ElementTree.parse(junit).getroot().iter("testsuite"))
+
+
 def _coverage(tree: Path, env: dict[str, str], workdir: Path) -> tuple[int, Counter[str], dict[str, str], list[str]]:
     """Tests run, covered lines per function key, where each function is, and the failing tests."""
     report = workdir / "coverage.json"
@@ -143,8 +147,6 @@ def _coverage(tree: Path, env: dict[str, str], workdir: Path) -> tuple[int, Coun
     # A collection error exits 2, so the junit count is every collected test.
     args = ["-q", "--cov=src", f"--cov-report=json:{report}", f"--junitxml={junit}"]
     out = _pytest(tree, args, env, exit_ok=(0, 1))
-    suite = ElementTree.parse(junit).getroot().find("testsuite")
-    tests = int(suite.get("tests", "0")) if suite is not None else 0
     failing = re.findall(r"^(?:FAILED|ERROR) (\S+)", out, re.MULTILINE)
     covered: Counter[str] = Counter()
     where: dict[str, str] = {}
@@ -157,7 +159,7 @@ def _coverage(tree: Path, env: dict[str, str], workdir: Path) -> tuple[int, Coun
             owners = [(start, key) for start, end, key in spans if start <= line <= end]
             if owners:
                 covered[max(owners)[1]] += 1
-    return tests, covered, where, failing
+    return _tests_run(junit), covered, where, failing
 
 
 def _measure(tree: Path, workdir: Path) -> Measurement:
