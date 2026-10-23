@@ -2,6 +2,17 @@ import re
 from collections.abc import Iterator, Mapping
 from datetime import date, time
 from types import MappingProxyType
+from typing import NamedTuple
+
+
+class StartWindow(NamedTuple):
+    """Half-open ``[start, end)`` time-of-day range in ET; ``end=None`` runs to end of day."""
+
+    start: time
+    end: time | None = None
+
+    def contains(self, value: time) -> bool:
+        return value >= self.start and (self.end is None or value < self.end)
 
 
 class Sport:
@@ -36,7 +47,9 @@ class Sport:
     _suffix_patterns_cache_key: tuple[str | None, ...] | None = None
 
     contest_restraint_day: date | None = None
-    contest_restraint_time: time | None = None
+    # Start-time constraint: None -> any start time passes; otherwise the start
+    # must fall inside at least one window.
+    start_windows: tuple[StartWindow, ...] | None = None
     contest_restraint_type_id: int | None = None
     contest_restraint_game_type_id: int | None = None
 
@@ -189,15 +202,14 @@ class NFLShowdownSport(Sport):
     suffixes = (None, r"\(\w{2,3} @ \w{2,3}\)", r"\([A-Za-z0-9 .'-]+\)")
 
     # DraftKings tags one "Featured" Showdown per game window, not just
-    # primetime — a Sunday early (1:00) and late (4:05/4:25) window each get
-    # their own Featured Showdown with an ordinary (TEAM @ TEAM) suffix,
-    # indistinguishable from Thu/Sun/Mon night by suffix or game type alone.
-    # Confirmed via live data pulled 2026-09-17. Regular-season primetime
-    # games kick off ~20:15-20:20 ET, but the Super Bowl kicks off ~18:30 ET
-    # (see test_filter_draft_groups_nfl_showdown_super_bowl_suffix) — a 6:00
-    # PM floor keeps every single-game primetime/marquee window while still
-    # excluding every standard Sunday day window (never later than ~16:25).
-    contest_restraint_time = time(18, 0)
+    # primetime: Sunday 1:00 and 4:05/4:25 PM ET each get their own, with an
+    # ordinary (TEAM @ TEAM) suffix, indistinguishable from the night games by
+    # suffix or game type. Only start time separates them. Two windows keep the
+    # 9:30 AM international game and a Thanksgiving 12:30 PM game ([06:00,
+    # 13:00); the bound is exclusive and relies on the Sunday 1:00 PM window
+    # starting at exactly 13:00 ET) and every evening game, including the
+    # ~18:30 Super Bowl, while dropping 13:00, 16:05 and 16:25. See ADR-0017.
+    start_windows = (StartWindow(time(6, 0), time(13, 0)), StartWindow(time(18, 0)))
     contest_restraint_game_type_id = 96
 
 

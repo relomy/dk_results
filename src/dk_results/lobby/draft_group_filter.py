@@ -33,9 +33,10 @@ def _passes_suffix(suffix: str | None, sport: Type[Sport]) -> bool:
 
 
 def _passes_time(dt_start: datetime.datetime, sport: Type[Sport]) -> bool:
-    if sport.contest_restraint_time is None:
+    if sport.start_windows is None:
         return True
-    return dt_start.time() >= sport.contest_restraint_time
+    start = dt_start.time()
+    return any(window.contains(start) for window in sport.start_windows)
 
 
 def _deduplicate_showdown(
@@ -145,7 +146,7 @@ def _process_draft_group(
         return
 
     if not _passes_time(dt_start, sport):
-        reason = f"time constraint (<{sport.contest_restraint_time})"
+        reason = f"start window constraint (not in {sport.start_windows})"
         _log_group_skip(sport, dt_start, draft_group_id, tag, suffix, contest_type_id, game_type_id, reason)
         return
 

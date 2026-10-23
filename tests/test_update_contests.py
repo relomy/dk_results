@@ -1,7 +1,7 @@
 """Tests for the update_contests CLI composition root.
 
 The contest-completion workflow itself now lives in
-`dk_results.completion_processor` (see tests/test_completion_processor.py). This
+`dk_results.completion_processor` (see tests/completion_processor/). This
 module covers what remains here: config loading, sender wiring, processor
 assembly, and ``main()``.
 """

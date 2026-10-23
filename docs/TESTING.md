@@ -2,6 +2,20 @@
 
 How to run this repo's checks, and how the `dfs-common` dependency is resolved.
 
+## Git hooks
+
+Enable the repository's versioned hooks once per clone:
+
+```bash
+git config core.hooksPath .githooks
+```
+
+The `pre-commit` hook runs the token budget check (`docs/CONVENTIONS.md`,
+"Token budget") on staged files. It needs only git and POSIX sh, so it works
+before `uv sync`. CI runs the same script on a PR's changed files, as the
+standalone `token-budget` job in `.github/workflows/ci.yml` (not part of
+`verify`).
+
 ## Completion checks
 
 Run before reporting any change complete. Use the full suite when the change is
@@ -14,6 +28,9 @@ broad; the relevant subset when it's narrow.
 - `uv run --group quality xenon --max-absolute B src` — the complexity floor.
 - `uv run --group quality complexity-ratchet --base origin/main --worktree` —
   complexity regressions against `origin/main`.
+- `uv run --group quality scripts/mutate-file.sh SRC_FILE TEST_PATH...` —
+  mutmut on one file; a pre-refactor check, not a completion check
+  ([Source splits](CONVENTIONS.md#source-splits)).
 
 The `quality` group is not installed by default, so these fail with
 `Failed to spawn` without `--group quality`.

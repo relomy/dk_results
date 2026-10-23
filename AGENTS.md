@@ -12,6 +12,9 @@ updates, and Discord notifications.
 - `dfs-common` is a private git dependency; read `docs/TESTING.md` when a `uv`
   command fails while building the venv.
 - Changes under `src/dk_results/services/snapshot_v3/` update `docs/SNAPSHOT_SCHEMA.md`, the exported `contract/snapshot.schema.json` and the goldens in `contract/goldens/` in the same PR; relomy/dk_dashboard checks itself against the feed.
+- **Token budget**: no file may exceed 5,000 tokens (bytes / 4). When the
+  pre-commit hook or CI blocks a file, read
+  [Token budget](docs/CONVENTIONS.md#token-budget) for how to split it.
 
 ## Further instructions
 
@@ -19,8 +22,8 @@ Read these when the task calls for them:
 
 - **Testing & verification** — `docs/TESTING.md`: the checks to run before
   reporting a change complete, and the `dfs-common` build gotcha.
-- **Code conventions** — `docs/CONVENTIONS.md`: change size, seams, and
-  repository boundaries.
+- **Code conventions** — `docs/CONVENTIONS.md`: repository boundaries and
+  splitting an over-budget file.
 - **Delivery workflow** — `docs/WORKFLOW.md`: commit message format and handoff
   report.
 
@@ -36,4 +39,4 @@ When triaging an issue or changing its triage label, read `docs/agents/triage-la
 
 ### Domain docs
 
-Before exploring an unfamiliar area or making a design/refactor decision, read `docs/agents/domain.md`; it directs you to `docs/GLOSSARY.md` and relevant ADRs for this single-context repo.
+Before exploring an unfamiliar area or making a design/refactor decision, read `docs/agents/domain.md`; it directs you to `GLOSSARY.md` and relevant ADRs for this single-context repo.

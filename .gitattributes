@@ -27,3 +27,24 @@
 # with the python modules ``pickle``, ``dbm.*``,
 # ``shelve``, ``marshal``, ``anydbm``, & ``bsddb``
 # (among others).
+
+# Generated files
+# ===============
+# Not authored by hand or by agents: skipped by the token budget check
+# (scripts/check-token-budget.sh) and collapsed in GitHub diffs.
+uv.lock                     linguist-generated
+contract/snapshot.schema.json linguist-generated
+contract/goldens/*.json     linguist-generated
+
+# Token budget grandfathering
+# ===========================
+# Files that were over the 5000-token budget when the check was added, each
+# held at its size then (tokens = bytes / 4, rounded up). They may shrink but
+# never grow; once a file is split under 5000 tokens, delete its line.
+docs/SNAPSHOT_SCHEMA.md token-budget=6092
+src/dk_results/persistence/contestdatabase.py token-budget=7197
+src/dk_results/sport_processor.py token-budget=5355
+tests/domain/test_contest_standings.py token-budget=6069
+tests/persistence/test_contestdatabase.py token-budget=7441
+tests/services/snapshot_scenarios.py token-budget=7042
+tests/test_export_fixture.py token-budget=7370

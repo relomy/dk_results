@@ -6,15 +6,12 @@ import csv
 import datetime
 import logging
 import os
-from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
-from typing import Any, NamedTuple
+from typing import Any
 from zoneinfo import ZoneInfo
 
 from dfs_common import state
 
-from dk_results.analytics.contest_metrics import average_remaining_salary
-from dk_results.analytics.game_status import is_locked_slot
 from dk_results.domain.contest_standings import ContestStandings, parse_contest_standings
 from dk_results.domain.draftables import Draftables
 from dk_results.domain.sport import Sport
@@ -22,18 +19,26 @@ from dk_results.draftkings import DraftKings as Draftkings
 from dk_results.draftkings.leaderboard import leaderboard_cash_cents
 from dk_results.paths import repo_file
 from dk_results.persistence.contestdatabase import ContestDatabase, ContestRow
-from dk_results.services.snapshot_v3 import sections
 from dk_results.services.snapshot_v3.constants import DEFAULT_STANDINGS_LIMIT
-from dk_results.services.snapshot_v3.normalize import (
-    completed_at_field,
-    is_live_from_slot,
-    is_locked_snapshot_slot,
-    normalize_name,
-    resolve_lineup_slots,
-    slug,
-    to_float,
-    to_int,
-    to_utc_iso,
+from dk_results.services.snapshot_v3.contest_selection import (
+    CANDIDATE_LIMIT,
+    _contest_row_from_detail,
+    _ResolvedContest,
+)
+from dk_results.services.snapshot_v3.source_bundle import (
+    FieldRemaining as FieldRemaining,  # re-exported: public name from the original path
+)
+from dk_results.services.snapshot_v3.source_bundle import (
+    _assemble_source_bundle,
+    _build_source_metrics,
+    _build_vip_points_by_entry,
+)
+from dk_results.services.snapshot_v3.vip_normalize import (
+    _build_unique_name_to_player_key_from_vip_lineups,
+    _merge_unique_name_to_player_keys,
+    _normalize_ownership_top_lists,
+    _normalize_players,
+    _normalize_vip_lineup_rows,
 )
 from dk_results.vip_lineups import build_vip_entries, fetch_vip_lineups, load_vips, scorecard_facts_by_draftable_id
 
@@ -42,7 +47,6 @@ logger = logging.getLogger(__name__)
 CONTEST_DIR = str(repo_file("contests"))
 SALARY_DIR = str(repo_file("salary"))
 COOKIES_FILE = str(repo_file("pickled_cookies_works.txt"))
-CANDIDATE_LIMIT = 5
 
 
 @dataclass(frozen=True)
@@ -61,107 +65,6 @@ def _sport_choices() -> dict[str, type[Sport]]:
     return {name.upper(): sport for name, sport in get_sport_choices().items()}
 
 
-def _build_selection_reason(
-    *,
-    mode: str,
-    sport: str,
-    min_entry_fee: int,
-    keyword: str,
-    selected_from_candidate_count: int,
-    contest_id: int | None = None,
-) -> dict[str, Any]:
-    criteria: dict[str, Any] = {
-        "sport": sport,
-        "min_entry_fee": min_entry_fee,
-        "keyword": keyword,
-        "status_window": "start_date <= now && completed=0",
-        "primary_preference": "entry_fee >= min_entry_fee then fallback below min",
-    }
-    if mode == "explicit_id":
-        criteria = {"contest_id": str(contest_id) if contest_id is not None else None}
-
-    return {
-        "mode": mode,
-        "criteria": criteria,
-        "tie_breakers": [
-            "entry_fee desc",
-            "entries desc",
-            "start_date desc",
-            "dk_id desc",
-        ],
-        "selected_from_candidate_count": selected_from_candidate_count,
-    }
-
-
-def _summarize_candidates(rows: list[tuple], top_n: int = CANDIDATE_LIMIT) -> list[dict[str, Any]]:
-    normalized: list[dict[str, Any]] = []
-    for row in rows:
-        contest_id, name, entry_fee, start_date, entries, selection_priority = row
-        normalized.append(
-            {
-                "contest_id": str(contest_id),
-                "name": name,
-                "entry_fee": entry_fee,
-                "entries": entries,
-                "start_time_utc": to_utc_iso(start_date),
-                "selection_priority": int(selection_priority),
-            }
-        )
-
-    normalized.sort(
-        key=lambda item: (
-            item["selection_priority"],
-            -int(item["entry_fee"] or 0),
-            -int(item["entries"] or 0),
-            item["contest_id"],
-        )
-    )
-    return normalized[:top_n]
-
-
-def _first_not_blank(*values: Any) -> Any:
-    for value in values:
-        if value not in (None, ""):
-            return value
-    return None
-
-
-def _contest_row_from_detail(dk_id: int, detail: dict[str, Any]) -> ContestRow:
-    contest_detail = detail.get("contestDetail", {})
-    payout_summary = contest_detail.get("payoutSummary") or []
-    positions_paid = None
-    if payout_summary:
-        positions_paid = payout_summary[0].get("maxPosition")
-    start_time = contest_detail.get("contestStartTime")
-    prize_pool = _first_not_blank(
-        contest_detail.get("totalPrizePool"),
-        contest_detail.get("totalPrizes"),
-        contest_detail.get("totalPayouts"),
-        contest_detail.get("totalPayout"),
-        contest_detail.get("prizePool"),
-        contest_detail.get("payout"),
-    )
-    max_entries_per_user = _first_not_blank(
-        contest_detail.get("maxEntriesPerUser"),
-        contest_detail.get("maximumEntriesPerUser"),
-        contest_detail.get("maxEntriesPerPerson"),
-        contest_detail.get("maxEntryCount"),
-    )
-    return ContestRow(
-        dk_id=dk_id,
-        name=contest_detail.get("name"),
-        draft_group=contest_detail.get("draftGroupId"),
-        positions_paid=positions_paid,
-        start_date=start_time,
-        entry_fee=contest_detail.get("entryFee"),
-        entries=contest_detail.get("maximumEntries"),
-        contest_state=contest_detail.get("contestState") or contest_detail.get("contestStatus"),
-        contest_completed=contest_detail.get("isCompleted"),
-        prize_pool=prize_pool,
-        max_entries_per_user=max_entries_per_user,
-    )
-
-
 def _leaderboard_payout_map(payload: dict[str, Any]) -> dict[str, int]:
     results: dict[str, int] = {}
     rows = payload.get("leaderBoard")
@@ -178,309 +81,6 @@ def _leaderboard_payout_map(payload: dict[str, Any]) -> dict[str, int]:
             continue
         results[str(entry_key)] = payout_cents
     return results
-
-
-def _normalize_contest_state(raw_state: Any, completed: Any) -> str | None:
-    if completed in (1, True, "1", "true", "True"):
-        return "completed"
-    text = str(raw_state or "").strip().lower()
-    if not text:
-        return None
-    if text in {"live", "in progress", "in_progress", "started"}:
-        return "live"
-    if text in {"completed", "complete", "final"}:
-        return "completed"
-    if text in {"cancelled", "canceled"}:
-        return "cancelled"
-    if text in {"scheduled", "upcoming", "open"}:
-        return "upcoming"
-    return None
-
-
-def _completed_at_for(resolved: _ResolvedContest, state: str | None) -> str | None:
-    """The stored ``completed_at``, only for a genuinely completed (never cancelled) contest.
-
-    ``update_contest`` never stamps ``CANCELLED``; this guard is defence in depth against a
-    hand-edited database. ``state`` alone cannot exclude cancelled contests, because they
-    carry ``completed=1`` and normalise to ``"completed"``.
-    """
-    cancelled = str(resolved.contest_state or "").strip().lower() in {"cancelled", "canceled"}
-    return None if state != "completed" or cancelled else resolved.completed_at
-
-
-def _derive_composite_player_key(sport: str, row: dict[str, Any]) -> str | None:
-    name_slug = slug(row.get("name") or row.get("player_name"))
-    if not name_slug:
-        return None
-    team_slug = slug(row.get("team") or row.get("team_abbv")) or "na"
-    pos_slug = slug(row.get("position") or row.get("pos")) or "na"
-    salary_num = to_float(row.get("salary"))
-    salary_part = str(int(round(salary_num))) if salary_num is not None else "na"
-    return f"{sport.lower()}:{name_slug}:{team_slug}:{salary_part}:{pos_slug}"
-
-
-def _trimmed(name: Any) -> Any:
-    """The one place a player name loses its leading/trailing whitespace; non-strings pass through."""
-    return name.strip() if isinstance(name, str) else name
-
-
-def _with_trimmed_name(row: dict[str, Any], field: str) -> dict[str, Any]:
-    """Copy ``row`` with its string name under ``field`` trimmed."""
-    mapped = dict(row)
-    if field in mapped:
-        mapped[field] = _trimmed(mapped[field])
-    return mapped
-
-
-def _normalize_players(
-    raw_players: list[Any],
-    sport: str,
-) -> tuple[list[dict[str, Any]], dict[str, str]]:
-    normalized_players: list[dict[str, Any]] = []
-    keys_by_name: dict[str, set[str]] = {}
-
-    for row in raw_players:
-        if not isinstance(row, dict):
-            continue
-        mapped = _with_trimmed_name(row, "name")
-        player_key = row.get("player_key")
-        if player_key in (None, ""):
-            player_key = _derive_composite_player_key(sport, row)
-        if player_key not in (None, ""):
-            mapped["player_key"] = str(player_key)
-        normalized_players.append(mapped)
-
-        name_key = normalize_name(mapped.get("name") or mapped.get("player_name"))
-        if not name_key:
-            continue
-        if mapped.get("player_key") in (None, ""):
-            continue
-        keys_by_name.setdefault(name_key, set()).add(str(mapped.get("player_key")))
-
-    unique_name_to_key: dict[str, str] = {}
-    for name_key, keys in keys_by_name.items():
-        if len(keys) == 1:
-            unique_name_to_key[name_key] = next(iter(keys))
-
-    return normalized_players, unique_name_to_key
-
-
-def _normalize_vip_lineup_rows(
-    raw_vip_lineups: list[Any],
-    standings: list[dict[str, Any]],
-    sport: str,
-    unique_name_to_player_key: dict[str, str],
-) -> list[dict[str, Any]]:
-    standings_entry_key_by_name = _unique_standings_entry_keys(standings)
-
-    normalized_rows: list[dict[str, Any]] = []
-    for row in raw_vip_lineups:
-        normalized = _normalize_vip_lineup_row(row, sport, standings_entry_key_by_name, unique_name_to_player_key)
-        if normalized:
-            normalized_rows.append(normalized)
-
-    # The fetcher returns lineups in worker-thread completion order; emit a stable order instead.
-    return sorted(normalized_rows, key=_vip_lineup_order)
-
-
-def _vip_lineup_order(row: dict[str, Any]) -> tuple[bool, int, bool, str, str]:
-    """Rank ascending, then ``vip_entry_key``, then ``display_name``; a missing rank or key sorts last."""
-    rank, vip_entry_key = row.get("rank"), row.get("vip_entry_key")
-    return (rank is None, rank or 0, vip_entry_key is None, vip_entry_key or "", row.get("display_name", ""))
-
-
-def _unique_standings_entry_keys(standings: list[dict[str, Any]]) -> dict[str, str]:
-    keys_by_name: dict[str, set[str]] = {}
-    for row in standings:
-        if not isinstance(row, dict):
-            continue
-        username, entry_key = row.get("username"), row.get("entry_key")
-        if username not in (None, "") and entry_key not in (None, ""):
-            keys_by_name.setdefault(str(username).strip().lower(), set()).add(str(entry_key))
-    return {name: next(iter(keys)) for name, keys in keys_by_name.items() if len(keys) == 1}
-
-
-def _normalize_vip_lineup_row(
-    row: Any,
-    sport: str,
-    standings_entry_keys: dict[str, str],
-    unique_name_to_player_key: dict[str, str],
-) -> dict[str, Any]:
-    if not isinstance(row, dict):
-        return {}
-    display_name = row.get("display_name") or row.get("user") or row.get("username")
-    entry_key = row.get("entry_key")
-    if entry_key in (None, "") and display_name not in (None, ""):
-        entry_key = standings_entry_keys.get(str(display_name).strip().lower())
-    vip_entry_key = row.get("vip_entry_key") if row.get("vip_entry_key") not in (None, "") else entry_key
-    normalized = _normalize_vip_identity(display_name, entry_key, vip_entry_key)
-    normalized.update(_normalize_vip_figures(row))
-    players_live = _normalize_vip_players(row, sport, unique_name_to_player_key)
-    if players_live:
-        normalized["players_live"] = players_live
-    return normalized
-
-
-def _normalize_vip_figures(row: dict[str, Any]) -> dict[str, Any]:
-    """Coerce fetched VIP rank/points/PMR to numbers; omit any that do not parse."""
-    figures = {
-        "rank": to_int(row.get("rank")),
-        "points": to_float(row.get("pts")),
-        "pmr": to_float(row.get("pmr")),
-    }
-    return {key: value for key, value in figures.items() if value is not None}
-
-
-def _normalize_vip_players(
-    row: dict[str, Any], sport: str, unique_name_to_player_key: dict[str, str]
-) -> list[dict[str, Any]]:
-    players_live: list[dict[str, Any]] = []
-    for slot in resolve_lineup_slots(row) or []:
-        normalized = _normalize_vip_player_slot(slot, sport, unique_name_to_player_key)
-        if normalized:
-            players_live.append(normalized)
-    return players_live
-
-
-def _normalize_vip_identity(display_name: Any, entry_key: Any, vip_entry_key: Any) -> dict[str, Any]:
-    normalized: dict[str, Any] = {}
-    for key, value in (
-        ("display_name", display_name),
-        ("entry_key", entry_key),
-        ("vip_entry_key", vip_entry_key),
-    ):
-        if value not in (None, ""):
-            normalized[key] = str(value)
-    return normalized
-
-
-def _slot_player_name(slot: dict[str, Any]) -> str:
-    return str(_trimmed(slot.get("player_name") or slot.get("name") or ""))
-
-
-def _normalize_vip_player_slot(
-    slot: Any, sport: str, unique_name_to_player_key: dict[str, str]
-) -> dict[str, Any] | None:
-    if not isinstance(slot, dict):
-        return None
-    player_name = _slot_player_name(slot)
-    if not player_name:
-        return None
-    roster_slot = slot.get("slot") or slot.get("pos")
-    live_slot: dict[str, Any] = {
-        "slot": str(roster_slot or ""),
-        "player_name": player_name,
-    }
-    if is_locked_snapshot_slot(slot):
-        live_slot["player_name"] = "LOCKED 🔒"
-        live_slot["is_locked"] = True
-        return live_slot
-
-    return _normalize_revealed_vip_slot(live_slot, slot, sport, unique_name_to_player_key, player_name)
-
-
-def _normalize_revealed_vip_slot(
-    live_slot: dict[str, Any],
-    slot: dict[str, Any],
-    sport: str,
-    unique_name_to_player_key: dict[str, str],
-    player_name: Any,
-) -> dict[str, Any]:
-    player_key = slot.get("player_key")
-    if player_key in (None, ""):
-        player_key = unique_name_to_player_key.get(normalize_name(player_name))
-    if player_key in (None, ""):
-        player_key = _derive_composite_player_key(sport, {**slot, "player_name": player_name})
-    if player_key not in (None, ""):
-        live_slot["player_key"] = str(player_key)
-    salary = to_float(slot.get("salary"))
-    if salary is not None:
-        live_slot["salary"] = int(round(salary))
-    live_slot["is_live"] = is_live_from_slot(slot)
-    return live_slot
-
-
-def _collect_slot_names_and_keys(slots: list[Any], keys_by_name: dict[str, set[str]]) -> None:
-    for slot in slots:
-        _collect_slot_name_and_key(slot, keys_by_name)
-
-
-def _collect_slot_name_and_key(slot: Any, keys_by_name: dict[str, set[str]]) -> None:
-    if not isinstance(slot, dict) or is_locked_snapshot_slot(slot):
-        return
-    player_name = slot.get("player_name") or slot.get("name")
-    player_key = slot.get("player_key")
-    if player_name in (None, "") or player_key in (None, ""):
-        return
-    keys_by_name.setdefault(normalize_name(player_name), set()).add(str(player_key))
-
-
-def _build_unique_name_to_player_key_from_vip_lineups(vip_lineups: list[dict[str, Any]]) -> dict[str, str]:
-    keys_by_name: dict[str, set[str]] = {}
-
-    for vip_row in vip_lineups:
-        if not isinstance(vip_row, dict):
-            continue
-        slots = vip_row.get("players_live")
-        if not isinstance(slots, list):
-            continue
-        _collect_slot_names_and_keys(slots, keys_by_name)
-
-    return {name_key: next(iter(keys)) for name_key, keys in keys_by_name.items() if len(keys) == 1}
-
-
-def _merge_unique_name_to_player_keys(
-    primary: dict[str, str],
-    secondary: dict[str, str],
-) -> dict[str, str]:
-    merged = dict(primary)
-    for name_key, key in secondary.items():
-        existing = merged.get(name_key)
-        if existing is None:
-            merged[name_key] = key
-            continue
-        if existing != key:
-            merged.pop(name_key, None)
-    return merged
-
-
-def _normalize_top_remaining_players(
-    rows: list[Any],
-    unique_name_to_player_key: dict[str, str],
-) -> list[dict[str, Any]]:
-    normalized_rows: list[dict[str, Any]] = []
-    for row in rows:
-        if not isinstance(row, dict):
-            continue
-        mapped = _with_trimmed_name(row, "player_name")
-        player_name = mapped.get("player_name")
-        player_key = mapped.get("player_key")
-        if player_key in (None, "") and player_name not in (None, ""):
-            player_key = unique_name_to_player_key.get(normalize_name(player_name))
-        if player_key not in (None, ""):
-            mapped["player_key"] = str(player_key)
-        normalized_rows.append(mapped)
-    return normalized_rows
-
-
-@dataclass(frozen=True)
-class _ResolvedContest:
-    """Contest identity and metadata resolved from the DB (and DK detail fallback)."""
-
-    mode: str
-    candidate_rows: list[tuple]
-    dk_id: Any
-    contest_name: Any
-    draft_group: Any
-    positions_paid: Any
-    start_date: Any
-    entry_fee: Any
-    contest_state: Any
-    contest_completed: Any
-    prize_pool: Any
-    max_entries: Any
-    max_entries_per_user: Any
-    completed_at: str | None = None
 
 
 def _resolve_selected_contest(
@@ -606,174 +206,6 @@ def _fetch_matchups(dk: Draftkings, draft_group: Any) -> dict[str, str | None]:
     return {}
 
 
-def _build_vip_points_by_entry(
-    vip_lineup_rows: list[dict[str, Any]],
-    vip_list: list[Any],
-) -> dict[str, float | None]:
-    """Map entry key to VIP points, preferring lineup rows then falling back to the VIP list."""
-    vip_points_by_entry: dict[str, float | None] = {
-        str(row.get("vip_entry_key") or row.get("entry_key")): to_float(row.get("pts"))
-        for row in vip_lineup_rows
-        if (row.get("vip_entry_key") or row.get("entry_key")) not in (None, "") and to_float(row.get("pts")) is not None
-    }
-    for vip in vip_list:
-        if vip.player_id not in (None, "") and str(vip.player_id) not in vip_points_by_entry:
-            vip_points_by_entry[str(vip.player_id)] = to_float(vip.pts)
-    return vip_points_by_entry
-
-
-def _compute_ownership_remaining_total(full_standings: list[dict[str, Any]]) -> float | None:
-    """Average the non-null remaining-ownership totals across standings rows."""
-    ownership_values = [
-        row["ownership_remaining_total_pct"]
-        for row in full_standings
-        if row["ownership_remaining_total_pct"] is not None
-    ]
-    if not ownership_values:
-        return None
-    return sum(ownership_values) / len(ownership_values)
-
-
-class FieldRemaining(NamedTuple):
-    """Contest-field remaining mean and whether any entry is incomplete."""
-
-    pct: float | None
-    is_partial: bool
-
-
-def _lineup_ownership_is_partial(user: Any) -> bool:
-    lineup = getattr(getattr(user, "lineupobj", None), "lineup", None)
-    if not lineup:
-        return True
-    return any(
-        is_locked_slot(slot)
-        or (slot.get("ownership") if isinstance(slot, Mapping) else getattr(slot, "ownership", None)) in (None, "")
-        for slot in lineup
-    )
-
-
-def _compute_field_remaining(full_standings: list[dict[str, Any]], users: Iterable[Any]) -> FieldRemaining:
-    """Return the contest-field mean and whether any entry is incomplete.
-
-    Runs over the full, pre-truncation standings. A row is left out when its lineup
-    could not be resolved, so it carries no remaining-ownership total. Included
-    entries with hidden or unresolved slots also make the field incomplete.
-    """
-    is_partial = any(row["ownership_remaining_total_pct"] is None for row in full_standings) or any(
-        _lineup_ownership_is_partial(user) for user in users
-    )
-    return FieldRemaining(pct=_compute_ownership_remaining_total(full_standings), is_partial=is_partial)
-
-
-def _compute_vip_remaining_by_entry_key(full_standings: list[dict[str, Any]]) -> dict[str, float]:
-    """Map entry key to ownership remaining for every VIP standings row.
-
-    Built from the full, pre-truncation standings, so a VIP ranked below the
-    standings limit still has a value.
-    """
-    return {
-        str(row["entry_key"]): row["ownership_remaining_total_pct"]
-        for row in full_standings
-        if row["is_vip"] and row["entry_key"] not in (None, "") and row["ownership_remaining_total_pct"] is not None
-    }
-
-
-def _apply_truncation(
-    full_standings: list[dict[str, Any]],
-    standings_limit: int,
-) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    """Cap standings to the limit and describe what was truncated."""
-    total_before = len(full_standings)
-    limit = standings_limit if standings_limit and standings_limit > 0 else None
-    applied = bool(limit and total_before > limit)
-    standings = full_standings[:limit] if applied and limit is not None else full_standings
-    truncation = {
-        "applied": applied,
-        "limit": limit,
-        "total_rows_before_truncation": total_before,
-        "total_rows_after_truncation": len(standings),
-    }
-    return standings, truncation
-
-
-def _assemble_source_bundle(
-    *,
-    sport_cls: type[Sport],
-    resolved: _ResolvedContest,
-    dk_id: Any,
-    draft_group: Any,
-    cash_line: dict[str, Any],
-    vip_lineups: list[Any],
-    players: list[dict[str, Any]],
-    ownership_remaining_total: float | None,
-    field_remaining: FieldRemaining,
-    vip_remaining_by_entry_key: dict[str, float],
-    vip_remaining_is_partial_by_entry_key: dict[str, bool],
-    avg_salary_per_player_remaining: Any,
-    non_cashing_user_count: Any,
-    non_cashing_avg_pmr: Any,
-    watchlist_entries: list[Any],
-    top_remaining_players: list[Any],
-    train_clusters: list[Any],
-    standings: list[dict[str, Any]],
-    truncation: dict[str, Any],
-) -> dict[str, Any]:
-    """Assemble the raw source-snapshot dict from already-computed pieces (pure)."""
-    state = _normalize_contest_state(resolved.contest_state, resolved.contest_completed)
-    return {
-        "sport": sport_cls.name,
-        "contest": {
-            "contest_id": dk_id,
-            "name": resolved.contest_name,
-            "sport": sport_cls.name.lower(),
-            "draft_group": draft_group,
-            "start_time_utc": to_utc_iso(resolved.start_date),
-            "is_primary": True,
-            "contest_type": "classic",
-            "state": state,
-            **completed_at_field(_completed_at_for(resolved, state)),
-            "entry_fee": resolved.entry_fee,
-            "currency": "USD",
-            "entries": resolved.max_entries,
-            "max_entries": resolved.max_entries,
-            "max_entries_per_user": resolved.max_entries_per_user,
-            "prize_pool": resolved.prize_pool,
-            "positions_paid": resolved.positions_paid,
-        },
-        "selection": {
-            "selected_contest_id": dk_id,
-            "reason": _build_selection_reason(
-                mode=resolved.mode,
-                sport=sport_cls.name,
-                min_entry_fee=sport_cls.sheet_min_entry_fee,
-                keyword=sport_cls.keyword,
-                selected_from_candidate_count=len(resolved.candidate_rows),
-                contest_id=int(dk_id) if resolved.mode == "explicit_id" else None,
-            ),
-        },
-        "candidates": _summarize_candidates(resolved.candidate_rows, top_n=CANDIDATE_LIMIT),
-        "cash_line": cash_line,
-        "vip_lineups": vip_lineups,
-        "players": players,
-        "ownership": {
-            "ownership_remaining_total_pct": ownership_remaining_total,
-            "field_remaining_pct": field_remaining.pct,
-            "field_remaining_is_partial": field_remaining.is_partial,
-            "vip_remaining_by_entry_key": vip_remaining_by_entry_key,
-            "vip_remaining_is_partial_by_entry_key": vip_remaining_is_partial_by_entry_key,
-            "avg_salary_per_player_remaining": avg_salary_per_player_remaining,
-            "non_cashing_user_count": non_cashing_user_count,
-            "non_cashing_avg_pmr": non_cashing_avg_pmr,
-            "watchlist_entries": watchlist_entries,
-            "non_cashing_top_remaining_players": top_remaining_players,
-            "top_remaining_players": top_remaining_players,
-        },
-        "train_clusters": train_clusters,
-        "standings": standings,
-        "truncation": truncation,
-    }
-
-
 def _open_contest_db(contest_db: ContestDatabase | None) -> tuple[ContestDatabase | None, bool]:
     if contest_db is not None:
         return contest_db, False
@@ -816,44 +248,6 @@ def _fetch_vip_lineups_for_contest(
     )
     # The fetcher returns typed VipLineup objects; normalization works on dict rows.
     return [lineup.to_dict() for lineup in lineups], scorecard_facts_by_draftable_id(lineups)
-
-
-def _build_source_metrics(
-    results: Any,
-    *,
-    leaderboard_payout_by_entry: dict[str, int],
-    vip_lookup: set[str],
-    vip_points_by_entry: dict[str, float | None],
-    matchups: dict[str, str | None],
-    scorecard_facts: dict[str, dict[str, Any]],
-    standings_limit: int,
-) -> dict[str, Any]:
-    full_standings = sections.build_standings_rows(
-        results,
-        leaderboard_payout_by_entry=leaderboard_payout_by_entry,
-        vip_lookup=vip_lookup,
-        vip_points_by_entry=vip_points_by_entry,
-    )
-    standings, truncation = _apply_truncation(full_standings, standings_limit)
-    vip_remaining_by_entry_key = _compute_vip_remaining_by_entry_key(full_standings)
-    return {
-        "players": sections.build_players(results, matchups=matchups, scorecard_facts=scorecard_facts),
-        "ownership_remaining_total": _compute_ownership_remaining_total(full_standings),
-        "field_remaining": _compute_field_remaining(full_standings, results.users),
-        "vip_remaining_by_entry_key": vip_remaining_by_entry_key,
-        "vip_remaining_is_partial_by_entry_key": {
-            str(user.player_id): _lineup_ownership_is_partial(user)
-            for user in results.users
-            if str(user.player_id) in vip_remaining_by_entry_key
-        },
-        "avg_salary_per_player_remaining": average_remaining_salary(results.users),
-        "top_remaining_players": sections.build_top_remaining_players(results),
-        "watchlist_entries": sections.build_watchlist(full_standings),
-        "standings": standings,
-        "truncation": truncation,
-        "cash_line": sections.build_cash_line(results, full_standings),
-        "train_clusters": sections.build_train_clusters(results),
-    }
 
 
 def _resolve_contest_standings(
@@ -960,17 +354,6 @@ def _collect_source_snapshot(
     finally:
         if owns_db and contest_db is not None:
             contest_db.close()
-
-
-def _normalize_ownership_top_lists(
-    ownership: dict[str, Any], unique_name_to_player_key: dict[str, str]
-) -> dict[str, Any]:
-    normalized = dict(ownership)
-    for field in ("non_cashing_top_remaining_players", "top_remaining_players"):
-        rows = normalized.get(field)
-        if isinstance(rows, list):
-            normalized[field] = _normalize_top_remaining_players(rows, unique_name_to_player_key)
-    return normalized
 
 
 def _build_collected_bundle(
