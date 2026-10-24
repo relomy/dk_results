@@ -8,6 +8,7 @@ dependencies = [
     "google-api-python-client",
     "requests>=2.33.0",
     "pulp",
+    "cbcbox==2.902; sys_platform == 'darwin' and platform_machine == 'arm64'",
     "yt-dlp>=2026.8.19",
     "pyyaml",
     "discord",

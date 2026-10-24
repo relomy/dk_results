@@ -24,13 +24,13 @@ _INVALID_LP_NAME_CHARS = re.compile(r"[^A-Za-z0-9_]")
 
 
 def _cbc_solver() -> pl.LpSolver:
-    """Select native Homebrew CBC on macOS arm64, bundled CBC elsewhere."""
+    """Select platform CBC, using the uv-installed cbcbox on macOS arm64."""
     if platform.system() == "Darwin" and platform.machine() == "arm64":
         solver = pl.COIN_CMD(msg=0)
         if not solver.available():
             raise pl.PulpSolverError(
-                "Native CBC is required on macOS arm64. Install it with brew install cbc "
-                "and ensure cbc is available on PATH."
+                "CBC is required on macOS arm64. Run uv sync to install the cbcbox "
+                "dependency and make cbc available on PATH."
             )
         return solver
     return pl.PULP_CBC_CMD(msg=0)

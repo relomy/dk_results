@@ -21,17 +21,15 @@ notifications (see `db_main.py:main`, `update_contests.py:check_contests_for_com
   `pyproject.toml:[tool.uv.sources]` and `docs/TESTING.md`); no sibling
   checkout is required.
 
-On macOS arm64, install native CBC and ensure it is on the `PATH` used by the
-application:
+On macOS arm64, `uv sync` installs the pinned, self-contained `cbcbox` wheel.
+Verify that PuLP can find its CBC executable with:
 
 ```bash
-brew install cbc
-command -v cbc
-cbc -stop
+uv run cbc -stop
 ```
 
-The optimizer uses native CBC on macOS arm64 because PuLP's bundled CBC is
-x86_64 there. Other platforms use PuLP's bundled CBC.
+The optimizer uses that executable because PuLP's bundled CBC is x86_64 on
+macOS arm64. Other platforms use PuLP's bundled CBC.
 
 ## Sheet Service
 

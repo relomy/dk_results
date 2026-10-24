@@ -61,5 +61,5 @@ def test_cbc_solver_explains_missing_native_cbc(
 
     monkeypatch.setattr(lineup_solver.pl, "COIN_CMD", lambda *, msg: MissingSolver())
 
-    with pytest.raises(pl.PulpSolverError, match="brew install cbc.*PATH"):
+    with pytest.raises(pl.PulpSolverError, match="uv sync.*PATH"):
         lineup_solver._cbc_solver()
