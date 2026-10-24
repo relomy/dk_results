@@ -1,5 +1,5 @@
 version = 1
-revision = 5
+revision = 3
 requires-python = "==3.13.*"
 
 [[package]]
@@ -147,14 +147,6 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/ed/6f/cf16418004c832e6eb9abc6905fa323a3bf96a76ca7f2e97858801a4103e/botocore-1.43.83.tar.gz", hash = "sha256:d9389b3b74400c34219965a2fb858c1d48744718865ee0496fd03bd5b21b943f", size = 16010078, upload-time = "2026-08-28T19:35:46.211Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/98/50/332d6713fa09b05ff0882f5d194569fa70d1c8735aca9829b1286fef32ba/botocore-1.43.83-py3-none-any.whl", hash = "sha256:bf75a6cf587c22d968e43e79fe122c39f82deafbe9c3422bc5d3e80b6210fc98", size = 15704489, upload-time = "2026-08-28T19:35:40.603Z" },
-]
-
-[[package]]
-name = "cbcbox"
-version = "2.902"
-source = { registry = "https://pypi.org/simple" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/a5/af/c7f28a6ed537e961db2d5927ecbdd6f84067a1f1d404654cbd9653edd0a4/cbcbox-2.902-py3-none-macosx_11_0_arm64.whl", hash = "sha256:2003d9cdc20c5bb4d9610c403b94d0e7e782d092c90f2ceb05ab747424fbb36b", size = 42865887, upload-time = "2026-02-25T05:38:24.244Z" },
 ]
 
 [[package]]
@@ -356,11 +348,9 @@ wheels = [
 name = "dk-results"
 version = "0.1.0"
 source = { editable = "." }
-default-groups = ["test"]
 dependencies = [
     { name = "aiohttp" },
     { name = "boto3" },
-    { name = "cbcbox", marker = "platform_machine == 'arm64' and sys_platform == 'darwin'" },
     { name = "cryptography" },
     { name = "dfs-common" },
     { name = "discord" },
@@ -395,7 +385,6 @@ test = [
 requires-dist = [
     { name = "aiohttp", specifier = ">=3.14.3" },
     { name = "boto3", specifier = ">=1.35" },
-    { name = "cbcbox", marker = "platform_machine == 'arm64' and sys_platform == 'darwin'", specifier = "==2.902" },
     { name = "cryptography", specifier = ">=50.0.0" },
     { name = "dfs-common", git = "https://github.com/relomy/dfs-common?tag=v0.1.4" },
     { name = "discord" },
