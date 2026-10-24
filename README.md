@@ -21,6 +21,18 @@ notifications (see `db_main.py:main`, `update_contests.py:check_contests_for_com
   `pyproject.toml:[tool.uv.sources]` and `docs/TESTING.md`); no sibling
   checkout is required.
 
+On macOS arm64, install native CBC and ensure it is on the `PATH` used by the
+application:
+
+```bash
+brew install cbc
+command -v cbc
+cbc -stop
+```
+
+The optimizer uses native CBC on macOS arm64 because PuLP's bundled CBC is
+x86_64 there. Other platforms use PuLP's bundled CBC.
+
 ## Sheet Service
 
 Construct the sheet service with the repo helper so entry points only need one import:

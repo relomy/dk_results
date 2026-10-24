@@ -74,6 +74,10 @@ jobs:
       - name: Install dependencies
         run: uv sync --locked --all-groups
 
+      - name: Install native CBC on macOS
+        if: runner.os == 'macOS'
+        run: brew install cbc
+
       - name: Ruff Format Check
         run: uv run --group quality ruff format --check .
 

@@ -10,11 +10,14 @@ assignment with its `Player` in a frozen `SelectedPlayer(player, slot)`. The two
 are sibling modules, not a package — `test_semantic_packages` pins them and bans a
 re-exporting `__init__`.
 
-The default backend is PuLP's **bundled CBC** (`PULP_CBC_CMD`), which needs no
-external executable. This retires the previous **GLPK** backend, whose `glpsol`
-binary CI never installed — leaving the optimizer's core solve path unrunnable and
-untested. Retiring GLPK is done **in code only** (no dependency change), and is
-what makes an end-to-end `get_optimal_lineup()` test runnable for the first time.
+The backend is PuLP's **bundled CBC** (`PULP_CBC_CMD`) by default, which needs no
+external executable. On macOS arm64, the adapter selects native CBC through
+`COIN_CMD` because PuLP's bundled macOS executable is x86_64; it raises a clear
+setup error when `cbc` is not available on `PATH`. This retires the previous
+**GLPK** backend, whose `glpsol` binary CI never installed — leaving the
+optimizer's core solve path unrunnable and untested. Retiring GLPK is done **in
+code only** (no dependency change), and is what makes an end-to-end
+`get_optimal_lineup()` test runnable for the first time.
 **HiGHS** (`highspy`) is the sanctioned next backend behind the same port, but is
 not built here.
 

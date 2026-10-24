@@ -115,7 +115,7 @@ _Avoid_: applying a `NumberFormat` via a second, separate write call — the poi
 The orchestrator that solves for a single sport's optimal lineup behind a swappable **LineupSolver**. Module: `analytics/optimizer.py`.
 
 **LineupSolver**:
-The port the Optimizer solves behind, keeping the LP backend swappable; the default adapter is PuLP's bundled CBC. See ADR-0004. Module: `analytics/lineup_solver.py`.
+The port the Optimizer solves behind, keeping the LP backend swappable; its PuLP adapter uses native CBC on macOS arm64 and PuLP's bundled CBC elsewhere. See ADR-0004. Module: `analytics/lineup_solver.py`.
 
 **Roster slot**:
 One fillable position in a lineup. `Sport.positions` enumerates every slot with its multiplicity (NFL lists `RB` twice, Golf lists `G` six times) and is the **sole source of truth** for a lineup's required composition and size. A player may fill a slot only if that slot appears in the player's `roster_pos` — DraftKings' per-player slot eligibility; flex slots (`FLEX`, `G`, `F`, `UTIL`, `S-FLEX`) are ordinary slots. See ADR-0005.

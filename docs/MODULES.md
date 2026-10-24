@@ -153,7 +153,7 @@ not formatted strings.
 
 | Module | Interface | Notes |
 |---|---|---|
-| `analytics/optimizer.py` | `Optimizer(sport_obj, players: dict[str, Player], logger=None, solver=None)` (solver defaults to `PulpCbcSolver`); `get_optimal_lineup() -> list[SelectedPlayer] \| None` | Orchestrator over the `LineupSolver` port. `SelectedPlayer(player, slot)` is frozen and never mutates the shared `Player`; the salary cap comes from `Sport.salary_cap`. |
+| `analytics/optimizer.py` | `Optimizer(sport_obj, players: dict[str, Player], logger=None, solver=None)` (solver defaults to `PulpCbcSolver`); `get_optimal_lineup() -> list[SelectedPlayer] \| None` | Orchestrator over the `LineupSolver` port. `SelectedPlayer(player, slot)` is frozen and never mutates the shared `Player`; the salary cap comes from `Sport.salary_cap`. `PulpCbcSolver` selects native CBC on macOS arm64 and bundled CBC elsewhere (ADR-0004). |
 | `analytics/game_status.py` | `classify_game_status(text) -> GameStatus(remaining, in_play)`, `sport_has_game_status(statuses)`, `UNKNOWN` | Single place that decides which DraftKings game-info texts mean a player is still to score or live; shared by every snapshot "remaining" metric. |
 | `analytics/trainfinder.py` | `TrainFinder`: `get_total_users`, `get_total_users_above_salary`, `get_users_above_salary_spent` | Clusters users by salary spent ("trains"). |
 
