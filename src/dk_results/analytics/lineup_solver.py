@@ -1,13 +1,14 @@
 """Solver port for lineup optimization and its PuLP/CBC adapter.
 
 The ``LineupSolver`` port keeps the LP backend swappable: callers depend on the
-protocol, not on PuLP. ``PulpCbcSolver`` is the executable-free default, using
-PuLP's bundled CBC (no external ``glpsol``). No PuLP type crosses the boundary —
-the port speaks only ``Assignment``.
+protocol, not on PuLP. ``PulpCbcSolver`` uses native CBC on macOS arm64 and
+PuLP's bundled CBC elsewhere. No PuLP type crosses the boundary — the port
+speaks only ``Assignment``.
 """
 
 from __future__ import annotations
 
+import platform
 import re
 from dataclasses import dataclass
 from typing import Protocol
@@ -20,6 +21,19 @@ from dk_results.domain.player import Player
 # digit; anything else is replaced generically so any key (e.g. a digit-leading
 # DST name like "49ers ") solves without a per-team hack.
 _INVALID_LP_NAME_CHARS = re.compile(r"[^A-Za-z0-9_]")
+
+
+def _cbc_solver() -> pl.LpSolver:
+    """Select native Homebrew CBC on macOS arm64, bundled CBC elsewhere."""
+    if platform.system() == "Darwin" and platform.machine() == "arm64":
+        solver = pl.COIN_CMD(msg=0)
+        if not solver.available():
+            raise pl.PulpSolverError(
+                "Native CBC is required on macOS arm64. Install it with brew install cbc "
+                "and ensure cbc is available on PATH."
+            )
+        return solver
+    return pl.PULP_CBC_CMD(msg=0)
 
 
 @dataclass(frozen=True)
@@ -51,7 +65,7 @@ def _sanitize_variable_name(player_key: str, slot: str, index: int) -> str:
 
 
 class PulpCbcSolver:
-    """``LineupSolver`` backed by PuLP's bundled CBC (no external executable)."""
+    """``LineupSolver`` backed by platform-appropriate PuLP CBC."""
 
     def solve(
         self,
@@ -66,7 +80,7 @@ class PulpCbcSolver:
         self._define_player_count_constraint(prob, players, variables)
         self._define_position_constraints(prob, variables, positions)
 
-        pl.PULP_CBC_CMD(msg=0).solve(prob)
+        _cbc_solver().solve(prob)
 
         return self._extract_assignments(prob, variables)
 
