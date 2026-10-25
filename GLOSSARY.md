@@ -142,6 +142,10 @@ The named, frozen shape of one contest read by ID, from `ContestDatabase` or fro
 The one startup operation each executable performs: load the repository `.env` without overriding a non-empty process value, resolve repository configuration, and apply values only where the process environment is unset or empty. Library imports do not perform it. Module: `config.py`; see ADR-0009 (runtime bootstrap).
 _Avoid_: the redundant `dotenv` package; per-entry-point dotenv setup; import-time configuration.
 
+**Runtime settings**:
+The frozen result of the Runtime bootstrap, built once by an executable and passed inward instead of re-reading the environment. Module: `config.py` (`load_runtime_settings()`, `RuntimeSettings`).
+_Avoid_: module-level config globals; `os.getenv` outside `config.py`.
+
 ### Contest completion & notifications
 
 **CompletionProcessor**:
