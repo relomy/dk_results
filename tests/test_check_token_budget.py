@@ -165,7 +165,7 @@ def test_failure_explains_how_to_split_that_kind_of_file(repo: Repo, path: str, 
 
     assert result.returncode == 1
     assert recipe_fact in result.stderr
-    assert "See docs/CONVENTIONS.md#token-budget" in result.stderr
+    assert "See docs/WORKFLOW.md#token-budget" in result.stderr
 
 
 def test_python_module_recipe_is_not_given_for_a_test_file(repo: Repo) -> None:

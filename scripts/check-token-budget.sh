@@ -22,12 +22,12 @@ recipe() {
     test_*.py | */test_*.py | *_test.py | conftest.py | */conftest.py)
       echo "  Python test: turn it into a test directory, tests/<area>/test_<behaviour>.py,"
       echo "  with shared fakes and builders as fixtures in conftest.py."
-      echo "  See docs/CONVENTIONS.md#token-budget"
+      echo "  See docs/WORKFLOW.md#token-budget"
       ;;
     *.py)
       echo "  Python module: turn it into a package of the same name; __init__.py"
       echo "  re-exports the public names."
-      echo "  See docs/CONVENTIONS.md#token-budget"
+      echo "  See docs/WORKFLOW.md#token-budget"
       ;;
     *.test.ts | *.test.tsx | *.spec.ts | *.spec.tsx)
       echo "  TS test: split by top-level describe into several *.test.ts(x) files."
@@ -76,6 +76,6 @@ for path in "$@"; do
 done
 if [ "$failed" -ne 0 ]; then
   echo "Token budget exceeded (tokens = bytes / 4)." >&2
-  echo "See docs/CONVENTIONS.md#token-budget" >&2
+  echo "See docs/WORKFLOW.md#token-budget" >&2
 fi
 exit "$failed"

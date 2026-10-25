@@ -20,7 +20,7 @@ Compares the working tree (head) with REF (base), whose tree is extracted with
 
 Exit 0 when nothing regressed, 1 when something did, 2 when the check could not run
 (unknown ref, a test file that doesn't parse, a pytest collection or usage error).
-See docs/CONVENTIONS.md#token-budget.
+See docs/WORKFLOW.md#token-budget.
 """
 
 from __future__ import annotations
@@ -241,7 +241,7 @@ def main(argv: list[str] | None = None) -> int:
     print("\n".join(report))
     if problems:
         print("\n".join(problems), file=sys.stderr)
-        print("Not a pure move. See docs/CONVENTIONS.md#token-budget", file=sys.stderr)
+        print("Not a pure move. See docs/WORKFLOW.md#token-budget", file=sys.stderr)
         return 1
     print("OK: pure move")
     return 0
