@@ -2,7 +2,8 @@
 
 The language of DraftKings contest tracking: slates and players, contests and
 their standings, lineups, and the announcements and snapshot feed built from
-them. Module interfaces live in `docs/MODULES.md`; decisions in `docs/adr/`.
+them. Module architecture and interfaces live in `docs/MODULES.md`; decisions
+live in `docs/adr/`.
 
 ## Language
 

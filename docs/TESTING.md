@@ -10,11 +10,12 @@ Enable the repository's versioned hooks once per clone:
 git config core.hooksPath .githooks
 ```
 
-The `pre-commit` hook runs the token budget check (`docs/CONVENTIONS.md`,
-"Token budget") on staged files. It needs only git and POSIX sh, so it works
-before `uv sync`. CI runs the same script on a PR's changed files, as the
-standalone `token-budget` job in `.github/workflows/ci.yml` (not part of
-`verify`).
+The `pre-commit` hook runs `scripts/check-token-budget.sh` on staged files. It
+needs only git and POSIX sh, so it works before `uv sync`. CI runs the same
+script on a PR's changed files, as the standalone `token-budget` job in
+`.github/workflows/ci.yml` (not part of `verify`), so `--no-verify` does not
+bypass the check. For the limit and conditional file-splitting procedure, see
+[`docs/WORKFLOW.md`](WORKFLOW.md#token-budget).
 
 ## Completion checks
 
@@ -30,7 +31,21 @@ broad; the relevant subset when it's narrow.
   complexity regressions against `origin/main`.
 - `uv run --group quality scripts/mutate-file.sh SRC_FILE TEST_PATH...` —
   mutmut on one file; a pre-refactor check, not a completion check
-  ([Source splits](CONVENTIONS.md#source-splits)).
+  ([Source splits](WORKFLOW.md#source-splits)).
+- `uv run scripts/check-pure-move.py [--base REF]` — prove a source split is a
+  pure move against the base before opening a PR. The default base is
+  `origin/main`; the split procedure is in
+  [`docs/WORKFLOW.md`](WORKFLOW.md#splitting-an-over-budget-file).
+
+The pure-move check runs pytest on both trees (the base from `git archive`, on
+this venv). It exits 1 when the head collects fewer tests, a base assertion in
+`tests/` is missing from the head, a `src/` function changed or lost covered
+lines, or a test fails in either tree. It compares assertions (`assert`,
+`pytest.raises`/`warns`/`approx`, mock `assert_*` calls) as `ast.unparse` text,
+so reformatting passes and edits don't. Functions match by qualified name plus
+an AST hash, so they can move between files; module-level lines such as imports
+are not compared. Exit 2 means it could not run, for example an unknown ref or
+a collection error.
 
 The `quality` group is not installed by default, so these fail with
 `Failed to spawn` without `--group quality`.

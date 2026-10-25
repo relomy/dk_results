@@ -5,7 +5,8 @@ How the engineering skills should consume this repo's domain documentation when 
 ## Before exploring, read these
 
 - **`GLOSSARY.md`** — domain vocabulary for this repo: each term's definition, its module, and words to avoid.
-- **`docs/MODULES.md`** — module boundaries, interfaces, and deepening candidates.
+- **`docs/MODULES.md`** — architecture, module boundaries, interfaces, and
+  deepening candidates when exploring or changing an area.
 - **`docs/adr/`** — read ADRs that touch the area you're about to work in.
 
 If any of these files don't exist, **proceed silently**. Don't flag their absence; don't suggest creating them upfront. The producer skill (`/grill-with-docs`) creates them lazily when terms or decisions actually get resolved.
