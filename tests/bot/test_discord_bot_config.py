@@ -115,3 +115,25 @@ async def test_create_bot_registered_commands_use_the_injected_settings(monkeypa
     other = FakeCtx()
     other.channel.id = 999
     assert [await check(_ctx(other)) for check in bot._checks] == [False]
+
+    class _StubContestDatabase:
+        def __init__(self, *_args, **_kwargs):
+            pass
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(discord_bot, "ContestDatabase", _StubContestDatabase)
+    monkeypatch.setattr(
+        discord_bot,
+        "_fetch_live_contests_with_cash_status",
+        lambda _db, _sports: (
+            [(1, "Live NBA Contest", None, 3, "2000-01-01", "NBA")],
+            {1: None},
+            {1: []},
+        ),
+    )
+
+    ctx2 = FakeCtx()
+    await bot.get_command("live").callback(_ctx(ctx2))
+    assert "https://docs.google.com/spreadsheets/d/sheet/edit#gid=123" in ctx2.sent[0]

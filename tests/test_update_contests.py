@@ -270,16 +270,17 @@ def test_main_uses_dfs_common_schema_init(monkeypatch):
 
 def test_main_happy_path(monkeypatch):
     called = {}
+    sentinel = _settings()
 
     class FakeConn:
         pass
 
+    def fake_check(_c, s):
+        called.update(ok=True, settings=s)
+
+    monkeypatch.setattr(update_contests, "load_runtime_settings", lambda: sentinel)
     monkeypatch.setattr(update_contests.sqlite3, "connect", lambda _p: FakeConn())
-    monkeypatch.setattr(
-        update_contests,
-        "check_contests_for_completion",
-        lambda c, s: called.setdefault("ok", True),
-    )
+    monkeypatch.setattr(update_contests, "check_contests_for_completion", fake_check)
     monkeypatch.setenv("DFS_STATE_DIR", "/tmp")
     monkeypatch.setattr(update_contests.state, "contests_db_path", lambda: "/tmp/contests.db")
     monkeypatch.setattr(update_contests.contests, "init_schema", lambda _p: None)
@@ -288,6 +289,7 @@ def test_main_happy_path(monkeypatch):
     update_contests.main()
 
     assert called["ok"] is True
+    assert called["settings"] is sentinel
 
 
 def test_main_handles_sqlite_error(monkeypatch):
@@ -359,7 +361,8 @@ def test_main_migrates_a_legacy_contests_table_to_have_completed_at(monkeypatch,
 
     monkeypatch.setattr(update_contests.state, "contests_db_path", lambda: db_path)
     monkeypatch.setattr(update_contests.contests, "init_schema", lambda _p: None)
-    monkeypatch.setattr(update_contests, "check_contests_for_completion", lambda _c: None)
+    monkeypatch.setattr(update_contests, "load_runtime_settings", lambda: _settings())
+    monkeypatch.setattr(update_contests, "check_contests_for_completion", lambda _c, _s: None)
 
     update_contests.main()
 
