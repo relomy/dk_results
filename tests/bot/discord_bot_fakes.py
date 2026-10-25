@@ -34,7 +34,7 @@ def _settings(**overrides) -> RuntimeSettings:
         "dashboard_base_url": None,
         "bot_token": None,
         "discord_log_file": None,
-        "allowed_channel_id": None,
+        "discord_channel_id": None,
     }
     values.update(overrides)
     return RuntimeSettings(**values)
