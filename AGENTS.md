@@ -25,9 +25,9 @@ Read these when the task calls for them:
 
 - **Testing & verification** — `docs/TESTING.md`: the checks to run before
   reporting a change complete, and the `dfs-common` build gotcha.
-- **Development workflow** — `docs/WORKFLOW.md`: token budget and file-splitting
-  procedure when a file approaches or exceeds its limit, plus commit message
-  format and handoff report.
+- **Development workflow** — `docs/WORKFLOW.md`: read when choosing a branch or
+  base, opening or reviewing a PR, or deciding merge procedure; it also covers
+  token budget, file splitting, commit message format, and handoff report.
 
 ## Agent skills
 
