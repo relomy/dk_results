@@ -6,22 +6,20 @@ import pytest
 from discord.ext import commands
 
 from dk_results.bot import discord_bot
-from tests.bot.discord_bot_fakes import FakeCtx, _ctx
+from tests.bot.discord_bot_fakes import FakeCtx, _ctx, _settings
 
 
 @pytest.mark.asyncio
 async def test_limit_to_channel_allows_when_not_set(monkeypatch):
-    monkeypatch.setattr(discord_bot, "ALLOWED_CHANNEL_ID", None)
     ctx = FakeCtx()
-    assert await discord_bot.limit_to_channel(_ctx(ctx)) is True
+    assert await discord_bot.limit_to_channel(_settings(), _ctx(ctx)) is True
 
 
 @pytest.mark.asyncio
 async def test_limit_to_channel_blocks_other_channels(monkeypatch):
-    monkeypatch.setattr(discord_bot, "ALLOWED_CHANNEL_ID", 123)
     ctx = FakeCtx()
     ctx.channel.id = 999
-    assert await discord_bot.limit_to_channel(_ctx(ctx)) is False
+    assert await discord_bot.limit_to_channel(_settings(allowed_channel_id=123), _ctx(ctx)) is False
 
 
 @pytest.mark.asyncio
