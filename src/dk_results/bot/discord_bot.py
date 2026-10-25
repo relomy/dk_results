@@ -157,10 +157,10 @@ def _system_uptime_seconds() -> float | None:
 
 async def limit_to_channel(settings: RuntimeSettings, ctx: commands.Context) -> bool:
     """Restrict commands to a single configured channel when set."""
-    if settings.allowed_channel_id is None:
+    if settings.discord_channel_id is None:
         return True
     channel = getattr(ctx, "channel", None)
-    return bool(channel and channel.id == settings.allowed_channel_id)
+    return bool(channel and channel.id == settings.discord_channel_id)
 
 
 async def on_ready(user: object) -> None:

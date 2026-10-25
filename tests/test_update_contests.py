@@ -31,7 +31,7 @@ def _settings(**overrides) -> RuntimeSettings:
         "dashboard_base_url": None,
         "bot_token": None,
         "discord_log_file": None,
-        "allowed_channel_id": None,
+        "discord_channel_id": None,
     }
     values.update(overrides)
     return RuntimeSettings(**values)
@@ -54,35 +54,31 @@ def test_sport_choices_filters_invalid():
     assert "" not in choices
 
 
-def test_build_discord_sender_ignores_notifications_flag(monkeypatch):
+def test_build_discord_sender_ignores_notifications_flag():
     # The sender is built from credentials alone; whether notifications are
     # enabled is a separate decision injected into the processor. A disabled run
     # can still have a sender wired (held idle by the processor's gate).
-    monkeypatch.setenv("DISCORD_BOT_TOKEN", "tok")
-    monkeypatch.setenv("DISCORD_CHANNEL_ID", "123")
+    settings = _settings(bot_token="tok", discord_channel_id=123, discord_notifications_enabled=False)
 
-    sender = update_contests._build_discord_sender()
+    sender = update_contests._build_discord_sender(settings)
 
     assert isinstance(sender, update_contests.DiscordRest)
 
 
-def test_build_discord_sender_missing_config(monkeypatch):
-    monkeypatch.delenv("DISCORD_BOT_TOKEN", raising=False)
-    monkeypatch.delenv("DISCORD_CHANNEL_ID", raising=False)
-    assert update_contests._build_discord_sender() is None
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"bot_token": None, "discord_channel_id": None},
+        {"bot_token": "tok", "discord_channel_id": None},
+        {"bot_token": None, "discord_channel_id": 123},
+    ],
+)
+def test_build_discord_sender_missing_config(overrides):
+    assert update_contests._build_discord_sender(_settings(**overrides)) is None
 
 
-def test_build_discord_sender_invalid_channel(monkeypatch):
-    monkeypatch.setenv("DISCORD_BOT_TOKEN", "tok")
-    monkeypatch.setenv("DISCORD_CHANNEL_ID", "bad")
-    assert update_contests._build_discord_sender() is None
-
-
-def test_build_discord_sender_success_path(monkeypatch):
-    monkeypatch.setenv("DISCORD_BOT_TOKEN", "tok")
-    monkeypatch.setenv("DISCORD_CHANNEL_ID", "123")
-
-    sender = update_contests._build_discord_sender()
+def test_build_discord_sender_success_path():
+    sender = update_contests._build_discord_sender(_settings(bot_token="tok", discord_channel_id=123))
 
     assert isinstance(sender, update_contests.DiscordRest)
     assert sender.token == "tok"
@@ -117,7 +113,7 @@ def test_build_completion_processor_wires_collaborators(monkeypatch, memory_conn
 
     sender = FakeSender()
     fake_client = object()
-    monkeypatch.setattr(update_contests, "_build_discord_sender", lambda: sender)
+    monkeypatch.setattr(update_contests, "_build_discord_sender", lambda _settings: sender)
     monkeypatch.setattr(update_contests, "_load_vips", lambda: ["FooBar"])
     monkeypatch.setattr(update_contests, "DraftKings", lambda: fake_client)
 
@@ -160,7 +156,7 @@ def test_build_completion_processor_uses_stub_results_when_client_init_fails(mon
     def boom():
         raise RuntimeError("no cookies")
 
-    monkeypatch.setattr(update_contests, "_build_discord_sender", lambda: FakeSender())
+    monkeypatch.setattr(update_contests, "_build_discord_sender", lambda _settings: FakeSender())
     monkeypatch.setattr(update_contests, "_load_vips", lambda: ["FooBar"])
     monkeypatch.setattr(update_contests, "DraftKings", boom)
 
@@ -177,7 +173,7 @@ def test_build_completion_processor_injects_enabled_flag(monkeypatch, memory_con
         def send_message(self, message):  # pragma: no cover - not called here
             pass
 
-    monkeypatch.setattr(update_contests, "_build_discord_sender", lambda: FakeSender())
+    monkeypatch.setattr(update_contests, "_build_discord_sender", lambda _settings: FakeSender())
     monkeypatch.setattr(update_contests, "DraftKings", lambda: object())
 
     processor = update_contests._build_completion_processor(conn, _settings())
@@ -196,7 +192,7 @@ def test_build_completion_processor_disabled_wires_idle_sender(monkeypatch, memo
             pass
 
     sender = FakeSender()
-    monkeypatch.setattr(update_contests, "_build_discord_sender", lambda: sender)
+    monkeypatch.setattr(update_contests, "_build_discord_sender", lambda _settings: sender)
     monkeypatch.setattr(update_contests, "_load_vips", lambda: ["FooBar"])
     monkeypatch.setattr(update_contests, "DraftKings", lambda: object())
 

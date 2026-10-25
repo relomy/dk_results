@@ -19,7 +19,7 @@ async def test_limit_to_channel_allows_when_not_set(monkeypatch):
 async def test_limit_to_channel_blocks_other_channels(monkeypatch):
     ctx = FakeCtx()
     ctx.channel.id = 999
-    assert await discord_bot.limit_to_channel(_settings(allowed_channel_id=123), _ctx(ctx)) is False
+    assert await discord_bot.limit_to_channel(_settings(discord_channel_id=123), _ctx(ctx)) is False
 
 
 @pytest.mark.asyncio

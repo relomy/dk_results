@@ -63,7 +63,7 @@ class ResolvedSettings:
     dashboard_base_url: str | None = field(default=None, metadata={"env": "DASHBOARD_BASE_URL"})
     bot_token: str | None = field(default=None, metadata={"env": "DISCORD_BOT_TOKEN"})
     discord_log_file: str | None = field(default=None, metadata={"env": "DISCORD_LOG_FILE"})
-    allowed_channel_id: int | None = field(
+    discord_channel_id: int | None = field(
         default=None, metadata={"env": "DISCORD_CHANNEL_ID", "parser": _optional_channel_id}
     )
 
@@ -84,7 +84,7 @@ class RuntimeSettings:
     dashboard_base_url: str | None
     bot_token: str | None
     discord_log_file: str | None
-    allowed_channel_id: int | None
+    discord_channel_id: int | None
 
 
 def load_settings() -> ResolvedSettings:
@@ -142,7 +142,14 @@ def _load_sheet_gid_map(sheet_gids_file: str) -> dict[str, int]:
     data = _read_yaml_dict(_resolve_repo_path(sheet_gids_file), "Sheet gid map")
     if data is None:
         return {}
-    return {key: value for key, value in data.items() if isinstance(key, str) and isinstance(value, int)}
+    gids: dict[str, int] = {}
+    for key, value in data.items():
+        if isinstance(key, str) and isinstance(value, int):
+            gids[key] = value
+        else:
+            logger.debug("Skipping invalid gid entry %r -> %r", key, value)
+    logger.info("Loaded %d sheet gid entries from %s", len(gids), sheet_gids_file)
+    return gids
 
 
 def _normalize_warning_schedule(items: Any, *, key: str) -> list[int]:
@@ -189,5 +196,5 @@ def load_runtime_settings() -> RuntimeSettings:
         dashboard_base_url=resolved.dashboard_base_url,
         bot_token=resolved.bot_token,
         discord_log_file=resolved.discord_log_file,
-        allowed_channel_id=resolved.allowed_channel_id,
+        discord_channel_id=resolved.discord_channel_id,
     )

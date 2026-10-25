@@ -102,7 +102,7 @@ async def test_create_bot_registered_commands_use_the_injected_settings(monkeypa
     settings = _settings(
         spreadsheet_id="sheet",
         sheet_gid_map={"NBA": 123},
-        allowed_channel_id=123,
+        discord_channel_id=123,
     )
 
     bot = discord_bot.create_bot(settings)

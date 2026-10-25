@@ -70,7 +70,7 @@ def test_load_runtime_settings_resolves_scalars_from_env_and_defaults(monkeypatc
     assert (settings.spreadsheet_id, settings.discord_notifications_enabled) == ("sheet", False)
     assert (settings.contest_warning_minutes, settings.default_warning_schedule) == (40, [40])
     assert (settings.dashboard_base_url, settings.bot_token) == ("https://dashboard.example", "tok")
-    assert (settings.allowed_channel_id, settings.discord_log_file) == (123, None)
+    assert (settings.discord_channel_id, settings.discord_log_file) == (123, None)
     assert (settings.sheet_gid_map, settings.warning_schedules) == ({}, {"default": [40]})
 
 
@@ -82,13 +82,13 @@ def test_load_runtime_settings_defaults_when_nothing_set(monkeypatch, tmp_path):
     assert settings.discord_notifications_enabled is True
     assert settings.contest_warning_minutes == 25
     assert settings.bot_token is None
-    assert settings.allowed_channel_id is None
+    assert settings.discord_channel_id is None
 
 
 def test_load_runtime_settings_invalid_channel_id_is_none(monkeypatch, tmp_path):
     _runtime_env(monkeypatch, tmp_path, DISCORD_CHANNEL_ID="bad")
 
-    assert config.load_runtime_settings().allowed_channel_id is None
+    assert config.load_runtime_settings().discord_channel_id is None
 
 
 def test_load_runtime_settings_does_not_warn_about_deprecated_resolver(monkeypatch, tmp_path):
@@ -113,6 +113,18 @@ def test_sheet_gid_map_keeps_only_str_to_int_entries(monkeypatch, tmp_path):
     _runtime_env(monkeypatch, tmp_path, SHEET_GIDS_FILE=str(path))
 
     assert config.load_runtime_settings().sheet_gid_map == {"NBA": 10}
+
+
+def test_sheet_gid_map_logs_loaded_count_and_skipped_entries(monkeypatch, tmp_path, caplog):
+    path = tmp_path / "gids.yaml"
+    path.write_text("NBA: 10\nbad: x\n")
+    _runtime_env(monkeypatch, tmp_path, SHEET_GIDS_FILE=str(path))
+
+    with caplog.at_level("DEBUG", logger=config.logger.name):
+        config.load_runtime_settings()
+
+    assert "Loaded 1 sheet gid entries from" in caplog.text
+    assert "Skipping invalid gid entry 'bad' -> 'x'" in caplog.text
 
 
 def test_sheet_gid_map_resolves_relative_path_against_repo(monkeypatch, tmp_path):

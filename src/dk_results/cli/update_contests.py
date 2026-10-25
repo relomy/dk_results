@@ -1,6 +1,5 @@
 import argparse
 import logging
-import os
 import sqlite3
 from collections.abc import Mapping
 from typing import Any
@@ -28,24 +27,17 @@ def _sport_choices() -> Mapping[str, type[Sport]]:
     return get_sport_choices()
 
 
-def _build_discord_sender() -> DiscordRest | None:
+def _build_discord_sender(settings: RuntimeSettings) -> DiscordRest | None:
     """Build the Discord sender from credentials alone.
 
     Whether notifications are *enabled* is a separate, explicit decision
     (`RuntimeSettings.discord_notifications_enabled`) injected into the processor; a sender may be
     wired yet held idle by a disabled run.
     """
-    token = os.getenv("DISCORD_BOT_TOKEN")
-    channel_id_raw = os.getenv("DISCORD_CHANNEL_ID")
-    if not token or not channel_id_raw:
+    if not settings.bot_token or settings.discord_channel_id is None:
         logger.warning("DISCORD_BOT_TOKEN or DISCORD_CHANNEL_ID not set; notifications disabled.")
         return None
-    try:
-        channel_id = int(channel_id_raw)
-    except ValueError:
-        logger.warning("DISCORD_CHANNEL_ID is not a valid integer: %s", channel_id_raw)
-        return None
-    return DiscordRest(token, channel_id)
+    return DiscordRest(settings.bot_token, settings.discord_channel_id)
 
 
 def _load_vips() -> list[str]:
@@ -103,7 +95,7 @@ class _UnavailableContestResults:
 def _build_completion_processor(conn, settings: RuntimeSettings) -> CompletionProcessor:
     """Wire the completion workflow's collaborators for one run."""
     notifications_enabled = settings.discord_notifications_enabled
-    sender = _build_discord_sender()
+    sender = _build_discord_sender(settings)
     # Presence and VIP suppression only matter for announcements, which the
     # explicit `notifications_enabled` gate authorizes — resolve them by that
     # flag, not by whether a sender happens to be wired.
