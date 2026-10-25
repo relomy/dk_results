@@ -202,7 +202,7 @@ Sample config files are provided to copy/adapt:
 | `DFS_STATE_DIR`                 | `dfs_common.state.contests_db_path`, `update_contests.py:_contests_db_path`, `bot/discord_bot.py:_db_path`                                                 | Required. Shared state directory containing `contests.db`.        |
 | `DISCORD_NOTIFICATIONS_ENABLED` | `update_contests.py:DISCORD_NOTIFICATIONS_ENABLED`                                                                                                           | Controls whether `update_contests.py` sends notifications.        |
 | `DISCORD_BOT_TOKEN`             | `update_contests.py:_build_discord_sender`, `bot/discord_bot.py:BOT_TOKEN`                                                                                   | Required for bot-based notifications and the Discord service.     |
-| `DISCORD_CHANNEL_ID`            | `update_contests.py:_build_discord_sender`, `bot/discord_bot.py:ALLOWED_CHANNEL_ID`                                                                          | Required for bot-based notifications; also gates allowed channel. |
+| `DISCORD_CHANNEL_ID`            | `update_contests.py:_build_discord_sender`, `bot/discord_bot.py:limit_to_channel`                                                                          | Required for bot-based notifications; also gates allowed channel. |
 | `DISCORD_WEBHOOK`               | `find_new_double_ups.py:main`                                                                                                                                | Enables webhook-based notifications for double-ups.               |
 | `DISCORD_BONUS_WEBHOOK`         | `db_main.py:_build_bonus_sender`, `db_main.py:write_players_to_sheet`                                                                                         | Optional dedicated webhook for VIP bonus announcements; falls back to `DISCORD_WEBHOOK`. |
 | `SPREADSHEET_ID`                | `dk_results/sheets/sheets_service.py:build_dfs_sheet_service`, `update_contests.py:SPREADSHEET_ID`, `bot/discord_bot.py:SPREADSHEET_ID`, `generate_sheet_gids.py:main` | Required for Google Sheets access and sheet link generation.      |
@@ -216,7 +216,10 @@ Sample config files are provided to copy/adapt:
 
 Configuration-dependent executables call `dk_results.config.load_and_apply_settings()`
 at startup. It loads the repository `.env` without overriding a non-empty process
-environment value, then applies `config.json` defaults.
+environment value, then applies `config.json` defaults. `update_contests` and the
+Discord bot call `dk_results.config.load_runtime_settings()`, which runs that
+bootstrap and returns one `RuntimeSettings` (including the parsed sheet-gid and
+warning-schedule YAML).
 
 Google Sheets access uses the shared `dfs_common` helpers that expect a
 `client_secret.json` service account file located in the repository root. The guard in

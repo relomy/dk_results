@@ -4,16 +4,17 @@ import pytest
 
 from dk_results.bot import discord_bot
 from dk_results.persistence.contestdatabase import VipCashStatus
-from tests.bot.discord_bot_fakes import DummySport, DummySportTwo, FakeCtx, _ctx
+from tests.bot.discord_bot_fakes import DummySport, DummySportTwo, FakeCtx, _ctx, _settings
 
 
 def test_live_contest_block_keeps_draftkings_link_separate_from_dashboard_and_sheet(monkeypatch):
-    monkeypatch.setattr(discord_bot, "DASHBOARD_BASE_URL", "https://dashboard.example/")
-    monkeypatch.setattr(discord_bot, "_sheet_link", lambda _sport: "<https://sheet.example/nba>")
+    monkeypatch.setattr(discord_bot, "_sheet_link", lambda _settings, _sport: "<https://sheet.example/nba>")
     monkeypatch.setattr(discord_bot, "_format_time_since", lambda _start_date: None)
     monkeypatch.setattr(discord_bot, "_vip_presence_for_contest", lambda _dk_id: None)
 
-    msg = discord_bot._format_live_contest_block(1, "Contest", "2000-01-01", "NBA", None, [], None)
+    msg = discord_bot._format_live_contest_block(
+        _settings(dashboard_base_url="https://dashboard.example/"), 1, "Contest", "2000-01-01", "NBA", None, [], None
+    )
 
     assert msg.endswith(
         "• 🔗 DK: [1](<https://www.draftkings.com/contest/gamecenter/1#/>)\n"
@@ -24,7 +25,7 @@ def test_live_contest_block_keeps_draftkings_link_separate_from_dashboard_and_sh
 @pytest.mark.asyncio
 async def test_live_lists_all_live_contests(monkeypatch):
     monkeypatch.setattr(discord_bot, "_sport_choices", lambda: {"nba": DummySport, "nfl": DummySportTwo})
-    monkeypatch.setattr(discord_bot, "_sheet_link", lambda _sport: None)
+    monkeypatch.setattr(discord_bot, "_sheet_link", lambda _settings, _sport: None)
     monkeypatch.setattr(discord_bot, "_vip_presence_for_contest", lambda _dk_id: None)
     monkeypatch.setattr(discord_bot, "_format_time_since", lambda _start_date: None)
 
@@ -54,7 +55,7 @@ async def test_live_lists_all_live_contests(monkeypatch):
     monkeypatch.setattr(discord_bot, "ContestDatabase", FakeContestDatabase)
 
     ctx = FakeCtx()
-    await discord_bot.live(_ctx(ctx))
+    await discord_bot.live(_settings(), _ctx(ctx))
 
     assert captured["sports"] == ["NBA", "NFL"]
     assert captured.get("closed") is True
@@ -71,7 +72,7 @@ async def test_live_lists_all_live_contests(monkeypatch):
 @pytest.mark.asyncio
 async def test_live_shows_vip_presence_per_contest(monkeypatch):
     monkeypatch.setattr(discord_bot, "_sport_choices", lambda: {"nba": DummySport, "nfl": DummySportTwo})
-    monkeypatch.setattr(discord_bot, "_sheet_link", lambda _sport: None)
+    monkeypatch.setattr(discord_bot, "_sheet_link", lambda _settings, _sport: None)
     monkeypatch.setattr(discord_bot, "_format_time_since", lambda _start_date: None)
 
     def fake_presence(dk_id):
@@ -101,7 +102,7 @@ async def test_live_shows_vip_presence_per_contest(monkeypatch):
     monkeypatch.setattr(discord_bot, "ContestDatabase", FakeContestDatabase)
 
     ctx = FakeCtx()
-    await discord_bot.live(_ctx(ctx))
+    await discord_bot.live(_settings(), _ctx(ctx))
 
     assert ctx.sent == [
         "Live: 🏀 NBA — ContestA\n"
@@ -118,7 +119,7 @@ async def test_live_shows_vip_presence_per_contest(monkeypatch):
 @pytest.mark.asyncio
 async def test_live_shows_vip_cash_bullets(monkeypatch):
     monkeypatch.setattr(discord_bot, "_sport_choices", lambda: {"nba": DummySport})
-    monkeypatch.setattr(discord_bot, "_sheet_link", lambda _sport: None)
+    monkeypatch.setattr(discord_bot, "_sheet_link", lambda _settings, _sport: None)
     monkeypatch.setattr(discord_bot, "_format_time_since", lambda _start_date: None)
     # Presence stubbed to a real verdict to prove it's suppressed once cash bullets render.
     monkeypatch.setattr(discord_bot, "_vip_presence_for_contest", lambda _dk_id: "present")
@@ -145,7 +146,7 @@ async def test_live_shows_vip_cash_bullets(monkeypatch):
     monkeypatch.setattr(discord_bot, "ContestDatabase", FakeContestDatabase)
 
     ctx = FakeCtx()
-    await discord_bot.live(_ctx(ctx))
+    await discord_bot.live(_settings(), _ctx(ctx))
 
     assert ctx.sent == [
         "Live: 🏀 NBA — ContestA\n"
@@ -159,7 +160,7 @@ async def test_live_shows_vip_cash_bullets(monkeypatch):
 @pytest.mark.asyncio
 async def test_live_shows_elapsed_time_since_start(monkeypatch):
     monkeypatch.setattr(discord_bot, "_sport_choices", lambda: {"nba": DummySport})
-    monkeypatch.setattr(discord_bot, "_sheet_link", lambda _sport: None)
+    monkeypatch.setattr(discord_bot, "_sheet_link", lambda _settings, _sport: None)
     monkeypatch.setattr(discord_bot, "_vip_presence_for_contest", lambda _dk_id: None)
     monkeypatch.setattr(discord_bot, "_format_time_since", lambda _start_date: "started 2h13m ago")
 
@@ -182,7 +183,7 @@ async def test_live_shows_elapsed_time_since_start(monkeypatch):
     monkeypatch.setattr(discord_bot, "ContestDatabase", FakeContestDatabase)
 
     ctx = FakeCtx()
-    await discord_bot.live(_ctx(ctx))
+    await discord_bot.live(_settings(), _ctx(ctx))
 
     assert ctx.sent == [
         "Live: 🏀 NBA — ContestA\n"
@@ -241,7 +242,7 @@ async def test_live_no_contests(monkeypatch):
     monkeypatch.setattr(discord_bot, "ContestDatabase", FakeContestDatabase)
 
     ctx = FakeCtx()
-    await discord_bot.live(_ctx(ctx))
+    await discord_bot.live(_settings(), _ctx(ctx))
 
     assert ctx.sent == ["No live contests found."]
 
