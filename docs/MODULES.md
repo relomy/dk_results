@@ -47,7 +47,7 @@ announces milestones. It reads its work list from `ContestDatabase`, not
 DraftKings.
 
 - **Injected collaborators:** `ContestDatabase` (work list and state writes),
-  `ContestResultsPort` (the external DraftKings edge), the `VipPresence` oracle,
+  `ContestResultsPort` (the external DraftKings edge), the `VipPresence` oracle (standings poll first, ADR-0018),
   and `BonusSenderPort` (Discord); `NotificationStore` is built from the run's
   connection for idempotency.
 - **Suppression policy** (ADR-0008): warning/live require a confirmed VIP
