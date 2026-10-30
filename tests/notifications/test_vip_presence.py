@@ -11,12 +11,14 @@ from dk_results.notifications.vip_presence import (
     VIP_UNKNOWN,
     VIP_UNKNOWN_CAPPED,
     ContestResultsPort,
+    StandingsPresencePort,
     VipPresence,
     _entrant_payload_is_ambiguous,
     _parse_entrant_usernames,
     _should_refresh_absent,
     vip_key,
 )
+from dk_results.persistence.contestdatabase import ContestDatabase, VipCashStatus
 from dk_results.persistence.notification_store import NotificationStore
 
 
@@ -194,3 +196,82 @@ def test_should_refresh_absent_is_sticky_after_start():
     checked_at = (now_local - datetime.timedelta(minutes=30)).isoformat(sep=" ")
     start_date = (now_local - datetime.timedelta(minutes=1)).isoformat(sep=" ")
     assert _should_refresh_absent(checked_at, start_date) is False
+
+
+class FakeStandingsPort:
+    """Canned `StandingsPresencePort`: the persisted cash line and VIP rows."""
+
+    def __init__(self, cash_line=None, statuses=None) -> None:
+        self._cash_line = cash_line
+        self._statuses = statuses or []
+
+    def get_cash_line(self, dk_id):
+        return self._cash_line
+
+    def get_vip_cash_status(self, dk_id):
+        return list(self._statuses)
+
+
+def _polled(*names: str) -> FakeStandingsPort:
+    return FakeStandingsPort((10, 100.0), [VipCashStatus(vip_name=name, rank=3, points=120.0) for name in names])
+
+
+def test_standings_with_matching_vip_is_present_without_entrant_scan(store):
+    port = FakeResultsPort()
+    verdict = VipPresence(port, store, _polled("VipGuy")).verdict(1, "2026-01-01T00:00:00", ["vipguy"])
+    assert verdict == VIP_PRESENT
+    assert port.entrant_calls == []
+    assert store.get_presence(1)[0] == VIP_PRESENT
+
+
+def test_standings_polled_without_matching_vip_is_absent_and_not_cached(store):
+    port = FakeResultsPort()
+    verdict = VipPresence(port, store, _polled("OtherGuy")).verdict(1, "2026-01-01T00:00:00", ["VipGuy"])
+    assert verdict == VIP_ABSENT
+    assert port.entrant_calls == []
+    assert store.get_presence(1) is None
+
+
+def test_standings_without_cash_line_falls_through_to_entrant_scan(store):
+    # Until a cash line exists SportProcessor clears VIP rows, so empty is not "absent".
+    port = FakeResultsPort({1: _page("vipguy")})
+    verdict = VipPresence(port, store, FakeStandingsPort(None)).verdict(1, "2026-01-01T00:00:00", ["VipGuy"])
+    assert verdict == VIP_PRESENT
+    assert port.entrant_calls == [1]
+
+
+def test_standings_cash_line_with_null_rank_falls_through(store):
+    port = FakeResultsPort({1: ""})
+    verdict = VipPresence(port, store, FakeStandingsPort((None, None))).verdict(1, "2026-01-01T00:00:00", ["VipGuy"])
+    assert verdict == VIP_ABSENT
+    assert port.entrant_calls == [1]
+
+
+def test_cached_present_is_served_before_standings(store):
+    store.upsert_presence(1, VIP_PRESENT)
+    standings = FakeStandingsPort(None)
+    assert VipPresence(FakeResultsPort(), store, standings).verdict(1, "2026-01-01T00:00:00", ["VipGuy"]) == VIP_PRESENT
+
+
+def test_standings_checked_even_when_cached_absent_is_stale(store):
+    _seed_presence(store, 1, VIP_ABSENT, "2000-01-01T00:00:00")
+    port = FakeResultsPort()
+    verdict = VipPresence(port, store, _polled("VipGuy")).verdict(1, "2999-01-01T00:00:00", ["VipGuy"])
+    assert verdict == VIP_PRESENT
+    assert port.entrant_calls == []
+
+
+def test_present_vips_returns_matched_names(store):
+    presence = VipPresence(FakeResultsPort(), store, _polled("VipGuy", "Other", "Third"))
+    assert presence.present_vips(1, ["vipguy", "THIRD", "missing"]) == ["vipguy", "THIRD"]
+
+
+def test_present_vips_empty_when_unpolled(store):
+    presence = VipPresence(FakeResultsPort(), store, FakeStandingsPort(None))
+    assert presence.present_vips(1, ["VipGuy"]) == []
+
+
+def test_contest_database_satisfies_standings_presence_port():
+    port: type[StandingsPresencePort] = ContestDatabase
+    for method in ("get_cash_line", "get_vip_cash_status"):
+        assert callable(getattr(port, method))

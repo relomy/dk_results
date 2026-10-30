@@ -1,9 +1,11 @@
 """The VIP-presence oracle and its DraftKings read seam.
 
-`VipPresence` answers one question: is a tracked VIP entered in a contest? It
-returns a *presence verdict* — ``present`` / ``absent`` / ``unknown`` /
-``unknown_capped`` — reading entrants through a narrow `ContestResultsPort`
-and caching verdicts through `NotificationStore`. It refreshes ``absent`` on
+`VipPresence` answers one question: is *any* tracked VIP entered in a contest?
+It returns a *presence verdict* — ``present`` / ``absent`` / ``unknown`` /
+``unknown_capped``. It consults the persisted standings poll first, through a
+narrow `StandingsPresencePort` (ADR-0018), and only falls back to reading
+entrants through `ContestResultsPort` when no usable poll exists. Verdicts are
+cached through `NotificationStore`. The entrant scan refreshes ``absent`` on
 the existing policy, short-circuiting the moment any tracked VIP is found
 rather than enumerating everyone entered. ``unknown_capped`` is returned
 specifically when the entrant-page cap is hit before a conclusive answer (a
@@ -27,6 +29,7 @@ from typing import Any, Protocol
 
 import requests
 
+from dk_results.persistence.contestdatabase import VipCashStatus
 from dk_results.persistence.notification_store import NotificationStore
 
 logger = logging.getLogger(__name__)
@@ -64,6 +67,13 @@ class ContestResultsPort(Protocol):
         timeout: int | None = None,
         session: requests.Session | None = None,
     ) -> dict[str, Any]: ...
+
+
+class StandingsPresencePort(Protocol):
+    """The persisted standings-poll readouts `VipPresence` consults (ADR-0018)."""
+
+    def get_cash_line(self, dk_id: int) -> tuple[int | None, float | None] | None: ...
+    def get_vip_cash_status(self, dk_id: int) -> list[VipCashStatus]: ...
 
 
 def vip_key(name: Any) -> str:
@@ -136,15 +146,23 @@ def _resolve_cached_verdict(cached: tuple[str, str] | None, start_date: str) -> 
 class VipPresence:
     """Oracle returning a presence verdict for a contest, cached in `NotificationStore`."""
 
-    def __init__(self, results: ContestResultsPort, store: NotificationStore) -> None:
+    def __init__(
+        self,
+        results: ContestResultsPort,
+        store: NotificationStore,
+        standings: StandingsPresencePort | None = None,
+    ) -> None:
         self._results = results
         self._store = store
+        self._standings = standings
 
     def verdict(self, dk_id: int, start_date: str, vip_names: list[str]) -> str:
         """Return ``present`` / ``absent`` / ``unknown`` for ``dk_id``.
 
         Serves a cached ``present`` immediately and a cached ``absent`` until the
-        refresh policy allows a re-check, then reads entrant pages until a VIP is
+        refresh policy allows a re-check, then answers from the persisted
+        standings poll when one exists (``present`` is cached, ``absent`` is
+        not). Otherwise it reads entrant pages until a VIP is
         found (``present``), a page proves the field empty (``absent``), the page
         cap is hit, a page is ambiguous, or a read fails (``unknown``).
         """
@@ -152,11 +170,42 @@ class VipPresence:
         if not vip_keys:
             return VIP_UNKNOWN
 
+        known = self._cached_or_standings_verdict(dk_id, start_date, vip_keys)
+        return known if known is not None else self._scan_entrant_pages(dk_id, vip_keys)
+
+    def _cached_or_standings_verdict(self, dk_id: int, start_date: str, vip_keys: set[str]) -> str | None:
         cached_verdict = _resolve_cached_verdict(self._store.get_presence(dk_id), start_date)
         if cached_verdict is not None:
             return cached_verdict
+        return self._standings_verdict(dk_id, vip_keys)
 
-        return self._scan_entrant_pages(dk_id, vip_keys)
+    def present_vips(self, dk_id: int, vip_names: list[str]) -> list[str]:
+        """Names from ``vip_names`` the last standings poll found; ``[]`` when none or unpolled."""
+        polled = self._polled_vip_keys(dk_id) or set()
+        return [name for name in vip_names if vip_key(name) in polled]
+
+    def _polled_vip_keys(self, dk_id: int) -> set[str] | None:
+        """VIP keys in the last standings poll, or ``None`` when the poll says nothing.
+
+        `SportProcessor` clears VIP rows while the cash line is unknown, so an
+        empty result before a cash line exists is not evidence of absence.
+        """
+        if self._standings is None:
+            return None
+        cash_line = self._standings.get_cash_line(dk_id)
+        if cash_line is None or cash_line[0] is None:
+            return None
+        return {vip_key(status.vip_name) for status in self._standings.get_vip_cash_status(dk_id)}
+
+    def _standings_verdict(self, dk_id: int, vip_keys: set[str]) -> str | None:
+        """``present`` / ``absent`` from the standings poll, or ``None`` when it is unusable."""
+        polled = self._polled_vip_keys(dk_id)
+        if polled is None:
+            return None
+        if polled & vip_keys:
+            self._store.upsert_presence(dk_id, VIP_PRESENT)
+            return VIP_PRESENT
+        return VIP_ABSENT
 
     def _scan_entrant_pages(self, dk_id: int, vip_keys: set[str]) -> str:
         try:
