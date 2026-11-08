@@ -70,7 +70,7 @@ class NotificationStore:
             )
             self._conn.commit()
         except (sqlite3.Error, AttributeError) as err:
-            logger.error("sqlite error inserting notification: %s", err)
+            logger.exception("sqlite error inserting notification: %s", err)
 
     # ── VIP-presence cache ─────────────────────────────────────────────────────
 

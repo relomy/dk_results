@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from types import SimpleNamespace
 from typing import Any
 
@@ -254,15 +255,20 @@ def test_fetch_vip_lineups_no_roster_data_excluded():
     assert result == []
 
 
-def test_fetch_vip_lineups_worker_exception_swallowed():
+def test_fetch_vip_lineups_worker_exception_swallowed(caplog):
     http = _FakeHttp(raise_on_entry=RuntimeError("network error"))
-    result = fetch_vip_lineups(
-        1,
-        2,
-        http,
-        vip_entries={"Alice": {"entry_key": "ek1"}},
-    )
+    with caplog.at_level(logging.ERROR):
+        result = fetch_vip_lineups(
+            1,
+            2,
+            http,
+            vip_entries={"Alice": {"entry_key": "ek1"}},
+        )
     assert result == []
+    (record,) = caplog.records
+    assert record.levelno == logging.ERROR
+    assert record.getMessage() == "Failed fetching lineup for Alice: network error"
+    assert record.exc_info is None
 
 
 # ── fetch_vip_lineups — leaderboard path ─────────────────────────────────────

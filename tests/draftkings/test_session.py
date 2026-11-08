@@ -42,9 +42,15 @@ def test_auth_session_get_session_caches_result(monkeypatch):
     assert session.get_session() is result
 
 
-def test_cj_from_pickle_missing(tmp_path):
+def test_cj_from_pickle_missing(tmp_path, caplog):
     session = session_module.AuthSession.__new__(session_module.AuthSession)
-    assert session.cj_from_pickle(str(tmp_path / "missing.pkl")) is None
+    missing = str(tmp_path / "missing.pkl")
+    with caplog.at_level(logging.ERROR):
+        assert session.cj_from_pickle(missing) is None
+    (record,) = caplog.records
+    assert record.levelno == logging.ERROR
+    assert record.getMessage().startswith(f"File {missing} not found [")
+    assert record.exc_info is None
 
 
 def test_setup_session_clears_existing_cookie(monkeypatch):

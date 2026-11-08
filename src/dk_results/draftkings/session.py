@@ -28,8 +28,11 @@ class AuthSession:
             with open(filename, "rb") as fp:
                 return pickle.load(fp)
         except FileNotFoundError as err:
-            logger.error("File %s not found [%s]", filename, err)
-            return None
+            missing_file = err
+
+        # Logged outside the handler: a missing cookie file is an expected fallback.
+        logger.error("File %s not found [%s]", filename, missing_file)
+        return None
 
     def setup_session(self, cookies: RequestsCookieJar) -> requests.Session:
         """Create a requests.Session and populate it with cookies."""

@@ -17,6 +17,10 @@ import requests
 from .session import AuthSession
 
 
+class SalaryDownloadError(Exception):
+    """Raised when the DraftKings salary CSV request returns a non-200 status."""
+
+
 class DraftKings:
     """
     Thin HTTP client for DraftKings endpoints. Owns an authenticated requests.Session
@@ -183,9 +187,13 @@ class DraftKings:
         return list(csv.reader(csvfile.splitlines(), delimiter=","))
 
     def _extract_csv_from_zip(self, content: bytes, cdir: str) -> list[list[str]] | None:
+        zip_obj: zipfile.ZipFile | None = None
         try:
             zip_obj = zipfile.ZipFile(io.BytesIO(content))
         except zipfile.BadZipFile:
+            pass
+
+        if zip_obj is None:
             self.logger.error("Response was neither CSV nor valid ZIP.")
             return None
 
@@ -271,7 +279,7 @@ class DraftKings:
 
         # if not successful, raise an exception
         if response.status_code != 200:
-            raise Exception(f"Requests status != 200. It is: {response.status_code}")
+            raise SalaryDownloadError(f"Requests status != 200. It is: {response.status_code}")
 
         # dump html to file to avoid multiple requests
         Path(filename).parent.mkdir(parents=True, exist_ok=True)

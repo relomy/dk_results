@@ -151,7 +151,7 @@ def test_download_contest_rows_redacts_signed_url_in_logs(caplog):
     assert "url=https://example.test/contest/export" in caplog.text
 
 
-def test_download_contest_rows_bad_zip_returns_none():
+def test_download_contest_rows_bad_zip_returns_none(caplog):
     response = _FakeResponse(
         headers={"Content-Type": "application/octet-stream"},
         content=b"not-zip",
@@ -159,7 +159,12 @@ def test_download_contest_rows_bad_zip_returns_none():
     session = _FakeSession(response)
     dk = DraftKings(session=session)
 
-    assert dk.download_contest_rows(1) is None
+    with caplog.at_level(logging.ERROR):
+        assert dk.download_contest_rows(1) is None
+    (record,) = caplog.records
+    assert record.levelno == logging.ERROR
+    assert record.getMessage() == "Response was neither CSV nor valid ZIP."
+    assert record.exc_info is None
 
 
 def test_download_contest_rows_zip_reads_csv(tmp_path):
