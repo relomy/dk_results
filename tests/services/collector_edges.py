@@ -1,12 +1,9 @@
-"""Shared fakes and builders for the snapshot_v3 collector tests.
+"""The snapshot_v3 collector edge stubs that cannot be fixtures.
 
-Edge stubs for DraftKings and the contest database, plus the Player and
-standings-user builders more than one collector test module uses.
+``_FakeDK`` is subclassed at module scope by several collector tests, and
+``snapshot_scenarios.py`` builds ``_FakeContestDB`` outside pytest; neither can reach a
+fixture. ``conftest.py`` exposes both as factory fixtures for everything else.
 """
-
-from types import SimpleNamespace
-
-from dk_results.domain.player import Player
 
 
 class _FakeDK:
@@ -80,25 +77,3 @@ class _FakeContestDB:
 
     def close(self):
         self.closed = True
-
-
-def _salary_player(name, team, game_info, draftable_id):
-    """A Player as the salary CSV + standings parse would leave it (sheet matchup_info included)."""
-    player = Player(name, "QB", "QB/FLEX", 8000, game_info, team, draftable_id=draftable_id)
-    player.update_stats("QB", "12.5%", "20.0")
-    return player
-
-
-def _by_name(rows: list[dict]) -> dict[str, dict]:
-    return {row["name"]: row for row in rows}
-
-
-def _field_user(rank, entry_key, ownership, *, game_info="Live", salary=None):
-    lineupobj = (
-        None
-        if ownership is None
-        else SimpleNamespace(lineup=[SimpleNamespace(game_info=game_info, ownership=ownership, salary=salary)])
-    )
-    return SimpleNamespace(
-        rank=str(rank), pts="10", pmr="0", player_id=entry_key, name=f"u{entry_key}", salary=0, lineupobj=lineupobj
-    )

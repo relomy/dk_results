@@ -3,10 +3,9 @@
 from dk_results.persistence.contestdatabase import ContestRow
 from dk_results.services.snapshot_v3 import collector
 from dk_results.services.snapshot_v3.collector import _select_contest
-from tests.services.snapshot_v3_collector_fakes import _FakeContestDB, _FakeDK
 
 
-def test_select_contest_explicit_id_uses_db_row_and_merges_state_and_contract() -> None:
+def test_select_contest_explicit_id_uses_db_row_and_merges_state_and_contract(make_contest_db, make_dk) -> None:
     sport_cls = collector._sport_choices()["NBA"]
     row = ContestRow(
         dk_id=123,
@@ -17,14 +16,14 @@ def test_select_contest_explicit_id_uses_db_row_and_merges_state_and_contract() 
         entry_fee=5,
         entries=100,
     )
-    db = _FakeContestDB(
+    db = make_contest_db(
         by_id=row,
         candidates=[(1, "n", 5, "d", 9, 0)],
         state=("live", 0),
         contract=(500, 200, 3, 150),
     )
 
-    resolved = _select_contest(sport_cls=sport_cls, contest_db=db, contest_id=123, dk=_FakeDK())
+    resolved = _select_contest(sport_cls=sport_cls, contest_db=db, contest_id=123, dk=make_dk())
 
     assert resolved.mode == "explicit_id"
     assert resolved.dk_id == 123
@@ -35,7 +34,7 @@ def test_select_contest_explicit_id_uses_db_row_and_merges_state_and_contract() 
     assert resolved.candidate_rows == [(1, "n", 5, "d", 9, 0)]
 
 
-def test_select_contest_explicit_id_falls_back_to_dk_detail_when_db_misses() -> None:
+def test_select_contest_explicit_id_falls_back_to_dk_detail_when_db_misses(make_contest_db, make_dk) -> None:
     sport_cls = collector._sport_choices()["NBA"]
     detail = {
         "contestDetail": {
@@ -47,9 +46,9 @@ def test_select_contest_explicit_id_falls_back_to_dk_detail_when_db_misses() -> 
             "payoutSummary": [{"maxPosition": 5}],
         }
     }
-    db = _FakeContestDB(by_id=None)
+    db = make_contest_db(by_id=None)
 
-    resolved = _select_contest(sport_cls=sport_cls, contest_db=db, contest_id=999, dk=_FakeDK(detail=detail))
+    resolved = _select_contest(sport_cls=sport_cls, contest_db=db, contest_id=999, dk=make_dk(detail=detail))
 
     assert resolved.dk_id == 999
     assert resolved.contest_name == "FromDetail"
@@ -57,7 +56,7 @@ def test_select_contest_explicit_id_falls_back_to_dk_detail_when_db_misses() -> 
     assert resolved.positions_paid == 5
 
 
-def test_select_contest_primary_live_selects_live_contest() -> None:
+def test_select_contest_primary_live_selects_live_contest(make_contest_db, make_dk) -> None:
     sport_cls = collector._sport_choices()["NBA"]
     row = ContestRow(
         dk_id=55,
@@ -68,29 +67,29 @@ def test_select_contest_primary_live_selects_live_contest() -> None:
         entry_fee=5,
         entries=200,
     )
-    db = _FakeContestDB(by_id=row, live=(55,))
+    db = make_contest_db(by_id=row, live=(55,))
 
-    resolved = _select_contest(sport_cls=sport_cls, contest_db=db, contest_id=None, dk=_FakeDK())
+    resolved = _select_contest(sport_cls=sport_cls, contest_db=db, contest_id=None, dk=make_dk())
 
     assert resolved.mode == "primary_live"
     assert resolved.dk_id == 55
 
 
-def test_select_contest_raises_without_db_for_primary_live() -> None:
+def test_select_contest_raises_without_db_for_primary_live(make_dk) -> None:
     sport_cls = collector._sport_choices()["NBA"]
     try:
-        _select_contest(sport_cls=sport_cls, contest_db=None, contest_id=None, dk=_FakeDK())
+        _select_contest(sport_cls=sport_cls, contest_db=None, contest_id=None, dk=make_dk())
     except RuntimeError as exc:
         assert "unavailable" in str(exc).lower()
     else:
         raise AssertionError("expected RuntimeError")
 
 
-def test_select_contest_raises_when_no_contest_found() -> None:
+def test_select_contest_raises_when_no_contest_found(make_contest_db, make_dk) -> None:
     sport_cls = collector._sport_choices()["NBA"]
-    db = _FakeContestDB(by_id=None, live=None)
+    db = make_contest_db(by_id=None, live=None)
     try:
-        _select_contest(sport_cls=sport_cls, contest_db=db, contest_id=None, dk=_FakeDK())
+        _select_contest(sport_cls=sport_cls, contest_db=db, contest_id=None, dk=make_dk())
     except RuntimeError as exc:
         assert "no contest found" in str(exc).lower()
     else:

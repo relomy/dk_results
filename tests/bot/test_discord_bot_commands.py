@@ -3,27 +3,24 @@
 import pytest
 
 from dk_results.bot import discord_bot
-from tests.bot.discord_bot_fakes import DummySport, DummySportTwo, FakeCtx, _ctx
 
 
 @pytest.mark.asyncio
-async def test_health_reports_bot_and_host_uptime(monkeypatch):
+async def test_health_reports_bot_and_host_uptime(monkeypatch, ctx, as_context):
     monkeypatch.setattr(discord_bot, "START_TIME", 0)
     monkeypatch.setattr(discord_bot.time, "time", lambda: 1000)
     monkeypatch.setattr(discord_bot, "_system_uptime_seconds", lambda: 200)
 
-    ctx = FakeCtx()
-    await discord_bot.health(_ctx(ctx))
+    await discord_bot.health(as_context(ctx))
 
     assert ctx.sent == ["alive. bot uptime: 16m 40s. host uptime: 3m 20s"]
 
 
 @pytest.mark.asyncio
-async def test_help_lists_commands(monkeypatch):
-    monkeypatch.setattr(discord_bot, "_sport_choices", lambda: {"nba": DummySport, "nfl": DummySportTwo})
+async def test_help_lists_commands(monkeypatch, ctx, as_context, dummy_sport, dummy_sport_two):
+    monkeypatch.setattr(discord_bot, "_sport_choices", lambda: {"nba": dummy_sport, "nfl": dummy_sport_two})
 
-    ctx = FakeCtx()
-    await discord_bot.help_command(_ctx(ctx))
+    await discord_bot.help_command(as_context(ctx))
 
     message = ctx.sent[0]
     assert "!sankayadead" in message
@@ -36,16 +33,15 @@ async def test_help_lists_commands(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_sports_lists_supported(monkeypatch):
-    monkeypatch.setattr(discord_bot, "_sport_choices", lambda: {"nba": DummySport, "nfl": DummySportTwo})
-    ctx = FakeCtx()
-    await discord_bot.sports(_ctx(ctx))
+async def test_sports_lists_supported(monkeypatch, ctx, as_context, dummy_sport, dummy_sport_two):
+    monkeypatch.setattr(discord_bot, "_sport_choices", lambda: {"nba": dummy_sport, "nfl": dummy_sport_two})
+    await discord_bot.sports(as_context(ctx))
     assert ctx.sent == ["Supported sports: NBA, NFL"]
 
 
 @pytest.mark.asyncio
-async def test_upcoming_lists_next_per_sport(monkeypatch):
-    monkeypatch.setattr(discord_bot, "_sport_choices", lambda: {"nba": DummySport, "nfl": DummySportTwo})
+async def test_upcoming_lists_next_per_sport(monkeypatch, ctx, as_context, dummy_sport, dummy_sport_two):
+    monkeypatch.setattr(discord_bot, "_sport_choices", lambda: {"nba": dummy_sport, "nfl": dummy_sport_two})
 
     class FakeContestDatabase:
         def __init__(self, *args, **kwargs):
@@ -68,8 +64,7 @@ async def test_upcoming_lists_next_per_sport(monkeypatch):
 
     monkeypatch.setattr(discord_bot, "ContestDatabase", FakeContestDatabase)
 
-    ctx = FakeCtx()
-    await discord_bot.upcoming(_ctx(ctx))
+    await discord_bot.upcoming(as_context(ctx))
 
     assert ctx.sent == [
         "NBA: name=MatchNBA, start_date=2000-01-02, url=<https://www.draftkings.com/contest/gamecenter/10#/>\n"
@@ -78,15 +73,14 @@ async def test_upcoming_lists_next_per_sport(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_sankayadead_sends():
-    ctx = FakeCtx()
+async def test_sankayadead_sends(ctx, as_context):
 
-    await discord_bot.sankayadead(_ctx(ctx))
+    await discord_bot.sankayadead(as_context(ctx))
     assert ctx.sent == ["ya man"]
 
 
 @pytest.mark.asyncio
-async def test_upcoming_returns_without_lines(monkeypatch):
+async def test_upcoming_returns_without_lines(monkeypatch, ctx, as_context, dummy_sport):
     class FakeDB:
         def __init__(self, *args, **kwargs):
             pass
@@ -100,10 +94,8 @@ async def test_upcoming_returns_without_lines(monkeypatch):
         def close(self):
             return None
 
-    monkeypatch.setattr(discord_bot, "_sport_choices", lambda: {"nba": DummySport})
+    monkeypatch.setattr(discord_bot, "_sport_choices", lambda: {"nba": dummy_sport})
     monkeypatch.setattr(discord_bot, "ContestDatabase", FakeDB)
 
-    ctx = FakeCtx()
-
-    await discord_bot.upcoming(_ctx(ctx))
+    await discord_bot.upcoming(as_context(ctx))
     assert ctx.sent == []
