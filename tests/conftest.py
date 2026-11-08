@@ -2,7 +2,7 @@ import datetime
 import sys
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 import pytest
 import requests
@@ -245,7 +245,7 @@ class _FakeDraftKingsNoStandings(_FakeDraftKings):
 
 
 class _FakeDraftKingsTrackVipEntries(_FakeDraftKings):
-    captured_vip_entries: dict = {}
+    captured_vip_entries: ClassVar[dict] = {}
 
     def download_contest_rows(self, *_args, **_kwargs):
         return _standings_rows_with_missing_vip_entry()
