@@ -566,6 +566,31 @@ def test_get_vip_cash_status_sqlite_error(caplog, boom_conn):
     assert any("get_vip_cash_status" in rec.message for rec in caplog.records)
 
 
+_GUARDED_ON_ERROR = {
+    "set_cash_line": (lambda db: db.set_cash_line(1, rank=1, points=1.0), None, False),
+    "get_cash_line": (lambda db: db.get_cash_line(1), None, False),
+    "get_contest_completed_at": (lambda db: db.get_contest_completed_at(1), None, False),
+    "replace_vip_cash_status": (lambda db: db.replace_vip_cash_status(1, []), None, True),
+    "get_vip_cash_status": (lambda db: db.get_vip_cash_status(1), [], False),
+}
+
+
+@pytest.mark.parametrize("method", list(_GUARDED_ON_ERROR))
+def test_guarded_methods_return_their_default_and_roll_back_only_when_asked(method, boom_conn):
+    call, default, rolls_back = _GUARDED_ON_ERROR[method]
+
+    assert call(ContestDatabase.from_connection(boom_conn)) == default
+    assert boom_conn.rolled_back is rolls_back
+    assert getattr(ContestDatabase, method).__name__ == method
+
+
+def test_guarded_default_is_built_fresh_for_each_failure(boom_conn):
+    db = ContestDatabase.from_connection(boom_conn)
+    db.get_vip_cash_status(1).append(VipCashStatus(vip_name="Alice", rank=1, points=1.0))
+
+    assert db.get_vip_cash_status(1) == []
+
+
 def test_ensure_schema_migrates_preexisting_database_file(tmp_path):
     """A pre-existing on-disk db file lacking the new cash-line columns
     should be migrated in place, not just a fresh one (ADR-0011)."""
