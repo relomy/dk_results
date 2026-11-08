@@ -2,6 +2,7 @@
 
 import datetime
 import sys
+import types
 
 import pytest
 from pydantic import ValidationError
@@ -118,6 +119,35 @@ def test_main_passes_sport_class_choices_to_response_filters(monkeypatch):
         dkcontests.main()
 
     assert captured["sport_cls"] is _DummySport
+
+
+def test_main_defaults_start_date_to_the_current_eastern_calendar_day(monkeypatch):
+    # 02:30 UTC on 8 Nov is 21:30 on 7 Nov in New York (EST), so UTC and Eastern disagree.
+    class _FrozenDateTime(datetime.datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return datetime.datetime(2026, 11, 8, 2, 30, tzinfo=datetime.UTC).astimezone(tz)
+
+    class _DummySport:
+        name = "PGAShowdown"
+        contest_restraint_game_type_id = 87
+
+        @staticmethod
+        def get_primary_sport():
+            return "GOLF"
+
+    stats_start_dates = []
+    monkeypatch.setattr(dkcontests, "datetime", types.SimpleNamespace(datetime=_FrozenDateTime, date=datetime.date))
+    monkeypatch.setattr(dkcontests, "get_sport_class_choices", lambda: {"PGAShowdown": _DummySport})
+    monkeypatch.setattr(dkcontests, "load_sport_class_contests", lambda _cls: SportClassContests([], set()))
+    monkeypatch.setattr(dkcontests, "print_stats", lambda _c, **kw: stats_start_dates.append(kw["start_date"]))
+    monkeypatch.setattr(dkcontests, "get_largest_contest", lambda *_a, **_kw: None)
+    monkeypatch.setattr(sys, "argv", ["prog", "--sport-class", "PGAShowdown"])
+
+    with pytest.raises(SystemExit):
+        dkcontests.main()
+
+    assert stats_start_dates == [datetime.date(2026, 11, 7)]
 
 
 def test_format_sport_class_game_type_help_lists_constraints():
