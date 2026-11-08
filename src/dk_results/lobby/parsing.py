@@ -46,7 +46,7 @@ def log_draft_group_event(
     )
     if reason:
         message += " reason: %s"
-        args = args + (reason,)
+        args = (*args, reason)
     logger.log(level, message, *args)
 
 

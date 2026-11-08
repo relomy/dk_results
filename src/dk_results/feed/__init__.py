@@ -10,4 +10,4 @@ the object store) and the end-to-end orchestration.
 from dk_results.feed.object_store import ObjectStore, ObjectStoreError
 from dk_results.feed.pipeline import FeedResult, run_feed
 
-__all__ = ["ObjectStore", "ObjectStoreError", "FeedResult", "run_feed"]
+__all__ = ["FeedResult", "ObjectStore", "ObjectStoreError", "run_feed"]

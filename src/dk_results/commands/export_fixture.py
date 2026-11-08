@@ -137,7 +137,7 @@ def _build_latest_payload(
 ) -> dict[str, Any]:
     snapshot_at = _coerce_iso(payload.get("snapshot_at"), "snapshot_at")
     generated_at = _coerce_iso(payload.get("generated_at"), "generated_at")
-    available_sports = sorted(str(key) for key in (payload.get("sports") or {}).keys())
+    available_sports = sorted(str(key) for key in (payload.get("sports") or {}))
     date_utc = snapshot_at[:10]
     yesterday_utc = (datetime.fromisoformat(f"{date_utc}T00:00:00+00:00") - timedelta(days=1)).date().isoformat()
     return {
@@ -184,7 +184,7 @@ def _build_manifest_entry(
     snapshot_path: pathlib.Path,
 ) -> dict[str, Any]:
     sports = payload.get("sports") or {}
-    sports_present = sorted(str(key) for key in sports.keys())
+    sports_present = sorted(str(key) for key in sports)
     contest_counts_by_sport: dict[str, int] = {}
     state_counts: dict[str, int] = {}
     sports_status: dict[str, dict[str, Any]] = {}
