@@ -1,7 +1,5 @@
 """Tests for the channel check and the bot's event handlers."""
 
-import types
-
 import pytest
 from discord.ext import commands
 
@@ -77,12 +75,7 @@ async def test_on_ready_logs(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_on_command_error_check_failure():
-    ctx = types.SimpleNamespace(sent=[])
+    ctx = FakeCtx()
 
-    async def _send(message: str):
-        ctx.sent.append(message)
-
-    ctx.send = _send
-
-    await discord_bot.on_command_error(ctx, discord_bot.commands.CheckFailure())
+    await discord_bot.on_command_error(_ctx(ctx), discord_bot.commands.CheckFailure())
     assert ctx.sent == []

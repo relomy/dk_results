@@ -1,7 +1,5 @@
 """Tests for the !health, !help, !sports, !upcoming and !sankayadead commands."""
 
-import types
-
 import pytest
 
 from dk_results.bot import discord_bot
@@ -81,24 +79,14 @@ async def test_upcoming_lists_next_per_sport(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_sankayadead_sends():
-    ctx = types.SimpleNamespace(sent=[])
+    ctx = FakeCtx()
 
-    async def _send(message: str):
-        ctx.sent.append(message)
-
-    ctx.send = _send
-
-    await discord_bot.sankayadead(ctx)
+    await discord_bot.sankayadead(_ctx(ctx))
     assert ctx.sent == ["ya man"]
 
 
 @pytest.mark.asyncio
 async def test_upcoming_returns_without_lines(monkeypatch):
-    class DummySport:
-        name = "NBA"
-        sheet_min_entry_fee = 5
-        keyword = "%"
-
     class FakeDB:
         def __init__(self, *args, **kwargs):
             pass
@@ -115,12 +103,7 @@ async def test_upcoming_returns_without_lines(monkeypatch):
     monkeypatch.setattr(discord_bot, "_sport_choices", lambda: {"nba": DummySport})
     monkeypatch.setattr(discord_bot, "ContestDatabase", FakeDB)
 
-    ctx = types.SimpleNamespace(sent=[])
+    ctx = FakeCtx()
 
-    async def _send(message: str):
-        ctx.sent.append(message)
-
-    ctx.send = _send
-
-    await discord_bot.upcoming(ctx)
+    await discord_bot.upcoming(_ctx(ctx))
     assert ctx.sent == []
