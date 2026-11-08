@@ -27,9 +27,7 @@ from dk_results.services.snapshot_v3.contest_selection import (
 )
 from dk_results.services.snapshot_v3.ports import SnapshotContestDbPort, SnapshotDkPort
 from dk_results.services.snapshot_v3.source_bundle import (
-    FieldRemaining as FieldRemaining,  # re-exported: public name from the original path
-)
-from dk_results.services.snapshot_v3.source_bundle import (
+    FieldRemaining,
     _assemble_source_bundle,
     _build_source_metrics,
     _build_vip_points_by_entry,
@@ -42,6 +40,9 @@ from dk_results.services.snapshot_v3.vip_normalize import (
     _normalize_vip_lineup_rows,
 )
 from dk_results.vip_lineups import build_vip_entries, fetch_vip_lineups, load_vips, scorecard_facts_by_draftable_id
+
+# FieldRemaining is imported from source_bundle and re-exported: the public name from the original path.
+__all__ = ["CollectedSnapshot", "FieldRemaining", "collect_raw_bundle", "collect_snapshot"]
 
 logger = logging.getLogger(__name__)
 
