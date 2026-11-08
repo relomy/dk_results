@@ -25,7 +25,7 @@ def test_collect_reads_standings_and_draftables_for_a_completed_contest(
         min_cash_pts=0.0,
         non_cashing_players={},
     )
-    monkeypatch.setattr(collector, "load_vips", lambda: [])
+    monkeypatch.setattr(collector, "load_vips", list)
     monkeypatch.setattr(collector, "parse_contest_standings", lambda *a, **k: results)
     monkeypatch.setattr(collector, "fetch_vip_lineups", lambda *a, **k: [])
     row = ContestRow(
@@ -66,7 +66,7 @@ def _collect_contest_with_state(monkeypatch, tmp_path, make_contest_db, *, state
         min_cash_pts=0.0,
         non_cashing_players={},
     )
-    monkeypatch.setattr(collector, "load_vips", lambda: [])
+    monkeypatch.setattr(collector, "load_vips", list)
     monkeypatch.setattr(collector, "parse_contest_standings", lambda *a, **k: results)
     monkeypatch.setattr(collector, "fetch_vip_lineups", lambda *a, **k: [])
     row = ContestRow(

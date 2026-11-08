@@ -64,7 +64,7 @@ class _RemainingMetricsDK(_FakeDK):
 
 def _remaining_metrics_contest(monkeypatch, tmp_path, make_contest_db, statuses):
     monkeypatch.setattr(collector, "SALARY_DIR", str(tmp_path))
-    monkeypatch.setattr(collector, "load_vips", lambda: [])
+    monkeypatch.setattr(collector, "load_vips", list)
     monkeypatch.setattr(collector, "fetch_vip_lineups", lambda *a, **k: [])
     row = ContestRow(
         dk_id=321,
@@ -144,7 +144,7 @@ def test_users_not_cashing_is_entries_minus_positions_paid_for_a_fully_parsed_st
         ["6", "e6", "below_b", "60", "60", lineup],
     ]
     monkeypatch.setattr(collector, "SALARY_DIR", str(tmp_path))
-    monkeypatch.setattr(collector, "load_vips", lambda: [])
+    monkeypatch.setattr(collector, "load_vips", list)
     monkeypatch.setattr(collector, "fetch_vip_lineups", lambda *a, **k: [])
     row = ContestRow(
         dk_id=321,

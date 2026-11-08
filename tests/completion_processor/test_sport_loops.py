@@ -41,7 +41,7 @@ def soft_finish_pair(
             details_by_id=details | (detail_errors or {}),
             leaderboards_by_id=leaderboard_errors,
         )
-        presence = make_presence(VIP_PRESENT, by_id={dk_id: VIP_ABSENT for dk_id in absent})
+        presence = make_presence(VIP_PRESENT, by_id=dict.fromkeys(absent, VIP_ABSENT))
         make_processor(results=results, sender=sender, presence=presence if absent else None, sport_choices=sports).run(
             conn
         )

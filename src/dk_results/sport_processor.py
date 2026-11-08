@@ -452,9 +452,9 @@ class SportProcessor:
             ]
             if results.non_cashing_players:
                 info.append(["Top 10 Own% Remaining", ""])
-                sorted_non_cashing: dict[str, int] = {
-                    k: v for k, v in sorted(results.non_cashing_players.items(), key=lambda item: item[1], reverse=True)
-                }
+                sorted_non_cashing: dict[str, int] = dict(
+                    sorted(results.non_cashing_players.items(), key=lambda item: item[1], reverse=True)
+                )
                 for p, count in list(sorted_non_cashing.items())[:10]:
                     info.append([p, float(count / results.non_cashing_users)])
             sheet.add_non_cashing_info(info)
