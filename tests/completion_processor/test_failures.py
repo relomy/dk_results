@@ -38,7 +38,7 @@ def test_contest_detail_request_failure_is_logged_with_traceback(
     errors = [r for r in caplog.records if r.levelno == logging.ERROR]
     assert len(errors) == 1
     assert errors[0].getMessage() == "Request error"
-    assert errors[0].exc_info is not None and errors[0].exc_info[0] is RuntimeError
+    assert all((errors[0].exc_info is not None, errors[0].exc_info[0] is RuntimeError))
 
 
 def test_failing_contest_sync_is_logged_with_traceback_and_contest_id(
@@ -54,7 +54,7 @@ def test_failing_contest_sync_is_logged_with_traceback_and_contest_id(
     errors = [r for r in caplog.records if r.levelno == logging.ERROR]
     assert len(errors) == 1
     assert errors[0].getMessage() == "Failed to sync contest dk_id=1"
-    assert errors[0].exc_info is not None and errors[0].exc_info[0] is RuntimeError
+    assert all((errors[0].exc_info is not None, errors[0].exc_info[0] is RuntimeError))
 
 
 def test_a_failing_contest_does_not_stop_the_next_contest_from_syncing(

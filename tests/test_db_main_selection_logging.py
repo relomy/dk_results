@@ -137,4 +137,4 @@ def test_optimal_lineup_failure_is_logged_once_with_traceback(
     errors = [r for r in caplog.records if r.levelno == logging.ERROR]
     assert len(errors) == 1
     assert "NFL" in errors[0].getMessage()
-    assert errors[0].exc_info is not None and errors[0].exc_info[0] is RuntimeError
+    assert all((errors[0].exc_info is not None, errors[0].exc_info[0] is RuntimeError))
