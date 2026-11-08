@@ -84,7 +84,7 @@ def _build_standings_row(
     parsed_rank = _rank_numeric(user.rank)
     points = to_float(user.pts)
     entry_key = user.player_id
-    payout_cents = leaderboard_payout_by_entry.get(str(entry_key), None) if entry_key else None
+    payout_cents = leaderboard_payout_by_entry.get(str(entry_key)) if entry_key else None
     is_vip = user.name in vip_lookup
     vip_points = vip_points_by_entry.get(str(entry_key)) if entry_key else None
     is_cashing = _is_user_cashing(

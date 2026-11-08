@@ -12,13 +12,13 @@ def _money_to_cents(value: Any) -> int | None:
     if isinstance(value, bool):
         return None
     if isinstance(value, (int, float)):
-        return int(round(float(value) * 100))
+        return round(float(value) * 100)
     if isinstance(value, str):
         text = value.strip().replace("$", "").replace(",", "")
         if not text:
             return None
         try:
-            return int(round(float(text) * 100))
+            return round(float(text) * 100)
         except ValueError:
             return None
     return None

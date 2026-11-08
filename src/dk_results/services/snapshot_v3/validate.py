@@ -75,7 +75,7 @@ def _validate_sport_entry(sport: str, sport_payload_raw: Any) -> list[str]:
         ]
     contest = sport_payload.get("contests", [])[0]
     if not isinstance(contest, dict):
-        return violations + [f"sports.{sport}.contests[0] must be an object"]
+        return [*violations, f"sports.{sport}.contests[0] must be an object"]
     violations.extend(_validate_contest_required_fields(sport, contest))
     violations.extend(_validate_section_rows(sport, contest))
     violations.extend(_validate_vip_lineups(sport, contest))
