@@ -1,6 +1,6 @@
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
-from typing import Any, Type
+from typing import Any
 
 import requests
 from requests.cookies import RequestsCookieJar
@@ -41,7 +41,7 @@ def requests_fetch_json(
 
 
 def get_dk_lobby(
-    sport: Type[Sport],
+    sport: type[Sport],
     url: str,
     *,
     fetch_json: FetchJson = requests_fetch_json,
@@ -81,7 +81,7 @@ class SportClassContests:
     featured_draft_group_ids: set[int]
 
 
-def load_sport_class_contests(sport_cls: Type[Sport]) -> SportClassContests:
+def load_sport_class_contests(sport_cls: type[Sport]) -> SportClassContests:
     """Fetch, qualify, and filter a sport class's upcoming lobby contests.
 
     Sport-class mode always reads the anonymous, non-live getcontests lobby

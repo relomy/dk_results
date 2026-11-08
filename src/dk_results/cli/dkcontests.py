@@ -40,7 +40,7 @@ import contextlib
 import datetime
 import io
 from collections.abc import Mapping, Sequence
-from typing import Any, Type
+from typing import Any
 
 from dfs_common import state
 
@@ -60,12 +60,12 @@ def get_contests(sport: str, live: bool = False):
     return get_contests_from_response(response)
 
 
-def get_sport_class_choices() -> Mapping[str, Type[Sport]]:
+def get_sport_class_choices() -> Mapping[str, type[Sport]]:
     return get_sport_choices()
 
 
 def format_sport_class_game_type_help(
-    choices: Mapping[str, Type[Sport]],
+    choices: Mapping[str, type[Sport]],
 ) -> str:
     lines = ["Sport-class gameTypeId constraints:"]
     constrained = [
@@ -390,7 +390,7 @@ def print_stats(
 
 def _load_contests_for_args(
     args: argparse.Namespace,
-    sport_class_choices: Mapping[str, Type[Sport]],
+    sport_class_choices: Mapping[str, type[Sport]],
 ) -> tuple[list[dict], str, set[int] | None]:
     featured_draft_group_ids = None
     if args.sport_class:

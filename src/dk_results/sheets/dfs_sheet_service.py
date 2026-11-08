@@ -1,7 +1,8 @@
 """Service layer for DFS sheet operations."""
 
 import datetime
-from typing import Any, Sequence
+from collections.abc import Sequence
+from typing import Any
 
 from dfs_common.sheets import NumberFormat
 
