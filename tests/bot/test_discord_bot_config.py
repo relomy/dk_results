@@ -3,6 +3,7 @@
 import inspect
 
 import pytest
+from discord.ext import commands
 
 from dk_results.bot import discord_bot
 from tests.bot.discord_bot_fakes import DummySport, FakeCtx, _ctx, _settings
@@ -96,6 +97,18 @@ def test_main_runs_bot(monkeypatch):
     assert captured["settings"].bot_token == "tok"
 
 
+def _callback(bot: commands.Bot, name: str):
+    command = bot.get_command(name)
+    assert command is not None
+    return command.callback
+
+
+async def _check_outcomes(bot: commands.Bot, ctx: FakeCtx) -> list[bool]:
+    """Run every global check of the bot against ``ctx``, awaiting the async ones."""
+    results = [check(_ctx(ctx)) for check in bot._checks]
+    return [await result if inspect.isawaitable(result) else result for result in results]
+
+
 @pytest.mark.asyncio
 async def test_create_bot_registered_commands_use_the_injected_settings(monkeypatch):
     monkeypatch.setattr(discord_bot, "_sport_choices", lambda: {"nba": DummySport})
@@ -111,15 +124,12 @@ async def test_create_bot_registered_commands_use_the_injected_settings(monkeypa
 
     ctx = FakeCtx()
     ctx.channel.id = 123
-    contests_command = bot.get_command("contests")
-    assert contests_command is not None
-    await contests_command.callback(_ctx(ctx), "nba")
+    await _callback(bot, "contests")(_ctx(ctx), "nba")
     assert "https://docs.google.com/spreadsheets/d/sheet/edit#gid=123" in ctx.sent[0]
 
     other = FakeCtx()
     other.channel.id = 999
-    check_results = [check(_ctx(other)) for check in bot._checks]
-    assert [await result if inspect.isawaitable(result) else result for result in check_results] == [False]
+    assert await _check_outcomes(bot, other) == [False]
 
     class _StubContestDatabase:
         def __init__(self, *_args, **_kwargs):
@@ -140,7 +150,5 @@ async def test_create_bot_registered_commands_use_the_injected_settings(monkeypa
     )
 
     ctx2 = FakeCtx()
-    live_command = bot.get_command("live")
-    assert live_command is not None
-    await live_command.callback(_ctx(ctx2))
+    await _callback(bot, "live")(_ctx(ctx2))
     assert "https://docs.google.com/spreadsheets/d/sheet/edit#gid=123" in ctx2.sent[0]

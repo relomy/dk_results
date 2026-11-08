@@ -282,7 +282,8 @@ def test_vip_fetch_requested_uses_filtered_entry_keys(monkeypatch, tmp_path, cap
     assert _parse_event_fields(fetch[0])["requested"] == "1"
 
 
-def test_process_sport_emits_no_vip_events_when_results_build_fails(monkeypatch, tmp_path, caplog):
+def _run_with_failing_results_build(monkeypatch, tmp_path, caplog) -> StandsParseError:
+    """Run a VIP-enabled NFL processor whose results build raises, returning the error it surfaces."""
     monkeypatch.setattr(
         SportProcessor,
         "_build_results",
@@ -292,12 +293,22 @@ def test_process_sport_emits_no_vip_events_when_results_build_fails(monkeypatch,
     with caplog.at_level(logging.INFO):
         with pytest.raises(StandsParseError) as excinfo:
             processor.run("NFL", NFLSport)
+    return excinfo.value
 
-    assert isinstance(excinfo.value.__cause__, RuntimeError)
-    assert str(excinfo.value.__cause__) == "boom"
+
+def test_process_sport_emits_no_vip_events_when_results_build_fails(monkeypatch, tmp_path, caplog):
+    _run_with_failing_results_build(monkeypatch, tmp_path, caplog)
+
     assert len(_event_messages(caplog, "vip_detection")) == 0
     assert len(_event_messages(caplog, "vip_fetch")) == 0
     assert len(_event_messages(caplog, "vip_sheet_write")) == 0
+
+
+def test_process_sport_chains_the_results_build_error_as_the_cause(monkeypatch, tmp_path, caplog):
+    error = _run_with_failing_results_build(monkeypatch, tmp_path, caplog)
+
+    assert isinstance(error.__cause__, RuntimeError)
+    assert str(error.__cause__) == "boom"
 
 
 def test_process_sport_logs_optimizer_skip(tmp_path, caplog):

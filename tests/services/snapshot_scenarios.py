@@ -15,6 +15,8 @@ from dataclasses import dataclass
 from typing import Any
 from unittest.mock import patch
 
+import requests
+
 from dk_results.persistence.contestdatabase import ContestRow
 from dk_results.services.snapshot_v3 import collector
 from dk_results.services.snapshot_v3.pipeline import build_snapshot_v3_envelope
@@ -468,15 +470,23 @@ class _NflDraftKings:
                     [pos, name, _nfl_draftable_id(name), _NFL_FLEX_ELIGIBLE.get(pos, pos), salary, status, team]
                 )
 
-    def download_contest_rows(self, *_args: Any, **_kwargs: Any) -> list[list[str]]:
+    def download_contest_rows(
+        self,
+        contest_id: int,
+        /,
+        *,
+        timeout: int = 30,
+        cookies_dump_file: str | None = None,
+        contest_dir: str | None = None,
+    ) -> list[list[str]]:
         return self._standings_rows
 
     def get_entry(
-        self, draft_group: int, entry_key: str, *, timeout: int | None = None, session: Any = None
+        self, draft_group: int, entry_key: str, *, timeout: int | None = None, session: requests.Session | None = None
     ) -> dict[str, Any]:
         return {"entries": [{"roster": {"scorecards": self._scorecards[entry_key]}}]}
 
-    def clone_auth_to(self, target_session: Any) -> None:
+    def clone_auth_to(self, target_session: requests.Session) -> None:
         return None
 
 
