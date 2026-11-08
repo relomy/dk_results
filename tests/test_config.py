@@ -156,9 +156,14 @@ def test_yaml_loader_internal_errors_log_failed_to_load(monkeypatch, tmp_path, c
     path = tmp_path / "gids.yaml"
     path.write_text(content)
     _runtime_env(monkeypatch, tmp_path, SHEET_GIDS_FILE=str(path))
+    # Pin the capture level: the INFO "not found" line otherwise depends on logger state left by other tests.
+    caplog.set_level("INFO", logger="dk_results.config")
 
     assert config.load_runtime_settings().sheet_gid_map == {}
-    assert f"Failed to load Sheet gid map from {path}" in caplog.text
+    assert caplog.messages == [
+        f"Failed to load Sheet gid map from {path}",
+        f"Warning schedules not found at {tmp_path / 'contest_warning_schedules.yaml'}.",
+    ]
 
 
 def test_warning_schedules_normalize_and_drop_invalid_entries(monkeypatch, tmp_path, caplog):
