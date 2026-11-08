@@ -39,7 +39,7 @@ CREATE TABLE contests (
 """
 
 # The clock when a test does not pick one: long after every started contest below.
-DEFAULT_MOMENT = datetime.datetime(2030, 1, 1, 12, 0, tzinfo=datetime.timezone.utc)
+DEFAULT_MOMENT = datetime.datetime(2030, 1, 1, 12, 0, tzinfo=datetime.UTC)
 
 
 class DummySport:

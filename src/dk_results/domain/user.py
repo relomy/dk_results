@@ -36,9 +36,10 @@ class User:
             self.salary -= player.salary
 
     def __str__(self) -> str:
-        return "[User]: Name: {} Rank: {} PMR: {} Pts: {} Salary: {} LU: {}".format(
-            self.name, self.rank, self.pmr, self.pts, self.salary, self.lineup_str
+        return (
+            f"[User]: Name: {self.name} Rank: {self.rank} PMR: {self.pmr} "
+            f"Pts: {self.pts} Salary: {self.salary} LU: {self.lineup_str}"
         )
 
     def __repr__(self) -> str:
-        return "User({}, {}, {}, {}, {})".format(self.name, self.rank, self.pmr, self.pts, self.lineup_str)
+        return f"User({self.name}, {self.rank}, {self.pmr}, {self.pts}, {self.lineup_str})"
