@@ -216,7 +216,7 @@ def build_bonus_achievement_announcement(sport_name: str, headline: str) -> str:
     return f"{sport_emoji(sport_name)} {sport_name} — {headline}"
 
 
-def build_double_up_found_announcement(sport_name: str, contests: Sequence["Contest"]) -> str | None:
+def build_double_up_found_announcement(sport_name: str, contests: Sequence[Contest]) -> str | None:
     """Build the double-up-found announcement for one sport's newly found contests.
 
     Gated: a sport absent from ``DISCORD_ROLE_MAP`` produces no announcement at

@@ -38,7 +38,7 @@ class R2Config:
         return f"https://{self.account_id}.r2.cloudflarestorage.com"
 
     @classmethod
-    def from_env(cls, env: dict[str, str] | None = None) -> "R2Config":
+    def from_env(cls, env: dict[str, str] | None = None) -> R2Config:
         source = os.environ if env is None else env
         missing = [
             name
@@ -71,7 +71,7 @@ class R2ObjectStore:
         self._bucket = bucket
 
     @classmethod
-    def from_env(cls, env: dict[str, str] | None = None) -> "R2ObjectStore":
+    def from_env(cls, env: dict[str, str] | None = None) -> R2ObjectStore:
         config = R2Config.from_env(env)
         import boto3  # imported lazily so hermetic tests never require it
 

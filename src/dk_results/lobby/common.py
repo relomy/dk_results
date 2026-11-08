@@ -1,6 +1,5 @@
 import argparse
 import datetime
-from typing import Optional
 
 
 def valid_date(date_string: str) -> datetime.datetime:
@@ -29,7 +28,7 @@ def get_salary_date(draft_group: dict) -> datetime.date:
 def is_time_between(
     begin_time: datetime.time,
     end_time: datetime.time,
-    check_time: Optional[datetime.time] = None,
+    check_time: datetime.time | None = None,
 ) -> bool:
     """Check whether check_time falls in the [begin_time, end_time] window."""
     check_time = check_time or datetime.datetime.now(datetime.UTC).time()
