@@ -148,7 +148,7 @@ def _format_time_since(start_date: str) -> str | None:
 def _system_uptime_seconds() -> float | None:
     """Return system uptime in seconds if /proc/uptime is available."""
     try:
-        with open("/proc/uptime", "r") as f:
+        with open("/proc/uptime") as f:
             first_field = f.read().split()[0]
             return float(first_field)
     except Exception:

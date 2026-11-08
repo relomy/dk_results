@@ -4,7 +4,6 @@ import argparse
 import logging
 from collections.abc import Mapping
 from os import getenv
-from typing import Type
 
 from dfs_common import contests, state
 from dfs_common.discord import WebhookSender
@@ -67,7 +66,7 @@ def set_quiet_verbosity() -> None:
     logger.setLevel(logging.INFO)
 
 
-def parse_args(choices: Mapping[str, Type[Sport]]) -> argparse.Namespace:
+def parse_args(choices: Mapping[str, type[Sport]]) -> argparse.Namespace:
     """Parse command-line arguments."""
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -84,7 +83,7 @@ def parse_args(choices: Mapping[str, Type[Sport]]) -> argparse.Namespace:
 
 def process_sport(
     sport_name: str,
-    choices: Mapping[str, Type[Sport]],
+    choices: Mapping[str, type[Sport]],
     db: ContestDatabase,
     bot: WebhookSender | None,
     *,
@@ -151,7 +150,7 @@ def main() -> None:
     """Main function to find new double ups and send notifications."""
     _init_runtime()
 
-    choices: Mapping[str, Type[Sport]] = get_sport_choices()
+    choices: Mapping[str, type[Sport]] = get_sport_choices()
 
     webhook = getenv("DISCORD_WEBHOOK")
     if not webhook:

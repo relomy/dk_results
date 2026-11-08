@@ -230,12 +230,16 @@ def test_empty_contests_returns_empty():
 
 def test_largest_by_entries_returns_max():
     contests = [_contest(1, entries=150), _contest(2, entries=300), _contest(3, entries=200)]
-    assert largest_by_entries(contests).id == 2
+    largest = largest_by_entries(contests)
+    assert largest is not None
+    assert largest.id == 2
 
 
 def test_largest_by_entries_single_item():
     c = _contest(1, entries=100)
-    assert largest_by_entries([c]).id == 1
+    largest = largest_by_entries([c])
+    assert largest is not None
+    assert largest.id == 1
 
 
 def test_largest_by_entries_empty_returns_none():

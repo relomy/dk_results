@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Type
 
 from dk_results.analytics.lineup_solver import LineupSolver, PulpCbcSolver
 from dk_results.domain.player import Player
@@ -30,7 +29,7 @@ class Optimizer:
 
     def __init__(
         self,
-        sport_obj: Sport | Type[Sport],
+        sport_obj: Sport | type[Sport],
         players: dict[str, Player],
         logger: logging.Logger | None = None,
         solver: LineupSolver | None = None,

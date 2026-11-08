@@ -69,7 +69,7 @@ def test_announcement_without_sheet_or_dashboard_says_sheet_is_unavailable(run_l
         ("2024-01-01 12:00:00", datetime.datetime(2024, 1, 1, 12, 0, 1), None),
         (
             "2024-01-01T12:00:00+00:00",
-            datetime.datetime(2024, 1, 1, 10, 30, tzinfo=datetime.timezone.utc),
+            datetime.datetime(2024, 1, 1, 10, 30, tzinfo=datetime.UTC),
             "1h30m",
         ),
     ],

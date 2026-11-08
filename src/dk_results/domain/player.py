@@ -69,24 +69,19 @@ class Player:
         #     home_team, away_team, match_time))
         # home_team, away_team = self.game_info.split(" ", 1)[0].split("@")
         if self.team_abbv == home_team:
-            matchup_info = "vs. {}".format(away_team)
+            matchup_info = f"vs. {away_team}"
         else:
-            matchup_info = "at {}".format(home_team)
+            matchup_info = f"at {home_team}"
         return matchup_info
 
     def __str__(self) -> str:
-        return "[Player] {} {} Sal: ${} - {:.4f} - {} pts Game_Info: {} Team_Abbv: {}".format(
-            self.pos,
-            self.name,
-            self.salary,
-            self.ownership,
-            self.fpts,
-            self.game_info,
-            self.team_abbv,
+        return (
+            f"[Player] {self.pos} {self.name} Sal: ${self.salary} - {self.ownership:.4f} - {self.fpts} pts "
+            f"Game_Info: {self.game_info} Team_Abbv: {self.team_abbv}"
         )
 
     def __repr__(self) -> str:
-        return "Player({}, {}, {}, {}, {})".format(self.name, self.pos, self.salary, self.game_info, self.team_abbv)
+        return f"Player({self.name}, {self.pos}, {self.salary}, {self.game_info}, {self.team_abbv})"
 
     def writeable(self, sport: str) -> list[Any]:
         if sport in ["PGA", "GOLF"] or "PGA" in sport:

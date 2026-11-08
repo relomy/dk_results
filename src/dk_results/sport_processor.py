@@ -7,9 +7,9 @@ import os
 import sqlite3
 import time
 from collections import OrderedDict
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
-from typing import Any, Callable, Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
 import requests
 from dfs_common import state
@@ -209,7 +209,7 @@ class SportProcessor:
         standings_rows: list[list[str]],
     ) -> ContestStandings:
         logger.debug("standings_parse sport=%s contest_id=%s", sport_cls.name, contest_id)
-        with open(salary_csv, mode="r", encoding="utf-8-sig", newline="") as fp:
+        with open(salary_csv, encoding="utf-8-sig", newline="") as fp:
             salary_rows = list(csv.reader(fp, delimiter=","))
         return parse_contest_standings(
             sport_cls,
