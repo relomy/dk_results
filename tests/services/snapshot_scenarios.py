@@ -18,6 +18,7 @@ from unittest.mock import patch
 from dk_results.persistence.contestdatabase import ContestRow
 from dk_results.services.snapshot_v3 import collector
 from dk_results.services.snapshot_v3.pipeline import build_snapshot_v3_envelope
+from tests.services.snapshot_v3_collector_fakes import _FakeContestDB
 
 GENERATED_AT = "2026-10-04T12:00:00Z"
 PRODUCER_COMMIT = "0123456789abcdef0123456789abcdef01234567"
@@ -63,6 +64,10 @@ def _standing(rank: int, entry: str, user: str, points: float, pmr: float, **ext
     }
 
 
+def _golf_player_key(name: str) -> str:
+    return f"golf:{name.lower().replace(' ', '-')}"
+
+
 def _golf_bundle() -> dict[str, Any]:
     """Golf: every player's status is the tournament name, so the sport has no Game status."""
     tournament = "Masters Tournament"
@@ -79,7 +84,7 @@ def _golf_bundle() -> dict[str, Any]:
     players = [
         {
             "name": name,
-            "player_key": f"golf:{name.lower().replace(' ', '-')}",
+            "player_key": _golf_player_key(name),
             "position": "G",
             "roster_positions": ["G"],
             "salary": salary,
@@ -91,7 +96,7 @@ def _golf_bundle() -> dict[str, Any]:
         }
         for name, salary, own in field
     ]
-    slots = [_slot("G", p["name"], p["player_key"], p["salary"], live=False) for p in players[:6]]
+    slots = [_slot("G", name, _golf_player_key(name), salary, live=False) for name, salary, _own in field[:6]]
     return {
         "sport": "GOLF",
         "contest": {
@@ -445,7 +450,10 @@ class _NflDraftKings:
         self._leaderboard = leaderboard
         self._scorecards = scorecards
 
-    def get_leaderboard(self, _contest_id: int, *, timeout: int | None = None) -> dict[str, Any]:
+    def get_contest_detail(self, dk_id: int, /) -> dict[str, Any]:
+        return {}
+
+    def get_leaderboard(self, contest_id: int, *, timeout: int | None = None) -> dict[str, Any]:
         return self._leaderboard
 
     def get_draftables(self, _draft_group: int, timeout: int | None = None) -> dict[str, Any]:
@@ -463,30 +471,12 @@ class _NflDraftKings:
     def download_contest_rows(self, *_args: Any, **_kwargs: Any) -> list[list[str]]:
         return self._standings_rows
 
-    def get_entry(self, _draft_group: int, entry_key: str, *, timeout: int | None = None, session: Any = None):
+    def get_entry(
+        self, draft_group: int, entry_key: str, *, timeout: int | None = None, session: Any = None
+    ) -> dict[str, Any]:
         return {"entries": [{"roster": {"scorecards": self._scorecards[entry_key]}}]}
 
-    def clone_auth_to(self, _session: Any) -> None:
-        return None
-
-
-class _NflContestDatabase:
-    def __init__(self, row: ContestRow):
-        self._row = row
-
-    def get_live_contest_candidates(self, *_args: Any, **_kwargs: Any) -> list[tuple]:
-        return []
-
-    def get_contest_by_id(self, _contest_id: int) -> ContestRow:
-        return self._row
-
-    def get_contest_state(self, _dk_id: int) -> None:
-        return None
-
-    def get_contest_contract_metadata(self, _dk_id: int) -> None:
-        return None
-
-    def get_contest_completed_at(self, _dk_id: int) -> None:
+    def clone_auth_to(self, target_session: Any) -> None:
         return None
 
 
@@ -740,7 +730,7 @@ def _nfl_mid_slate_bundle() -> dict[str, Any]:
             patch.object(
                 collector,
                 "_collect_source_snapshot",
-                lambda **kwargs: real_collect(dk=dk, contest_db=_NflContestDatabase(row), **kwargs),
+                lambda **kwargs: real_collect(dk=dk, contest_db=_FakeContestDB(by_id=row), **kwargs),
             )
         )
         return collector.collect_snapshot(sport="NFL", contest_id=300400, standings_limit=_NFL_STANDINGS_LIMIT).bundle

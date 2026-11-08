@@ -35,8 +35,8 @@ def test_fetch_leaderboard_payouts_reads_real_envelope_and_ignores_legacy_keys()
 
 
 def test_fetch_leaderboard_payouts_returns_empty_on_error() -> None:
-    class _Boom:
-        def get_leaderboard(self, _contest_id):
+    class _Boom(_FakeDK):
+        def get_leaderboard(self, contest_id, *, timeout=None):
             raise RuntimeError("unavailable")
 
     assert _fetch_leaderboard_payouts(_Boom(), 5) == {}
