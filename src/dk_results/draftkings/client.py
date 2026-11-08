@@ -264,16 +264,14 @@ class DraftKings:
         if sport in contest_types:
             self.logger.debug("contest_types sport=%s type_id=%s", sport, contest_types[sport])
 
-        csv_url = (
-            "https://www.draftkings.com/lineup/getavailableplayerscsv?contestTypeId={0}&draftGroupId={1}"
-        ).format(contest_types[sport], draft_group)
+        csv_url = f"https://www.draftkings.com/lineup/getavailableplayerscsv?contestTypeId={contest_types[sport]}&draftGroupId={draft_group}"
 
         # send GET request
         response = self.session.get(csv_url)
 
         # if not successful, raise an exception
         if response.status_code != 200:
-            raise Exception("Requests status != 200. It is: {0}".format(response.status_code))
+            raise Exception(f"Requests status != 200. It is: {response.status_code}")
 
         # dump html to file to avoid multiple requests
         Path(filename).parent.mkdir(parents=True, exist_ok=True)

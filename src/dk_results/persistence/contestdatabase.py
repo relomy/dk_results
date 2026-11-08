@@ -27,7 +27,7 @@ def _format_utc(moment: datetime.datetime) -> str:
     """
     if moment.tzinfo is None:
         raise ValueError("completed_at moments must be timezone-aware")
-    return moment.astimezone(datetime.timezone.utc).strftime(_UTC_FORMAT)
+    return moment.astimezone(datetime.UTC).strftime(_UTC_FORMAT)
 
 
 def _sqlite_guard(

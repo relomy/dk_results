@@ -20,7 +20,7 @@ def test_to_utc_iso_normalizes_naive_eastern_datetime() -> None:
 
 
 def test_to_utc_iso_normalizes_aware_utc_datetime() -> None:
-    value = datetime.datetime(2026, 2, 14, 12, 30, 45, tzinfo=datetime.timezone.utc)
+    value = datetime.datetime(2026, 2, 14, 12, 30, 45, tzinfo=datetime.UTC)
 
     assert to_utc_iso(value) == "2026-02-14T12:30:45Z"
 
