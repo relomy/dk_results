@@ -10,15 +10,7 @@ from __future__ import annotations
 from typing import Any
 
 from dk_results.services.snapshot_v3.contracts import SCHEMA_VERSION, validate_single_contest
-from dk_results.services.snapshot_v3.presence_rules import (
-    PresenceRule as PresenceRule,  # re-exported: public names from the original path
-)
-from dk_results.services.snapshot_v3.presence_rules import (
-    PresenceWarningRow as PresenceWarningRow,
-)
-from dk_results.services.snapshot_v3.presence_rules import (
-    collect_presence_warnings as collect_presence_warnings,
-)
+from dk_results.services.snapshot_v3.presence_rules import PresenceRule, PresenceWarningRow, collect_presence_warnings
 from dk_results.services.snapshot_v3.validate_metrics import _validate_contest_metrics
 from dk_results.services.snapshot_v3.validate_shape import (
     _validate_contest_id_coherence,
@@ -29,6 +21,8 @@ from dk_results.services.snapshot_v3.validate_shape import (
     _validate_vip_lineups,
 )
 from dk_results.services.snapshot_v3.validate_values import _is_valid_timestamp
+
+__all__ = ["PresenceRule", "PresenceWarningRow", "collect_presence_warnings", "validate_v3_envelope"]
 
 
 def validate_v3_envelope(payload: dict[str, Any]) -> list[str]:

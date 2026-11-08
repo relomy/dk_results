@@ -61,11 +61,11 @@ class DraftKings:
         target_session.headers.update(self.session.headers)
         try:
             target_session.cookies.update(self.session.cookies.get_dict())
-        except Exception:
+        except (AttributeError, TypeError):
             for c in getattr(self.session, "cookies", []):
                 try:
                     target_session.cookies.set(c.name, c.value, domain=c.domain, path=c.path)
-                except Exception:
+                except (AttributeError, TypeError):
                     pass
 
     # -----------------------

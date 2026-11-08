@@ -378,8 +378,8 @@ class SportProcessor:
                     sender=self._bonus_sender,
                     logger=logger,
                 )
-        except sqlite3.Error as err:
-            logger.exception("Failed bonus announcement DB flow for %s (%s): %s", sport_name, dk_id, err)
+        except sqlite3.Error:
+            logger.exception("Failed bonus announcement DB flow for %s (%s)", sport_name, dk_id)
 
     def _write_vip_lineups_to_sheet(
         self, sheet: SheetPort, sport_name: str, dk_id: int, vip_lineups: list[dict[str, Any]]

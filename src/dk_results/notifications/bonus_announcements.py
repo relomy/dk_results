@@ -301,7 +301,7 @@ def _collect_player_bonuses(
 
 
 def _build_bonus_candidate(normalized_name: str, bonus_code: str, data: dict[str, Any]) -> BonusCandidate:
-    canonical_display_name = sorted(data["display_names"], key=str.lower)[0]
+    canonical_display_name = min(data["display_names"], key=str.lower)
     return BonusCandidate(
         display_name=canonical_display_name,
         normalized_player_name=normalized_name,
@@ -364,13 +364,12 @@ def _announce_candidate(
     try:
         for count_value in counts_to_announce:
             sender.send_message(_format_message(sport, candidate, count_value))
-    except Exception as err:
+    except Exception:
         log.exception(
-            "Failed to send bonus announcement for %s %s in contest %s: %s",
+            "Failed to send bonus announcement for %s %s in contest %s",
             candidate.normalized_player_name,
             candidate.bonus_code,
             contest_id,
-            err,
         )
         return _CandidateOutcome(send_failures=1)
 
@@ -387,13 +386,12 @@ def _announce_candidate(
                 contest_id,
             )
             return _CandidateOutcome(webhook_messages=webhook_messages, cas_skips=1)
-    except sqlite3.Error as err:
+    except sqlite3.Error:
         log.exception(
-            "Failed to persist bonus announcement for %s %s in contest %s: %s",
+            "Failed to persist bonus announcement for %s %s in contest %s",
             candidate.normalized_player_name,
             candidate.bonus_code,
             contest_id,
-            err,
         )
         return _CandidateOutcome(webhook_messages=webhook_messages, db_failures=1)
 

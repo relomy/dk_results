@@ -1,5 +1,6 @@
 """Contest edges through the collector seam: candidates, state, DK detail fallback, payouts, own DB."""
 
+import sqlite3
 from types import SimpleNamespace
 
 import pytest
@@ -219,9 +220,14 @@ def test_collector_opens_and_closes_its_own_db_from_the_state_path(
     assert db.closed is True  # a DB the collector opened itself is closed
 
 
-def test_collector_runs_without_a_db_when_opening_it_fails(monkeypatch, tmp_path, make_dk) -> None:
+@pytest.mark.parametrize(
+    "error",
+    [OSError("no state dir"), RuntimeError("DFS_STATE_DIR is not set"), sqlite3.OperationalError("unable to open")],
+    ids=["os_error", "state_dir_unset", "sqlite_error"],
+)
+def test_collector_runs_without_a_db_when_opening_it_fails(monkeypatch, tmp_path, make_dk, error) -> None:
     def _unavailable():
-        raise OSError("no state dir")
+        raise error
 
     monkeypatch.setattr(collector, "state", SimpleNamespace(contests_db_path=_unavailable))
     dk = make_dk(

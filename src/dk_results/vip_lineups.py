@@ -102,7 +102,7 @@ def load_vips() -> list[str]:
     except FileNotFoundError:
         logger.warning("vips.yaml not found at %s; proceeding with empty VIP list.", vip_path)
         return []
-    except Exception as e:
+    except (OSError, ValueError, yaml.YAMLError, KeyError, AttributeError, RecursionError) as e:
         logger.warning("Failed to load vips.yaml: %s; proceeding with empty VIP list.", e)
         return []
 

@@ -37,10 +37,12 @@ async def test_contests_returns_live_contest(monkeypatch, ctx, as_context, make_
     await discord_bot.contests(make_settings(), as_context(ctx), "nba")
 
     assert ctx.sent == [
-        "Live: 🏀 NBA — Contest\n"
-        "• 🕒 2000-01-01\n"
-        "• 🔗 DK: [1](<https://www.draftkings.com/contest/gamecenter/1#/>)\n"
-        "• 📊 Sheet: n/a"
+        (
+            "Live: 🏀 NBA — Contest\n"
+            "• 🕒 2000-01-01\n"
+            "• 🔗 DK: [1](<https://www.draftkings.com/contest/gamecenter/1#/>)\n"
+            "• 📊 Sheet: n/a"
+        )
     ]
 
 
@@ -58,11 +60,13 @@ async def test_contests_returns_live_contest_with_vip_present(monkeypatch, ctx, 
     await discord_bot.contests(make_settings(), as_context(ctx), "nba")
 
     assert ctx.sent == [
-        "Live: 🏀 NBA — Contest\n"
-        "• 🕒 2000-01-01\n"
-        "• 🔗 DK: [1](<https://www.draftkings.com/contest/gamecenter/1#/>)\n"
-        "• 📊 Sheet: n/a\n"
-        "• ⭐ VIP: present"
+        (
+            "Live: 🏀 NBA — Contest\n"
+            "• 🕒 2000-01-01\n"
+            "• 🔗 DK: [1](<https://www.draftkings.com/contest/gamecenter/1#/>)\n"
+            "• 📊 Sheet: n/a\n"
+            "• ⭐ VIP: present"
+        )
     ]
 
 

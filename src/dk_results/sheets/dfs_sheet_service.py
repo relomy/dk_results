@@ -52,8 +52,10 @@ class DfsSheetService:
         start_col_index = self._column_letters_to_index(origin.start_col)
         formats: list[tuple[str, NumberFormat]] = [
             (
-                f"{self._column_index_to_letters(start_col_index + cell_format.col)}"
-                f"{origin.start_row + cell_format.row}",
+                (
+                    f"{self._column_index_to_letters(start_col_index + cell_format.col)}"
+                    f"{origin.start_row + cell_format.row}"
+                ),
                 cell_format.number_format,
             )
             for cell_format in format_plan

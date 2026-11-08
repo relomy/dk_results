@@ -151,7 +151,7 @@ def _system_uptime_seconds() -> float | None:
         with open("/proc/uptime") as f:
             first_field = f.read().split()[0]
             return float(first_field)
-    except Exception:
+    except (OSError, IndexError, ValueError):
         return None
 
 

@@ -121,6 +121,29 @@ def test_validate_v3_envelope_reports_each_malformed_edge(edits: dict[str, Any],
     assert expected in validate_v3_envelope(_with(edits))
 
 
+ACCEPTED_TIMESTAMPS = [
+    "2026-02-25T10:00:00Z",
+    "2026-02-25T10:00:00.250Z",
+    "2026-02-25T10:00:00+00:00",
+    "2026-02-25T10:00:00-05:00",
+    "2026-02-25T10:00:00",
+    "2026-02-25",
+]
+REJECTED_TIMESTAMPS = ["2026-02-25T10:00:00z", "2026-02-25T10:00:00ZZ", "nope"]
+# Accepted only while the validator rewrote "Z" to "+00:00" before parsing; malformed, so now rejected.
+Z_SUFFIX_MALFORMED_TIMESTAMPS = ["2026-02-25Z", "2026-02-25ZZ", "2026-02-25T10Z:00:00"]
+
+
+@pytest.mark.parametrize("stamp", ACCEPTED_TIMESTAMPS)
+def test_validate_v3_envelope_accepts_each_supported_timestamp_form(stamp: str) -> None:
+    assert validate_v3_envelope(_with({"snapshot_at": stamp, "sports.nba.updated_at": stamp})) == []
+
+
+@pytest.mark.parametrize("stamp", [*REJECTED_TIMESTAMPS, *Z_SUFFIX_MALFORMED_TIMESTAMPS])
+def test_validate_v3_envelope_rejects_malformed_timestamps(stamp: str) -> None:
+    assert validate_v3_envelope(_with({"snapshot_at": stamp})) == ["snapshot_at must be a valid ISO timestamp"]
+
+
 def test_validate_v3_envelope_prefixes_contract_messages_for_malformed_metric_rows() -> None:
     payload = _with(
         {

@@ -1,3 +1,4 @@
+import logging
 import sqlite3
 from dataclasses import dataclass
 
@@ -276,6 +277,50 @@ def test_announce_vip_bonuses_webhook_failure_does_not_update_db(conn):
         (888, "GOLF", "Rory McIlroy", "EAG"),
     ).fetchone()
     assert row is None
+
+
+def test_announce_vip_bonuses_webhook_failure_logs_constant_message_with_traceback(caplog, conn):
+    sender = _Sender()
+    sender.raise_error = True
+    vip_lineups = [{"user": "amy", "players": [{"name": "Rory McIlroy", "stats": "1 EAG"}]}]
+
+    with caplog.at_level(logging.ERROR):
+        announce_vip_bonuses(conn=conn, sport="GOLF", contest_id=888, vip_lineups=vip_lineups, sender=sender)
+
+    assert caplog.messages == ["Failed to send bonus announcement for Rory McIlroy EAG in contest 888"]
+    exc_info = caplog.records[0].exc_info
+    assert isinstance(exc_info, tuple)
+    assert exc_info[0] is RuntimeError
+
+
+def test_announce_candidate_persist_failure_logs_constant_message_with_traceback(caplog):
+    class _FailingStore(_StateStore):
+        def compare_and_set(self, key: bonus_announcements._BonusKey, old_count: int, new_count: int) -> bool:
+            raise sqlite3.OperationalError("database is locked")
+
+    candidate = bonus_announcements.BonusCandidate(
+        display_name="Rory McIlroy",
+        normalized_player_name="Rory McIlroy",
+        bonus_code="EAG",
+        new_count=1,
+        max_ownership=0.1,
+        vip_users=["amy"],
+    )
+
+    with caplog.at_level(logging.ERROR):
+        result = bonus_announcements._announce_candidate(
+            state_store=_FailingStore(),
+            sender=_Sender(),
+            sport="GOLF",
+            contest_id=777,
+            candidate=candidate,
+        )
+
+    assert result.db_failures == 1
+    assert caplog.messages == ["Failed to persist bonus announcement for Rory McIlroy EAG in contest 777"]
+    exc_info = caplog.records[0].exc_info
+    assert isinstance(exc_info, tuple)
+    assert exc_info[0] is sqlite3.OperationalError
 
 
 def test_announce_vip_bonuses_cas_rowcount_zero_skips_update(monkeypatch, conn):

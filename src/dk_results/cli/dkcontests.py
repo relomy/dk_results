@@ -42,6 +42,7 @@ import io
 import sys
 from collections.abc import Mapping, Sequence
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from dfs_common import state
 
@@ -449,7 +450,6 @@ def _print_selected_contest(contest: Contest) -> None:
 
 
 def main():
-    """"""
     load_and_apply_settings()
 
     supported_sports = [
@@ -501,7 +501,7 @@ def main():
         "-d",
         "--date",
         help="The Start Date - format YYYY-MM-DD",
-        default=datetime.datetime.today(),
+        default=datetime.datetime.now(ZoneInfo("America/New_York")).replace(tzinfo=None),
         type=valid_date,
     )
     parser.add_argument("--time", help="Optional start time - format HH:MM", type=valid_time)

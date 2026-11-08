@@ -106,6 +106,36 @@ def test_load_vips_missing_file(tmp_path, monkeypatch):
     assert update_contests._load_vips() == []
 
 
+def test_load_vips_unparsable_yaml_returns_empty(tmp_path, monkeypatch, caplog):
+    path = tmp_path / "vips.yaml"
+    path.write_text("bad: yaml: :")
+    monkeypatch.setattr(update_contests, "repo_file", lambda *_parts: path)
+
+    assert update_contests._load_vips() == []
+    assert caplog.messages == [f"failed to load vips.yaml from {path}"]
+
+
+@pytest.mark.parametrize(
+    "content", ["!!bool foo", "!!timestamp abc", "[" * 5000], ids=["bool-tag", "timestamp-tag", "deep-nesting"]
+)
+def test_load_vips_loader_internal_errors_return_empty(tmp_path, monkeypatch, caplog, content):
+    # Explicit-tag and deep-nesting YAML raise KeyError, AttributeError and RecursionError.
+    path = tmp_path / "vips.yaml"
+    path.write_text(content)
+    monkeypatch.setattr(update_contests, "repo_file", lambda *_parts: path)
+
+    assert update_contests._load_vips() == []
+    assert caplog.messages == [f"failed to load vips.yaml from {path}"]
+
+
+def test_load_vips_undecodable_bytes_returns_empty(tmp_path, monkeypatch):
+    path = tmp_path / "vips.yaml"
+    path.write_bytes(b"\xff\xfe\x00bad")
+    monkeypatch.setattr(update_contests, "repo_file", lambda *_parts: path)
+
+    assert update_contests._load_vips() == []
+
+
 # ── Processor assembly ───────────────────────────────────────────────────────
 
 
@@ -349,6 +379,20 @@ def test_main_logs_unexpected_error_with_traceback(monkeypatch, caplog):
     errors = [r for r in caplog.records if r.levelno == logging.ERROR]
     assert len(errors) == 1
     _assert_traceback_is(errors[0], RuntimeError)
+
+
+def test_main_logs_sqlite_error_with_traceback_and_constant_message(monkeypatch, caplog):
+    def boom(_path):
+        raise sqlite3.OperationalError("disk I/O error")
+
+    monkeypatch.setattr(update_contests.state, "contests_db_path", lambda: "unused.db")
+    monkeypatch.setattr(update_contests.contests, "init_schema", boom)
+    with caplog.at_level(logging.ERROR):
+        update_contests.main()
+
+    errors = [r for r in caplog.records if r.levelno == logging.ERROR]
+    assert [r.getMessage() for r in errors] == ["SQLite error"]
+    _assert_traceback_is(errors[0], sqlite3.OperationalError)
 
 
 def test_main_migrates_a_legacy_contests_table_to_have_completed_at(monkeypatch, tmp_path):

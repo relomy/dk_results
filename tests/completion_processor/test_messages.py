@@ -103,8 +103,10 @@ def test_warning_shows_whole_minutes_left_and_links_the_sheet_and_dashboard(run_
                 "Contest starting soon (25m): 🏀 NBA — Main Slate",
                 f"• 🕒 {scenario.far_start} (⏳ 13m)",
                 DK_LINE,
-                "• 📈 Dashboard: [NBA](<https://dashboard.example/live/nba>)"
-                " | 📊 Sheet: [NBA](<https://docs.google.com/spreadsheets/d/test-sheet/edit#gid=123>)",
+                (
+                    "• 📈 Dashboard: [NBA](<https://dashboard.example/live/nba>)"
+                    " | 📊 Sheet: [NBA](<https://docs.google.com/spreadsheets/d/test-sheet/edit#gid=123>)"
+                ),
             ]
         )
     ]

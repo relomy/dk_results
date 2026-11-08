@@ -176,14 +176,19 @@ def test_load_cookies_from_pickle_invalid(tmp_path, monkeypatch):
     assert cookies_module.load_cookies_from_pickle(str(path)) is None
 
 
-def test_save_cookies_to_pickle_error_is_swallowed(tmp_path):
+def test_save_cookies_to_pickle_error_is_swallowed(tmp_path, caplog):
     # Parent directory does not exist, so Path.open("wb") really fails. Always pass
     # an explicit tmp path: the default filename is the live dk_auth_cookies.pkl.
     path = tmp_path / "missing_dir" / "cookies.pkl"
 
-    cookies_module.save_cookies_to_pickle([{"name": "a", "value": "1"}], filename=str(path))
+    with caplog.at_level(logging.ERROR):
+        cookies_module.save_cookies_to_pickle([{"name": "a", "value": "1"}], filename=str(path))
 
     assert not path.exists()
+    assert caplog.messages == ["Failed to save cookies"]
+    exc_info = caplog.records[0].exc_info
+    assert isinstance(exc_info, tuple)
+    assert exc_info[0] is FileNotFoundError
 
 
 def test_save_cookies_to_pickle_success(tmp_path):

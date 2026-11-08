@@ -10,7 +10,7 @@ from dk_results.services.json_stable import to_stable_json
 
 
 def normalize_rfc3339_utc_seconds(value: str) -> str:
-    parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    parsed = datetime.fromisoformat(value)
     if parsed.tzinfo is None:
         parsed = parsed.replace(tzinfo=UTC)
     parsed_utc = parsed.astimezone(UTC).replace(microsecond=0)

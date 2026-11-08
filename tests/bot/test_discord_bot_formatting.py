@@ -78,6 +78,16 @@ def test_format_time_until_invalid():
     assert discord_bot._format_time_until("not a date") is None
 
 
+@pytest.mark.parametrize("content", ["", "   \n", "not-a-number 0.00"])
+def test_system_uptime_seconds_unreadable_content_is_none(monkeypatch, tmp_path, content):
+    uptime = tmp_path / "uptime"
+    uptime.write_text(content)
+    real_open = open
+    monkeypatch.setattr("builtins.open", lambda _path, *args, **kwargs: real_open(uptime, *args, **kwargs))
+
+    assert discord_bot._system_uptime_seconds() is None
+
+
 def test_system_uptime_seconds_missing_file(monkeypatch):
     def boom(*_args, **_kwargs):
         raise FileNotFoundError("nope")
