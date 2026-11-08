@@ -523,8 +523,9 @@ def test_classic_nfl_resolves_trailing_space_on_last_dst_slot():
 
 def test_contest_standings_is_frozen():
     standings = parse_contest_standings(NFLSport, _salary_rows(), _standings_rows(), positions_paid=1)
+    field_name = "min_rank"
     with pytest.raises(dataclasses.FrozenInstanceError):
-        standings.min_rank = 99
+        setattr(standings, field_name, 99)
 
 
 def test_vip_log_uses_vip_user_format(caplog):
