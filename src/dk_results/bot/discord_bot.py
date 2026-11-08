@@ -4,7 +4,7 @@ import sqlite3
 import time
 from pathlib import Path
 
-import discord  # noqa: E402
+import discord
 from dfs_common import state
 from discord.ext import commands
 

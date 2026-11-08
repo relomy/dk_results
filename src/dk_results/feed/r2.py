@@ -87,7 +87,7 @@ class R2ObjectStore:
     def get_json(self, key: str) -> dict[str, Any] | None:
         try:
             response = self._client.get_object(Bucket=self._bucket, Key=key)
-        except Exception as exc:  # noqa: BLE001 - narrowed below
+        except Exception as exc:  # narrowed below
             if _is_missing_key(exc):
                 return None
             raise ObjectStoreError(f"Failed to read object {key}") from exc
@@ -108,5 +108,5 @@ class R2ObjectStore:
                 Body=payload,
                 ContentType=content_type,
             )
-        except Exception as exc:  # noqa: BLE001 - surfaced as ObjectStoreError
+        except Exception as exc:  # surfaced as ObjectStoreError
             raise ObjectStoreError(f"Failed to write object {key}") from exc
