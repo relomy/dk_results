@@ -508,8 +508,10 @@ def test_classic_nfl_resolves_trailing_space_on_last_dst_slot():
             "CashUser",
             "0",
             "150",
-            "QB Tom Brady RB Derrick Henry RB Derrick Henry WR Justin Jefferson "
-            "WR Justin Jefferson WR Justin Jefferson TE Travis Kelce FLEX Travis Kelce DST Bears ",
+            (
+                "QB Tom Brady RB Derrick Henry RB Derrick Henry WR Justin Jefferson "
+                "WR Justin Jefferson WR Justin Jefferson TE Travis Kelce FLEX Travis Kelce DST Bears "
+            ),
         ],
     ]
 

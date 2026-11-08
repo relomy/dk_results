@@ -20,8 +20,10 @@ LINKED = {
 HEADER = "Contest soft-finished: 🔥 NBA — Main Slate"
 TAIL = [
     "• 🔗 DK: [42](<https://www.draftkings.com/contest/gamecenter/42#/>)",
-    "• 📈 Dashboard: [NBA](<https://dash.example/live/nba>)"
-    " | 📊 Sheet: [NBA](<https://docs.google.com/spreadsheets/d/sheet1/edit#gid=7>)",
+    (
+        "• 📈 Dashboard: [NBA](<https://dash.example/live/nba>)"
+        " | 📊 Sheet: [NBA](<https://docs.google.com/spreadsheets/d/sheet1/edit#gid=7>)"
+    ),
 ]
 
 

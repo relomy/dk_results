@@ -67,8 +67,10 @@ async def test_upcoming_lists_next_per_sport(monkeypatch, ctx, as_context, dummy
     await discord_bot.upcoming(as_context(ctx))
 
     assert ctx.sent == [
-        "NBA: name=MatchNBA, start_date=2000-01-02, url=<https://www.draftkings.com/contest/gamecenter/10#/>\n"
-        "NFL: name=AnyNFL, start_date=2000-01-04 (failed criteria), url=<https://www.draftkings.com/contest/gamecenter/21#/>"
+        (
+            "NBA: name=MatchNBA, start_date=2000-01-02, url=<https://www.draftkings.com/contest/gamecenter/10#/>\n"
+            "NFL: name=AnyNFL, start_date=2000-01-04 (failed criteria), url=<https://www.draftkings.com/contest/gamecenter/21#/>"
+        )
     ]
 
 
