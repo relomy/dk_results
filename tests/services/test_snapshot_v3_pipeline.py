@@ -92,11 +92,8 @@ def test_build_snapshot_v3_envelope_raises_on_validation_errors(monkeypatch) -> 
     )
     monkeypatch.setattr("dk_results.services.snapshot_v3.pipeline.validate_v3_envelope", lambda payload: ["bad"])
 
-    try:
+    with pytest.raises(ValueError, match="Snapshot v3 validation failed: bad"):
         build_snapshot_v3_envelope({"NBA": 1})
-        assert False, "expected ValueError"
-    except ValueError as exc:
-        assert "Snapshot v3 validation failed: bad" in str(exc)
 
 
 def _bundle_with_vip_lineup() -> dict:

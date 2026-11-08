@@ -290,9 +290,11 @@ def test_process_sport_emits_no_vip_events_when_results_build_fails(monkeypatch,
     )
     processor = _make_processor(_FakeContestDb(), vips=["UserA"], salary_dir=str(tmp_path))
     with caplog.at_level(logging.INFO):
-        with pytest.raises(StandsParseError):
+        with pytest.raises(StandsParseError) as excinfo:
             processor.run("NFL", NFLSport)
 
+    assert isinstance(excinfo.value.__cause__, RuntimeError)
+    assert str(excinfo.value.__cause__) == "boom"
     assert len(_event_messages(caplog, "vip_detection")) == 0
     assert len(_event_messages(caplog, "vip_fetch")) == 0
     assert len(_event_messages(caplog, "vip_sheet_write")) == 0

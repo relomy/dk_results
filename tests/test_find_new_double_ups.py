@@ -182,7 +182,7 @@ def test_format_discord_messages():
 def test_process_sport_invalid_name(monkeypatch):
     db = ContestDatabase(":memory:")
     try:
-        with pytest.raises(Exception):
+        with pytest.raises(Exception, match="Could not find matching Sport subclass"):
             process_sport("BAD", {}, db, None)
     finally:
         db.close()
