@@ -41,13 +41,16 @@ class _StateStore:
     committed: bool = False
     compare_and_set_args: tuple[int, int] | None = None
 
-    def load_count(self, _key):
+    def create_table(self) -> None:
+        pass
+
+    def load_count(self, key: bonus_announcements._BonusKey) -> int:
         return self.old_count
 
-    def ensure_row(self, _key) -> None:
+    def ensure_row(self, key: bonus_announcements._BonusKey) -> None:
         self.ensured = True
 
-    def compare_and_set(self, _key, old_count: int, new_count: int) -> bool:
+    def compare_and_set(self, key: bonus_announcements._BonusKey, old_count: int, new_count: int) -> bool:
         self.compare_and_set_args = (old_count, new_count)
         return self.updated
 
