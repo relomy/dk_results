@@ -6,6 +6,7 @@ one backfilled from a name that maps to exactly one key, or a composite key.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import Any
 
 from dk_results.services.snapshot_v3.normalize import (
@@ -226,7 +227,7 @@ def _collect_slot_name_and_key(slot: Any, keys_by_name: dict[str, set[str]]) -> 
     keys_by_name.setdefault(normalize_name(player_name), set()).add(str(player_key))
 
 
-def _build_unique_name_to_player_key_from_vip_lineups(vip_lineups: list[dict[str, Any]]) -> dict[str, str]:
+def _build_unique_name_to_player_key_from_vip_lineups(vip_lineups: Sequence[Any]) -> dict[str, str]:
     keys_by_name: dict[str, set[str]] = {}
 
     for vip_row in vip_lineups:
