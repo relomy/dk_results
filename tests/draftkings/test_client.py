@@ -4,6 +4,7 @@ import logging
 from pathlib import Path
 
 import pytest
+import requests
 from requests.cookies import RequestsCookieJar
 from requests.models import Response
 from requests.sessions import Session
@@ -237,6 +238,22 @@ def test_download_salary_csv_writes_file(tmp_path):
     dk.download_salary_csv("NBA", 123, str(path))
 
     assert path.read_text().strip() == "csv"
+    assert session.last is not None
+    assert session.last[1] == 15
+
+
+def test_download_salary_csv_propagates_timeout(tmp_path):
+    class TimeoutSession(_FakeSession):
+        def get(self, url, timeout=None, **_kwargs):
+            raise requests.Timeout("slow")
+
+    dk = DraftKings(session=TimeoutSession(_FakeResponse()))
+    path = tmp_path / "salary.csv"
+
+    with pytest.raises(requests.Timeout):
+        dk.download_salary_csv("NBA", 123, str(path))
+
+    assert not path.exists()
 
 
 def test_clone_auth_to_ignores_cookie_set_errors():
