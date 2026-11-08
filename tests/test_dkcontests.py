@@ -174,8 +174,12 @@ def test_from_lobby_missing_required_key_raises_naming_field():
     assert "Field required" in message
 
 
-def test_contest_is_frozen():
+@pytest.mark.parametrize("attribute", list(Contest.model_fields))
+def test_contest_is_frozen(attribute):
     contest = Contest.from_lobby(_contest_payload(10), "NFL")
+    original = getattr(contest, attribute)
 
     with pytest.raises(ValidationError):
-        contest.name = "mutated"
+        setattr(contest, attribute, "mutated")
+
+    assert getattr(contest, attribute) == original

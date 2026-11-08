@@ -19,7 +19,7 @@ import json
 import logging
 import shutil
 import tempfile
-from collections.abc import Iterator
+from collections.abc import Generator
 from dataclasses import dataclass
 from pathlib import Path
 from types import SimpleNamespace
@@ -58,7 +58,7 @@ def _snapshot_name(snapshot_at: str) -> str:
 
 
 @contextlib.contextmanager
-def _ephemeral_root(data_root: str | Path | None) -> Iterator[Path]:
+def _ephemeral_root(data_root: str | Path | None) -> Generator[Path]:
     if data_root is not None:
         root = Path(data_root)
         root.mkdir(parents=True, exist_ok=True)

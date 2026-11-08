@@ -1,12 +1,21 @@
 """dkcontests contest insert: SQL preview, confirmation and contests.db writes."""
 
 import sys
+from dataclasses import dataclass
 
 import pytest
 
 from dk_results.cli import dkcontests
 from dk_results.domain.contest import Contest
 from tests.dkcontests_payloads import _contest_payload
+
+
+@dataclass
+class _DbCalls:
+    inserted: list[Contest] | None = None
+    closed: bool = False
+    db_path: str | None = None
+    created_table: bool = False
 
 
 def test_print_sql_insert_uses_typed_values(capsys):
@@ -71,23 +80,23 @@ def test_maybe_insert_contest_skips_db_when_declined(monkeypatch):
 
 def test_maybe_insert_contest_inserts_when_confirmed(monkeypatch, capsys):
     contest = Contest.from_lobby(_contest_payload(1), "NFL")
-    calls = {"inserted": None, "closed": False, "db_path": None, "created_table": False}
+    calls = _DbCalls()
 
     class FakeDB:
         def __init__(self, db_path):
-            calls["db_path"] = db_path
+            calls.db_path = db_path
 
         def ensure_schema(self):
-            calls["created_table"] = True
+            calls.created_table = True
 
         def compare_contests(self, contests):
             return [c.id for c in contests]
 
         def insert_contests(self, contests):
-            calls["inserted"] = list(contests)
+            calls.inserted = list(contests)
 
         def close(self):
-            calls["closed"] = True
+            calls.closed = True
 
     monkeypatch.setattr(dkcontests, "ContestDatabase", FakeDB)
     monkeypatch.setattr(dkcontests, "confirm_insert", lambda: True)
@@ -95,10 +104,10 @@ def test_maybe_insert_contest_inserts_when_confirmed(monkeypatch, capsys):
 
     dkcontests.maybe_insert_contest(contest, insert=True)
 
-    assert calls["inserted"] == [contest]
-    assert calls["closed"] is True
-    assert calls["db_path"] == "/tmp/contests.db"
-    assert calls["created_table"] is True
+    assert calls.inserted == [contest]
+    assert calls.closed is True
+    assert calls.db_path == "/tmp/contests.db"
+    assert calls.created_table is True
     assert "Inserted contest 1" in capsys.readouterr().out
 
 
@@ -149,7 +158,7 @@ def test_main_with_insert_flag_prompts_and_inserts_confirmed_contest(monkeypatch
     contest_payload = _contest_payload(1, entries=200, fee=25)
     monkeypatch.setattr(dkcontests, "get_lobby_response", lambda _sport, live=False: {"Contests": [contest_payload]})
 
-    calls = {"inserted": None}
+    calls = _DbCalls()
 
     class FakeDB:
         def __init__(self, _db_path):
@@ -162,7 +171,7 @@ def test_main_with_insert_flag_prompts_and_inserts_confirmed_contest(monkeypatch
             return [c.id for c in contests]
 
         def insert_contests(self, contests):
-            calls["inserted"] = list(contests)
+            calls.inserted = list(contests)
 
         def close(self):
             pass
@@ -174,8 +183,8 @@ def test_main_with_insert_flag_prompts_and_inserts_confirmed_contest(monkeypatch
 
     dkcontests.main()
 
-    assert calls["inserted"] is not None
-    assert calls["inserted"][0].id == 1
+    assert calls.inserted is not None
+    assert calls.inserted[0].id == 1
     assert "INSERT INTO contests (" in capsys.readouterr().out
 
 
