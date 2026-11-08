@@ -69,6 +69,7 @@ def test_distance_to_cash_omits_rank_delta_when_rank_cutoff_missing() -> None:
 
     metric = derive_distance_to_cash(raw)
 
+    assert metric is not None
     assert "rank_delta" not in metric["per_vip"][0]
 
 
@@ -85,6 +86,7 @@ def test_threat_falls_back_to_top_remaining_players_when_non_cashing_missing() -
 
     threat = derive_threat(raw)
 
+    assert threat is not None
     assert [row["player_name"] for row in threat["top_swing_players"]] == ["Player A"]
 
 
@@ -112,6 +114,7 @@ def test_threat_uses_player_level_source_only() -> None:
 
     threat = derive_threat(raw)
 
+    assert threat is not None
     assert [row["player_name"] for row in threat["top_swing_players"]] == ["Player A", "Player B"]
 
 
@@ -160,6 +163,7 @@ def test_threat_vip_count_joins_on_player_key_only() -> None:
 
     threat = derive_threat(raw)
 
+    assert threat is not None
     assert threat["top_swing_players"][0]["vip_count"] == 1
 
 
@@ -212,4 +216,5 @@ def test_threat_sort_is_deterministic_for_ties() -> None:
 
     threat = derive_threat(raw)
 
+    assert threat is not None
     assert [row["player_key"] for row in threat["top_swing_players"]] == ["nba:1", "nba:2"]
