@@ -365,7 +365,7 @@ def _announce_candidate(
         for count_value in counts_to_announce:
             sender.send_message(_format_message(sport, candidate, count_value))
     except Exception as err:
-        log.error(
+        log.exception(
             "Failed to send bonus announcement for %s %s in contest %s: %s",
             candidate.normalized_player_name,
             candidate.bonus_code,
@@ -388,7 +388,7 @@ def _announce_candidate(
             )
             return _CandidateOutcome(webhook_messages=webhook_messages, cas_skips=1)
     except sqlite3.Error as err:
-        log.error(
+        log.exception(
             "Failed to persist bonus announcement for %s %s in contest %s: %s",
             candidate.normalized_player_name,
             candidate.bonus_code,

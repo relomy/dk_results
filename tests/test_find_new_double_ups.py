@@ -126,7 +126,8 @@ def test_upsert_contests_uses_dfs_common(monkeypatch):
     find_mod._upsert_contests([contest])
 
     assert calls["db_path"] == "/tmp/contests.db"
-    assert calls["rows"] and calls["rows"][0]["dk_id"] == 303
+    assert calls["rows"]
+    assert calls["rows"][0]["dk_id"] == 303
 
 
 def _contest_payload(dk_id: int):

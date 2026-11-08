@@ -4,6 +4,8 @@ import datetime
 from types import SimpleNamespace
 from zoneinfo import ZoneInfo
 
+import pytest
+
 from dk_results.persistence.contestdatabase import ContestRow
 from dk_results.services.snapshot_v3 import collector
 from dk_results.services.snapshot_v3.collector import collect_snapshot
@@ -72,12 +74,8 @@ def test_collect_source_snapshot_raises_when_standings_unavailable(
     db = make_contest_db(by_id=row)
     dk = make_dk(standings_rows=[])  # empty -> unavailable
 
-    try:
+    with pytest.raises(RuntimeError, match="Contest standings unavailable for contest_id=321"):
         collector._collect_source_snapshot(sport="NBA", contest_id=321, dk=dk, contest_db=db)
-    except RuntimeError as exc:
-        assert "standings unavailable" in str(exc).lower()
-    else:
-        raise AssertionError("expected RuntimeError for unavailable standings")
 
 
 def test_collect_source_snapshot_no_draft_group_skips_salary_and_vip_fetch(

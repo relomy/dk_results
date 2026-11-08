@@ -359,7 +359,8 @@ def test_get_contest_by_id_returns_row(contest_db):
         entries=123,
     )
     # The four detail-only fields default to None for a by-id DB read.
-    assert row.contest_state is None and row.prize_pool is None
+    assert row.contest_state is None
+    assert row.prize_pool is None
 
 
 def test_get_live_contest_logs_key_value(contest_db, caplog):
@@ -446,7 +447,7 @@ def test_get_incomplete_contests_returns_started_and_pending(contest_db):
     assert ids == [1, 2]
     # tuple shape: (dk_id, draft_group, entries, positions_paid, status, completed, name, start_date, sport)
     row1 = next(r for r in rows if r[0] == 1)
-    assert row1[4] == "UPCOMING" and row1[8] == "NBA"
+    assert (row1[4], row1[8]) == ("UPCOMING", "NBA")
 
 
 def test_get_incomplete_contests_error_returns_none(boom_conn):
@@ -461,7 +462,8 @@ def test_update_contest_writes_fields(contest_db):
 
     assert contest_db.get_contest_state(1) == ("COMPLETED", 1)
     row = contest_db.get_contest_by_id(1)
-    assert row is not None and row.positions_paid == 42
+    assert row is not None
+    assert row.positions_paid == 42
 
 
 def test_update_contest_handles_error(caplog, boom_conn):
@@ -710,7 +712,8 @@ def test_recently_completed_prefers_entry_fee_at_or_above_minimum(contest_db):
 
     row = contest_db.get_recently_completed_contest("NBA", entry_fee=25, now=_T0)
 
-    assert row is not None and row[0] == 2
+    assert row is not None
+    assert row[0] == 2
 
 
 def test_recently_completed_falls_back_below_minimum_and_orders_by_entries(contest_db):
@@ -721,7 +724,8 @@ def test_recently_completed_falls_back_below_minimum_and_orders_by_entries(conte
 
     row = contest_db.get_recently_completed_contest("NBA", entry_fee=25, now=_T0)
 
-    assert row is not None and row[0] == 2
+    assert row is not None
+    assert row[0] == 2
 
 
 def test_recently_completed_is_per_sport_and_honours_keyword(contest_db):
@@ -731,7 +735,8 @@ def test_recently_completed_is_per_sport_and_honours_keyword(contest_db):
     _complete(contest_db, 2, _T0)
 
     nfl = contest_db.get_recently_completed_contest("NFL", now=_T0)
-    assert nfl is not None and nfl[0] == 2
+    assert nfl is not None
+    assert nfl[0] == 2
     assert contest_db.get_recently_completed_contest("NBA", keyword="%Nope%", now=_T0) is None
 
 
@@ -808,12 +813,12 @@ def test_contest_completed_at_is_none_for_an_unknown_contest(contest_db):
 
 
 def test_update_contest_rejects_naive_now(contest_db):
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="completed_at moments must be timezone-aware"):
         contest_db.update_contest(
             1, positions_paid=1, status="COMPLETED", completed=1, now=datetime.datetime(2026, 10, 5, 4, 0)
         )
 
 
 def test_get_recently_completed_contest_rejects_naive_now(contest_db):
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="completed_at moments must be timezone-aware"):
         contest_db.get_recently_completed_contest("NBA", entry_fee=5, now=datetime.datetime(2026, 10, 5, 4, 0))

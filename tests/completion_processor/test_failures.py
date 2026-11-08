@@ -3,6 +3,11 @@
 import logging
 
 
+def _assert_traceback_is(record: logging.LogRecord, exc_type: type[BaseException]) -> None:
+    assert isinstance(record.exc_info, tuple), "expected the error record to carry a traceback"
+    assert record.exc_info[0] is exc_type
+
+
 def test_undecodable_contest_detail_is_logged_and_skipped(
     conn, sender, insert_contest, make_results, make_processor, caplog
 ):
@@ -11,6 +16,9 @@ def test_undecodable_contest_detail_is_logged_and_skipped(
     with caplog.at_level(logging.ERROR):
         processor.run(conn)
     assert "JSON decoding error: bad json" in caplog.messages
+    record = caplog.records[0]
+    assert (record.levelno, record.exc_info) == (logging.ERROR, None)
+    assert record.getMessage() == "JSON decoding error: bad json"
     assert sender.messages == []
 
 
@@ -22,6 +30,9 @@ def test_contest_detail_missing_fields_is_logged_and_skipped(
     with caplog.at_level(logging.ERROR):
         processor.run(conn)
     assert "Key error: 'payoutSummary'" in caplog.messages
+    record = caplog.records[0]
+    assert (record.levelno, record.exc_info) == (logging.ERROR, None)
+    assert record.getMessage() == "Key error: 'payoutSummary'"
     assert sender.messages == []
 
 
@@ -38,7 +49,7 @@ def test_contest_detail_request_failure_is_logged_with_traceback(
     errors = [r for r in caplog.records if r.levelno == logging.ERROR]
     assert len(errors) == 1
     assert errors[0].getMessage() == "Request error"
-    assert errors[0].exc_info is not None and errors[0].exc_info[0] is RuntimeError
+    _assert_traceback_is(errors[0], RuntimeError)
 
 
 def test_failing_contest_sync_is_logged_with_traceback_and_contest_id(
@@ -54,7 +65,7 @@ def test_failing_contest_sync_is_logged_with_traceback_and_contest_id(
     errors = [r for r in caplog.records if r.levelno == logging.ERROR]
     assert len(errors) == 1
     assert errors[0].getMessage() == "Failed to sync contest dk_id=1"
-    assert errors[0].exc_info is not None and errors[0].exc_info[0] is RuntimeError
+    _assert_traceback_is(errors[0], RuntimeError)
 
 
 def test_a_failing_contest_does_not_stop_the_next_contest_from_syncing(

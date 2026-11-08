@@ -22,6 +22,10 @@ from dk_results.persistence.contestdatabase import ContestDatabase
 logger = logging.getLogger(__name__)
 
 
+class UnknownSportError(Exception):
+    """Raised when a requested sport has no matching Sport subclass."""
+
+
 def _contest_to_row(contest: Contest) -> dict:
     return {
         "dk_id": contest.id,
@@ -91,7 +95,7 @@ def process_sport(
 ) -> None:
     """Process contests for a given sport and send Discord notifications."""
     if sport_name not in choices:
-        raise Exception("Could not find matching Sport subclass")
+        raise UnknownSportError("Could not find matching Sport subclass")
 
     sport_obj = choices[sport_name]
     primary_sport = sport_obj.get_primary_sport()

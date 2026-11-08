@@ -11,6 +11,11 @@ from dk_results.sport_processor import (
 )
 
 
+def _assert_traceback_is(record: logging.LogRecord, exc_type: type[BaseException]) -> None:
+    assert isinstance(record.exc_info, tuple), "expected the error record to carry a traceback"
+    assert record.exc_info[0] is exc_type
+
+
 def _selection_messages(caplog):
     return [r.getMessage() for r in caplog.records if r.name == db_main.logger.name]
 
@@ -137,4 +142,4 @@ def test_optimal_lineup_failure_is_logged_once_with_traceback(
     errors = [r for r in caplog.records if r.levelno == logging.ERROR]
     assert len(errors) == 1
     assert "NFL" in errors[0].getMessage()
-    assert errors[0].exc_info is not None and errors[0].exc_info[0] is RuntimeError
+    _assert_traceback_is(errors[0], RuntimeError)
