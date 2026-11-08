@@ -275,7 +275,7 @@ class DraftKings:
         csv_url = f"https://www.draftkings.com/lineup/getavailableplayerscsv?contestTypeId={contest_types[sport]}&draftGroupId={draft_group}"
 
         # send GET request
-        response = self.session.get(csv_url)
+        response = self.session.get(csv_url, timeout=self.timeout_sec)
 
         # if not successful, raise an exception
         if response.status_code != 200:

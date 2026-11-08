@@ -4,6 +4,7 @@ import sys
 import types
 
 import pytest
+import requests
 from requests.cookies import RequestsCookieJar
 from requests.sessions import Session
 
@@ -114,7 +115,7 @@ def test_requests_fetch_json_passes_headers_and_cookies(monkeypatch):
         def json(self):
             return {"ok": True}
 
-    def fake_get(url, headers=None, cookies=None):
+    def fake_get(url, headers=None, cookies=None, timeout=None):
         captured["url"] = url
         captured["headers"] = headers
         captured["cookies"] = cookies
@@ -135,6 +136,34 @@ def test_requests_fetch_json_passes_headers_and_cookies(monkeypatch):
     assert captured["url"] == "https://www.example.com/lobby"
     assert captured["headers"]["X-Requested-With"] == "XMLHttpRequest"
     assert captured["cookies"] is cookies
+
+
+def test_requests_fetch_json_sets_timeout(monkeypatch):
+    captured = {}
+
+    class FakeResponse:
+        def json(self):
+            return {}
+
+    def fake_get(url, headers=None, cookies=None, timeout=None):
+        captured["timeout"] = timeout
+        return FakeResponse()
+
+    monkeypatch.setattr("dk_results.lobby.fetch.requests.get", fake_get)
+
+    requests_fetch_json("https://www.example.com/lobby", {}, None)
+
+    assert captured["timeout"] == 15
+
+
+def test_requests_fetch_json_propagates_timeout(monkeypatch):
+    def fake_get(url, headers=None, cookies=None, timeout=None):
+        raise requests.Timeout("slow")
+
+    monkeypatch.setattr("dk_results.lobby.fetch.requests.get", fake_get)
+
+    with pytest.raises(requests.Timeout):
+        requests_fetch_json("https://www.example.com/lobby", {}, None)
 
 
 def test_get_lobby_response_uses_injected_client():

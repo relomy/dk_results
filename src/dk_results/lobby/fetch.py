@@ -37,7 +37,7 @@ def requests_fetch_json(
     cookies: RequestsCookieJar | None,
 ) -> Any:
     """Default lobby JSON fetch using requests with existing semantics."""
-    return requests.get(url, headers=headers, cookies=cookies).json()
+    return requests.get(url, headers=headers, cookies=cookies, timeout=15).json()
 
 
 def get_dk_lobby(
