@@ -82,7 +82,8 @@ surface is `pipeline.build_snapshot_v3_envelope`.
 - **Patch seam:** tests patch the I/O names on `collector` because that module
   alone uses them; keep those names there.
 - **Collector seam:** DraftKings and `ContestDatabase` are injectable through
-  `dk`/`contest_db` (both default to real objects). The collector returns a
+  `dk`/`contest_db` (both default to real objects); `ports.py` declares the two
+  ports, `SnapshotDkPort` and `SnapshotContestDbPort`. The collector returns a
   frozen `CollectedSnapshot` for derive and build, and closes only a database it
   opened. It reads each sport's draftables once to set player `matchup` by
   draftable ID; a failed read logs one warning and omits `matchup`.

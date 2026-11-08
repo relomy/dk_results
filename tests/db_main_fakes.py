@@ -175,7 +175,8 @@ class _ScriptedProcessor(SportProcessor):
 
     def __init__(self, run: Callable[[str, type[Sport]], int]):
         super().__init__(
-            contest_db=ContestDatabase(":memory:"),
+            # ``run`` is overridden, so the database is never read: skip opening a real connection.
+            contest_db=ContestDatabase.__new__(ContestDatabase),
             dk=_FakeDraftKings(),
             sheet_factory=lambda _sport: _FakeSheet(),
             bonus_sender=None,
