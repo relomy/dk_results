@@ -187,9 +187,13 @@ class DraftKings:
         return list(csv.reader(csvfile.splitlines(), delimiter=","))
 
     def _extract_csv_from_zip(self, content: bytes, cdir: str) -> list[list[str]] | None:
+        zip_obj: zipfile.ZipFile | None = None
         try:
             zip_obj = zipfile.ZipFile(io.BytesIO(content))
         except zipfile.BadZipFile:
+            pass
+
+        if zip_obj is None:
             self.logger.error("Response was neither CSV nor valid ZIP.")
             return None
 

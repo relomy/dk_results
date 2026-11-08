@@ -11,6 +11,9 @@ def test_undecodable_contest_detail_is_logged_and_skipped(
     with caplog.at_level(logging.ERROR):
         processor.run(conn)
     assert "JSON decoding error: bad json" in caplog.messages
+    record = caplog.records[0]
+    assert (record.levelno, record.exc_info) == (logging.ERROR, None)
+    assert record.getMessage() == "JSON decoding error: bad json"
     assert sender.messages == []
 
 
@@ -22,6 +25,9 @@ def test_contest_detail_missing_fields_is_logged_and_skipped(
     with caplog.at_level(logging.ERROR):
         processor.run(conn)
     assert "Key error: 'payoutSummary'" in caplog.messages
+    record = caplog.records[0]
+    assert (record.levelno, record.exc_info) == (logging.ERROR, None)
+    assert record.getMessage() == "Key error: 'payoutSummary'"
     assert sender.messages == []
 
 
