@@ -24,7 +24,7 @@ def _collect(monkeypatch, tmp_path, make_dk, *, contest_db, dk=None, contest_id=
         min_cash_pts=0.0,
         non_cashing_players={},
     )
-    monkeypatch.setattr(collector, "load_vips", lambda: [])
+    monkeypatch.setattr(collector, "load_vips", list)
     monkeypatch.setattr(collector, "parse_contest_standings", lambda *a, **k: results)
     monkeypatch.setattr(collector, "fetch_vip_lineups", lambda *a, **k: [])
     dk = dk or make_dk(standings_rows=[["header"], ["row"]], leaderboard={})

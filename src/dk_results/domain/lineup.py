@@ -81,12 +81,10 @@ def parse_lineup_string(
                 raise LineupParseError(f"Unresolved lineup slot {position}: {name}")
 
     # sort by DraftKings roster order (RB, RB, WR, WR, etc.), then name
-    sorted_list = sorted(
+    return sorted(
         player_list,
         key=lambda x: (sport_obj.positions.index(x.pos), x.name),
     )
-
-    return sorted_list
 
 
 class Lineup:

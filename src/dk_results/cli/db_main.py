@@ -58,7 +58,7 @@ def build_snapshot_payload(
     producer_commit: str | None = None,
 ) -> dict[str, Any]:
     return build_snapshot_v3_envelope(
-        {sport: contest_id for sport, contest_id in selected_contests.items()},
+        dict(selected_contests),
         standings_limit=standings_limit,
         producer_commit=producer_commit,
     )

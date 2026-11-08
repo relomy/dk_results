@@ -10,7 +10,7 @@ from tests.domain.draftables_payloads import cfb_payload, golf_payload
 
 def _collect_players(monkeypatch, tmp_path, make_contest_db, *, sport, players, dk) -> list[dict]:
     monkeypatch.setattr(collector, "SALARY_DIR", str(tmp_path))
-    monkeypatch.setattr(collector, "load_vips", lambda: [])
+    monkeypatch.setattr(collector, "load_vips", list)
     monkeypatch.setattr(collector, "fetch_vip_lineups", lambda *a, **k: [])
     results = SimpleNamespace(
         vip_list=[],

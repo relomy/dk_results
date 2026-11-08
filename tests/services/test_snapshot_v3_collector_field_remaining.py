@@ -20,7 +20,7 @@ def _collect_with_users(monkeypatch, tmp_path, make_contest_db, make_dk, users, 
         min_cash_pts=0.0,
         non_cashing_players={},
     )
-    monkeypatch.setattr(collector, "load_vips", lambda: [])
+    monkeypatch.setattr(collector, "load_vips", list)
     monkeypatch.setattr(collector, "parse_contest_standings", lambda *a, **k: results)
     monkeypatch.setattr(collector, "fetch_vip_lineups", lambda *a, **k: [])
     row = ContestRow(

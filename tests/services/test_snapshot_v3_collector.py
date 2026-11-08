@@ -27,7 +27,7 @@ def test_collect_source_snapshot_runs_end_to_end_through_injected_fakes(
     )
     # Stub the external-data boundaries; the pure section builders and the new
     # helpers all run for real against the results object.
-    monkeypatch.setattr(collector, "load_vips", lambda: [])
+    monkeypatch.setattr(collector, "load_vips", list)
     monkeypatch.setattr(collector, "parse_contest_standings", lambda *a, **k: results)
     monkeypatch.setattr(collector, "fetch_vip_lineups", lambda *a, **k: [])
 
@@ -58,7 +58,7 @@ def test_collect_source_snapshot_raises_when_standings_unavailable(
     monkeypatch, tmp_path, make_contest_db, make_dk
 ) -> None:
     monkeypatch.setattr(collector, "SALARY_DIR", str(tmp_path))
-    monkeypatch.setattr(collector, "load_vips", lambda: [])
+    monkeypatch.setattr(collector, "load_vips", list)
 
     row = ContestRow(
         dk_id=321,
@@ -84,7 +84,7 @@ def test_collect_source_snapshot_no_draft_group_skips_salary_and_vip_fetch(
     monkeypatch, tmp_path, make_contest_db, make_dk
 ) -> None:
     monkeypatch.setattr(collector, "SALARY_DIR", str(tmp_path))
-    monkeypatch.setattr(collector, "load_vips", lambda: [])
+    monkeypatch.setattr(collector, "load_vips", list)
 
     results = SimpleNamespace(
         vip_list=[],

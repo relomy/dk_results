@@ -86,7 +86,7 @@ def run_export_bundle(args: Any) -> int:
         raise ValueError("At least one --item SPORT:CONTEST_ID is required for bundle export.")
 
     parsed_items = [_parse_bundle_item(item) for item in items]
-    selected_contests: dict[str, int | None] = {sport: contest_id for sport, contest_id in parsed_items}
+    selected_contests: dict[str, int | None] = dict(parsed_items)
     payload = build_snapshot_v3_envelope(
         selected_contests,
         standings_limit=standings_limit,
