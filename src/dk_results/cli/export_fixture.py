@@ -1,6 +1,6 @@
 import argparse
 import sys
-from typing import Sequence
+from collections.abc import Sequence
 
 from dk_results.commands.export_fixture import run_export_bundle, run_export_fixture, run_publish_snapshot
 from dk_results.services.snapshot_v3.pipeline import DEFAULT_STANDINGS_LIMIT
