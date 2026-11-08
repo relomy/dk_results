@@ -4,11 +4,9 @@ import logging
 import sqlite3
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, TypeVar
+from typing import Any
 
 from dk_results.domain.contest import Contest
-
-_T = TypeVar("_T")
 
 COMPLETED_STATUS = "COMPLETED"
 
@@ -30,16 +28,16 @@ def _format_utc(moment: datetime.datetime) -> str:
     return moment.astimezone(datetime.UTC).strftime(_UTC_FORMAT)
 
 
-def _sqlite_guard(
-    default_factory: Callable[[], _T] = lambda: None, *, rollback: bool = False
-) -> Callable[[Callable[..., _T]], Callable[..., _T]]:
+def _sqlite_guard[T](
+    default_factory: Callable[[], T] = lambda: None, *, rollback: bool = False
+) -> Callable[[Callable[..., T]], Callable[..., T]]:
     """Log and swallow ``sqlite3.Error`` from the wrapped method, returning
     ``default_factory()`` instead. Factors out the try/except-log shape used
     by the cash-line/VIP-status methods below (ADR-0011)."""
 
-    def decorator(func: Callable[..., _T]) -> Callable[..., _T]:
+    def decorator(func: Callable[..., T]) -> Callable[..., T]:
         @functools.wraps(func)
-        def wrapper(self: "ContestDatabase", *args: Any, **kwargs: Any) -> _T:
+        def wrapper(self: "ContestDatabase", *args: Any, **kwargs: Any) -> T:
             try:
                 return func(self, *args, **kwargs)
             except sqlite3.Error:
