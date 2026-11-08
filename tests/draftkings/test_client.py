@@ -241,7 +241,7 @@ def test_download_salary_csv_raises_on_non_200(tmp_path):
     session = _Session(response)
     dk = DraftKings(session=session)
 
-    with pytest.raises(Exception):
+    with pytest.raises(Exception, match=r"Requests status != 200\. It is: 500"):
         dk.download_salary_csv("NBA", 123, str(tmp_path / "salary.csv"))
 
 
