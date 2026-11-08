@@ -199,8 +199,11 @@ to a deep module, as the sheet pipeline did with `SportProcessor`.
   contest rows and is injected into workflows. It owns reads for live, upcoming,
   incomplete, and completion state, plus contest synchronization and VIP cash
   status writes. `get_contest_by_id` returns a `ContestRow` (ADR-0006); other
-  queries return tuples. `NotificationStore` separately owns notification and
-  VIP-presence state.
+  queries return tuples. `persistence/sqlite_guard.py` holds `_sqlite_guard`,
+  the decorator behind the cash-line and VIP-status methods: it logs and
+  swallows `sqlite3.Error` (ADR-0011), returning `None` unless given a
+  `default_factory`. `ContestDatabase` re-imports it. `NotificationStore`
+  separately owns notification and VIP-presence state.
 - **Snapshot storage:** `ObjectStore` exposes `get_json(key)` and
   `put_json(key, body, content_type)`; `R2ObjectStore` is its boto3 adapter
   (ADR-0007). The feed builds through `db_main.build_live_snapshot`, so
