@@ -93,7 +93,7 @@ def load_vips() -> list[str]:
     """Load VIP usernames from vips.yaml located next to this file."""
     vip_path = repo_file("vips.yaml")
     try:
-        with open(vip_path, "r") as f:
+        with open(vip_path) as f:
             vips = yaml.safe_load(f) or []
         if not isinstance(vips, list):
             logger.warning("vips.yaml did not contain a list; treating as empty.")

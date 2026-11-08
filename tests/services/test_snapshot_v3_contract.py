@@ -167,7 +167,10 @@ class TestVipLineupsContract:
 
     @pytest.mark.parametrize("field", ["rank", "pmr", "points"])
     def test_string_figure_fails_the_build(self, field: str) -> None:
-        message = _build_error(_vip_bundle(**{field: "55"}))
+        bundle = _vip_bundle()
+        bundle["vip_lineups"][0][field] = "55"
+
+        message = _build_error(bundle)
 
         assert f"sports.nba.contests[0].vip_lineups[0].{field}: Input should be a valid" in message
 

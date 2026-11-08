@@ -25,6 +25,7 @@ from dk_results.services.snapshot_v3.contest_selection import (
     _contest_row_from_detail,
     _ResolvedContest,
 )
+from dk_results.services.snapshot_v3.ports import SnapshotContestDbPort, SnapshotDkPort
 from dk_results.services.snapshot_v3.source_bundle import (
     FieldRemaining as FieldRemaining,  # re-exported: public name from the original path
 )
@@ -86,9 +87,9 @@ def _leaderboard_payout_map(payload: dict[str, Any]) -> dict[str, int]:
 def _resolve_selected_contest(
     *,
     sport_cls: type[Sport],
-    contest_db: ContestDatabase | None,
+    contest_db: SnapshotContestDbPort | None,
     contest_id: int | None,
-    dk: Draftkings,
+    dk: SnapshotDkPort,
 ) -> tuple[str, ContestRow | None]:
     if contest_id is not None:
         selected: ContestRow | None = None
@@ -105,7 +106,7 @@ def _resolve_selected_contest(
     return "primary_live", selected
 
 
-def _resolve_contest_db_overrides(contest_db: ContestDatabase | None, selected: ContestRow) -> dict[str, Any]:
+def _resolve_contest_db_overrides(contest_db: SnapshotContestDbPort | None, selected: ContestRow) -> dict[str, Any]:
     contest_state = selected.contest_state
     contest_completed = selected.contest_completed
     prize_pool = selected.prize_pool if selected.prize_pool not in (None, "") else None
@@ -146,9 +147,9 @@ def _resolve_contest_db_overrides(contest_db: ContestDatabase | None, selected: 
 def _select_contest(
     *,
     sport_cls: type[Sport],
-    contest_db: ContestDatabase | None,
+    contest_db: SnapshotContestDbPort | None,
     contest_id: int | None,
-    dk: Draftkings,
+    dk: SnapshotDkPort,
 ) -> _ResolvedContest:
     """Resolve which contest to snapshot and merge its DB/detail metadata."""
     candidate_rows: list[tuple] = []
@@ -184,7 +185,7 @@ def _select_contest(
     )
 
 
-def _fetch_leaderboard_payouts(dk: Draftkings, dk_id: Any) -> dict[str, int]:
+def _fetch_leaderboard_payouts(dk: SnapshotDkPort, dk_id: Any) -> dict[str, int]:
     """Read the leaderboard payout map, returning an empty map on any failure."""
     try:
         leaderboard_payload = dk.get_leaderboard(int(dk_id))
@@ -195,7 +196,7 @@ def _fetch_leaderboard_payouts(dk: Draftkings, dk_id: Any) -> dict[str, int]:
     return {}
 
 
-def _fetch_matchups(dk: Draftkings, draft_group: Any) -> dict[str, str | None]:
+def _fetch_matchups(dk: SnapshotDkPort, draft_group: Any) -> dict[str, str | None]:
     """Read the draftable ID -> Matchup lookup, returning an empty lookup on any failure."""
     if not draft_group:
         return {}
@@ -206,7 +207,7 @@ def _fetch_matchups(dk: Draftkings, draft_group: Any) -> dict[str, str | None]:
     return {}
 
 
-def _open_contest_db(contest_db: ContestDatabase | None) -> tuple[ContestDatabase | None, bool]:
+def _open_contest_db(contest_db: SnapshotContestDbPort | None) -> tuple[SnapshotContestDbPort | None, bool]:
     if contest_db is not None:
         return contest_db, False
     try:
@@ -215,7 +216,7 @@ def _open_contest_db(contest_db: ContestDatabase | None) -> tuple[ContestDatabas
         return None, False
 
 
-def _download_standings_rows(dk: Draftkings, dk_id: Any) -> list[list[str]]:
+def _download_standings_rows(dk: SnapshotDkPort, dk_id: Any) -> list[list[str]]:
     standings_rows = dk.download_contest_rows(
         int(dk_id),
         timeout=30,
@@ -228,7 +229,7 @@ def _download_standings_rows(dk: Draftkings, dk_id: Any) -> list[list[str]]:
 
 
 def _fetch_vip_lineups_for_contest(
-    dk: Draftkings,
+    dk: SnapshotDkPort,
     dk_id: Any,
     draft_group: Any,
     vips: list[str],
@@ -271,8 +272,8 @@ def _collect_source_snapshot(
     sport: str,
     contest_id: int | None = None,
     standings_limit: int = DEFAULT_STANDINGS_LIMIT,
-    dk: Draftkings | None = None,
-    contest_db: ContestDatabase | None = None,
+    dk: SnapshotDkPort | None = None,
+    contest_db: SnapshotContestDbPort | None = None,
     standings: ContestStandings | None = None,
 ) -> dict[str, Any]:
     """Collect behind injectable edges, optionally using already-parsed standings."""

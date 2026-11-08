@@ -1,6 +1,6 @@
 import datetime
 import logging
-from typing import Any, Type
+from typing import Any
 
 from dk_results.domain.sport import Sport
 
@@ -21,7 +21,7 @@ def get_contests_from_response(
 
 def log_draft_group_event(
     action: str,
-    sport_obj: Sport | Type[Sport],
+    sport_obj: Sport | type[Sport],
     start_date: datetime.datetime,
     draft_group_id: int,
     tag: str,

@@ -57,14 +57,13 @@ def test_contests_db_path_logs_info(tmp_path, monkeypatch, caplog):
 
 def test_upsert_contests_uses_state_path_once(monkeypatch):
     contest = Contest.from_lobby(_payload(202), "NBA")
-    captured = {"db_path": None, "calls": 0}
+    upserted_db_paths: list[str] = []
 
     def fake_db_path():
         return "/tmp/contests.db"
 
     def fake_upsert(db_path, rows):
-        captured["db_path"] = db_path
-        captured["calls"] += 1
+        upserted_db_paths.append(db_path)
         assert rows
 
     monkeypatch.setattr("dk_results.cli.find_new_double_ups.state.contests_db_path", fake_db_path)
@@ -72,4 +71,4 @@ def test_upsert_contests_uses_state_path_once(monkeypatch):
 
     _upsert_contests([contest])
 
-    assert captured == {"db_path": "/tmp/contests.db", "calls": 1}
+    assert upserted_db_paths == ["/tmp/contests.db"]

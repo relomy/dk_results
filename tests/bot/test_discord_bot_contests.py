@@ -1,7 +1,5 @@
 """Tests for the !contests command and its single live-contest lookup."""
 
-import types
-
 import pytest
 
 from dk_results.bot import discord_bot
@@ -116,11 +114,6 @@ def test_fetch_live_contest_closes_db(monkeypatch):
         def close(self):
             captured["closed"] = True
 
-    class DummySport:
-        name = "NBA"
-        sheet_min_entry_fee = 5
-        keyword = "%"
-
     monkeypatch.setattr(discord_bot, "ContestDatabase", FakeDB)
 
     assert discord_bot._fetch_live_contest(DummySport) == (
@@ -135,19 +128,11 @@ def test_fetch_live_contest_closes_db(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_contests_invalid_sport_config(monkeypatch):
-    class DummySport:
-        name = None
-        sheet_min_entry_fee = 5
-        keyword = "%"
+    NamelessSport = type("NamelessSport", (DummySport,), {"name": None})
 
-    monkeypatch.setattr(discord_bot, "_sport_choices", lambda: {"nba": DummySport})
+    monkeypatch.setattr(discord_bot, "_sport_choices", lambda: {"nba": NamelessSport})
 
-    ctx = types.SimpleNamespace(sent=[])
+    ctx = FakeCtx()
 
-    async def _send(message: str):
-        ctx.sent.append(message)
-
-    ctx.send = _send
-
-    await discord_bot.contests(_settings(), ctx, "nba")
+    await discord_bot.contests(_settings(), _ctx(ctx), "nba")
     assert ctx.sent == ["Invalid sport configuration."]

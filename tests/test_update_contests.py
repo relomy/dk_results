@@ -6,6 +6,7 @@ module covers what remains here: config loading, sender wiring, processor
 assembly, and ``main()``.
 """
 
+import dataclasses
 import logging
 import runpy
 import sqlite3
@@ -17,24 +18,23 @@ import dk_results.cli.update_contests as update_contests
 from dk_results.config import RuntimeSettings
 
 
-def _settings(**overrides) -> RuntimeSettings:
-    values = {
-        "spreadsheet_id": "sheet",
-        "dfs_state_dir": None,
-        "sheet_gids_file": "sheet_gids.yaml",
-        "sheet_gid_map": {"NBA": 10},
-        "discord_notifications_enabled": True,
-        "contest_warning_minutes": 25,
-        "warning_schedule_file": "contest_warning_schedules.yaml",
-        "warning_schedules": {"default": [25], "nba": [60]},
-        "default_warning_schedule": [25],
-        "dashboard_base_url": None,
-        "bot_token": None,
-        "discord_log_file": None,
-        "discord_channel_id": None,
-    }
-    values.update(overrides)
-    return RuntimeSettings(**values)
+def _settings(**overrides: object) -> RuntimeSettings:
+    base = RuntimeSettings(
+        spreadsheet_id="sheet",
+        dfs_state_dir=None,
+        sheet_gids_file="sheet_gids.yaml",
+        sheet_gid_map={"NBA": 10},
+        discord_notifications_enabled=True,
+        contest_warning_minutes=25,
+        warning_schedule_file="contest_warning_schedules.yaml",
+        warning_schedules={"default": [25], "nba": [60]},
+        default_warning_schedule=[25],
+        dashboard_base_url=None,
+        bot_token=None,
+        discord_log_file=None,
+        discord_channel_id=None,
+    )
+    return dataclasses.replace(base, **overrides)
 
 
 @pytest.fixture

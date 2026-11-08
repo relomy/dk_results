@@ -1,3 +1,4 @@
+import dataclasses
 import logging
 
 import pytest
@@ -522,7 +523,7 @@ def test_classic_nfl_resolves_trailing_space_on_last_dst_slot():
 
 def test_contest_standings_is_frozen():
     standings = parse_contest_standings(NFLSport, _salary_rows(), _standings_rows(), positions_paid=1)
-    with pytest.raises(Exception):
+    with pytest.raises(dataclasses.FrozenInstanceError):
         standings.min_rank = 99
 
 

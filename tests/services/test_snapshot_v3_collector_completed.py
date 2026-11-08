@@ -45,9 +45,11 @@ class _StandingsRecordingDK(_FakeDK):
         super().__init__(**kwargs)
         self.standings_requests: list[int] = []
 
-    def download_contest_rows(self, dk_id, timeout=30, cookies_dump_file=None, contest_dir=None):
-        self.standings_requests.append(dk_id)
-        return super().download_contest_rows(dk_id, timeout, cookies_dump_file, contest_dir)
+    def download_contest_rows(self, contest_id, /, *, timeout=30, cookies_dump_file=None, contest_dir=None):
+        self.standings_requests.append(contest_id)
+        return super().download_contest_rows(
+            contest_id, timeout=timeout, cookies_dump_file=cookies_dump_file, contest_dir=contest_dir
+        )
 
 
 def _collect_contest_with_state(monkeypatch, tmp_path, *, state, completed_at):

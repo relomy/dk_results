@@ -48,8 +48,8 @@ class _RemainingMetricsDK(_FakeDK):
         )
         self.statuses = [*statuses, statuses[1]]
 
-    def download_salary_csv(self, _name, _draft_group, path):
-        with open(path, "w", newline="", encoding="utf-8") as handle:
+    def download_salary_csv(self, sport, draft_group, filename, /):
+        with open(filename, "w", newline="", encoding="utf-8") as handle:
             writer = csv.writer(handle)
             writer.writerow(["Position", "Name", "Roster Position", "Salary", "Game Info", "TeamAbbrev"])
             for name, pos, salary, status in zip(
@@ -188,9 +188,9 @@ class _LeverageMetricsDK(_RemainingMetricsDK):
             ]
         )
 
-    def download_salary_csv(self, name, draft_group, path):
-        super().download_salary_csv(name, draft_group, path)
-        with open(path, "a", newline="", encoding="utf-8") as handle:
+    def download_salary_csv(self, sport, draft_group, filename, /):
+        super().download_salary_csv(sport, draft_group, filename)
+        with open(filename, "a", newline="", encoding="utf-8") as handle:
             csv.writer(handle).writerows(
                 [
                     ["F", "George", "F", 3000, "In Progress", "AAA"],

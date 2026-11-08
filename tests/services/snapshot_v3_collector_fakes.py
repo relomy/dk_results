@@ -24,16 +24,22 @@ class _FakeDK:
     def get_contest_detail(self, _contest_id):
         return self._detail
 
-    def get_leaderboard(self, _contest_id):
+    def get_leaderboard(self, contest_id, *, timeout=None):
         return self._leaderboard
 
-    def download_salary_csv(self, _name, _draft_group, path):
-        with open(path, "w", newline="", encoding="utf-8") as handle:
+    def download_salary_csv(self, sport, draft_group, filename, /):
+        with open(filename, "w", newline="", encoding="utf-8") as handle:
             handle.write("Position,Name+ID,Name,ID,Roster Position,Salary,Game Info,TeamAbbrev,AvgPointsPerGame\n")
-        self.salary_path = path
+        self.salary_path = filename
 
-    def download_contest_rows(self, _dk_id, timeout=30, cookies_dump_file=None, contest_dir=None):
+    def download_contest_rows(self, contest_id, /, *, timeout=30, cookies_dump_file=None, contest_dir=None):
         return self.standings_rows
+
+    def get_entry(self, draft_group, entry_key, *, timeout=None, session=None):
+        raise AssertionError("this fake serves no VIP entries; use a subclass that does")
+
+    def clone_auth_to(self, target_session):
+        return None
 
     def get_draftables(self, draft_group, timeout=None):
         self.draftables_requests.append(draft_group)

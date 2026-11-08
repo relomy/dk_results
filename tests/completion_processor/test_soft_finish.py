@@ -73,7 +73,8 @@ def test_soft_finish_scores_are_shown_to_the_cent_rounding_half_up(
     run_soft_finish, board, cashed_row, top, cashing, shown
 ):
     sender = run_soft_finish(payload=board(top, cashing, cashed_row("x")), **LINKED)
-    assert sender.messages == [_summary(*shown, "none")]
+    top_shown, cashing_shown = shown
+    assert sender.messages == [_summary(top_shown, cashing_shown, "none")]
 
 
 def test_soft_finish_announcement_shows_time_left_until_the_start(run_soft_finish):
