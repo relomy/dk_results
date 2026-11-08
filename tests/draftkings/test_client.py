@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import logging
+from http.cookiejar import CookieJar
 from pathlib import Path
 
 import pytest
 import requests
-from requests.cookies import RequestsCookieJar
+from requests.cookies import RequestsCookieJar, create_cookie
 from requests.models import Response
 from requests.sessions import Session
 
@@ -101,6 +102,32 @@ def test_clone_auth_to_fallbacks_on_cookie_error():
 
     assert target.headers["X"] == "Y"
     assert target.cookies.get("a") == "1"
+
+
+def test_clone_auth_to_copies_from_plain_cookiejar_without_get_dict():
+    """A stdlib CookieJar has no get_dict; the real AttributeError routes to the per-cookie copy."""
+    jar = CookieJar()
+    jar.set_cookie(create_cookie("a", "1", domain="example.com", path="/"))
+    session = _FakeSession(_FakeResponse(json_data={}))
+    session.__dict__["cookies"] = jar
+
+    target = Session()
+    DraftKings(session=session).clone_auth_to(target)
+
+    assert target.headers["X"] == "Y"
+    assert target.cookies.get("a", domain="example.com") == "1"
+
+
+def test_clone_auth_to_survives_mapping_cookies_that_hold_no_cookie_objects():
+    """Session.cookies set to a plain dict: get_dict and the per-cookie attributes both really fail."""
+    session = _FakeSession(_FakeResponse(json_data={}))
+    session.__dict__["cookies"] = {"a": "1"}
+
+    target = Session()
+    DraftKings(session=session).clone_auth_to(target)
+
+    assert target.headers["X"] == "Y"
+    assert len(target.cookies) == 0
 
 
 def test_get_leaderboard_uses_timeout_and_session():
