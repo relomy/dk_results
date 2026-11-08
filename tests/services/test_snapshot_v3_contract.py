@@ -52,7 +52,7 @@ def _build(bundle: dict[str, Any]) -> dict[str, Any]:
 
 class TestPipelineEnforcesContract:
     def test_wrongly_typed_field_fails_the_build_with_its_contract_path(self) -> None:
-        with pytest.raises(ValueError) as excinfo:
+        with pytest.raises(ValueError, match="Snapshot v3 validation failed: ") as excinfo:
             _build(_bundle(max_entries="100"))
 
         message = str(excinfo.value)
@@ -61,7 +61,7 @@ class TestPipelineEnforcesContract:
 
     def test_hand_written_validator_still_runs_after_the_contract_passes(self) -> None:
         # Coherence between the sport key and the contest is not a shape the models express.
-        with pytest.raises(ValueError, match="sports.nba.contests\\[0\\].sport must match sport key"):
+        with pytest.raises(ValueError, match=r"sports\.nba\.contests\[0\]\.sport must match sport key"):
             _build(_bundle(sport="nfl"))
 
     def test_a_fault_both_checks_catch_is_reported_once(self) -> None:
@@ -79,7 +79,7 @@ class TestPipelineEnforcesContract:
             lambda envelope: calls.append(envelope) or [],
         )
 
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="Snapshot v3 validation failed: "):
             _build(_bundle(max_entries="100"))
 
         assert calls == []
@@ -148,7 +148,7 @@ def _vip_bundle(*, slots: list[dict[str, Any]] | None = None, **row: Any) -> dic
 
 
 def _build_error(bundle: dict[str, Any]) -> str:
-    with pytest.raises(ValueError) as excinfo:
+    with pytest.raises(ValueError, match="Snapshot v3 validation failed: ") as excinfo:
         _build(bundle)
     return str(excinfo.value)
 

@@ -1,5 +1,7 @@
 """Contest selection: explicit id and primary live, against the fake contest DB."""
 
+import pytest
+
 from dk_results.persistence.contestdatabase import ContestRow
 from dk_results.services.snapshot_v3 import collector
 from dk_results.services.snapshot_v3.collector import _select_contest
@@ -77,20 +79,12 @@ def test_select_contest_primary_live_selects_live_contest(make_contest_db, make_
 
 def test_select_contest_raises_without_db_for_primary_live(make_dk) -> None:
     sport_cls = collector._sport_choices()["NBA"]
-    try:
+    with pytest.raises(RuntimeError, match="Contest DB unavailable for primary live selection"):
         _select_contest(sport_cls=sport_cls, contest_db=None, contest_id=None, dk=make_dk())
-    except RuntimeError as exc:
-        assert "unavailable" in str(exc).lower()
-    else:
-        raise AssertionError("expected RuntimeError")
 
 
 def test_select_contest_raises_when_no_contest_found(make_contest_db, make_dk) -> None:
     sport_cls = collector._sport_choices()["NBA"]
     db = make_contest_db(by_id=None, live=None)
-    try:
+    with pytest.raises(RuntimeError, match="No contest found for sport=NBA"):
         _select_contest(sport_cls=sport_cls, contest_db=db, contest_id=None, dk=make_dk())
-    except RuntimeError as exc:
-        assert "no contest found" in str(exc).lower()
-    else:
-        raise AssertionError("expected RuntimeError")
