@@ -115,6 +115,19 @@ def test_load_vips_unparsable_yaml_returns_empty(tmp_path, monkeypatch, caplog):
     assert caplog.messages == [f"failed to load vips.yaml from {path}"]
 
 
+@pytest.mark.parametrize(
+    "content", ["!!bool foo", "!!timestamp abc", "[" * 5000], ids=["bool-tag", "timestamp-tag", "deep-nesting"]
+)
+def test_load_vips_loader_internal_errors_return_empty(tmp_path, monkeypatch, caplog, content):
+    # Explicit-tag and deep-nesting YAML raise KeyError, AttributeError and RecursionError.
+    path = tmp_path / "vips.yaml"
+    path.write_text(content)
+    monkeypatch.setattr(update_contests, "repo_file", lambda *_parts: path)
+
+    assert update_contests._load_vips() == []
+    assert caplog.messages == [f"failed to load vips.yaml from {path}"]
+
+
 def test_load_vips_undecodable_bytes_returns_empty(tmp_path, monkeypatch):
     path = tmp_path / "vips.yaml"
     path.write_bytes(b"\xff\xfe\x00bad")
