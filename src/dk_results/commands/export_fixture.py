@@ -126,7 +126,7 @@ def _coerce_iso(value: Any, field_name: str) -> str:
     text = str(value or "").strip()
     if not text:
         raise ValueError(f"Snapshot payload missing required field: {field_name}")
-    datetime.fromisoformat(text.replace("Z", "+00:00"))
+    datetime.fromisoformat(text)
     return text
 
 
