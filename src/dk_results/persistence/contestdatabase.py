@@ -702,7 +702,7 @@ class ContestDatabase:
         )
         self.conn.commit()
 
-    @_sqlite_guard(default_factory=list)
+    @_sqlite_guard(default_factory=list[VipCashStatus])
     def get_vip_cash_status(self, dk_id: int) -> list[VipCashStatus]:
         """Fetch the persisted VIP cash-status rows for a contest."""
         cur = self.conn.cursor()
