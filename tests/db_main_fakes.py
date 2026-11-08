@@ -1,8 +1,16 @@
 """Shared fakes and builders for the db_main test modules."""
 
 import datetime
+from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
+import requests
+
+from dk_results.domain.contest_standings import ContestStandings
+from dk_results.domain.sport import Sport
+from dk_results.domain.user import User
+from dk_results.persistence.contestdatabase import ContestDatabase
 from dk_results.sport_processor import (
     SportProcessor,
     SportProcessorConfig,
@@ -72,7 +80,7 @@ class _FakeContestDb:
 
 
 class _FakeDraftKings:
-    def download_salary_csv(self, _sport: str, _draft_group: int, filename: str) -> None:
+    def download_salary_csv(self, sport: str, draft_group: int, filename: str) -> None:
         path = Path(filename)
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(_salary_csv_text(), encoding="utf-8")
@@ -80,7 +88,20 @@ class _FakeDraftKings:
     def download_contest_rows(self, *_args, **_kwargs):
         return _standings_rows()
 
-    def clone_auth_to(self, _session) -> None:
+    def get_leaderboard(self, contest_id: int, *, timeout: int | None = None) -> dict[str, Any]:
+        raise NotImplementedError
+
+    def get_entry(
+        self,
+        draft_group: int,
+        entry_key: str,
+        *,
+        timeout: int | None = None,
+        session: requests.Session | None = None,
+    ) -> dict[str, Any]:
+        raise NotImplementedError
+
+    def clone_auth_to(self, target_session: requests.Session) -> None:
         pass
 
 
@@ -146,4 +167,37 @@ def _make_processor(
         ),
         now=datetime.datetime(2026, 2, 14, 12, 0, 0),
         vips=vips,
+    )
+
+
+class _ScriptedProcessor(SportProcessor):
+    """A SportProcessor whose ``run`` outcome is scripted by the test."""
+
+    def __init__(self, run: Callable[[str, type[Sport]], int]):
+        super().__init__(
+            contest_db=ContestDatabase(":memory:"),
+            dk=_FakeDraftKings(),
+            sheet_factory=lambda _sport: _FakeSheet(),
+            bonus_sender=None,
+            config=SportProcessorConfig(salary_dir="", contest_dir=".", cookies_file="."),
+            now=datetime.datetime(2026, 2, 14, 12, 0, 0),
+            vips=[],
+        )
+        self._run = run
+
+    def run(self, sport_name: str, sport_cls: type[Sport]) -> int:
+        return self._run(sport_name, sport_cls)
+
+
+def _make_standings(*, users: list[User] | None = None) -> ContestStandings:
+    return ContestStandings(
+        players={},
+        users=users or [],
+        vip_list=[],
+        positions_paid=None,
+        min_rank=0,
+        min_cash_pts=0.0,
+        non_cashing_users=0,
+        non_cashing_avg_pmr=0.0,
+        non_cashing_players={},
     )

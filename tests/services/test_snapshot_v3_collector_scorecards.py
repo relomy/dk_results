@@ -36,12 +36,12 @@ class _ScorecardDK(_FakeDK):
         self._delays = delays or {}
         self.entry_requests: list[str] = []
 
-    def get_entry(self, _draft_group, entry_key, *, timeout=None, session=None):
+    def get_entry(self, draft_group, entry_key, *, timeout=None, session=None):
         time.sleep(self._delays.get(entry_key, 0))
         self.entry_requests.append(entry_key)
         return {"entries": [{"roster": {"scorecards": self._scorecards[entry_key]}}]}
 
-    def clone_auth_to(self, _session):
+    def clone_auth_to(self, target_session):
         return None
 
 

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import datetime
+from collections.abc import Sequence
+from typing import Any
 
 from dfs_common.sheets import NumberFormat, SheetClient
 
@@ -10,17 +12,25 @@ from dk_results.sheets.dfs_sheet_service import DfsSheetService
 from dk_results.sheets.sheets_service import build_dfs_sheet_service
 
 
-class RecordingRepo:
+class RecordingRepo(DfsSheetRepository):
     """Records calls to write_range_with_format without exercising SheetClient/Sheets API internals."""
 
-    def __init__(self):
-        self.write_range_with_format_calls = []
-        self.write_range_calls = []
+    def __init__(self) -> None:
+        super().__init__(SheetClient(spreadsheet_id="sheet-id", service=FakeService()))
+        self.write_range_with_format_calls: list[
+            tuple[Sequence[Sequence[Any]], str, Sequence[tuple[str, NumberFormat]]]
+        ] = []
+        self.write_range_calls: list[tuple[Sequence[Sequence[Any]], str]] = []
 
-    def write_range_with_format(self, values, cell_range, formats):
+    def write_range_with_format(
+        self,
+        values: Sequence[Sequence[Any]],
+        cell_range: str,
+        formats: Sequence[tuple[str, NumberFormat]],
+    ) -> None:
         self.write_range_with_format_calls.append((values, cell_range, formats))
 
-    def write_range(self, values, cell_range):
+    def write_range(self, values: Sequence[Sequence[Any]], cell_range: str) -> None:
         self.write_range_calls.append((values, cell_range))
 
 

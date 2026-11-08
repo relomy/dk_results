@@ -4,11 +4,12 @@ import logging
 from types import SimpleNamespace
 
 import dk_results.cli.db_main as db_main
-from dk_results.domain.sport import NFLSport
+from dk_results.domain.sport import NFLSport, Sport
+from dk_results.domain.user import User
 from dk_results.sport_processor import (
     NoLiveContestError,
 )
-from tests.db_main_fakes import _FakeContestDb, _FakeSheet, _make_processor
+from tests.db_main_fakes import _FakeContestDb, _FakeSheet, _make_processor, _make_standings, _ScriptedProcessor
 
 
 def _selection_messages(caplog):
@@ -16,15 +17,14 @@ def _selection_messages(caplog):
 
 
 def test_select_live_contests_logs_one_summary_instead_of_a_warning_per_idle_sport(caplog):
-    class _Processor:
-        def run(self, sport_name, sport_cls):
-            if sport_name == "NFL":
-                return 123
-            raise NoLiveContestError(sport_name)
+    def _run(sport_name: str, sport_cls: type[Sport]) -> int:
+        if sport_name == "NFL":
+            return 123
+        raise NoLiveContestError(sport_name)
 
     names = ["NBA", "NFL", "NHL"]
     with caplog.at_level(logging.DEBUG):
-        selected = db_main.select_live_contests(_Processor(), names, dict.fromkeys(names, object))
+        selected = db_main.select_live_contests(_ScriptedProcessor(_run), names, dict.fromkeys(names, NFLSport))
 
     assert selected == {"NFL": 123}
     assert [r for r in caplog.records if r.levelno >= logging.WARNING] == []
@@ -36,24 +36,22 @@ def test_select_live_contests_logs_one_summary_instead_of_a_warning_per_idle_spo
 
 
 def test_select_live_contests_summary_when_nothing_is_live(caplog):
-    class _Processor:
-        def run(self, sport_name, sport_cls):
-            raise NoLiveContestError(sport_name)
+    def _run(sport_name: str, sport_cls: type[Sport]) -> int:
+        raise NoLiveContestError(sport_name)
 
     names = ["NBA", "NFL"]
     with caplog.at_level(logging.INFO):
-        assert db_main.select_live_contests(_Processor(), names, dict.fromkeys(names, object)) == {}
+        assert db_main.select_live_contests(_ScriptedProcessor(_run), names, dict.fromkeys(names, NFLSport)) == {}
 
     assert _selection_messages(caplog) == ["contest_selection selected=none no_live=2 requested=2"]
 
 
 def test_select_live_contests_omits_idle_line_when_every_sport_is_live(caplog):
-    class _Processor:
-        def run(self, sport_name, sport_cls):
-            return 1
+    def _run(sport_name: str, sport_cls: type[Sport]) -> int:
+        return 1
 
     with caplog.at_level(logging.DEBUG):
-        db_main.select_live_contests(_Processor(), ["NBA"], {"NBA": object})
+        db_main.select_live_contests(_ScriptedProcessor(_run), ["NBA"], {"NBA": NFLSport})
 
     assert _selection_messages(caplog) == ["contest_selection selected=NBA no_live=0 requested=1"]
 
@@ -83,7 +81,7 @@ def test_write_train_info_logs_one_debug_line_for_all_clusters(monkeypatch, capl
     processor = _make_processor(_FakeContestDb(), vips=[], sheet=sheet)
 
     with caplog.at_level(logging.DEBUG):
-        processor._write_train_info(sheet, SimpleNamespace(users=[object()]))
+        processor._write_train_info(sheet, _make_standings(users=[User(1, "e1", "one", "20", 100.0, "")]))
 
     debug = [r.getMessage() for r in caplog.records if r.levelno == logging.DEBUG]
     assert debug == ["train_clusters top=5:101.5:1.5,3:102.5:1.5,2:103.5:1.5"]
@@ -108,7 +106,7 @@ def test_optimal_lineup_logs_one_debug_line_for_all_player_events(monkeypatch, c
 
     with caplog.at_level(logging.DEBUG):
         processor._maybe_write_optimal_lineup(
-            sheet=_FakeSheet(), results=SimpleNamespace(players={}), sport_cls=NFLSport, sport_name="NFL"
+            sheet=_FakeSheet(), results=_make_standings(), sport_cls=NFLSport, sport_name="NFL"
         )
 
     debug = [r.getMessage() for r in caplog.records if r.levelno == logging.DEBUG]
@@ -128,7 +126,7 @@ def test_optimal_lineup_failure_is_logged_once_with_traceback(monkeypatch, caplo
 
     with caplog.at_level(logging.ERROR):
         processor._maybe_write_optimal_lineup(
-            sheet=_FakeSheet(), results=SimpleNamespace(players={}), sport_cls=NFLSport, sport_name="NFL"
+            sheet=_FakeSheet(), results=_make_standings(), sport_cls=NFLSport, sport_name="NFL"
         )
 
     errors = [r for r in caplog.records if r.levelno == logging.ERROR]

@@ -1,5 +1,7 @@
 """collect_raw_bundle: the raw bundle shape and its VIP name-to-player-key mapping."""
 
+import json
+
 from dk_results.services.snapshot_v3.collector import collect_raw_bundle
 from dk_results.services.snapshot_v3.derive import derive_threat
 from dk_results.services.snapshot_v3.vip_normalize import _build_unique_name_to_player_key_from_vip_lineups
@@ -19,7 +21,7 @@ def test_build_unique_name_to_player_key_drops_ambiguous_name() -> None:
 
 
 def test_build_unique_name_to_player_key_skips_non_list_players_live() -> None:
-    vip_lineups = [{"players_live": "not-a-list"}, "not-a-dict"]
+    vip_lineups = json.loads('[{"players_live": "not-a-list"}, "not-a-dict"]')
     assert _build_unique_name_to_player_key_from_vip_lineups(vip_lineups) == {}
 
 
