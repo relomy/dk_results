@@ -1,6 +1,5 @@
 import dataclasses
 import logging
-from types import SimpleNamespace
 
 import pytest
 from dfs_common.sheets import NumberFormat
@@ -11,7 +10,8 @@ from dk_results.domain.contest_standings import (
     players_to_values,
 )
 from dk_results.domain.dfs_sheet_domain import CellFormat
-from dk_results.domain.sport import GolfSport, NBASport, NFLSport
+from dk_results.domain.sport import GolfSport, NBASport, NFLShowdownSport, NFLSport
+from dk_results.domain.user import User
 
 
 def _salary_rows():
@@ -373,11 +373,6 @@ def test_players_to_values_format_plan_uses_pga_salary_column():
     ]
 
 
-class DummyShowdownSport:
-    name = "NFLShowdown"
-    positions = ("CPT", "FLEX")
-
-
 def _showdown_salary():
     return [
         ["Position", "", "Name", "", "Roster Pos", "Salary", "Game Info", "Team", "APPG"],
@@ -395,7 +390,7 @@ def _showdown_standings():
 
 def test_showdown_non_cashing_and_vip():
     standings = parse_contest_standings(
-        DummyShowdownSport,
+        NFLShowdownSport,
         _showdown_salary(),
         _showdown_standings(),
         positions_paid=1,
@@ -441,13 +436,14 @@ def _showdown_standings_with_trailing_space():
 
 def test_showdown_resolves_dst_in_last_flex_slot_with_trailing_space():
     standings = parse_contest_standings(
-        DummyShowdownSport,
+        NFLShowdownSport,
         _showdown_salary_with_dst(),
         _showdown_standings_with_trailing_space(),
         positions_paid=1,
     )
 
     user = standings.users[0]
+    assert user.lineupobj
     assert [slot.pos for slot in user.lineupobj.lineup] == ["CPT", "FLEX"]
     assert [slot.name for slot in user.lineupobj.lineup] == ["Josh Allen", "Lions"]
 
@@ -459,13 +455,14 @@ def test_showdown_resolves_dst_in_captain_slot():
     ]
 
     standings = parse_contest_standings(
-        DummyShowdownSport,
+        NFLShowdownSport,
         _showdown_salary_with_dst(),
         standings_rows,
         positions_paid=1,
     )
 
     user = standings.users[0]
+    assert user.lineupobj
     assert [slot.pos for slot in user.lineupobj.lineup] == ["CPT", "FLEX"]
     assert [slot.name for slot in user.lineupobj.lineup] == ["Lions", "Josh Allen"]
 
@@ -484,13 +481,14 @@ def test_showdown_resolves_multi_word_name_in_trailing_space_last_slot():
     ]
 
     standings = parse_contest_standings(
-        DummyShowdownSport,
+        NFLShowdownSport,
         salary_rows,
         standings_rows,
         positions_paid=1,
     )
 
     user = standings.users[0]
+    assert user.lineupobj
     assert [slot.pos for slot in user.lineupobj.lineup] == ["CPT", "FLEX"]
     assert [slot.name for slot in user.lineupobj.lineup] == ["Josh Allen", "Amon-Ra St. Brown"]
 
@@ -518,14 +516,16 @@ def test_classic_nfl_resolves_trailing_space_on_last_dst_slot():
     standings = parse_contest_standings(NFLSport, salary_rows, standings_rows, positions_paid=1)
 
     user = standings.users[0]
+    assert user.lineupobj
     assert user.lineupobj.lineup[-1].pos == "DST"
     assert user.lineupobj.lineup[-1].name == "Bears"
 
 
 def test_contest_standings_is_frozen():
     standings = parse_contest_standings(NFLSport, _salary_rows(), _standings_rows(), positions_paid=1)
+    field_name = "min_rank"
     with pytest.raises(dataclasses.FrozenInstanceError):
-        standings.min_rank = 99
+        setattr(standings, field_name, 99)
 
 
 def test_vip_log_uses_vip_user_format(caplog):
@@ -582,14 +582,16 @@ def test_parse_without_id_column_leaves_draftable_id_unset():
     assert player.salary == 6000
 
 
+def _user() -> User:
+    return User(rank=1, player_id="1", name="UserA", pmr="0", pts=1.0, lineup_str="")
+
+
 def test_top_showdown_captains_are_one_info_line_and_not_printed(caplog, capsys):
     from dk_results.domain import contest_standings as contest_standings_module
 
     logger = logging.getLogger("test.captains")
     with caplog.at_level(logging.DEBUG):
-        contest_standings_module._log_top_showdown_captains(
-            SimpleNamespace(name="NFLShowdown"), [object()] * 4, {"A": 3, "B": 1}, logger
-        )
+        contest_standings_module._log_top_showdown_captains(NFLShowdownSport, [_user()] * 4, {"A": 3, "B": 1}, logger)
 
     assert capsys.readouterr().out == ""
     assert [(r.levelno, r.getMessage()) for r in caplog.records] == [
@@ -602,7 +604,7 @@ def test_top_showdown_captains_logs_nothing_for_other_sports(caplog):
 
     with caplog.at_level(logging.DEBUG):
         contest_standings_module._log_top_showdown_captains(
-            SimpleNamespace(name="NFL"), [object()], {"A": 1}, logging.getLogger("test.captains")
+            NFLSport, [_user()], {"A": 1}, logging.getLogger("test.captains")
         )
 
     assert caplog.records == []
