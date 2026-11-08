@@ -1,6 +1,8 @@
 import datetime
 import logging
 import sqlite3
+from collections.abc import Callable, Iterator
+from typing import TypeVar, overload
 
 import pytest
 
@@ -16,6 +18,42 @@ def contest_db():
         yield db
     finally:
         db.close()
+
+
+_CursorT = TypeVar("_CursorT", bound=sqlite3.Cursor)
+
+
+class _BoomCursor(sqlite3.Cursor):
+    """A cursor whose statements always fail with ``sqlite3.Error``."""
+
+    def execute(self, *_args, **_kwargs):
+        raise sqlite3.Error("boom")
+
+
+class _BoomConn(sqlite3.Connection):
+    """A real connection that hands out failing cursors and notes whether it was rolled back."""
+
+    rolled_back = False
+
+    @overload
+    def cursor(self, factory: None = None) -> _BoomCursor: ...
+    @overload
+    def cursor(self, factory: Callable[[sqlite3.Connection], _CursorT]) -> _CursorT: ...
+    def cursor(self, factory=None):
+        return (factory or _BoomCursor)(self)
+
+    def rollback(self):
+        self.rolled_back = True
+        super().rollback()
+
+
+@pytest.fixture
+def boom_conn() -> Iterator[_BoomConn]:
+    conn = sqlite3.connect(":memory:", factory=_BoomConn)
+    try:
+        yield conn
+    finally:
+        conn.close()
 
 
 def _insert_contest(
@@ -229,39 +267,23 @@ def test_sync_draft_group_start_dates_handles_invalid_existing_date(contest_db):
     assert updates == 1
 
 
-def test_get_live_contest_sqlite_error(monkeypatch):
+def test_get_live_contest_sqlite_error(monkeypatch, boom_conn):
     db = ContestDatabase(":memory:")
     original_conn = db.conn
 
-    class BoomCursor:
-        def execute(self, *_args, **_kwargs):
-            raise sqlite3.Error("boom")
-
-    class BoomConn:
-        def cursor(self):
-            return BoomCursor()
-
     try:
-        db.conn = BoomConn()
+        db.conn = boom_conn
         assert db.get_live_contest("NBA") is None
     finally:
         original_conn.close()
 
 
-def test_get_live_contests_sqlite_error(monkeypatch):
+def test_get_live_contests_sqlite_error(monkeypatch, boom_conn):
     db = ContestDatabase(":memory:")
     original_conn = db.conn
 
-    class BoomCursor:
-        def execute(self, *_args, **_kwargs):
-            raise sqlite3.Error("boom")
-
-    class BoomConn:
-        def cursor(self):
-            return BoomCursor()
-
     try:
-        db.conn = BoomConn()
+        db.conn = boom_conn
         assert db.get_live_contests() == []
     finally:
         original_conn.close()
@@ -301,39 +323,23 @@ def test_get_next_upcoming_contest_any_returns_row(contest_db):
     assert row[0] == 2
 
 
-def test_get_next_upcoming_contest_sqlite_error(monkeypatch):
+def test_get_next_upcoming_contest_sqlite_error(monkeypatch, boom_conn):
     db = ContestDatabase(":memory:")
     original_conn = db.conn
 
-    class BoomCursor:
-        def execute(self, *_args, **_kwargs):
-            raise sqlite3.Error("boom")
-
-    class BoomConn:
-        def cursor(self):
-            return BoomCursor()
-
     try:
-        db.conn = BoomConn()
+        db.conn = boom_conn
         assert db.get_next_upcoming_contest("NBA") is None
     finally:
         original_conn.close()
 
 
-def test_get_next_upcoming_contest_any_sqlite_error(monkeypatch):
+def test_get_next_upcoming_contest_any_sqlite_error(monkeypatch, boom_conn):
     db = ContestDatabase(":memory:")
     original_conn = db.conn
 
-    class BoomCursor:
-        def execute(self, *_args, **_kwargs):
-            raise sqlite3.Error("boom")
-
-    class BoomConn:
-        def cursor(self):
-            return BoomCursor()
-
     try:
-        db.conn = BoomConn()
+        db.conn = boom_conn
         assert db.get_next_upcoming_contest_any("NBA") is None
     finally:
         original_conn.close()
@@ -443,12 +449,8 @@ def test_get_incomplete_contests_returns_started_and_pending(contest_db):
     assert row1[4] == "UPCOMING" and row1[8] == "NBA"
 
 
-def test_get_incomplete_contests_error_returns_none():
-    class BoomConn:
-        def cursor(self):
-            raise sqlite3.Error("boom")
-
-    db = ContestDatabase.from_connection(BoomConn())  # type: ignore[arg-type]
+def test_get_incomplete_contests_error_returns_none(boom_conn):
+    db = ContestDatabase.from_connection(boom_conn)
     assert db.get_incomplete_contests() is None
 
 
@@ -462,19 +464,8 @@ def test_update_contest_writes_fields(contest_db):
     assert row is not None and row.positions_paid == 42
 
 
-def test_update_contest_handles_error(caplog):
-    class BoomCursor:
-        def execute(self, *_a, **_k):
-            raise sqlite3.Error("boom")
-
-    class BoomConn:
-        def cursor(self):
-            return BoomCursor()
-
-        def commit(self):  # pragma: no cover - not reached
-            return None
-
-    db = ContestDatabase.from_connection(BoomConn())  # type: ignore[arg-type]
+def test_update_contest_handles_error(caplog, boom_conn):
+    db = ContestDatabase.from_connection(boom_conn)
     with caplog.at_level(logging.ERROR):
         db.update_contest(1, positions_paid=1, status="LIVE", completed=0, now=_T0)
     assert any("update_contest" in rec.message for rec in caplog.records)
@@ -492,31 +483,15 @@ def test_get_cash_line_returns_none_for_missing_contest(contest_db):
     assert contest_db.get_cash_line(999) is None
 
 
-def test_get_cash_line_sqlite_error(caplog):
-    class BoomCursor:
-        def execute(self, *_a, **_k):
-            raise sqlite3.Error("boom")
-
-    class BoomConn:
-        def cursor(self):
-            return BoomCursor()
-
-    db = ContestDatabase.from_connection(BoomConn())  # type: ignore[arg-type]
+def test_get_cash_line_sqlite_error(caplog, boom_conn):
+    db = ContestDatabase.from_connection(boom_conn)
     with caplog.at_level(logging.ERROR):
         assert db.get_cash_line(1) is None
     assert any("get_cash_line" in rec.message for rec in caplog.records)
 
 
-def test_set_cash_line_sqlite_error(caplog):
-    class BoomCursor:
-        def execute(self, *_a, **_k):
-            raise sqlite3.Error("boom")
-
-    class BoomConn:
-        def cursor(self):
-            return BoomCursor()
-
-    db = ContestDatabase.from_connection(BoomConn())  # type: ignore[arg-type]
+def test_set_cash_line_sqlite_error(caplog, boom_conn):
+    db = ContestDatabase.from_connection(boom_conn)
     with caplog.at_level(logging.ERROR):
         db.set_cash_line(1, rank=1, points=1.0)
     assert any("set_cash_line" in rec.message for rec in caplog.records)
@@ -568,56 +543,22 @@ def test_get_vip_cash_status_returns_empty_for_missing_contest(contest_db):
     assert contest_db.get_vip_cash_status(999) == []
 
 
-def test_replace_vip_cash_status_sqlite_error(caplog):
-    class BoomCursor:
-        def execute(self, *_a, **_k):
-            raise sqlite3.Error("boom")
-
-    class BoomConn:
-        def cursor(self):
-            return BoomCursor()
-
-        def rollback(self):
-            pass
-
-    db = ContestDatabase.from_connection(BoomConn())  # type: ignore[arg-type]
+def test_replace_vip_cash_status_sqlite_error(caplog, boom_conn):
+    db = ContestDatabase.from_connection(boom_conn)
     with caplog.at_level(logging.ERROR):
         db.replace_vip_cash_status(1, [VipCashStatus(vip_name="Alice", rank=1, points=1.0)])
     assert any("replace_vip_cash_status" in rec.message for rec in caplog.records)
 
 
-def test_replace_vip_cash_status_rolls_back_on_error(caplog):
-    class BoomCursor:
-        def execute(self, *_a, **_k):
-            raise sqlite3.Error("boom")
-
-    class BoomConn:
-        def __init__(self):
-            self.rolled_back = False
-
-        def cursor(self):
-            return BoomCursor()
-
-        def rollback(self):
-            self.rolled_back = True
-
-    conn = BoomConn()
-    db = ContestDatabase.from_connection(conn)  # type: ignore[arg-type]
+def test_replace_vip_cash_status_rolls_back_on_error(caplog, boom_conn):
+    db = ContestDatabase.from_connection(boom_conn)
     with caplog.at_level(logging.ERROR):
         db.replace_vip_cash_status(1, [VipCashStatus(vip_name="Alice", rank=1, points=1.0)])
-    assert conn.rolled_back is True
+    assert boom_conn.rolled_back is True
 
 
-def test_get_vip_cash_status_sqlite_error(caplog):
-    class BoomCursor:
-        def execute(self, *_a, **_k):
-            raise sqlite3.Error("boom")
-
-    class BoomConn:
-        def cursor(self):
-            return BoomCursor()
-
-    db = ContestDatabase.from_connection(BoomConn())  # type: ignore[arg-type]
+def test_get_vip_cash_status_sqlite_error(caplog, boom_conn):
+    db = ContestDatabase.from_connection(boom_conn)
     with caplog.at_level(logging.ERROR):
         assert db.get_vip_cash_status(1) == []
     assert any("get_vip_cash_status" in rec.message for rec in caplog.records)
@@ -691,22 +632,8 @@ _SQLITE_ERROR_CALLS = {
 
 
 @pytest.mark.parametrize("method", list(_SQLITE_ERROR_CALLS))
-def test_sqlite_errors_are_logged_once_with_a_traceback(method, caplog):
-    class BoomCursor:
-        def execute(self, *_a, **_k):
-            raise sqlite3.Error("boom")
-
-    class BoomConn:
-        def cursor(self):
-            return BoomCursor()
-
-        def rollback(self):
-            return None
-
-        def commit(self):
-            return None
-
-    db = ContestDatabase.from_connection(BoomConn())  # type: ignore[arg-type]
+def test_sqlite_errors_are_logged_once_with_a_traceback(method, caplog, boom_conn):
+    db = ContestDatabase.from_connection(boom_conn)
     with caplog.at_level(logging.ERROR):
         _SQLITE_ERROR_CALLS[method](db)
 
@@ -721,7 +648,7 @@ def test_sqlite_errors_are_logged_once_with_a_traceback(method, caplog):
 
 # ── Completed contests and the completion window ─────────────────────────────
 
-_T0 = datetime.datetime(2026, 10, 10, 12, 0, tzinfo=datetime.timezone.utc)
+_T0 = datetime.datetime(2026, 10, 10, 12, 0, tzinfo=datetime.UTC)
 
 
 def _complete(db: ContestDatabase, dk_id: int, at: datetime.datetime, status: str = "COMPLETED") -> None:

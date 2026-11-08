@@ -1,9 +1,11 @@
 """Tests for the bot's runtime configuration and its main() entry point."""
 
+import inspect
+
 import pytest
+from discord.ext import commands
 
 from dk_results.bot import discord_bot
-from tests.bot.discord_bot_fakes import DummySport, FakeCtx, _ctx, _settings
 
 
 def test_module_main_executes(monkeypatch, tmp_path):
@@ -27,40 +29,40 @@ def test_main_requires_token(monkeypatch):
         discord_bot.main()
 
 
-def test_sheet_link_requires_spreadsheet_id():
-    settings = _settings(spreadsheet_id=None, sheet_gid_map={"NBA": 123})
+def test_sheet_link_requires_spreadsheet_id(make_settings):
+    settings = make_settings(spreadsheet_id=None, sheet_gid_map={"NBA": 123})
     assert discord_bot._sheet_link(settings, "NBA") is None
 
 
-def test_sheet_link_missing_gid():
-    settings = _settings(spreadsheet_id="sheet", sheet_gid_map={"NBA": 123})
+def test_sheet_link_missing_gid(make_settings):
+    settings = make_settings(spreadsheet_id="sheet", sheet_gid_map={"NBA": 123})
     assert discord_bot._sheet_link(settings, "NFL") is None
 
 
-def test_sheet_link_builds_url():
-    settings = _settings(spreadsheet_id="sheet", sheet_gid_map={"NBA": 123})
+def test_sheet_link_builds_url(make_settings):
+    settings = make_settings(spreadsheet_id="sheet", sheet_gid_map={"NBA": 123})
     assert discord_bot._sheet_link(settings, "NBA") == "<https://docs.google.com/spreadsheets/d/sheet/edit#gid=123>"
 
 
 def test_sport_sheet_title_prefers_sheet_name():
-    class DummySport:
+    class DummySport(discord_bot.Sport):
         name = "NBA"
         sheet_name = "NBA Sheet"
 
-    class DummySportNoSheet:
+    class DummySportNoSheet(discord_bot.Sport):
         name = "NFL"
 
     assert discord_bot._sport_sheet_title(DummySport) == "NBA Sheet"
     assert discord_bot._sport_sheet_title(DummySportNoSheet) == "NFL"
 
 
-def test_configure_discord_log_file_handles_exception(monkeypatch):
+def test_configure_discord_log_file_handles_exception(monkeypatch, make_settings):
     class BoomHandler:
         def __init__(self, *args, **kwargs):
             raise RuntimeError("boom")
 
     monkeypatch.setattr(discord_bot.logging, "FileHandler", BoomHandler)
-    discord_bot._configure_discord_log_file(_settings())
+    discord_bot._configure_discord_log_file(make_settings())
 
 
 def test_sport_choices_uses_the_built_in_registry():
@@ -94,12 +96,26 @@ def test_main_runs_bot(monkeypatch):
     assert captured["settings"].bot_token == "tok"
 
 
+def _callback(bot: commands.Bot, name: str):
+    command = bot.get_command(name)
+    assert command is not None
+    return command.callback
+
+
+async def _check_outcomes(bot: commands.Bot, ctx) -> list[bool]:
+    """Run every global check of the bot against ``ctx``, awaiting the async ones."""
+    results = [check(ctx) for check in bot._checks]
+    return [await result if inspect.isawaitable(result) else result for result in results]
+
+
 @pytest.mark.asyncio
-async def test_create_bot_registered_commands_use_the_injected_settings(monkeypatch):
-    monkeypatch.setattr(discord_bot, "_sport_choices", lambda: {"nba": DummySport})
+async def test_create_bot_registered_commands_use_the_injected_settings(
+    monkeypatch, make_settings, ctx, make_ctx, as_context, dummy_sport
+):
+    monkeypatch.setattr(discord_bot, "_sport_choices", lambda: {"nba": dummy_sport})
     monkeypatch.setattr(discord_bot, "_fetch_live_contest", lambda sport_cls: (1, "Contest", None, None, "2000-01-01"))
     monkeypatch.setattr(discord_bot, "_vip_presence_for_contest", lambda _dk_id: None)
-    settings = _settings(
+    settings = make_settings(
         spreadsheet_id="sheet",
         sheet_gid_map={"NBA": 123},
         discord_channel_id=123,
@@ -107,14 +123,13 @@ async def test_create_bot_registered_commands_use_the_injected_settings(monkeypa
 
     bot = discord_bot.create_bot(settings)
 
-    ctx = FakeCtx()
     ctx.channel.id = 123
-    await bot.get_command("contests").callback(_ctx(ctx), "nba")
+    await _callback(bot, "contests")(as_context(ctx), "nba")
     assert "https://docs.google.com/spreadsheets/d/sheet/edit#gid=123" in ctx.sent[0]
 
-    other = FakeCtx()
+    other = make_ctx()
     other.channel.id = 999
-    assert [await check(_ctx(other)) for check in bot._checks] == [False]
+    assert await _check_outcomes(bot, other) == [False]
 
     class _StubContestDatabase:
         def __init__(self, *_args, **_kwargs):
@@ -134,6 +149,6 @@ async def test_create_bot_registered_commands_use_the_injected_settings(monkeypa
         ),
     )
 
-    ctx2 = FakeCtx()
-    await bot.get_command("live").callback(_ctx(ctx2))
+    ctx2 = make_ctx()
+    await _callback(bot, "live")(as_context(ctx2))
     assert "https://docs.google.com/spreadsheets/d/sheet/edit#gid=123" in ctx2.sent[0]

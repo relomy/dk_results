@@ -6,13 +6,15 @@ import pytest
 
 from dk_results.persistence.contestdatabase import ContestRow
 from dk_results.services.snapshot_v3 import collector
-from tests.services.snapshot_v3_collector_fakes import _FakeContestDB, _FakeDK, _field_user
+from tests.services.collector_edges import _FakeDK
 
 
-def test_collect_reads_standings_and_draftables_for_a_completed_contest(monkeypatch, tmp_path) -> None:
+def test_collect_reads_standings_and_draftables_for_a_completed_contest(
+    monkeypatch, tmp_path, make_contest_db, make_dk, field_user
+) -> None:
     """A completed contest (the completion-window fallback) is read like a live one."""
     monkeypatch.setattr(collector, "SALARY_DIR", str(tmp_path))
-    users = [_field_user(1, "e1", 0.10), _field_user(2, "e2", 0.20)]
+    users = [field_user(1, "e1", 0.10), field_user(2, "e2", 0.20)]
     results = SimpleNamespace(
         vip_list=[],
         players={},
@@ -29,8 +31,8 @@ def test_collect_reads_standings_and_draftables_for_a_completed_contest(monkeypa
     row = ContestRow(
         dk_id=321, name="C", draft_group=8, positions_paid=10, start_date="2026-01-04", entry_fee=5, entries=100
     )
-    db = _FakeContestDB(by_id=row, state=("COMPLETED", 1))
-    dk = _FakeDK(standings_rows=[["header"], ["row"]], leaderboard={})
+    db = make_contest_db(by_id=row, state=("COMPLETED", 1))
+    dk = make_dk(standings_rows=[["header"], ["row"]], leaderboard={})
 
     raw = collector._collect_source_snapshot(sport="NBA", contest_id=321, dk=dk, contest_db=db)
 
@@ -45,12 +47,14 @@ class _StandingsRecordingDK(_FakeDK):
         super().__init__(**kwargs)
         self.standings_requests: list[int] = []
 
-    def download_contest_rows(self, dk_id, timeout=30, cookies_dump_file=None, contest_dir=None):
-        self.standings_requests.append(dk_id)
-        return super().download_contest_rows(dk_id, timeout, cookies_dump_file, contest_dir)
+    def download_contest_rows(self, contest_id, /, *, timeout=30, cookies_dump_file=None, contest_dir=None):
+        self.standings_requests.append(contest_id)
+        return super().download_contest_rows(
+            contest_id, timeout=timeout, cookies_dump_file=cookies_dump_file, contest_dir=contest_dir
+        )
 
 
-def _collect_contest_with_state(monkeypatch, tmp_path, *, state, completed_at):
+def _collect_contest_with_state(monkeypatch, tmp_path, make_contest_db, *, state, completed_at):
     monkeypatch.setattr(collector, "SALARY_DIR", str(tmp_path))
     results = SimpleNamespace(
         vip_list=[],
@@ -68,15 +72,17 @@ def _collect_contest_with_state(monkeypatch, tmp_path, *, state, completed_at):
     row = ContestRow(
         dk_id=321, name="Contest", draft_group=8, positions_paid=10, start_date="2026-01-04", entry_fee=5, entries=100
     )
-    db = _FakeContestDB(by_id=row, state=state, completed_at=completed_at)
+    db = make_contest_db(by_id=row, state=state, completed_at=completed_at)
     dk = _StandingsRecordingDK(standings_rows=[["header"], ["row"]], leaderboard={})
     raw = collector._collect_source_snapshot(sport="NBA", contest_id=321, dk=dk, contest_db=db)
     return raw, dk
 
 
-def test_completed_contest_carries_its_stored_completed_at_and_still_reads_standings(monkeypatch, tmp_path) -> None:
+def test_completed_contest_carries_its_stored_completed_at_and_still_reads_standings(
+    monkeypatch, tmp_path, make_contest_db
+) -> None:
     raw, dk = _collect_contest_with_state(
-        monkeypatch, tmp_path, state=("COMPLETED", 1), completed_at="2026-10-10T12:00:00Z"
+        monkeypatch, tmp_path, make_contest_db, state=("COMPLETED", 1), completed_at="2026-10-10T12:00:00Z"
     )
 
     assert raw["contest"]["state"] == "completed"
@@ -95,8 +101,10 @@ def test_completed_contest_carries_its_stored_completed_at_and_still_reads_stand
     ],
 )
 def test_completed_at_key_is_absent_unless_the_contest_is_completed_and_stamped(
-    monkeypatch, tmp_path, state, completed_at
+    monkeypatch, tmp_path, make_contest_db, state, completed_at
 ) -> None:
-    raw, _dk = _collect_contest_with_state(monkeypatch, tmp_path, state=state, completed_at=completed_at)
+    raw, _dk = _collect_contest_with_state(
+        monkeypatch, tmp_path, make_contest_db, state=state, completed_at=completed_at
+    )
 
     assert "completed_at" not in raw["contest"]

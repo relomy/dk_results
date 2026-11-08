@@ -35,9 +35,9 @@ def normalize_sport_name(raw: str) -> str:
 def _resolved_generated_at(generated_at: str | None) -> str:
     if generated_at:
         return normalize_rfc3339_utc_seconds(generated_at)
-    fallback = to_utc_iso(datetime.datetime.now(datetime.timezone.utc))
+    fallback = to_utc_iso(datetime.datetime.now(datetime.UTC))
     if fallback is None:
-        return datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0).strftime("%Y-%m-%dT%H:%M:%SZ")
+        return datetime.datetime.now(datetime.UTC).replace(microsecond=0).strftime("%Y-%m-%dT%H:%M:%SZ")
     return fallback
 
 

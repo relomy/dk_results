@@ -59,7 +59,10 @@ where = ["src"]
 testpaths = ["tests"]
 pythonpath = ["src", "."]
 
-[tool.ty]
+[tool.ruff]
+line-length = 120
+target-version = "py313"
+extend-exclude = ["build"]
 
-[tool.ty.src]
-exclude = ["tests"]
+[tool.ruff.lint]
+extend-select = ["E501", "I", "G", "LOG", "C90", "UP", "B", "RUF100"]

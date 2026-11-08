@@ -7,9 +7,9 @@ import os
 import sqlite3
 import time
 from collections import OrderedDict
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
-from typing import Any, Callable, Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
 import requests
 from dfs_common import state
@@ -113,7 +113,7 @@ class SportProcessor:
     Coordinates the full "process one sport → write sheet" workflow.
 
     Construction-time dependencies are injected; nothing is constructed inline.
-    One instance may be reused across multiple sports in a single run.
+    One instance may be reused across sports in a run.
 
     Ordering guarantee (enforced internally):
       1. DB lookup → NoLiveContestError if no contest
@@ -184,9 +184,9 @@ class SportProcessor:
                 positions_paid=positions_paid,
                 standings_rows=contest_list,
             )
-        except Exception:
+        except Exception as err:
             logger.exception("Failed to parse contest standings: sport=%s contest_id=%s", sport_name, dk_id)
-            raise StandsParseError(sport_name)
+            raise StandsParseError(sport_name) from err
 
         self._persist_cash_status(int(dk_id), results)
         self._maybe_write_optimal_lineup(sheet=sheet, results=results, sport_cls=sport_cls, sport_name=sport_name)
@@ -209,7 +209,7 @@ class SportProcessor:
         standings_rows: list[list[str]],
     ) -> ContestStandings:
         logger.debug("standings_parse sport=%s contest_id=%s", sport_cls.name, contest_id)
-        with open(salary_csv, mode="r", encoding="utf-8-sig", newline="") as fp:
+        with open(salary_csv, encoding="utf-8-sig", newline="") as fp:
             salary_rows = list(csv.reader(fp, delimiter=","))
         return parse_contest_standings(
             sport_cls,

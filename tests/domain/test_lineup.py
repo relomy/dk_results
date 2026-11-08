@@ -2,10 +2,11 @@ import pytest
 
 from dk_results.domain.lineup import Lineup, LineupParseError, LockedSlot, normalize_name, parse_lineup_string
 from dk_results.domain.player import Player
+from dk_results.domain.sport import Sport
 
 
-class DummySport:
-    positions = ["RB", "WR", "FLEX"]
+class DummySport(Sport):
+    positions = ("RB", "WR", "FLEX")
 
 
 def test_parse_lineup_string_handles_position_swap():

@@ -1,7 +1,6 @@
 import copy
 import unicodedata
 from dataclasses import dataclass
-from typing import Type
 
 from dk_results.domain.sport import Sport
 
@@ -36,7 +35,7 @@ def normalize_name(name: str) -> str:
 
 
 def parse_lineup_string(
-    sport_obj: Sport | Type[Sport],
+    sport_obj: Sport | type[Sport],
     players: dict[str, Player],
     lineup_str: str,
 ) -> list[LineupSlot]:
@@ -93,7 +92,7 @@ def parse_lineup_string(
 class Lineup:
     """A representation of a list of Players"""
 
-    def __init__(self, sport_obj: Sport | Type[Sport], players: dict[str, Player], lineup_str: str) -> None:
+    def __init__(self, sport_obj: Sport | type[Sport], players: dict[str, Player], lineup_str: str) -> None:
         self.sport_obj = sport_obj
         self.players = players
 

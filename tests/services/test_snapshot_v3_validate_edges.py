@@ -48,15 +48,23 @@ def _envelope() -> dict[str, Any]:
     }
 
 
+def _child(node: dict[str, Any] | list[Any], key: str) -> Any:
+    """One path step: digit keys index lists, other keys index objects."""
+    return node[int(key)] if isinstance(node, list) else node[key]
+
+
 def _with(edits: dict[str, Any]) -> dict[str, Any]:
     """An envelope with each dotted path (digits index lists) set to a value."""
     payload = deepcopy(_envelope())
     for dotted, value in edits.items():
         *parents, leaf = dotted.split(".")
-        node: Any = payload
+        node: dict[str, Any] | list[Any] = payload
         for part in parents:
-            node = node[int(part)] if part.isdigit() else node[part]
-        node[int(leaf) if leaf.isdigit() else leaf] = value
+            node = _child(node, part)
+        if isinstance(node, list):
+            node[int(leaf)] = value
+        else:
+            node[leaf] = value
     return payload
 
 

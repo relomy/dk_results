@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from types import SimpleNamespace
 from typing import Any
 
@@ -85,7 +86,7 @@ def test_normalize_name_strips_accents():
 
 
 def test_normalize_name_non_string_returns_empty():
-    assert _normalize_name(123) == ""  # type: ignore[arg-type]
+    assert _normalize_name(json.loads("123")) == ""
 
 
 # ── _lookup_salary ────────────────────────────────────────────────────────────

@@ -7,10 +7,11 @@ from zoneinfo import ZoneInfo
 from dk_results.persistence.contestdatabase import ContestRow
 from dk_results.services.snapshot_v3 import collector
 from dk_results.services.snapshot_v3.collector import collect_snapshot
-from tests.services.snapshot_v3_collector_fakes import _FakeContestDB, _FakeDK
 
 
-def test_collect_source_snapshot_runs_end_to_end_through_injected_fakes(monkeypatch, tmp_path) -> None:
+def test_collect_source_snapshot_runs_end_to_end_through_injected_fakes(
+    monkeypatch, tmp_path, make_contest_db, make_dk
+) -> None:
     sport_cls = collector._sport_choices()["NBA"]
     monkeypatch.setattr(collector, "SALARY_DIR", str(tmp_path))
 
@@ -39,8 +40,8 @@ def test_collect_source_snapshot_runs_end_to_end_through_injected_fakes(monkeypa
         entry_fee=5,
         entries=100,
     )
-    db = _FakeContestDB(by_id=row)
-    dk = _FakeDK(standings_rows=[["header"], ["row"]], leaderboard={})
+    db = make_contest_db(by_id=row)
+    dk = make_dk(standings_rows=[["header"], ["row"]], leaderboard={})
 
     raw = collector._collect_source_snapshot(sport="NBA", contest_id=321, dk=dk, contest_db=db)
 
@@ -53,7 +54,9 @@ def test_collect_source_snapshot_runs_end_to_end_through_injected_fakes(monkeypa
     assert db.closed is False  # an injected DB is never closed by the collector
 
 
-def test_collect_source_snapshot_raises_when_standings_unavailable(monkeypatch, tmp_path) -> None:
+def test_collect_source_snapshot_raises_when_standings_unavailable(
+    monkeypatch, tmp_path, make_contest_db, make_dk
+) -> None:
     monkeypatch.setattr(collector, "SALARY_DIR", str(tmp_path))
     monkeypatch.setattr(collector, "load_vips", lambda: [])
 
@@ -66,8 +69,8 @@ def test_collect_source_snapshot_raises_when_standings_unavailable(monkeypatch, 
         entry_fee=5,
         entries=100,
     )
-    db = _FakeContestDB(by_id=row)
-    dk = _FakeDK(standings_rows=[])  # empty -> unavailable
+    db = make_contest_db(by_id=row)
+    dk = make_dk(standings_rows=[])  # empty -> unavailable
 
     try:
         collector._collect_source_snapshot(sport="NBA", contest_id=321, dk=dk, contest_db=db)
@@ -77,7 +80,9 @@ def test_collect_source_snapshot_raises_when_standings_unavailable(monkeypatch, 
         raise AssertionError("expected RuntimeError for unavailable standings")
 
 
-def test_collect_source_snapshot_no_draft_group_skips_salary_and_vip_fetch(monkeypatch, tmp_path) -> None:
+def test_collect_source_snapshot_no_draft_group_skips_salary_and_vip_fetch(
+    monkeypatch, tmp_path, make_contest_db, make_dk
+) -> None:
     monkeypatch.setattr(collector, "SALARY_DIR", str(tmp_path))
     monkeypatch.setattr(collector, "load_vips", lambda: [])
 
@@ -107,8 +112,8 @@ def test_collect_source_snapshot_no_draft_group_skips_salary_and_vip_fetch(monke
         entry_fee=5,
         entries=100,
     )
-    db = _FakeContestDB(by_id=row)
-    dk = _FakeDK(standings_rows=[["header"], ["row"]], leaderboard={})
+    db = make_contest_db(by_id=row)
+    dk = make_dk(standings_rows=[["header"], ["row"]], leaderboard={})
 
     now_et = datetime.datetime.now(ZoneInfo("America/New_York"))
     salary_path = tmp_path / f"DKSalaries_NBA_{now_et:%A}.csv"

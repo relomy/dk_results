@@ -30,7 +30,7 @@ def test_build_draft_group_start_map_filters_and_parses():
 
 
 def test_get_contests_from_response_list_and_dict():
-    assert get_contests_from_response([{1: 2}]) == [{1: 2}]
+    assert get_contests_from_response([{"a": 2}]) == [{"a": 2}]
     assert get_contests_from_response({"Contests": [1]}) == [1]
 
 

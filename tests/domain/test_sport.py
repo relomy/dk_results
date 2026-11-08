@@ -36,11 +36,15 @@ def test_registry_unknown_lookup_is_optional_or_strict():
         require_sport("unknown")
 
 
+def _assign_item(mapping, key, value):
+    mapping[key] = value
+
+
 def test_registry_choices_are_read_only():
     choices = get_sport_choices()
     assert choices is get_sport_choices()
     with pytest.raises(TypeError):
-        choices["NEW"] = NFLShowdownSport  # type: ignore[index]
+        _assign_item(choices, "NEW", NFLShowdownSport)
 
 
 def test_registry_rejects_duplicate_and_invalid_names():

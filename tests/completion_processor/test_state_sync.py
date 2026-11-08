@@ -129,7 +129,7 @@ def test_completed_contest_is_stamped_with_the_processor_clock_and_never_moved(
     conn, insert_contest, detail, make_results, make_processor
 ):
     insert_contest(status="LIVE")
-    fixed = datetime.datetime(2026, 10, 10, 12, 0, tzinfo=datetime.timezone.utc)
+    fixed = datetime.datetime(2026, 10, 10, 12, 0, tzinfo=datetime.UTC)
     results = make_results(detail=detail(status="COMPLETED", positions_paid=42))
     make_processor(results=results, sender=None, clock=lambda: fixed).run(conn)
 
@@ -147,7 +147,7 @@ def test_cancelled_contest_is_not_stamped_by_the_processor(
     conn, insert_contest, detail, make_results, make_processor, clock_at
 ):
     insert_contest(status="LIVE")
-    moment = datetime.datetime(2026, 10, 10, 12, 0, tzinfo=datetime.timezone.utc)
+    moment = datetime.datetime(2026, 10, 10, 12, 0, tzinfo=datetime.UTC)
     results = make_results(detail=detail(status="CANCELLED"))
     make_processor(results=results, sender=None, now=clock_at(moment)).run(conn)
 

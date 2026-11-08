@@ -7,7 +7,7 @@ import pytest
 
 from dk_results.persistence.contestdatabase import ContestRow
 from dk_results.services.snapshot_v3 import collector
-from tests.services.snapshot_v3_collector_fakes import _by_name, _FakeContestDB, _FakeDK, _salary_player
+from tests.services.collector_edges import _FakeDK
 
 
 def _sc_row(draftable_id, name="Player", **overrides) -> dict:
@@ -36,16 +36,16 @@ class _ScorecardDK(_FakeDK):
         self._delays = delays or {}
         self.entry_requests: list[str] = []
 
-    def get_entry(self, _draft_group, entry_key, *, timeout=None, session=None):
+    def get_entry(self, draft_group, entry_key, *, timeout=None, session=None):
         time.sleep(self._delays.get(entry_key, 0))
         self.entry_requests.append(entry_key)
         return {"entries": [{"roster": {"scorecards": self._scorecards[entry_key]}}]}
 
-    def clone_auth_to(self, _session):
+    def clone_auth_to(self, target_session):
         return None
 
 
-def _collect_with_scorecards(monkeypatch, tmp_path, *, players, scorecards, delays=None):
+def _collect_with_scorecards(monkeypatch, tmp_path, make_contest_db, by_name, *, players, scorecards, delays=None):
     monkeypatch.setattr(collector, "SALARY_DIR", str(tmp_path))
     monkeypatch.setattr(collector, "load_vips", lambda: [f"vip{key}" for key in scorecards])
     dk = _ScorecardDK(scorecards, delays)
@@ -69,19 +69,23 @@ def _collect_with_scorecards(monkeypatch, tmp_path, *, players, scorecards, dela
         entry_fee=5,
         entries=100,
     )
-    raw = collector._collect_source_snapshot(sport="NFL", contest_id=321, dk=dk, contest_db=_FakeContestDB(by_id=row))
-    return _by_name(raw["players"]), dk, raw
+    raw = collector._collect_source_snapshot(sport="NFL", contest_id=321, dk=dk, contest_db=make_contest_db(by_id=row))
+    return by_name(raw["players"]), dk, raw
 
 
-def _pool(*ids_and_names) -> list:
-    return [_salary_player(name, "BUF", "Final", draftable_id) for draftable_id, name in ids_and_names]
+def _pool(salary_player, *ids_and_names) -> list:
+    return [salary_player(name, "BUF", "Final", draftable_id) for draftable_id, name in ids_and_names]
 
 
-def test_held_player_gets_stats_text_and_value_icon_and_others_get_none(monkeypatch, tmp_path) -> None:
+def test_held_player_gets_stats_text_and_value_icon_and_others_get_none(
+    monkeypatch, tmp_path, make_contest_db, salary_player, by_name
+) -> None:
     rows, dk, raw = _collect_with_scorecards(
         monkeypatch,
         tmp_path,
-        players=_pool(("11", "Held"), ("22", "Unheld")),
+        make_contest_db,
+        by_name,
+        players=_pool(salary_player, ("11", "Held"), ("22", "Unheld")),
         scorecards={"100": [_sc_row(11, "Held")]},
     )
 
@@ -92,7 +96,9 @@ def test_held_player_gets_stats_text_and_value_icon_and_others_get_none(monkeypa
     assert dk.entry_requests == ["100"]  # one fetch per VIP
 
 
-def test_unusable_scorecard_rows_contribute_nothing(monkeypatch, tmp_path) -> None:
+def test_unusable_scorecard_rows_contribute_nothing(
+    monkeypatch, tmp_path, make_contest_db, salary_player, by_name
+) -> None:
     scorecards = {
         "100": [
             {"displayName": "", "draftableId": 11, "statsDescription": "ghost", "projection": {"valueIcon": "fire"}},
@@ -101,14 +107,21 @@ def test_unusable_scorecard_rows_contribute_nothing(monkeypatch, tmp_path) -> No
         ]
     }
     rows, _, _ = _collect_with_scorecards(
-        monkeypatch, tmp_path, players=_pool(("11", "Locked"), ("33", "No Id")), scorecards=scorecards
+        monkeypatch,
+        tmp_path,
+        make_contest_db,
+        by_name,
+        players=_pool(salary_player, ("11", "Locked"), ("33", "No Id")),
+        scorecards=scorecards,
     )
 
     for row in rows.values():
         assert "stats_text" not in row and "value_icon" not in row
 
 
-def test_empty_or_unrecognised_values_are_omitted(monkeypatch, tmp_path) -> None:
+def test_empty_or_unrecognised_values_are_omitted(
+    monkeypatch, tmp_path, make_contest_db, salary_player, by_name
+) -> None:
     scorecards = {
         "100": [
             _sc_row(11, "Empty", statsDescription="", projection={"valueIcon": ""}),
@@ -117,7 +130,12 @@ def test_empty_or_unrecognised_values_are_omitted(monkeypatch, tmp_path) -> None
         ]
     }
     rows, _, _ = _collect_with_scorecards(
-        monkeypatch, tmp_path, players=_pool(("11", "Empty"), ("22", "Odd"), ("33", "Cold")), scorecards=scorecards
+        monkeypatch,
+        tmp_path,
+        make_contest_db,
+        by_name,
+        players=_pool(salary_player, ("11", "Empty"), ("22", "Odd"), ("33", "Cold")),
+        scorecards=scorecards,
     )
 
     assert "stats_text" not in rows["Empty"] and "value_icon" not in rows["Empty"]
@@ -125,25 +143,37 @@ def test_empty_or_unrecognised_values_are_omitted(monkeypatch, tmp_path) -> None
     assert rows["Cold"]["value_icon"] == "ice"
 
 
-def test_two_vips_holding_one_player_lowest_entry_key_wins_whatever_the_fetch_order(monkeypatch, tmp_path) -> None:
+def test_two_vips_holding_one_player_lowest_entry_key_wins_whatever_the_fetch_order(
+    monkeypatch, tmp_path, make_contest_db, salary_player, by_name
+) -> None:
     scorecards = {
         "100": [_sc_row(11, "Held", statsDescription="from 100", projection={"valueIcon": ""})],
         "200": [_sc_row(11, "Held", statsDescription="from 200", projection={"valueIcon": "ice"})],
     }
     # entry 100 answers last, so the fetch completes in the opposite order
     rows, _, _ = _collect_with_scorecards(
-        monkeypatch, tmp_path, players=_pool(("11", "Held")), scorecards=scorecards, delays={"100": 0.2}
+        monkeypatch,
+        tmp_path,
+        make_contest_db,
+        by_name,
+        players=_pool(salary_player, ("11", "Held")),
+        scorecards=scorecards,
+        delays={"100": 0.2},
     )
 
     assert rows["Held"]["stats_text"] == "from 100"
     assert rows["Held"]["value_icon"] == "ice"  # first non-empty value per field
 
 
-def test_held_player_gets_unrounded_projection_and_pmr_minutes(monkeypatch, tmp_path) -> None:
+def test_held_player_gets_unrounded_projection_and_pmr_minutes(
+    monkeypatch, tmp_path, make_contest_db, salary_player, by_name
+) -> None:
     rows, _, _ = _collect_with_scorecards(
         monkeypatch,
         tmp_path,
-        players=_pool(("11", "Held"), ("22", "Unheld")),
+        make_contest_db,
+        by_name,
+        players=_pool(salary_player, ("11", "Held"), ("22", "Unheld")),
         scorecards={"100": [_sc_row(11, "Held")]},
     )
 
@@ -152,10 +182,17 @@ def test_held_player_gets_unrounded_projection_and_pmr_minutes(monkeypatch, tmp_
     assert "rt_projection" not in rows["Unheld"] and "time_remaining_minutes" not in rows["Unheld"]
 
 
-def test_zero_projection_and_zero_minutes_are_emitted(monkeypatch, tmp_path) -> None:
+def test_zero_projection_and_zero_minutes_are_emitted(
+    monkeypatch, tmp_path, make_contest_db, salary_player, by_name
+) -> None:
     row = _sc_row(11, "Done", timeRemaining=0, projection={"realTimeProjection": 0, "valueIcon": ""})
     rows, _, _ = _collect_with_scorecards(
-        monkeypatch, tmp_path, players=_pool(("11", "Done")), scorecards={"100": [row]}
+        monkeypatch,
+        tmp_path,
+        make_contest_db,
+        by_name,
+        players=_pool(salary_player, ("11", "Done")),
+        scorecards={"100": [row]},
     )
 
     assert rows["Done"]["rt_projection"] == 0
@@ -163,10 +200,17 @@ def test_zero_projection_and_zero_minutes_are_emitted(monkeypatch, tmp_path) -> 
 
 
 @pytest.mark.parametrize("raw", ["", None, "n/a", True, float("nan")])
-def test_empty_or_unparseable_projection_is_omitted(monkeypatch, tmp_path, raw) -> None:
+def test_empty_or_unparseable_projection_is_omitted(
+    monkeypatch, tmp_path, raw, make_contest_db, salary_player, by_name
+) -> None:
     row = _sc_row(11, "Held", projection={"realTimeProjection": raw})
     rows, _, _ = _collect_with_scorecards(
-        monkeypatch, tmp_path, players=_pool(("11", "Held")), scorecards={"100": [row]}
+        monkeypatch,
+        tmp_path,
+        make_contest_db,
+        by_name,
+        players=_pool(salary_player, ("11", "Held")),
+        scorecards={"100": [row]},
     )
 
     assert "rt_projection" not in rows["Held"]
@@ -182,32 +226,50 @@ def test_empty_or_unparseable_projection_is_omitted(monkeypatch, tmp_path, raw) 
         {"timeRemaining": None},
     ],
 )
-def test_minutes_omitted_unless_a_pmr_number(monkeypatch, tmp_path, overrides) -> None:
+def test_minutes_omitted_unless_a_pmr_number(
+    monkeypatch, tmp_path, overrides, make_contest_db, salary_player, by_name
+) -> None:
     row = _sc_row(11, "Held", **overrides)
     rows, _, _ = _collect_with_scorecards(
-        monkeypatch, tmp_path, players=_pool(("11", "Held")), scorecards={"100": [row]}
+        monkeypatch,
+        tmp_path,
+        make_contest_db,
+        by_name,
+        players=_pool(salary_player, ("11", "Held")),
+        scorecards={"100": [row]},
     )
 
     assert "time_remaining_minutes" not in rows["Held"]
 
 
-def test_locked_and_unmatched_rows_contribute_no_projection_or_minutes(monkeypatch, tmp_path) -> None:
+def test_locked_and_unmatched_rows_contribute_no_projection_or_minutes(
+    monkeypatch, tmp_path, make_contest_db, salary_player, by_name
+) -> None:
     scorecards = {"100": [_sc_row(11, ""), _sc_row(None, "No Id"), _sc_row(999, "Unmatched")]}
     rows, _, _ = _collect_with_scorecards(
-        monkeypatch, tmp_path, players=_pool(("11", "Locked"), ("33", "No Id")), scorecards=scorecards
+        monkeypatch,
+        tmp_path,
+        make_contest_db,
+        by_name,
+        players=_pool(salary_player, ("11", "Locked"), ("33", "No Id")),
+        scorecards=scorecards,
     )
 
     for row in rows.values():
         assert "rt_projection" not in row and "time_remaining_minutes" not in row
 
 
-def test_projection_and_minutes_follow_the_lowest_entry_key_per_field(monkeypatch, tmp_path) -> None:
+def test_projection_and_minutes_follow_the_lowest_entry_key_per_field(
+    monkeypatch, tmp_path, make_contest_db, salary_player, by_name
+) -> None:
     low = _sc_row(11, "Held", timeRemaining="", projection={"realTimeProjection": 5.5})
     high = _sc_row(11, "Held", timeRemaining=30, projection={"realTimeProjection": 9.9})
     rows, _, _ = _collect_with_scorecards(
         monkeypatch,
         tmp_path,
-        players=_pool(("11", "Held")),
+        make_contest_db,
+        by_name,
+        players=_pool(salary_player, ("11", "Held")),
         scorecards={"100": [low], "200": [high]},
         delays={"100": 0.2},
     )
