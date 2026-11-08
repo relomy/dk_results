@@ -1,7 +1,7 @@
 import datetime
 import logging
 from dataclasses import dataclass, field
-from typing import Any, Type
+from typing import Any
 
 from dk_results.domain.sport import Sport
 from dk_results.lobby.parsing import _parse_start_date, log_draft_group_event
@@ -18,13 +18,13 @@ def get_featured_draft_group_ids(groups: list[dict[str, Any]]) -> set[int]:
     return {group["DraftGroupId"] for group in groups if _passes_tag(group["DraftGroupTag"])}
 
 
-def _passes_game_type(game_type_id: int, sport: Type[Sport]) -> bool:
+def _passes_game_type(game_type_id: int, sport: type[Sport]) -> bool:
     if sport.contest_restraint_game_type_id is None:
         return True
     return game_type_id == sport.contest_restraint_game_type_id
 
 
-def _passes_suffix(suffix: str | None, sport: Type[Sport]) -> bool:
+def _passes_suffix(suffix: str | None, sport: type[Sport]) -> bool:
     if sport.suffixes is None:
         return True
     if suffix is None:
@@ -32,7 +32,7 @@ def _passes_suffix(suffix: str | None, sport: Type[Sport]) -> bool:
     return any(pattern.search(suffix) for pattern in sport.get_suffix_patterns())
 
 
-def _passes_time(dt_start: datetime.datetime, sport: Type[Sport]) -> bool:
+def _passes_time(dt_start: datetime.datetime, sport: type[Sport]) -> bool:
     if sport.start_windows is None:
         return True
     start = dt_start.time()
@@ -41,7 +41,7 @@ def _passes_time(dt_start: datetime.datetime, sport: Type[Sport]) -> bool:
 
 def _deduplicate_showdown(
     entries: list[tuple[datetime.datetime, int, str, str | None, int, int, datetime.datetime]],
-    sport: Type[Sport],
+    sport: type[Sport],
 ) -> list[int]:
     counts: dict[datetime.datetime, int] = {}
     for start_key, *_ in entries:
@@ -83,7 +83,7 @@ def _suffix_skip_reason(suffix: str | None) -> str:
 
 
 def _log_group_skip(
-    sport: Type[Sport],
+    sport: type[Sport],
     dt_start: datetime.datetime,
     draft_group_id: int,
     tag: str,
@@ -117,7 +117,7 @@ class _DraftGroupAccumulator:
 
 def _process_draft_group(
     group: dict[str, Any],
-    sport: Type[Sport],
+    sport: type[Sport],
     is_nfl_showdown: bool,
     acc: _DraftGroupAccumulator,
 ) -> None:
@@ -159,7 +159,7 @@ def _process_draft_group(
     acc.result.append(draft_group_id)
 
 
-def filter_draft_groups(groups: list[dict[str, Any]], sport: Type[Sport]) -> list[int]:
+def filter_draft_groups(groups: list[dict[str, Any]], sport: type[Sport]) -> list[int]:
     """Return qualifying draft-group IDs for the given sport."""
     is_nfl_showdown = sport.name == "NFLShowdown"
     acc = _DraftGroupAccumulator()
