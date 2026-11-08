@@ -7,9 +7,9 @@ import os
 import sqlite3
 import time
 from collections import OrderedDict
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
-from typing import Any, Callable, Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
 import requests
 from dfs_common import state

@@ -3,7 +3,7 @@
 import logging
 from collections.abc import Iterable
 from dataclasses import dataclass, field
-from typing import Any, Type
+from typing import Any
 
 from dfs_common.sheets import NumberFormat
 
@@ -188,7 +188,7 @@ def _accumulate_player_stats(
     player_agg["row_count"] += 1
 
 
-def _merge_positions(sport: Sport | Type[Sport], positions: set[str], fallback: str) -> str:
+def _merge_positions(sport: Sport | type[Sport], positions: set[str], fallback: str) -> str:
     if not positions:
         return fallback
     ordered_positions = tuple(dict.fromkeys(sport.positions))
@@ -198,7 +198,7 @@ def _merge_positions(sport: Sport | Type[Sport], positions: set[str], fallback: 
 
 
 def _apply_aggregated_player_stats(
-    sport: Sport | Type[Sport],
+    sport: Sport | type[Sport],
     players: dict[str, Player],
     aggregated: dict[str, dict[str, Any]],
     logger: logging.Logger,
@@ -234,7 +234,7 @@ def _add_to_dict(player: Player, d: dict[str, int]) -> dict[str, int]:
 
 
 def _parse_standing_user(
-    sport: Sport | Type[Sport], players: dict[str, Player], row: list[str]
+    sport: Sport | type[Sport], players: dict[str, Player], row: list[str]
 ) -> tuple[User, int | None, float | None]:
     rank, player_id, name, pmr, points, lineup = row[:6]
     parsed_rank: int | None = None
@@ -260,7 +260,7 @@ NON_CASHING_TALLY_SPORTS = ("NFL", "NFLShowdown", "CFB", "NBA")
 
 
 def _record_non_cashing_user(
-    sport: Sport | Type[Sport],
+    sport: Sport | type[Sport],
     players: dict[str, Player],
     lineup: str,
     non_cashing_players: dict[str, int],
@@ -282,7 +282,7 @@ def _update_cash_stats(
     parsed_rank: int | None,
     parsed_points: float | None,
     pmr: str,
-    sport: Sport | Type[Sport],
+    sport: Sport | type[Sport],
     players: dict[str, Player],
     lineup: str,
     non_cashing_players: dict[str, int],
@@ -305,7 +305,7 @@ def _update_cash_stats(
 
 @dataclass
 class _StandingsAccumulator:
-    sport: Sport | Type[Sport]
+    sport: Sport | type[Sport]
     players: dict[str, Player]
     vips: list[str]
     positions_paid: int | None
@@ -351,7 +351,7 @@ class _StandingsAccumulator:
 
 
 def _log_top_showdown_captains(
-    sport: Sport | Type[Sport],
+    sport: Sport | type[Sport],
     users: list[User],
     showdown_captains: dict[str, int],
     logger: logging.Logger,
@@ -369,7 +369,7 @@ def _log_top_showdown_captains(
 
 
 def _parse_standings_rows(
-    sport: Sport | Type[Sport],
+    sport: Sport | type[Sport],
     players: dict[str, Player],
     standings: Iterable[list[str]],
     positions_paid: int | None,
@@ -410,7 +410,7 @@ def _parse_standings_rows(
 
 
 def parse_contest_standings(
-    sport: Sport | Type[Sport],
+    sport: Sport | type[Sport],
     salary_rows: Iterable[list[str]],
     standings_rows: Iterable[list[str]],
     positions_paid: Any = None,
