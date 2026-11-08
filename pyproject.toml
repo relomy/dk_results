@@ -68,6 +68,6 @@ target-version = "py313"
 extend-exclude = ["build"]
 
 [tool.ruff.lint]
-extend-select = ["E501", "I", "G", "LOG", "C90", "UP", "B", "C4", "PIE", "RET", "RUF", "PT", "SIM", "TRY400", "TRY002", "ASYNC", "PLE", "PGH", "TID", "T10", "FLY", "S113"]
+extend-select = ["E501", "I", "G", "LOG", "C90", "UP", "B", "C4", "PIE", "RET", "RUF", "PT", "SIM", "TRY400", "TRY002", "ASYNC", "PLE", "PGH", "TID", "T10", "FLY", "S113", "PLR0402", "PLR1711", "PLR1722", "PLR5501", "PLW1510", "A001", "RSE102", "PYI041", "FURB110", "FURB157", "PLC0206"]
 # Style preferences.
 ignore = ["SIM105", "SIM108"]

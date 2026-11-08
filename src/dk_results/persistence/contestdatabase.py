@@ -482,7 +482,7 @@ class ContestDatabase:
             cur.execute(sql, (sport, keyword, entry_fee))
             row = cur.fetchone()
             self.logger.debug("returning %s", row)
-            return row if row else None
+            return row or None
         except sqlite3.Error:
             self.logger.exception("sqlite error in get_next_upcoming_contest()")
             return None
@@ -511,7 +511,7 @@ class ContestDatabase:
             cur.execute(sql, (sport,))
             row = cur.fetchone()
             self.logger.debug("returning %s", row)
-            return row if row else None
+            return row or None
         except sqlite3.Error:
             self.logger.exception("sqlite error in get_next_upcoming_contest_any()")
             return None

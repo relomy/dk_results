@@ -43,9 +43,8 @@ class AuthSession:
             if cookie.name in session.cookies:
                 logger.debug("removing %s from 'cookies'", cookie.name)
                 cookies.clear(cookie.domain, cookie.path, cookie.name)
-            else:
-                if not cookie.expires:
-                    continue
+            elif not cookie.expires:
+                continue
 
         session.cookies.update(cookies)
 

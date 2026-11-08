@@ -97,9 +97,9 @@ class Lineup:
         self.lineup: list[LineupSlot] = parse_lineup_string(self.sport_obj, self.players, lineup_str)
 
     def __str__(self) -> str:
-        str = ""
+        text = ""
 
         for player in self.lineup:
-            str += f"{player.pos} {player.name} "
+            text += f"{player.pos} {player.name} "
 
-        return str
+        return text

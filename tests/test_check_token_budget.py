@@ -37,7 +37,7 @@ class Repo:
         self.git("commit", "-q", "-m", "seed")
 
     def check(self, *paths: str) -> subprocess.CompletedProcess[str]:
-        return subprocess.run(["sh", str(SCRIPT), *paths], cwd=self.root, capture_output=True, text=True)
+        return subprocess.run(["sh", str(SCRIPT), *paths], cwd=self.root, capture_output=True, text=True, check=False)
 
 
 @pytest.fixture

@@ -39,6 +39,7 @@ import argparse
 import contextlib
 import datetime
 import io
+import sys
 from collections.abc import Mapping, Sequence
 from typing import Any
 
@@ -535,7 +536,7 @@ def main():
             scope=report_scope,
         )
         print(diagnostics, end="")
-        exit("No contests found.")
+        sys.exit("No contests found.")
 
     assert contest is not None
     # Keep the report before the selection diagnostics while deriving its marker

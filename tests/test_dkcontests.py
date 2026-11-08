@@ -6,7 +6,7 @@ import sys
 import pytest
 from pydantic import ValidationError
 
-import dk_results.cli.dkcontests as dkcontests
+from dk_results.cli import dkcontests
 from dk_results.domain.contest import Contest
 from dk_results.lobby.fetch import SportClassContests
 from tests.dkcontests_payloads import _contest_payload
