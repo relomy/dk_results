@@ -185,7 +185,7 @@ def test_entrant_payload_ambiguity():
 def test_should_refresh_absent_normalizes_timezone_before_subtraction():
     now_local = datetime.datetime.now().astimezone().replace(microsecond=0)
     checked_at = (now_local - datetime.timedelta(minutes=11)).replace(tzinfo=None).isoformat(sep=" ")
-    start_date = (now_local + datetime.timedelta(minutes=30)).astimezone(datetime.timezone.utc).isoformat()
+    start_date = (now_local + datetime.timedelta(minutes=30)).astimezone(datetime.UTC).isoformat()
     assert _should_refresh_absent(checked_at, start_date) is True
 
 

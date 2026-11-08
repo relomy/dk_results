@@ -1,5 +1,7 @@
 """Tests for the bot's runtime configuration and its main() entry point."""
 
+import inspect
+
 import pytest
 
 from dk_results.bot import discord_bot
@@ -43,11 +45,11 @@ def test_sheet_link_builds_url():
 
 
 def test_sport_sheet_title_prefers_sheet_name():
-    class DummySport:
+    class DummySport(discord_bot.Sport):
         name = "NBA"
         sheet_name = "NBA Sheet"
 
-    class DummySportNoSheet:
+    class DummySportNoSheet(discord_bot.Sport):
         name = "NFL"
 
     assert discord_bot._sport_sheet_title(DummySport) == "NBA Sheet"
@@ -109,12 +111,15 @@ async def test_create_bot_registered_commands_use_the_injected_settings(monkeypa
 
     ctx = FakeCtx()
     ctx.channel.id = 123
-    await bot.get_command("contests").callback(_ctx(ctx), "nba")
+    contests_command = bot.get_command("contests")
+    assert contests_command is not None
+    await contests_command.callback(_ctx(ctx), "nba")
     assert "https://docs.google.com/spreadsheets/d/sheet/edit#gid=123" in ctx.sent[0]
 
     other = FakeCtx()
     other.channel.id = 999
-    assert [await check(_ctx(other)) for check in bot._checks] == [False]
+    check_results = [check(_ctx(other)) for check in bot._checks]
+    assert [await result if inspect.isawaitable(result) else result for result in check_results] == [False]
 
     class _StubContestDatabase:
         def __init__(self, *_args, **_kwargs):
@@ -135,5 +140,7 @@ async def test_create_bot_registered_commands_use_the_injected_settings(monkeypa
     )
 
     ctx2 = FakeCtx()
-    await bot.get_command("live").callback(_ctx(ctx2))
+    live_command = bot.get_command("live")
+    assert live_command is not None
+    await live_command.callback(_ctx(ctx2))
     assert "https://docs.google.com/spreadsheets/d/sheet/edit#gid=123" in ctx2.sent[0]
