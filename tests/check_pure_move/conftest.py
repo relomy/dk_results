@@ -55,7 +55,8 @@ def split() -> Callable[..., dict[str, str]]:
 def pure_move() -> ModuleType:
     """The script, imported so its comparison runs in-process."""
     spec = importlib.util.spec_from_file_location("check_pure_move", SCRIPT)
-    assert spec is not None and spec.loader is not None
+    assert spec is not None
+    assert spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = module  # dataclasses resolve annotations through sys.modules
     spec.loader.exec_module(module)

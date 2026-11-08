@@ -80,7 +80,7 @@ def _pool(salary_player, *ids_and_names) -> list:
 def test_held_player_gets_stats_text_and_value_icon_and_others_get_none(
     monkeypatch, tmp_path, make_contest_db, salary_player, by_name
 ) -> None:
-    rows, dk, raw = _collect_with_scorecards(
+    rows, dk, _raw = _collect_with_scorecards(
         monkeypatch,
         tmp_path,
         make_contest_db,
@@ -91,7 +91,7 @@ def test_held_player_gets_stats_text_and_value_icon_and_others_get_none(
 
     assert rows["Held"]["stats_text"] == "1 PaTD, 286 PaYds"
     assert rows["Held"]["value_icon"] == "fire"
-    assert "stats_text" not in rows["Unheld"] and "value_icon" not in rows["Unheld"]
+    assert {"stats_text", "value_icon"}.isdisjoint(rows["Unheld"])
     assert "draftable_id" not in rows["Held"]
     assert dk.entry_requests == ["100"]  # one fetch per VIP
 
@@ -116,7 +116,8 @@ def test_unusable_scorecard_rows_contribute_nothing(
     )
 
     for row in rows.values():
-        assert "stats_text" not in row and "value_icon" not in row
+        assert "stats_text" not in row
+        assert "value_icon" not in row
 
 
 def test_empty_or_unrecognised_values_are_omitted(
@@ -138,8 +139,8 @@ def test_empty_or_unrecognised_values_are_omitted(
         scorecards=scorecards,
     )
 
-    assert "stats_text" not in rows["Empty"] and "value_icon" not in rows["Empty"]
-    assert "stats_text" not in rows["Odd"] and "value_icon" not in rows["Odd"]
+    assert {"stats_text", "value_icon"}.isdisjoint(rows["Empty"])
+    assert {"stats_text", "value_icon"}.isdisjoint(rows["Odd"])
     assert rows["Cold"]["value_icon"] == "ice"
 
 
@@ -179,7 +180,8 @@ def test_held_player_gets_unrounded_projection_and_pmr_minutes(
 
     assert rows["Held"]["rt_projection"] == 21.456
     assert rows["Held"]["time_remaining_minutes"] == 45
-    assert "rt_projection" not in rows["Unheld"] and "time_remaining_minutes" not in rows["Unheld"]
+    assert "rt_projection" not in rows["Unheld"]
+    assert "time_remaining_minutes" not in rows["Unheld"]
 
 
 def test_zero_projection_and_zero_minutes_are_emitted(
@@ -256,7 +258,8 @@ def test_locked_and_unmatched_rows_contribute_no_projection_or_minutes(
     )
 
     for row in rows.values():
-        assert "rt_projection" not in row and "time_remaining_minutes" not in row
+        assert "rt_projection" not in row
+        assert "time_remaining_minutes" not in row
 
 
 def test_projection_and_minutes_follow_the_lowest_entry_key_per_field(

@@ -225,7 +225,7 @@ def test_get_dk_cookies_falls_back_and_saves(monkeypatch):
 
     monkeypatch.setattr(cookies_module, "save_cookies_to_pickle", fake_save)
 
-    cookie_dict, jar = cookies_module.get_dk_cookies(use_pickle=True)
+    cookie_dict, _jar = cookies_module.get_dk_cookies(use_pickle=True)
     assert cookie_dict == {"a": "1"}
     assert saved["cookies"] == [{"name": "a", "value": "1", "domain": "example.com", "path": "/"}]
 
@@ -264,8 +264,7 @@ def test_export_failure_is_raised_without_a_duplicate_error_log(monkeypatch, cap
     monkeypatch.setattr(cookies_module.subprocess, "run", lambda *_a, **_k: _Result())
     monkeypatch.delenv("COOKIES_DB_PATH", raising=False)
 
-    with caplog.at_level(logging.ERROR):
-        with pytest.raises(RuntimeError, match="browser cookie database was not found"):
-            cookies_module.get_browser_cookies()
+    with caplog.at_level(logging.ERROR), pytest.raises(RuntimeError, match="browser cookie database was not found"):
+        cookies_module.get_browser_cookies()
 
     assert [r for r in caplog.records if r.levelno >= logging.ERROR] == []
