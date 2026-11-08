@@ -125,7 +125,7 @@ def _read_yaml_dict(path: Path, label: str) -> dict[Any, Any] | None:
         return None
     try:
         data = yaml.safe_load(path.read_text()) or {}
-    except Exception:
+    except (OSError, ValueError, yaml.YAMLError):
         logger.warning("Failed to load %s from %s", label, path)
         return None
     if not isinstance(data, dict):

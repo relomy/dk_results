@@ -6,6 +6,7 @@ import csv
 import datetime
 import logging
 import os
+import sqlite3
 from dataclasses import dataclass
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -213,7 +214,7 @@ def _open_contest_db(contest_db: SnapshotContestDbPort | None) -> tuple[Snapshot
         return contest_db, False
     try:
         return ContestDatabase(str(state.contests_db_path())), True
-    except Exception:
+    except (RuntimeError, OSError, sqlite3.Error):
         return None, False
 
 

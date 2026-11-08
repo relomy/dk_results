@@ -106,6 +106,23 @@ def test_load_vips_missing_file(tmp_path, monkeypatch):
     assert update_contests._load_vips() == []
 
 
+def test_load_vips_unparsable_yaml_returns_empty(tmp_path, monkeypatch, caplog):
+    path = tmp_path / "vips.yaml"
+    path.write_text("bad: yaml: :")
+    monkeypatch.setattr(update_contests, "repo_file", lambda *_parts: path)
+
+    assert update_contests._load_vips() == []
+    assert caplog.messages == [f"failed to load vips.yaml from {path}"]
+
+
+def test_load_vips_undecodable_bytes_returns_empty(tmp_path, monkeypatch):
+    path = tmp_path / "vips.yaml"
+    path.write_bytes(b"\xff\xfe\x00bad")
+    monkeypatch.setattr(update_contests, "repo_file", lambda *_parts: path)
+
+    assert update_contests._load_vips() == []
+
+
 # ── Processor assembly ───────────────────────────────────────────────────────
 
 

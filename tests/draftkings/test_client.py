@@ -36,14 +36,14 @@ class _FakeResponse(Response):
 
 
 class _CookiesWithoutDict(RequestsCookieJar):
-    """A cookie jar whose ``get_dict`` fails, forcing the per-cookie fallback."""
+    """A cookie jar without ``get_dict`` (like a plain ``CookieJar``), forcing the per-cookie fallback."""
 
     def __init__(self) -> None:
         super().__init__()
         self.set("a", "1", domain="example.com", path="/")
 
     def get_dict(self, domain: str | None = None, path: str | None = None) -> dict[str, str | None]:
-        raise RuntimeError("boom")
+        raise AttributeError("get_dict")
 
 
 class _FakeSession(Session):
@@ -264,7 +264,7 @@ def test_clone_auth_to_ignores_cookie_set_errors():
 
         def set(self, name: str, value: str | None, **_kwargs: object) -> None:
             self.calls += 1
-            raise RuntimeError("nope")
+            raise TypeError("nope")
 
     source = Session()
     source.headers["X"] = "Y"

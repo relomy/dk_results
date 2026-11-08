@@ -5,6 +5,8 @@ import logging
 from types import SimpleNamespace
 from typing import Any
 
+import pytest
+
 import dk_results.vip_lineups as vip_mod
 from dk_results.vip_lineups import (
     VipLineup,
@@ -129,6 +131,19 @@ def test_load_vips_missing_file_returns_empty(tmp_path, monkeypatch):
 
 def test_load_vips_non_list_yaml_returns_empty(tmp_path, monkeypatch):
     (tmp_path / "vips.yaml").write_text("not_a_list: true\n", encoding="utf-8")
+    monkeypatch.setattr(vip_mod, "repo_file", lambda *parts: tmp_path.joinpath(*parts))
+    assert load_vips() == []
+
+
+@pytest.mark.parametrize("content", [b"bad: yaml: :", b"\xff\xfe\x00bad"])
+def test_load_vips_unreadable_content_returns_empty(tmp_path, monkeypatch, content):
+    (tmp_path / "vips.yaml").write_bytes(content)
+    monkeypatch.setattr(vip_mod, "repo_file", lambda *parts: tmp_path.joinpath(*parts))
+    assert load_vips() == []
+
+
+def test_load_vips_directory_in_place_of_file_returns_empty(tmp_path, monkeypatch):
+    (tmp_path / "vips.yaml").mkdir()
     monkeypatch.setattr(vip_mod, "repo_file", lambda *parts: tmp_path.joinpath(*parts))
     assert load_vips() == []
 

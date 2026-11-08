@@ -46,7 +46,7 @@ def _load_vips() -> list[str]:
         return []
     try:
         data = yaml.safe_load(path.read_text()) or []
-    except Exception:
+    except (OSError, ValueError, yaml.YAMLError):
         logger.warning("failed to load vips.yaml from %s", path)
         return []
     if not isinstance(data, list):
