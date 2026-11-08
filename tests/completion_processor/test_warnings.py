@@ -34,7 +34,7 @@ def test_warning_is_sent_only_while_the_start_is_inside_the_window(run_warning, 
 
 def test_warning_with_a_timezone_aware_start_is_measured_in_that_zone(run_warning):
     start = "2099-06-01T20:00:00+00:00"
-    now = datetime.datetime(2099, 6, 1, 19, 35, tzinfo=datetime.timezone.utc)
+    now = datetime.datetime(2099, 6, 1, 19, 35, tzinfo=datetime.UTC)
     sender = run_warning(at=now, start=start)
     assert sender.messages[0].splitlines()[1] == f"• 🕒 {start} (⏳ 25m)"
 

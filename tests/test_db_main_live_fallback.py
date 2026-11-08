@@ -8,7 +8,7 @@ from dk_results.sport_processor import (
     StandingsUnavailableError,
 )
 
-_NOW = datetime.datetime(2026, 10, 10, 12, 0, tzinfo=datetime.timezone.utc)
+_NOW = datetime.datetime(2026, 10, 10, 12, 0, tzinfo=datetime.UTC)
 
 
 def _completed_db(*, sport: str = "NFL", dk_id: int = 900, completed_at: datetime.datetime = _NOW):

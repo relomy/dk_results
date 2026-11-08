@@ -147,7 +147,7 @@ def _recently_completed_contest_ids(
     now: datetime.datetime | None,
 ) -> dict[str, int]:
     """Map each idle sport to its primary contest completed inside the completion window."""
-    now = now or datetime.datetime.now(datetime.timezone.utc)
+    now = now or datetime.datetime.now(datetime.UTC)
     filled: dict[str, int] = {}
     for sport_name in idle:
         sport_cls = choices[sport_name]

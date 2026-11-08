@@ -721,7 +721,7 @@ def test_sqlite_errors_are_logged_once_with_a_traceback(method, caplog):
 
 # ── Completed contests and the completion window ─────────────────────────────
 
-_T0 = datetime.datetime(2026, 10, 10, 12, 0, tzinfo=datetime.timezone.utc)
+_T0 = datetime.datetime(2026, 10, 10, 12, 0, tzinfo=datetime.UTC)
 
 
 def _complete(db: ContestDatabase, dk_id: int, at: datetime.datetime, status: str = "COMPLETED") -> None:

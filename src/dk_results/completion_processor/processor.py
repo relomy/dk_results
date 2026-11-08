@@ -50,7 +50,7 @@ class CompletionProcessor:
         clock: Callable[[], datetime.datetime] | None = None,
         now: Now = datetime.datetime.now,
     ) -> None:
-        self._clock = clock or (lambda: now(datetime.timezone.utc))
+        self._clock = clock or (lambda: now(datetime.UTC))
         self._results = results
         self._presence = presence
         self._sender = bonus_sender

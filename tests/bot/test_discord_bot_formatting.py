@@ -75,7 +75,7 @@ def test_format_time_until_days_hours(monkeypatch):
 
 
 def test_format_time_until_invalid():
-    assert discord_bot._format_time_until(None) is None
+    assert discord_bot._format_time_until("not a date") is None
 
 
 def test_system_uptime_seconds_missing_file(monkeypatch):
