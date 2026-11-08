@@ -58,8 +58,3 @@ where = ["src"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src", "."]
-
-[tool.ty]
-
-[tool.ty.src]
-exclude = ["tests"]
