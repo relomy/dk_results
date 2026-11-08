@@ -183,7 +183,7 @@ def save_cookies_to_pickle(cookies: Iterable[dict[str, Any]], filename: str = PI
         with path.open("wb") as f:
             pickle.dump(cookies, f)
     except Exception as e:
-        logger.error("Failed to save cookies: %s", e)
+        logger.exception("Failed to save cookies: %s", e)
 
 
 def _cached_cookies_are_usable(cookies: Any) -> bool:

@@ -163,7 +163,7 @@ def main(argv: list[str] | None = None):
         conn = sqlite3.connect(db_path)
         check_contests_for_completion(conn, settings)
     except sqlite3.Error as sql_error:
-        logger.error("SQLite error: %s", sql_error)
+        logger.exception("SQLite error: %s", sql_error)
     except Exception:
         logger.exception("An unexpected error occurred")
 
