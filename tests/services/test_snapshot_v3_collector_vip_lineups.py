@@ -9,7 +9,6 @@ from dk_results.services.snapshot_v3 import collector
 from dk_results.services.snapshot_v3.collector import collect_snapshot
 from dk_results.services.snapshot_v3.pipeline import build_snapshot_v3_envelope
 from dk_results.vip_lineups import VipLineup, VipPlayer
-from tests.services.snapshot_v3_collector_fakes import _FakeContestDB, _FakeDK
 
 
 def _typed_vip_lineup() -> VipLineup:
@@ -65,7 +64,7 @@ def _typed_vip_lineup() -> VipLineup:
 
 
 def _collect_typed_vip_bundle(
-    monkeypatch, tmp_path, *, lineup=None, lineups=None, extra_users=(), standings_limit=None
+    monkeypatch, tmp_path, make_dk, make_contest_db, *, lineup=None, lineups=None, extra_users=(), standings_limit=None
 ) -> dict:
     monkeypatch.setattr(collector, "SALARY_DIR", str(tmp_path))
     monkeypatch.setattr(collector, "load_vips", lambda: ["vipuser"])
@@ -105,15 +104,17 @@ def _collect_typed_vip_bundle(
     monkeypatch.setattr(
         collector,
         "_collect_source_snapshot",
-        lambda **kwargs: real_collect(dk=_FakeDK(), contest_db=_FakeContestDB(by_id=row), **kwargs),
+        lambda **kwargs: real_collect(dk=make_dk(), contest_db=make_contest_db(by_id=row), **kwargs),
     )
 
     kwargs = {} if standings_limit is None else {"standings_limit": standings_limit}
     return collect_snapshot(sport="NBA", contest_id=321, **kwargs).bundle
 
 
-def test_collect_snapshot_keeps_typed_vip_lineups_from_the_fetcher(monkeypatch, tmp_path) -> None:
-    bundle = _collect_typed_vip_bundle(monkeypatch, tmp_path)
+def test_collect_snapshot_keeps_typed_vip_lineups_from_the_fetcher(
+    monkeypatch, tmp_path, make_dk, make_contest_db
+) -> None:
+    bundle = _collect_typed_vip_bundle(monkeypatch, tmp_path, make_dk, make_contest_db)
 
     assert len(bundle["vip_lineups"]) == 1
     vip = bundle["vip_lineups"][0]
@@ -128,7 +129,9 @@ def _ranked_vip_lineup(user: str, entry_key: str, rank: str) -> VipLineup:
     return lineup
 
 
-def test_collect_snapshot_orders_vip_lineups_by_rank_then_vip_entry_key(monkeypatch, tmp_path) -> None:
+def test_collect_snapshot_orders_vip_lineups_by_rank_then_vip_entry_key(
+    monkeypatch, tmp_path, make_dk, make_contest_db
+) -> None:
     # The fetcher returns lineups in worker-thread completion order.
     fetched = [
         _ranked_vip_lineup("slowpoke", "e9", "12"),
@@ -136,13 +139,15 @@ def test_collect_snapshot_orders_vip_lineups_by_rank_then_vip_entry_key(monkeypa
         _ranked_vip_lineup("tiedlate", "e5", "3"),
         _ranked_vip_lineup("tiedearly", "e2", "3"),
     ]
-    bundle = _collect_typed_vip_bundle(monkeypatch, tmp_path, lineups=fetched)
+    bundle = _collect_typed_vip_bundle(monkeypatch, tmp_path, make_dk, make_contest_db, lineups=fetched)
 
     assert [vip["vip_entry_key"] for vip in bundle["vip_lineups"]] == ["e2", "e5", "e9", "e0"]
 
 
-def test_collect_snapshot_typed_vip_lineup_slots_carry_salary_and_live_state(monkeypatch, tmp_path) -> None:
-    bundle = _collect_typed_vip_bundle(monkeypatch, tmp_path)
+def test_collect_snapshot_typed_vip_lineup_slots_carry_salary_and_live_state(
+    monkeypatch, tmp_path, make_dk, make_contest_db
+) -> None:
+    bundle = _collect_typed_vip_bundle(monkeypatch, tmp_path, make_dk, make_contest_db)
 
     slots = {slot["player_name"]: slot for slot in bundle["vip_lineups"][0]["players_live"]}
     assert (slots["Player A"]["slot"], slots["Player A"]["salary"], slots["Player A"]["is_live"]) == (
@@ -158,22 +163,26 @@ def test_collect_snapshot_typed_vip_lineup_slots_carry_salary_and_live_state(mon
     )
 
 
-def test_collect_snapshot_typed_vip_lineup_locked_slot_omits_player_details(monkeypatch, tmp_path) -> None:
-    bundle = _collect_typed_vip_bundle(monkeypatch, tmp_path)
+def test_collect_snapshot_typed_vip_lineup_locked_slot_omits_player_details(
+    monkeypatch, tmp_path, make_dk, make_contest_db
+) -> None:
+    bundle = _collect_typed_vip_bundle(monkeypatch, tmp_path, make_dk, make_contest_db)
 
     locked = bundle["vip_lineups"][0]["players_live"][2]
     assert locked == {"slot": "UTIL", "player_name": "LOCKED 🔒", "is_locked": True}
 
 
-def test_collect_snapshot_vip_points_lookup_sees_typed_vip_lineup(monkeypatch, tmp_path) -> None:
-    bundle = _collect_typed_vip_bundle(monkeypatch, tmp_path)
+def test_collect_snapshot_vip_points_lookup_sees_typed_vip_lineup(
+    monkeypatch, tmp_path, make_dk, make_contest_db
+) -> None:
+    bundle = _collect_typed_vip_bundle(monkeypatch, tmp_path, make_dk, make_contest_db)
 
     # the VIP-points lookup sees the lineup's 130.0 (>= 120 cutoff), not the standings row's 100.0
     assert bundle["standings"][0]["is_cashing"] is True
 
 
-def test_typed_vip_lineup_reaches_validated_snapshot_envelope(monkeypatch, tmp_path) -> None:
-    bundle = _collect_typed_vip_bundle(monkeypatch, tmp_path)
+def test_typed_vip_lineup_reaches_validated_snapshot_envelope(monkeypatch, tmp_path, make_dk, make_contest_db) -> None:
+    bundle = _collect_typed_vip_bundle(monkeypatch, tmp_path, make_dk, make_contest_db)
     bundle["contest"]["state"] = "live"
     bundle["contest"]["prize_pool"] = 1000
 
@@ -199,20 +208,28 @@ def _prod_shaped_vip_lineup() -> VipLineup:
     return lineup
 
 
-def _collect_vip_below_standings_limit(monkeypatch, tmp_path) -> dict:
+def _collect_vip_below_standings_limit(monkeypatch, tmp_path, make_dk, make_contest_db) -> dict:
     leader = SimpleNamespace(
         rank="1", player_id="e0", name="leader", pmr="0", pts=200.0, salary=0, lineupobj=None, lineup=[]
     )
     bundle = _collect_typed_vip_bundle(
-        monkeypatch, tmp_path, lineup=_prod_shaped_vip_lineup(), extra_users=[leader], standings_limit=1
+        monkeypatch,
+        tmp_path,
+        make_dk,
+        make_contest_db,
+        lineup=_prod_shaped_vip_lineup(),
+        extra_users=[leader],
+        standings_limit=1,
     )
     bundle["contest"]["state"] = "live"
     bundle["contest"]["prize_pool"] = 1000
     return bundle
 
 
-def test_vip_below_standings_limit_emits_numeric_rank_points_and_pmr(monkeypatch, tmp_path) -> None:
-    bundle = _collect_vip_below_standings_limit(monkeypatch, tmp_path)
+def test_vip_below_standings_limit_emits_numeric_rank_points_and_pmr(
+    monkeypatch, tmp_path, make_dk, make_contest_db
+) -> None:
+    bundle = _collect_vip_below_standings_limit(monkeypatch, tmp_path, make_dk, make_contest_db)
     envelope = build_snapshot_v3_envelope(
         {"NBA": 321}, generated_at="2026-10-04T12:00:00Z", collector=lambda **_: bundle
     )
@@ -225,8 +242,8 @@ def test_vip_below_standings_limit_emits_numeric_rank_points_and_pmr(monkeypatch
     assert [row["entry_key"] for row in contest["metrics"]["distance_to_cash"]["per_vip"]] == ["e1"]
 
 
-def test_vip_lineup_player_names_are_trimmed(monkeypatch, tmp_path) -> None:
-    bundle = _collect_vip_below_standings_limit(monkeypatch, tmp_path)
+def test_vip_lineup_player_names_are_trimmed(monkeypatch, tmp_path, make_dk, make_contest_db) -> None:
+    bundle = _collect_vip_below_standings_limit(monkeypatch, tmp_path, make_dk, make_contest_db)
 
     names = [slot["player_name"] for slot in bundle["vip_lineups"][0]["players_live"]]
     assert names == ["Rams", "Player B", "LOCKED 🔒"]
@@ -236,9 +253,11 @@ def test_vip_lineup_player_names_are_trimmed(monkeypatch, tmp_path) -> None:
     ("rank", "pts", "pmr"),
     [("", None, "n/a"), (None, "", None)],
 )
-def test_unparseable_vip_figures_are_omitted_not_null(monkeypatch, tmp_path, rank, pts, pmr) -> None:
+def test_unparseable_vip_figures_are_omitted_not_null(
+    monkeypatch, tmp_path, make_dk, make_contest_db, rank, pts, pmr
+) -> None:
     lineup = _typed_vip_lineup()
     lineup.rank, lineup.pts, lineup.pmr = rank, pts, pmr
-    vip = _collect_typed_vip_bundle(monkeypatch, tmp_path, lineup=lineup)["vip_lineups"][0]
+    vip = _collect_typed_vip_bundle(monkeypatch, tmp_path, make_dk, make_contest_db, lineup=lineup)["vip_lineups"][0]
 
     assert not {"rank", "points", "pmr", "pts"} & vip.keys()

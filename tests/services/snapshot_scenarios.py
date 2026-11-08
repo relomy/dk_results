@@ -20,7 +20,7 @@ import requests
 from dk_results.persistence.contestdatabase import ContestRow
 from dk_results.services.snapshot_v3 import collector
 from dk_results.services.snapshot_v3.pipeline import build_snapshot_v3_envelope
-from tests.services.snapshot_v3_collector_fakes import _FakeContestDB
+from tests.services.collector_edges import _FakeContestDB
 
 GENERATED_AT = "2026-10-04T12:00:00Z"
 PRODUCER_COMMIT = "0123456789abcdef0123456789abcdef01234567"

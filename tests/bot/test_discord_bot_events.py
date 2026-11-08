@@ -4,53 +4,47 @@ import pytest
 from discord.ext import commands
 
 from dk_results.bot import discord_bot
-from tests.bot.discord_bot_fakes import FakeCtx, _ctx, _settings
 
 
 @pytest.mark.asyncio
-async def test_limit_to_channel_allows_when_not_set(monkeypatch):
-    ctx = FakeCtx()
-    assert await discord_bot.limit_to_channel(_settings(), _ctx(ctx)) is True
+async def test_limit_to_channel_allows_when_not_set(monkeypatch, ctx, as_context, make_settings):
+    assert await discord_bot.limit_to_channel(make_settings(), as_context(ctx)) is True
 
 
 @pytest.mark.asyncio
-async def test_limit_to_channel_blocks_other_channels(monkeypatch):
-    ctx = FakeCtx()
+async def test_limit_to_channel_blocks_other_channels(monkeypatch, ctx, as_context, make_settings):
     ctx.channel.id = 999
-    assert await discord_bot.limit_to_channel(_settings(discord_channel_id=123), _ctx(ctx)) is False
+    assert await discord_bot.limit_to_channel(make_settings(discord_channel_id=123), as_context(ctx)) is False
 
 
 @pytest.mark.asyncio
-async def test_on_command_error_unknown_command(monkeypatch):
-    ctx = FakeCtx()
+async def test_on_command_error_unknown_command(monkeypatch, ctx, as_context):
 
     # Should ignore CommandNotFound silently.
     async def _dummy(ctx):
         return None
 
     dummy_command = commands.Command(_dummy, name="fake")
-    await discord_bot.on_command_error(_ctx(ctx), commands.CommandNotFound(f"Command {dummy_command} not found"))
+    await discord_bot.on_command_error(as_context(ctx), commands.CommandNotFound(f"Command {dummy_command} not found"))
     assert ctx.sent == []
 
 
 @pytest.mark.asyncio
-async def test_on_command_error_other_error(monkeypatch):
-    ctx = FakeCtx()
-    await discord_bot.on_command_error(_ctx(ctx), RuntimeError("boom"))
+async def test_on_command_error_other_error(monkeypatch, ctx, as_context):
+    await discord_bot.on_command_error(as_context(ctx), RuntimeError("boom"))
     assert ctx.sent == ["Something went wrong running that command."]
 
 
 @pytest.mark.asyncio
-async def test_on_command_error_logs_wrapped_traceback(caplog):
+async def test_on_command_error_logs_wrapped_traceback(caplog, ctx, as_context):
     """CommandInvokeError should be unwrapped so the real cause's traceback is logged."""
-    ctx = FakeCtx()
     try:
         raise ValueError("underlying failure")
     except ValueError as exc:
         wrapped = commands.CommandInvokeError(exc)
 
     with caplog.at_level("ERROR", logger="dk_results.bot.discord_bot"):
-        await discord_bot.on_command_error(_ctx(ctx), wrapped)
+        await discord_bot.on_command_error(as_context(ctx), wrapped)
 
     assert ctx.sent == ["Something went wrong running that command."]
     record = caplog.records[-1]
@@ -74,8 +68,7 @@ async def test_on_ready_logs(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_on_command_error_check_failure():
-    ctx = FakeCtx()
+async def test_on_command_error_check_failure(ctx, as_context):
 
-    await discord_bot.on_command_error(_ctx(ctx), discord_bot.commands.CheckFailure())
+    await discord_bot.on_command_error(as_context(ctx), discord_bot.commands.CheckFailure())
     assert ctx.sent == []

@@ -6,9 +6,9 @@ import dk_results.cli.db_main as db_main
 from dk_results.domain.sport import Sport
 from dk_results.sport_processor import (
     NoLiveContestError,
+    SportProcessor,
     StandingsUnavailableError,
 )
-from tests.db_main_fakes import _ScriptedProcessor
 
 _NOW = datetime.datetime(2026, 10, 10, 12, 0, tzinfo=datetime.UTC)
 
@@ -27,7 +27,7 @@ def _completed_db(*, sport: str = "NFL", dk_id: int = 900, completed_at: datetim
     return db
 
 
-def _live_for(live: dict[str, int]) -> _ScriptedProcessor:
+def _live_for(make_scripted_processor, live: dict[str, int]) -> SportProcessor:
     """A processor whose sports are live (mapped to an id) or idle (absent)."""
 
     def _run(sport_name: str, sport_cls: type[Sport]) -> int:
@@ -35,7 +35,7 @@ def _live_for(live: dict[str, int]) -> _ScriptedProcessor:
             raise NoLiveContestError(sport_name)
         return live[sport_name]
 
-    return _ScriptedProcessor(_run)
+    return make_scripted_processor(_run)
 
 
 def _capture_selection(monkeypatch) -> list[dict[str, int]]:
@@ -49,13 +49,15 @@ def _capture_selection(monkeypatch) -> list[dict[str, int]]:
     return calls
 
 
-def test_build_live_snapshot_fills_an_idle_sport_from_a_recently_completed_contest(monkeypatch):
+def test_build_live_snapshot_fills_an_idle_sport_from_a_recently_completed_contest(
+    monkeypatch, make_scripted_processor
+):
     calls = _capture_selection(monkeypatch)
     db = _completed_db()
 
     payload = db_main.build_live_snapshot(
         ["NFL"],
-        processor=_live_for({}),
+        processor=_live_for(make_scripted_processor, {}),
         contest_db=db,
         now=_NOW + datetime.timedelta(hours=17),
     )
@@ -64,31 +66,37 @@ def test_build_live_snapshot_fills_an_idle_sport_from_a_recently_completed_conte
     assert calls == [{"NFL": 900}]
 
 
-def test_build_live_snapshot_prefers_a_live_contest_over_a_completed_one_in_the_same_sport(monkeypatch):
+def test_build_live_snapshot_prefers_a_live_contest_over_a_completed_one_in_the_same_sport(
+    monkeypatch, make_scripted_processor
+):
     calls = _capture_selection(monkeypatch)
     db = _completed_db()
 
-    db_main.build_live_snapshot(["NFL"], processor=_live_for({"NFL": 123}), contest_db=db, now=_NOW)
+    db_main.build_live_snapshot(
+        ["NFL"], processor=_live_for(make_scripted_processor, {"NFL": 123}), contest_db=db, now=_NOW
+    )
 
     assert calls == [{"NFL": 123}]
 
 
-def test_build_live_snapshot_fills_only_the_idle_sports(monkeypatch):
+def test_build_live_snapshot_fills_only_the_idle_sports(monkeypatch, make_scripted_processor):
     calls = _capture_selection(monkeypatch)
     db = _completed_db(sport="NFL")
 
-    db_main.build_live_snapshot(["NBA", "NFL"], processor=_live_for({"NBA": 5}), contest_db=db, now=_NOW)
+    db_main.build_live_snapshot(
+        ["NBA", "NFL"], processor=_live_for(make_scripted_processor, {"NBA": 5}), contest_db=db, now=_NOW
+    )
 
     assert calls == [{"NBA": 5, "NFL": 900}]
 
 
-def test_build_live_snapshot_returns_none_once_the_window_has_closed(monkeypatch):
+def test_build_live_snapshot_returns_none_once_the_window_has_closed(monkeypatch, make_scripted_processor):
     calls = _capture_selection(monkeypatch)
     db = _completed_db()
 
     payload = db_main.build_live_snapshot(
         ["NFL"],
-        processor=_live_for({}),
+        processor=_live_for(make_scripted_processor, {}),
         contest_db=db,
         now=_NOW + datetime.timedelta(hours=19),
     )
@@ -97,20 +105,26 @@ def test_build_live_snapshot_returns_none_once_the_window_has_closed(monkeypatch
     assert calls == []
 
 
-def test_build_live_snapshot_does_not_fill_a_sport_whose_live_standings_were_unavailable(monkeypatch):
+def test_build_live_snapshot_does_not_fill_a_sport_whose_live_standings_were_unavailable(
+    monkeypatch, make_scripted_processor
+):
     calls = _capture_selection(monkeypatch)
     db = _completed_db()
 
     def _unavailable(sport_name: str, sport_cls: type[Sport]) -> int:
         raise StandingsUnavailableError(sport_name)
 
-    payload = db_main.build_live_snapshot(["NFL"], processor=_ScriptedProcessor(_unavailable), contest_db=db, now=_NOW)
+    payload = db_main.build_live_snapshot(
+        ["NFL"], processor=make_scripted_processor(_unavailable), contest_db=db, now=_NOW
+    )
 
     assert payload is None
     assert calls == []
 
 
-def test_build_live_snapshot_fills_an_idle_sport_but_not_one_with_unavailable_standings(monkeypatch):
+def test_build_live_snapshot_fills_an_idle_sport_but_not_one_with_unavailable_standings(
+    monkeypatch, make_scripted_processor
+):
     calls = _capture_selection(monkeypatch)
     db = _completed_db(sport="NFL", dk_id=900)
     db.conn.execute(
@@ -127,7 +141,7 @@ def test_build_live_snapshot_fills_an_idle_sport_but_not_one_with_unavailable_st
         raise NoLiveContestError(sport_name)
 
     db_main.build_live_snapshot(
-        ["NFL", "NBA"], processor=_ScriptedProcessor(_nfl_unavailable_nba_idle), contest_db=db, now=_NOW
+        ["NFL", "NBA"], processor=make_scripted_processor(_nfl_unavailable_nba_idle), contest_db=db, now=_NOW
     )
 
     assert calls == [{"NBA": 901}]
