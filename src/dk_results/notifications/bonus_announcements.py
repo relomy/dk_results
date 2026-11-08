@@ -301,7 +301,7 @@ def _collect_player_bonuses(
 
 
 def _build_bonus_candidate(normalized_name: str, bonus_code: str, data: dict[str, Any]) -> BonusCandidate:
-    canonical_display_name = sorted(data["display_names"], key=str.lower)[0]
+    canonical_display_name = min(data["display_names"], key=str.lower)
     return BonusCandidate(
         display_name=canonical_display_name,
         normalized_player_name=normalized_name,

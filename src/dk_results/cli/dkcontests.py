@@ -449,7 +449,6 @@ def _print_selected_contest(contest: Contest) -> None:
 
 
 def main():
-    """"""
     load_and_apply_settings()
 
     supported_sports = [
