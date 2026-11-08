@@ -1,6 +1,7 @@
 """SportProcessor.run: standings parsing, cash line, VIP and sheet events, bonus announcements."""
 
 import logging
+import sqlite3
 
 import pytest
 
@@ -309,6 +310,34 @@ def test_process_sport_announces_bonuses_when_bonus_sender_configured(
     assert captured["contest_id"] == 123
     assert captured["sender"] is bonus_sender
     assert captured["vip_lineups"] == [_FakeVipLineup().to_dict()]
+
+
+def test_process_sport_logs_bonus_announcement_db_failure_with_traceback(
+    monkeypatch, tmp_path, caplog, live_contest_db, make_sport_processor
+):
+    monkeypatch.setattr(
+        "dk_results.sport_processor.fetch_vip_lineups",
+        lambda *_a, **_kw: [_FakeVipLineup()],
+    )
+    monkeypatch.setattr(
+        "dk_results.sport_processor.state.contests_db_path",
+        lambda: tmp_path / "contests.db",
+    )
+
+    def _locked(**_kwargs):
+        raise sqlite3.OperationalError("database is locked")
+
+    monkeypatch.setattr("dk_results.sport_processor.announce_vip_bonuses", _locked)
+    processor = make_sport_processor(live_contest_db, vips=["UserA"], salary_dir=str(tmp_path), bonus_sender=object())
+
+    with caplog.at_level(logging.ERROR, logger="dk_results.sport_processor"):
+        contest_id = processor.run("NFL", NFLSport)
+
+    assert contest_id == 123
+    errors = [r for r in caplog.records if r.levelno == logging.ERROR]
+    assert [r.getMessage() for r in errors] == ["Failed bonus announcement DB flow for NFL (123)"]
+    assert isinstance(errors[0].exc_info, tuple)
+    assert errors[0].exc_info[0] is sqlite3.OperationalError
 
 
 def test_process_sport_uses_structured_log_events(tmp_path, caplog, live_contest_db, make_sport_processor):
