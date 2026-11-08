@@ -343,7 +343,7 @@ async def upcoming(ctx: commands.Context) -> None:
             upcoming_match = contest_db.get_next_upcoming_contest(
                 sport_cls.name, sport_cls.sheet_min_entry_fee, sport_cls.keyword
             )
-            dk_id, name, _, _, start_date = upcoming_match if upcoming_match else upcoming_any
+            dk_id, name, _, _, start_date = upcoming_match or upcoming_any
             suffix = "" if upcoming_match else " (failed criteria)"
             relative = _format_time_until(str(start_date))
             relative_part = f" ({relative})" if relative else ""

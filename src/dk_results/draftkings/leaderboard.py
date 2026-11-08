@@ -56,7 +56,7 @@ def _dollars_to_cents_half_up(value: Any) -> int | None:
         amount = Decimal(str(value))
     except (InvalidOperation, ValueError):
         return None
-    cents = (amount * Decimal("100")).quantize(Decimal("1"), rounding=ROUND_HALF_UP)
+    cents = (amount * Decimal(100)).quantize(Decimal(1), rounding=ROUND_HALF_UP)
     try:
         return int(cents)
     except (TypeError, ValueError):

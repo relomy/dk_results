@@ -5,7 +5,7 @@ import logging
 from argparse import Namespace
 from collections import OrderedDict
 
-import dk_results.cli.db_main as db_main
+from dk_results.cli import db_main
 from dk_results.sport_processor import (
     NoLiveContestError,
 )
@@ -234,7 +234,6 @@ def test_main_loads_vips_once_per_invocation(monkeypatch, tmp_path):
 
         def run(self, sport_name, sport_cls):
             run_sports.append(sport_name)
-            return
 
     monkeypatch.setattr(db_main, "load_vips", _load_vips_once)
     monkeypatch.setattr(db_main, "SportProcessor", _FakeSportProcessor)

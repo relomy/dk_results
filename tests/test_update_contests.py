@@ -14,7 +14,7 @@ import sys
 
 import pytest
 
-import dk_results.cli.update_contests as update_contests
+from dk_results.cli import update_contests
 from dk_results.config import RuntimeSettings
 
 

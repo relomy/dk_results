@@ -86,7 +86,7 @@ class DfsSheetService:
         values = [[positions_paid, contest_name]]
         self.repo.write_range(values, cell_range)
 
-    def add_min_cash(self, min_cash: int | float) -> None:
+    def add_min_cash(self, min_cash: float) -> None:
         cell_range = f"{self.sport}!W1:W1"
         values = [[min_cash]]
         self.repo.write_range(values, cell_range)

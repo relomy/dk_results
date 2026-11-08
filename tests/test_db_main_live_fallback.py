@@ -2,7 +2,7 @@
 
 import datetime
 
-import dk_results.cli.db_main as db_main
+from dk_results.cli import db_main
 from dk_results.domain.sport import Sport
 from dk_results.sport_processor import (
     NoLiveContestError,

@@ -3,7 +3,7 @@ from dataclasses import dataclass
 
 import pytest
 
-import dk_results.notifications.bonus_announcements as bonus_announcements
+from dk_results.notifications import bonus_announcements
 from dk_results.notifications.bonus_announcements import announce_vip_bonuses
 
 

@@ -16,7 +16,7 @@ def get_contests_from_response(
     if "Contests" in response:
         return response["Contests"]
     logger.error("response isn't a dict or a list??? exiting")
-    raise SystemExit()
+    raise SystemExit
 
 
 def log_draft_group_event(
