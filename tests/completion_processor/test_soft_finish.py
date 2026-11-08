@@ -30,8 +30,14 @@ REAL_LEADERBOARD = Path(__file__).parents[1] / "draftkings" / "data" / "leaderbo
 
 def _summary(top, cashing, vips, *, header=HEADER, when="2024-01-01 00:00:00", tail=TAIL):
     return "\n".join(
-        [header, f"• 🕒 {when}", *tail, f"• 🏆 Top score: {top}", f"• 💵 Cashing score: {cashing}"]
-        + [f"• ⭐ VIPs cashed (visible rows): {vips}"]
+        [
+            header,
+            f"• 🕒 {when}",
+            *tail,
+            f"• 🏆 Top score: {top}",
+            f"• 💵 Cashing score: {cashing}",
+            f"• ⭐ VIPs cashed (visible rows): {vips}",
+        ]
     )
 
 

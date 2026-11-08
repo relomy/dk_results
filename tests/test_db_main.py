@@ -104,9 +104,8 @@ def test_process_sport_persists_none_cash_line_when_positions_paid_missing(
 
 def test_process_sport_handles_no_live_contest(caplog, contest_db_no_live, make_sport_processor):
     processor = make_sport_processor(contest_db_no_live, vips=["UserA"])
-    with caplog.at_level(logging.DEBUG):
-        with pytest.raises(NoLiveContestError):
-            processor.run("NFL", NFLSport)
+    with caplog.at_level(logging.DEBUG), pytest.raises(NoLiveContestError):
+        processor.run("NFL", NFLSport)
 
     assert len(_event_messages(caplog, "vip_detection")) == 0
     assert len(_event_messages(caplog, "vip_fetch")) == 0
@@ -126,9 +125,8 @@ def test_process_sport_emits_no_vip_events_for_standings_skip(
         dk=dk_no_standings,
         salary_dir=str(tmp_path),
     )
-    with caplog.at_level(logging.INFO):
-        with pytest.raises(StandingsUnavailableError):
-            processor.run("NFL", NFLSport)
+    with caplog.at_level(logging.INFO), pytest.raises(StandingsUnavailableError):
+        processor.run("NFL", NFLSport)
 
     assert len(_event_messages(caplog, "vip_detection")) == 0
     assert len(_event_messages(caplog, "vip_fetch")) == 0
@@ -193,9 +191,8 @@ def _run_with_failing_results_build(
         lambda self, **_kwargs: (_ for _ in ()).throw(RuntimeError("boom")),
     )
     processor = make_sport_processor(live_contest_db, vips=["UserA"], salary_dir=str(tmp_path))
-    with caplog.at_level(logging.INFO):
-        with pytest.raises(StandsParseError) as excinfo:
-            processor.run("NFL", NFLSport)
+    with caplog.at_level(logging.INFO), pytest.raises(StandsParseError) as excinfo:
+        processor.run("NFL", NFLSport)
     return excinfo.value
 
 

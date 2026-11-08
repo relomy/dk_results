@@ -26,7 +26,7 @@ async def test_help_lists_commands(monkeypatch, ctx, as_context, dummy_sport, du
     assert "!sankayadead" in message
     assert "!health" in message
     assert "!contests <sport>" in message
-    assert "NBA" in message and "NFL" in message
+    assert all(sport in message for sport in ("NBA", "NFL"))
     assert "!live" in message
     assert "!upcoming" in message
     assert "!sports" in message

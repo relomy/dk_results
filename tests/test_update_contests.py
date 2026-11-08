@@ -343,7 +343,7 @@ def test_main_logs_unexpected_error_with_traceback(monkeypatch, caplog):
 
     errors = [r for r in caplog.records if r.levelno == logging.ERROR]
     assert len(errors) == 1
-    assert errors[0].exc_info is not None and errors[0].exc_info[0] is RuntimeError
+    assert all((errors[0].exc_info is not None, errors[0].exc_info[0] is RuntimeError))
 
 
 def test_main_migrates_a_legacy_contests_table_to_have_completed_at(monkeypatch, tmp_path):
