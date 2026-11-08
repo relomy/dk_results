@@ -73,3 +73,11 @@ extend-exclude = ["build"]
 extend-select = ["F", "E4", "E7", "E9", "E501", "I", "G", "LOG", "C90", "UP", "B", "C4", "PIE", "RET", "RUF", "PT", "SIM", "TRY400", "TRY002", "ASYNC", "PLE", "PGH", "TID", "T10", "FLY", "S113", "PLR0402", "PLR1711", "PLR1722", "PLR5501", "PLW1510", "A001", "RSE102", "PYI041", "FURB110", "FURB157", "PLC0206"]
 # Style preferences.
 ignore = ["SIM105", "SIM108"]
+
+[tool.ruff.lint.per-file-ignores]
+# Deliberate fallback: a corrupt or unreadable pickle cache can raise nearly any exception type, and
+# the loader returns None so the caller re-extracts cookies.
+"src/dk_results/draftkings/cookies.py" = ["BLE001"]
+# BLE001: one VIP's failed fetch must never abort the others (counted in `failures`). BLE001 and S110:
+# the failure-logging guard is best-effort; it cannot log its own failure.
+"src/dk_results/vip_lineups.py" = ["BLE001", "S110"]
