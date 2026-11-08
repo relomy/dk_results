@@ -78,20 +78,12 @@ jobs:
         if: runner.os == 'macOS'
         run: brew install cbc
 
-      - name: Ruff Format Check
-        run: uv run --group quality ruff format --check .
-
-      - name: Ruff Check
-        run: uv run --group quality ruff check .
-
-      - name: Ty Check
-        run: uv run --group quality ty check
-
-      - name: Complexity Floor (xenon)
-        run: uv run --group quality xenon --max-absolute B src
-
-      - name: Complexity Ratchet
-        run: uv run --group quality complexity-ratchet --base origin/main --head HEAD
+      # Single source for format, lint, types, complexity floor and ratchet. A clean
+      # checkout makes the script's --worktree ratchet equal to --head HEAD.
+      - name: Quality Checks
+        env:
+          QUALITY_BASE_REF: origin/main
+        run: scripts/check-quality.sh
 
       - name: Pytest
         run: uv run pytest

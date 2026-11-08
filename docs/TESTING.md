@@ -24,8 +24,10 @@ broad; the relevant subset when it's narrow.
 
 - `uv run pytest` — the repository-wide test command.
 - `scripts/check-quality.sh` — format check, lint, types, complexity floor, and
-  the complexity ratchet against `origin/main`. The single source for these
-  commands; the pre-commit hook does not run it.
+  the complexity ratchet against `origin/main` (override with
+  `QUALITY_BASE_REF`). The single source for these commands: CI's `verify` job
+  runs it too, with `--worktree` equal to the committed `HEAD` on a clean
+  checkout. The pre-commit hook does not run it.
 - `uv run --group quality scripts/mutate-file.sh SRC_FILE TEST_PATH...` —
   mutmut on one file; a pre-refactor check, not a completion check
   ([Source splits](WORKFLOW.md#source-splits)).
