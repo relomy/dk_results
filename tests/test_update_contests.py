@@ -127,6 +127,14 @@ def test_load_vips_unparsable_yaml_returns_empty(tmp_path, monkeypatch, caplog):
     assert caplog.messages == [f"failed to load vips.yaml from {path}"]
 
 
+def test_load_vips_directory_is_silent_empty_list(tmp_path, monkeypatch, caplog):
+    (tmp_path / "vips.yaml").mkdir()
+    monkeypatch.setattr(vip_lineups, "repo_file", lambda *parts: tmp_path.joinpath(*parts))
+
+    assert update_contests._load_vips() == []
+    assert caplog.messages == []
+
+
 @pytest.mark.parametrize(
     "content", ["!!bool foo", "!!timestamp abc", "[" * 5000], ids=["bool-tag", "timestamp-tag", "deep-nesting"]
 )

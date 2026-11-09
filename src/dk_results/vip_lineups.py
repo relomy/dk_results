@@ -109,11 +109,17 @@ def _load_vips_file(vip_path: Any, update_contests_warnings: bool) -> list[str]:
             logger.warning("vips.yaml not found at %s; proceeding with empty VIP list.", vip_path)
         return []
     except (OSError, ValueError, yaml.YAMLError, KeyError, AttributeError, RecursionError) as error:
-        if update_contests_warnings:
-            logger.warning("failed to load vips.yaml from %s", vip_path)
-        else:
-            logger.warning("Failed to load vips.yaml: %s; proceeding with empty VIP list.", error)
+        _warn_vips_load_error(vip_path, update_contests_warnings, error)
         return []
+
+
+def _warn_vips_load_error(vip_path: Any, update_contests_warnings: bool, error: Exception) -> None:
+    if isinstance(error, IsADirectoryError) and update_contests_warnings:
+        return
+    if update_contests_warnings:
+        logger.warning("failed to load vips.yaml from %s", vip_path)
+    else:
+        logger.warning("Failed to load vips.yaml: %s; proceeding with empty VIP list.", error)
 
 
 # ── vip_entries construction ──────────────────────────────────────────────────

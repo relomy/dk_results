@@ -288,8 +288,7 @@ def test_main_executes_with_fakes(monkeypatch, tmp_path):
     find_mod.main()
 
 
-def test_main_with_webhook_and_quiet(monkeypatch):
-    monkeypatch.setattr("dk_results.cli.find_new_double_ups.contests.init_schema", lambda path: path)
+def test_main_with_webhook_and_quiet(monkeypatch, tmp_path):
     monkeypatch.setattr(
         "dk_results.draftkings.cookies.get_dk_cookies",
         lambda *_a, **_k: ({}, RequestsCookieJar()),
@@ -321,7 +320,7 @@ def test_main_with_webhook_and_quiet(monkeypatch):
     monkeypatch.setattr("dk_results.cli.find_new_double_ups.ContestDatabase", FakeDB)
     monkeypatch.setattr("requests.get", lambda *_a, **_k: FakeResp())
     monkeypatch.setenv("DISCORD_WEBHOOK", "https://example.test/hook")
-    monkeypatch.setenv("DFS_STATE_DIR", "/tmp")
+    monkeypatch.setenv("DFS_STATE_DIR", str(tmp_path))
     monkeypatch.setattr("dk_results.cli.find_new_double_ups._upsert_contests", lambda *_a, **_k: None)
     monkeypatch.setattr(sys, "argv", ["prog", "-s", "NFL", "-q"])
 
