@@ -5,7 +5,6 @@ from collections.abc import Mapping
 from typing import Any
 
 import requests
-import yaml
 from dfs_common import contests, state
 
 from dk_results.bot.discord_rest import DiscordRest
@@ -16,9 +15,9 @@ from dk_results.domain.sport import Sport, get_sport_choices
 from dk_results.draftkings import DraftKings
 from dk_results.logging import configure_logging
 from dk_results.notifications.vip_presence import VipPresence
-from dk_results.paths import repo_file
 from dk_results.persistence.contestdatabase import ContestDatabase
 from dk_results.persistence.notification_store import NotificationStore
+from dk_results.vip_lineups import load_vips
 
 logger = logging.getLogger(__name__)
 
@@ -41,22 +40,7 @@ def _build_discord_sender(settings: RuntimeSettings) -> DiscordRest | None:
 
 
 def _load_vips() -> list[str]:
-    path = repo_file("vips.yaml")
-    if not path.is_file():
-        return []
-    try:
-        data = yaml.safe_load(path.read_text()) or []
-    except (OSError, ValueError, yaml.YAMLError, KeyError, AttributeError, RecursionError):
-        logger.warning("failed to load vips.yaml from %s", path)
-        return []
-    if not isinstance(data, list):
-        return []
-    vips: list[str] = []
-    for item in data:
-        name = str(item).strip()
-        if name:
-            vips.append(name)
-    return vips
+    return load_vips(update_contests_warnings=True)
 
 
 def _contests_db_path() -> str:

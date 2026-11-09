@@ -16,6 +16,7 @@ import pytest
 
 from dk_results.cli import update_contests
 from dk_results.config import RuntimeSettings
+from dk_results import vip_lineups
 
 
 def _assert_traceback_is(record: logging.LogRecord, exc_type: type[BaseException]) -> None:
@@ -96,20 +97,31 @@ def test_build_discord_sender_success_path():
 def test_load_vips_reads_names(tmp_path, monkeypatch):
     path = tmp_path / "vips.yaml"
     path.write_text("- FooBar\n- ' '\n- Alpha\n")
-    monkeypatch.setattr(update_contests, "repo_file", lambda *_parts: path)
+    monkeypatch.setattr(vip_lineups, "repo_file", lambda *_parts: path)
 
     assert update_contests._load_vips() == ["FooBar", "Alpha"]
 
 
-def test_load_vips_missing_file(tmp_path, monkeypatch):
-    monkeypatch.setattr(update_contests, "repo_file", lambda *_parts: tmp_path / "missing.yaml")
+def test_load_vips_missing_file(tmp_path, monkeypatch, caplog):
+    monkeypatch.setattr(vip_lineups, "repo_file", lambda *_parts: tmp_path / "missing.yaml")
+    caplog.set_level(logging.WARNING)
     assert update_contests._load_vips() == []
+    assert caplog.messages == []
+
+
+def test_load_vips_non_list_yaml_is_silent(tmp_path, monkeypatch, caplog):
+    path = tmp_path / "vips.yaml"
+    path.write_text("not_a_list: true")
+    monkeypatch.setattr(vip_lineups, "repo_file", lambda *_parts: path)
+
+    assert update_contests._load_vips() == []
+    assert caplog.messages == []
 
 
 def test_load_vips_unparsable_yaml_returns_empty(tmp_path, monkeypatch, caplog):
     path = tmp_path / "vips.yaml"
     path.write_text("bad: yaml: :")
-    monkeypatch.setattr(update_contests, "repo_file", lambda *_parts: path)
+    monkeypatch.setattr(vip_lineups, "repo_file", lambda *_parts: path)
 
     assert update_contests._load_vips() == []
     assert caplog.messages == [f"failed to load vips.yaml from {path}"]
@@ -122,7 +134,7 @@ def test_load_vips_loader_internal_errors_return_empty(tmp_path, monkeypatch, ca
     # Explicit-tag and deep-nesting YAML raise KeyError, AttributeError and RecursionError.
     path = tmp_path / "vips.yaml"
     path.write_text(content)
-    monkeypatch.setattr(update_contests, "repo_file", lambda *_parts: path)
+    monkeypatch.setattr(vip_lineups, "repo_file", lambda *_parts: path)
 
     assert update_contests._load_vips() == []
     assert caplog.messages == [f"failed to load vips.yaml from {path}"]
@@ -131,7 +143,7 @@ def test_load_vips_loader_internal_errors_return_empty(tmp_path, monkeypatch, ca
 def test_load_vips_undecodable_bytes_returns_empty(tmp_path, monkeypatch):
     path = tmp_path / "vips.yaml"
     path.write_bytes(b"\xff\xfe\x00bad")
-    monkeypatch.setattr(update_contests, "repo_file", lambda *_parts: path)
+    monkeypatch.setattr(vip_lineups, "repo_file", lambda *_parts: path)
 
     assert update_contests._load_vips() == []
 
