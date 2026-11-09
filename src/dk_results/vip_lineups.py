@@ -92,6 +92,10 @@ class VipLineup:
 def load_vips(*, update_contests_warnings: bool = False) -> list[str]:
     """Load VIP usernames from vips.yaml located next to this file."""
     vip_path = repo_file("vips.yaml")
+    return _load_vips_file(vip_path, update_contests_warnings)
+
+
+def _load_vips_file(vip_path: Any, update_contests_warnings: bool) -> list[str]:
     try:
         with open(vip_path) as f:
             vips = yaml.safe_load(f) or []
