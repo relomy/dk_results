@@ -14,9 +14,9 @@ import sys
 
 import pytest
 
+from dk_results import vip_lineups
 from dk_results.cli import update_contests
 from dk_results.config import RuntimeSettings
-from dk_results import vip_lineups
 
 
 def _assert_traceback_is(record: logging.LogRecord, exc_type: type[BaseException]) -> None:

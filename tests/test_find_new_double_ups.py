@@ -289,6 +289,7 @@ def test_main_executes_with_fakes(monkeypatch, tmp_path):
 
 
 def test_main_with_webhook_and_quiet(monkeypatch):
+    monkeypatch.setattr("dk_results.cli.find_new_double_ups.contests.init_schema", lambda path: path)
     monkeypatch.setattr(
         "dk_results.draftkings.cookies.get_dk_cookies",
         lambda *_a, **_k: ({}, RequestsCookieJar()),
