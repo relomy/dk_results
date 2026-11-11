@@ -1,3 +1,4 @@
+import dataclasses
 import json
 from types import SimpleNamespace
 
@@ -204,12 +205,8 @@ def test_warning_schedules_missing_non_dict_or_invalid_yaml_use_default(monkeypa
     assert config.load_runtime_settings().warning_schedules == {"default": [25]}
 
 
-_SETTINGS_ENV_KEYS = (
-    "SPREADSHEET_ID",
-    "DFS_STATE_DIR",
-    "SHEET_GIDS_FILE",
-    "DISCORD_NOTIFICATIONS_ENABLED",
-    "CONTEST_WARNING_MINUTES",
+_SETTINGS_ENV_KEYS = tuple(
+    field.metadata["env"] for field in dataclasses.fields(config.ResolvedSettings) if "env" in field.metadata
 )
 
 
