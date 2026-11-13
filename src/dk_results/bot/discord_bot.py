@@ -18,7 +18,7 @@ from dk_results.domain.sport import Sport, get_sport_choices
 from dk_results.logging import configure_logging
 from dk_results.notifications.vip_presence import VIP_ABSENT, VIP_PRESENT
 from dk_results.paths import repo_file
-from dk_results.persistence.contestdatabase import ContestDatabase
+from dk_results.persistence.contestdatabase import ContestDatabase, StandingsCashSnapshot
 from dk_results.persistence.notification_store import NotificationStore
 
 logger = logging.getLogger(__name__)
@@ -259,12 +259,14 @@ def _format_vip_cash_bullets(
 
 def _fetch_live_contests_with_cash_status(
     contest_db: ContestDatabase, allowed_sports: list[str]
-) -> tuple[list[tuple], dict[int, tuple[int | None, float | None] | None], dict[int, list]]:
-    """Fetch live contest rows plus each one's persisted cash line and VIP statuses."""
+) -> tuple[list[tuple], dict[int, StandingsCashSnapshot]]:
+    """Fetch live contest rows plus each one's cash line and VIP rows as one snapshot."""
     rows = contest_db.get_live_contests(sports=allowed_sports)
-    cash_lines = {dk_id: contest_db.get_cash_line(dk_id) for dk_id, *_rest in rows}
-    vip_statuses = {dk_id: contest_db.get_vip_cash_status(dk_id) for dk_id, *_rest in rows}
-    return rows, cash_lines, vip_statuses
+    snapshots = {}
+    for dk_id, *_rest in rows:
+        snapshot = contest_db.get_standings_cash_snapshot(dk_id)
+        snapshots[dk_id] = snapshot if snapshot is not None else StandingsCashSnapshot((None, None), [])
+    return rows, snapshots
 
 
 def _format_live_contest_block(
@@ -312,7 +314,7 @@ async def live(settings: RuntimeSettings, ctx: commands.Context) -> None:
 
     contest_db = ContestDatabase(_db_path(), logger=logger)
     try:
-        rows, cash_lines, vip_statuses = _fetch_live_contests_with_cash_status(contest_db, allowed_sports)
+        rows, snapshots = _fetch_live_contests_with_cash_status(contest_db, allowed_sports)
     finally:
         contest_db.close()
 
@@ -322,7 +324,14 @@ async def live(settings: RuntimeSettings, ctx: commands.Context) -> None:
 
     blocks = [
         _format_live_contest_block(
-            settings, dk_id, name, start_date, sport, cash_lines[dk_id], vip_statuses[dk_id], positions_paid
+            settings,
+            dk_id,
+            name,
+            start_date,
+            sport,
+            snapshots[dk_id].cash_line,
+            snapshots[dk_id].vip_statuses,
+            positions_paid,
         )
         for dk_id, name, _, positions_paid, start_date, sport in rows
     ]

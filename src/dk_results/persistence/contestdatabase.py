@@ -70,14 +70,22 @@ class ContestRow:
 class VipCashStatus:
     """One tracked VIP's standings row in one contest (ADR-0011).
 
-    Persisted via :meth:`ContestDatabase.replace_vip_cash_status` and read via
-    :meth:`ContestDatabase.get_vip_cash_status`, following the named-shape
-    precedent set by :class:`ContestRow` (ADR-0006).
+    Published with its poll via :meth:`ContestDatabase.persist_standings_cash_snapshot`
+    and read with the cash line via :meth:`ContestDatabase.get_standings_cash_snapshot`
+    (ADR-0011), following the named-shape precedent set by :class:`ContestRow` (ADR-0006).
     """
 
     vip_name: Any
     rank: Any
     points: Any
+
+
+@dataclass(frozen=True)
+class StandingsCashSnapshot:
+    """The persisted cash line and VIP rows from one standings poll (ADR-0011)."""
+
+    cash_line: tuple[int | None, float | None]
+    vip_statuses: list[VipCashStatus]
 
 
 class ContestDatabase:
@@ -176,15 +184,7 @@ class ContestDatabase:
         self.conn.execute(sql)
 
     def compare_contests(self, contests: list[Contest]) -> list[int]:
-        """
-        Compare given contests with those in the database and return new contest IDs.
-
-        Args:
-            contests (list[Contest]): List of Contest objects.
-
-        Returns:
-            list[int]: List of new contest IDs not found in the database.
-        """
+        """Return IDs from ``contests`` that are not already stored."""
         dk_ids = [c.id for c in contests]
         if not dk_ids:
             return []
@@ -196,12 +196,7 @@ class ContestDatabase:
         return [dk_id for dk_id in dk_ids if dk_id not in found_ids]
 
     def insert_contests(self, contests: list[Contest]) -> None:
-        """
-        Insert contests into the database, ignoring duplicates.
-
-        Args:
-            contests (list[Contest]): List of Contest objects.
-        """
+        """Insert contests, ignoring duplicate IDs."""
         columns = [
             "sport",
             "dk_id",
@@ -241,16 +236,7 @@ class ContestDatabase:
         self.conn.close()
 
     def sync_draft_group_start_dates(self, draft_group_start_dates: dict[int, datetime.datetime]) -> int:
-        """
-        Update start_date for contests in draft groups when the start time changes.
-
-        Args:
-            draft_group_start_dates (dict[int, datetime.datetime]): Draft group IDs
-                mapped to their latest start datetime (naive, seconds precision).
-
-        Returns:
-            int: Number of draft groups updated (not rows updated).
-        """
+        """Apply changed start times, returning the number of groups updated."""
         if not draft_group_start_dates:
             return 0
 
@@ -289,19 +275,7 @@ class ContestDatabase:
         return updates
 
     def get_live_contest(self, sport: str, entry_fee: int = 25, keyword: str = "%") -> tuple | None:
-        """
-        Get a live contest matching the criteria. Prefer contests at or above the
-        minimum entry fee; if none exist, fall back to the highest entry fee
-        below the minimum.
-
-        Args:
-            sport (str): Sport name.
-            entry_fee (int, optional): Minimum entry fee. Defaults to 25.
-            keyword (str, optional): Name keyword pattern. Defaults to "%".
-
-        Returns:
-            tuple | None: (dk_id, name, draft_group, positions_paid, start_date) if found, else None.
-        """
+        """Select a live contest, preferring entry fees at/above the minimum."""
         cur = self.conn.cursor()
         try:
             base_sql = (
@@ -346,19 +320,7 @@ class ContestDatabase:
     def get_live_contests(
         self, sports: list[str] | None = None, entry_fee: int = 25, keyword: str = "%"
     ) -> list[tuple]:
-        """
-        Get one live contest per sport, using the same fallback as get_live_contest:
-        prefer contests at or above the minimum entry fee; if none exist for a sport,
-        fall back to the highest entry fee below the minimum.
-
-        Args:
-            sports (list[str] | None): Sport names to include; if None, include all.
-            entry_fee (int, optional): Minimum entry fee. Defaults to 25.
-            keyword (str, optional): Name keyword pattern. Defaults to "%".
-
-        Returns:
-            list[tuple]: Each tuple is (dk_id, name, draft_group, positions_paid, start_date, sport).
-        """
+        """Return one live contest per sport using ``get_live_contest``'s fee fallback."""
         cur = self.conn.cursor()
         try:
             sport_list = list(sports) if sports else []
@@ -656,6 +618,39 @@ class ContestDatabase:
         sql = 'UPDATE "contests" SET "cash_line_rank"=?, "cash_line_points"=? WHERE "dk_id"=?'
         cur.execute(sql, (rank, points, dk_id))
         self.conn.commit()
+
+    @_sqlite_guard(rollback=True)
+    def persist_standings_cash_snapshot(
+        self, dk_id: int, rank: int | None, points: float | None, statuses: list[VipCashStatus]
+    ) -> None:
+        """Publish one complete standings poll atomically, including an empty VIP set."""
+        cur = self.conn.cursor()
+        cur.execute(
+            'UPDATE "contests" SET "cash_line_rank"=?, "cash_line_points"=? WHERE "dk_id"=?', (rank, points, dk_id)
+        )
+        cur.execute('DELETE FROM "vip_cash_status" WHERE "dk_id"=?', (dk_id,))
+        cur.executemany(
+            'INSERT INTO "vip_cash_status" ("dk_id", "vip_name", "rank", "points") VALUES (?, ?, ?, ?)',
+            [(dk_id, status.vip_name, status.rank, status.points) for status in statuses],
+        )
+        self.conn.commit()
+
+    @_sqlite_guard()
+    def get_standings_cash_snapshot(self, dk_id: int) -> StandingsCashSnapshot | None:
+        """Read the cash line and VIP rows in one SQLite statement snapshot."""
+        cur = self.conn.cursor()
+        cur.execute(
+            'SELECT c."cash_line_rank", c."cash_line_points", v."vip_name", v."rank", v."points" '
+            'FROM "contests" AS c LEFT JOIN "vip_cash_status" AS v ON v."dk_id"=c."dk_id" '
+            'WHERE c."dk_id"=? ORDER BY v."vip_name"',
+            (dk_id,),
+        )
+        rows = cur.fetchall()
+        if not rows:
+            return None
+        first = rows[0]
+        statuses = [VipCashStatus(vip_name=row[2], rank=row[3], points=row[4]) for row in rows if row[2] is not None]
+        return StandingsCashSnapshot(cash_line=(first[0], first[1]), vip_statuses=statuses)
 
     @_sqlite_guard()
     def get_contest_completed_at(self, dk_id: int) -> str | None:

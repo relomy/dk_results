@@ -3,7 +3,7 @@
 import pytest
 
 from dk_results.bot import discord_bot
-from dk_results.persistence.contestdatabase import VipCashStatus
+from dk_results.persistence.contestdatabase import StandingsCashSnapshot, VipCashStatus
 
 
 def test_live_contest_block_keeps_draftkings_link_separate_from_dashboard_and_sheet(monkeypatch, make_settings):
@@ -49,11 +49,8 @@ async def test_live_lists_all_live_contests(monkeypatch, ctx, as_context, make_s
                 (2, "ContestB", None, None, "2000-01-02", "NFL"),
             ]
 
-        def get_cash_line(self, dk_id):
+        def get_standings_cash_snapshot(self, dk_id):
             return None
-
-        def get_vip_cash_status(self, dk_id):
-            return []
 
         def close(self):
             captured["closed"] = True
@@ -99,11 +96,8 @@ async def test_live_shows_vip_presence_per_contest(
                 (2, "ContestB", None, None, "2000-01-02", "NFL"),
             ]
 
-        def get_cash_line(self, dk_id):
+        def get_standings_cash_snapshot(self, dk_id):
             return None
-
-        def get_vip_cash_status(self, dk_id):
-            return []
 
         def close(self):
             pass
@@ -141,14 +135,14 @@ async def test_live_shows_vip_cash_bullets(monkeypatch, ctx, as_context, make_se
         def get_live_contests(self, sports=None, entry_fee=25, keyword="%"):
             return [(1, "ContestA", None, 20, "2000-01-01", "NBA")]
 
-        def get_cash_line(self, dk_id):
-            return (5, 100.0)
-
-        def get_vip_cash_status(self, dk_id):
-            return [
-                VipCashStatus(vip_name="VipA", rank=3, points=150.0),
-                VipCashStatus(vip_name="VipB", rank=10, points=50.0),
-            ]
+        def get_standings_cash_snapshot(self, dk_id):
+            return StandingsCashSnapshot(
+                cash_line=(5, 100.0),
+                vip_statuses=[
+                    VipCashStatus(vip_name="VipA", rank=3, points=150.0),
+                    VipCashStatus(vip_name="VipB", rank=10, points=50.0),
+                ],
+            )
 
         def close(self):
             pass
@@ -182,11 +176,8 @@ async def test_live_shows_elapsed_time_since_start(monkeypatch, ctx, as_context,
         def get_live_contests(self, sports=None, entry_fee=25, keyword="%"):
             return [(1, "ContestA", None, None, "2000-01-01", "NBA")]
 
-        def get_cash_line(self, dk_id):
+        def get_standings_cash_snapshot(self, dk_id):
             return None
-
-        def get_vip_cash_status(self, dk_id):
-            return []
 
         def close(self):
             pass
@@ -242,11 +233,8 @@ async def test_live_no_contests(monkeypatch, ctx, as_context, make_settings, dum
         def get_live_contests(self, sports=None, entry_fee=25, keyword="%"):
             return []
 
-        def get_cash_line(self, dk_id):
+        def get_standings_cash_snapshot(self, dk_id):
             return None
-
-        def get_vip_cash_status(self, dk_id):
-            return []
 
         def close(self):
             pass
