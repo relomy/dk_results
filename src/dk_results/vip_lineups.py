@@ -89,22 +89,37 @@ class VipLineup:
 # ── vips.yaml loading ─────────────────────────────────────────────────────────
 
 
-def load_vips() -> list[str]:
+def load_vips(*, update_contests_warnings: bool = False) -> list[str]:
     """Load VIP usernames from vips.yaml located next to this file."""
     vip_path = repo_file("vips.yaml")
+    return _load_vips_file(vip_path, update_contests_warnings)
+
+
+def _load_vips_file(vip_path: Any, update_contests_warnings: bool) -> list[str]:
     try:
         with open(vip_path) as f:
             vips = yaml.safe_load(f) or []
         if not isinstance(vips, list):
-            logger.warning("vips.yaml did not contain a list; treating as empty.")
+            if not update_contests_warnings:
+                logger.warning("vips.yaml did not contain a list; treating as empty.")
             return []
         return [str(x).strip() for x in vips if str(x).strip()]
     except FileNotFoundError:
-        logger.warning("vips.yaml not found at %s; proceeding with empty VIP list.", vip_path)
+        if not update_contests_warnings:
+            logger.warning("vips.yaml not found at %s; proceeding with empty VIP list.", vip_path)
         return []
-    except (OSError, ValueError, yaml.YAMLError, KeyError, AttributeError, RecursionError) as e:
-        logger.warning("Failed to load vips.yaml: %s; proceeding with empty VIP list.", e)
+    except (OSError, ValueError, yaml.YAMLError, KeyError, AttributeError, RecursionError) as error:
+        _warn_vips_load_error(vip_path, update_contests_warnings, error)
         return []
+
+
+def _warn_vips_load_error(vip_path: Any, update_contests_warnings: bool, error: Exception) -> None:
+    if isinstance(error, IsADirectoryError) and update_contests_warnings:
+        return
+    if update_contests_warnings:
+        logger.warning("failed to load vips.yaml from %s", vip_path)
+    else:
+        logger.warning("Failed to load vips.yaml: %s; proceeding with empty VIP list.", error)
 
 
 # ── vip_entries construction ──────────────────────────────────────────────────
