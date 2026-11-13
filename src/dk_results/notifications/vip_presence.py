@@ -158,12 +158,12 @@ class VipPresence:
     def verdict(self, dk_id: int, start_date: str, vip_names: list[str]) -> str:
         """Return ``present`` / ``absent`` / ``unknown`` for ``dk_id``.
 
-        Serves a cached ``present`` immediately and a cached ``absent`` until the
-        refresh policy allows a re-check, then answers from the persisted
-        standings poll when one exists (``present`` is cached, ``absent`` is
-        not). Otherwise it reads entrant pages until a VIP is
-        found (``present``), a page proves the field empty (``absent``), the page
-        cap is hit, a page is ambiguous, or a read fails (``unknown``).
+        Serve cached ``present`` immediately and cached ``absent`` until its
+        refresh policy allows a re-check. Then consult a usable persisted
+        standings poll: matching VIPs yield cached ``present``; no match yields
+        uncached ``absent``. Without a usable poll, scan entrant pages until a
+        VIP is found, an empty page proves ``absent``, or a cap, ambiguous page,
+        or read failure leaves the verdict unknown.
         """
         vip_keys = {vip_key(name) for name in vip_names if vip_key(name)}
         if not vip_keys:
@@ -192,7 +192,10 @@ class VipPresence:
         if self._standings is None:
             return None
         snapshot = self._standings.get_standings_cash_snapshot(dk_id)
-        if snapshot is None or snapshot.cash_line[0] is None:
+        if snapshot is None:
+            return None
+        cash_line_rank, _cash_line_points = snapshot.cash_line
+        if cash_line_rank is None:
             return None
         return {vip_key(status.vip_name) for status in snapshot.vip_statuses}
 

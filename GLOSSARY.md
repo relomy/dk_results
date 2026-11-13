@@ -171,7 +171,7 @@ The state where a live contest's scoring is effectively final though DraftKings 
 _Avoid_: completed / CANCELLED (DraftKings' own terminal statuses).
 
 **VipPresence**:
-The oracle answering whether *any* tracked VIP is entered in a contest, returning a presence verdict. Reads the persisted standings poll when it has a cash line (ADR-0018), else short-circuits an entrant-page scan at the first tracked VIP found; it proves presence/absence of any VIP, not which specific VIP. Module: `notifications/vip_presence.py`.
+The oracle answering whether *any* tracked VIP is entered in a contest, returning a presence verdict. Reads the persisted standings poll when it has a cash line (ADR-0018), else short-circuits an entrant-page scan at the first tracked VIP found. Its `present_vips` method returns which configured names the last usable standings poll found. Module: `notifications/vip_presence.py`.
 
 **Presence verdict**:
 A VipPresence result: `present`, `absent`, `unknown`, or `unknown_capped`. `unknown_capped` is a structural variant of `unknown` — the entrant-page cap was hit before a conclusive read, because the field is too large to fully scan, not because of a transient failure. Which verdicts suppress an announcement differs by milestone; see ADR-0008.
