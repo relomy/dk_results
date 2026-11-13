@@ -14,6 +14,11 @@ from .sport import Sport
 from .user import User
 
 
+def _vip_name_key(name: str) -> str:
+    """Match configured VIP names to DraftKings standings names case-insensitively."""
+    return name.strip().lower()
+
+
 @dataclass(frozen=True)
 class ContestStandings:
     players: dict[str, Player]
@@ -318,6 +323,10 @@ class _StandingsAccumulator:
     non_cashing_total_pmr: float = 0.0
     showdown_captains: dict[str, int] = field(default_factory=dict)
     aggregated_player_stats: dict[str, dict[str, Any]] = field(default_factory=dict)
+    _vip_keys: set[str] = field(init=False, repr=False)
+
+    def __post_init__(self) -> None:
+        self._vip_keys = {_vip_name_key(name) for name in self.vips if _vip_name_key(name)}
 
     def process_row(self, row: list[str]) -> None:
         if not row or len(row) < 6:
@@ -328,7 +337,7 @@ class _StandingsAccumulator:
 
         user, parsed_rank, parsed_points = _parse_standing_user(self.sport, self.players, row)
         self.users.append(user)
-        if user.name in self.vips:
+        if _vip_name_key(user.name) in self._vip_keys:
             self.vip_list.append(user)
 
         self.min_rank, self.min_cash_pts, self.non_cashing_total_pmr, added_non_cashing = _update_cash_stats(

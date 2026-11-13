@@ -156,8 +156,14 @@ def test_build_completion_processor_wires_collaborators(monkeypatch, memory_conn
 
     assert processor._results is fake_client
     assert processor._sender is sender
-    assert processor._presence is not None
+    assert isinstance(processor._presence, update_contests.VipPresence)
+    _assert_standings_database_is_wired(processor._presence, conn)
     assert processor._config.vips == ["FooBar"]
+
+
+def _assert_standings_database_is_wired(presence, conn):
+    assert isinstance(presence._standings, update_contests.ContestDatabase)
+    assert presence._standings.conn is conn
 
 
 def test_build_completion_processor_wires_dashboard_origin(monkeypatch, memory_conn):
