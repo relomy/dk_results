@@ -1,7 +1,5 @@
 """Shared builders for ContestDatabase persistence tests."""
 
-import datetime
-
 from dk_results.persistence.contestdatabase import ContestDatabase
 
 
@@ -43,7 +41,3 @@ def insert_contest(
         ),
     )
     db.conn.commit()
-
-
-def contest_start(when: datetime.datetime) -> str:
-    return when.strftime("%Y-%m-%d %H:%M:%S")

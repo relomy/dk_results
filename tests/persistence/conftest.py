@@ -5,6 +5,7 @@ from collections.abc import Callable, Iterator
 from typing import TypeVar, overload
 
 import pytest
+from persistence.builders import insert_contest
 
 from dk_results.persistence.contestdatabase import ContestDatabase
 
@@ -23,8 +24,6 @@ def contest_db():
 
 @pytest.fixture
 def contest_db_with_contest(contest_db):
-    from persistence.builders import insert_contest
-
     insert_contest(contest_db, dk_id=1)
     return contest_db
 

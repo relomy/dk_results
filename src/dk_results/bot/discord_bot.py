@@ -275,8 +275,7 @@ def _format_live_contest_block(
     name: str,
     start_date: str,
     sport: str,
-    cash_line: tuple[int | None, float | None] | None,
-    vip_statuses: list,
+    snapshot: StandingsCashSnapshot,
     positions_paid: int | None,
 ) -> str:
     """Format one contest's `!live` block.
@@ -289,7 +288,7 @@ def _format_live_contest_block(
     suppressed once they're available (contest-level redundancy: a VIP with a
     cash-status bullet is already known to be present).
     """
-    cash_bullets = _format_vip_cash_bullets(vip_statuses, cash_line, positions_paid)
+    cash_bullets = _format_vip_cash_bullets(snapshot.vip_statuses, snapshot.cash_line, positions_paid)
     sheet_link = _sheet_link(settings, sport)
     dk_part, sheet_part = _shared_dk_and_sheet_parts(dk_id, sport, sheet_link, settings.dashboard_base_url)
     header = f"Live: {_shared_sport_emoji(sport)} {sport} — {name}"
@@ -329,8 +328,7 @@ async def live(settings: RuntimeSettings, ctx: commands.Context) -> None:
             name,
             start_date,
             sport,
-            snapshots[dk_id].cash_line,
-            snapshots[dk_id].vip_statuses,
+            snapshots[dk_id],
             positions_paid,
         )
         for dk_id, name, _, positions_paid, start_date, sport in rows

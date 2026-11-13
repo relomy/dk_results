@@ -3,15 +3,15 @@ import logging
 import sqlite3
 
 import pytest
-from persistence.builders import insert_contest as _insert_contest
+from persistence.builders import insert_contest
 
 from dk_results.domain.contest import Contest
 from dk_results.persistence.contestdatabase import ContestDatabase, ContestRow
 
 
 def test_get_live_contest_prefers_entry_fee_at_or_above_min(contest_db):
-    _insert_contest(contest_db, dk_id=1, entry_fee=30, entries=150)
-    _insert_contest(contest_db, dk_id=2, entry_fee=10, entries=500)
+    insert_contest(contest_db, dk_id=1, entry_fee=30, entries=150)
+    insert_contest(contest_db, dk_id=2, entry_fee=10, entries=500)
 
     row = contest_db.get_live_contest("NBA", entry_fee=25)
 
@@ -19,8 +19,8 @@ def test_get_live_contest_prefers_entry_fee_at_or_above_min(contest_db):
 
 
 def test_get_live_contest_falls_back_to_highest_below_min(contest_db):
-    _insert_contest(contest_db, dk_id=3, entry_fee=10, entries=200)
-    _insert_contest(contest_db, dk_id=4, entry_fee=5, entries=400)
+    insert_contest(contest_db, dk_id=3, entry_fee=10, entries=200)
+    insert_contest(contest_db, dk_id=4, entry_fee=5, entries=400)
 
     row = contest_db.get_live_contest("NBA", entry_fee=25)
 
@@ -33,14 +33,14 @@ def test_get_live_contest_returns_none_when_no_rows(contest_db):
 
 def test_get_live_contest_is_deterministic_on_ties(contest_db):
     base_time = datetime.datetime(2024, 1, 1, 12, 0, 0)
-    _insert_contest(
+    insert_contest(
         contest_db,
         dk_id=5,
         entry_fee=20,
         entries=100,
         start_date=(base_time - datetime.timedelta(hours=1)).strftime("%Y-%m-%d %H:%M:%S"),
     )
-    _insert_contest(
+    insert_contest(
         contest_db,
         dk_id=6,
         entry_fee=20,
@@ -54,8 +54,8 @@ def test_get_live_contest_is_deterministic_on_ties(contest_db):
 
 
 def test_get_live_contests_uses_fallback_per_sport(contest_db):
-    _insert_contest(contest_db, dk_id=10, sport="NBA", entry_fee=10, entries=200)
-    _insert_contest(contest_db, dk_id=11, sport="NFL", entry_fee=30, entries=100)
+    insert_contest(contest_db, dk_id=10, sport="NBA", entry_fee=10, entries=200)
+    insert_contest(contest_db, dk_id=11, sport="NFL", entry_fee=30, entries=100)
 
     rows = contest_db.get_live_contests(sports=["NBA", "NFL"], entry_fee=25)
 
@@ -66,7 +66,7 @@ def test_get_live_contests_uses_fallback_per_sport(contest_db):
 
 
 def test_get_live_contests_discovers_sports_when_not_provided(contest_db):
-    _insert_contest(contest_db, dk_id=12, sport="NBA", entry_fee=20, entries=50)
+    insert_contest(contest_db, dk_id=12, sport="NBA", entry_fee=20, entries=50)
 
     rows = contest_db.get_live_contests(entry_fee=25)
 
@@ -76,9 +76,9 @@ def test_get_live_contests_discovers_sports_when_not_provided(contest_db):
 
 
 def test_sync_draft_group_start_dates_updates_only_changed_groups(contest_db):
-    _insert_contest(contest_db, dk_id=1, draft_group=10, start_date="2024-01-01 00:00:00")
-    _insert_contest(contest_db, dk_id=2, draft_group=10, start_date="2024-01-01 00:00:00")
-    _insert_contest(contest_db, dk_id=3, draft_group=20, start_date="2024-01-02 00:00:00")
+    insert_contest(contest_db, dk_id=1, draft_group=10, start_date="2024-01-01 00:00:00")
+    insert_contest(contest_db, dk_id=2, draft_group=10, start_date="2024-01-01 00:00:00")
+    insert_contest(contest_db, dk_id=3, draft_group=20, start_date="2024-01-02 00:00:00")
 
     updates = contest_db.sync_draft_group_start_dates(
         {
@@ -147,7 +147,7 @@ def test_sync_draft_group_start_dates_no_rows(contest_db):
 
 
 def test_sync_draft_group_start_dates_skips_none(contest_db):
-    _insert_contest(
+    insert_contest(
         contest_db,
         dk_id=1,
         draft_group=10,
@@ -254,7 +254,7 @@ def test_get_next_upcoming_contest_any_sqlite_error(monkeypatch, boom_conn):
 
 
 def test_get_contest_by_id_returns_row(contest_db):
-    _insert_contest(contest_db, dk_id=55, sport="NBA", entry_fee=25, entries=123)
+    insert_contest(contest_db, dk_id=55, sport="NBA", entry_fee=25, entries=123)
     row = contest_db.get_contest_by_id(55)
 
     assert row == ContestRow(
@@ -272,7 +272,7 @@ def test_get_contest_by_id_returns_row(contest_db):
 
 
 def test_get_live_contest_logs_key_value(contest_db, caplog):
-    _insert_contest(
+    insert_contest(
         contest_db,
         dk_id=190402321,
         sport="GOLF",
@@ -292,7 +292,7 @@ def test_get_live_contest_logs_key_value(contest_db, caplog):
 
 
 def test_get_live_contest_candidates_returns_stable_order(contest_db):
-    _insert_contest(
+    insert_contest(
         contest_db,
         dk_id=101,
         sport="NBA",
@@ -300,7 +300,7 @@ def test_get_live_contest_candidates_returns_stable_order(contest_db):
         entries=200,
         start_date="2024-01-01 01:00:00",
     )
-    _insert_contest(
+    insert_contest(
         contest_db,
         dk_id=102,
         sport="NBA",
@@ -308,7 +308,7 @@ def test_get_live_contest_candidates_returns_stable_order(contest_db):
         entries=100,
         start_date="2024-01-01 01:00:00",
     )
-    _insert_contest(
+    insert_contest(
         contest_db,
         dk_id=103,
         sport="NBA",
@@ -332,7 +332,7 @@ def test_from_connection_shares_the_connection():
         assert db.conn is conn
         db.ensure_schema()
         # A write through the wrapper is visible on the same connection.
-        _insert_contest(db, dk_id=1, status="LIVE")
+        insert_contest(db, dk_id=1, status="LIVE")
         assert conn.execute("SELECT COUNT(*) FROM contests").fetchone()[0] == 1
     finally:
         conn.close()
@@ -342,13 +342,13 @@ def test_get_incomplete_contests_returns_started_and_pending(contest_db):
     past = "2024-01-01 00:00:00"
     future = (datetime.datetime.now() + datetime.timedelta(days=1)).strftime("%Y-%m-%d %H:%M:%S")
     # started + not completed → included
-    _insert_contest(contest_db, dk_id=1, start_date=past, completed=0, positions_paid=None, status="UPCOMING")
+    insert_contest(contest_db, dk_id=1, start_date=past, completed=0, positions_paid=None, status="UPCOMING")
     # started + completed but positions_paid NULL → included
-    _insert_contest(contest_db, dk_id=2, start_date=past, completed=1, positions_paid=None, status="COMPLETED")
+    insert_contest(contest_db, dk_id=2, start_date=past, completed=1, positions_paid=None, status="COMPLETED")
     # started + completed + positions_paid set → excluded
-    _insert_contest(contest_db, dk_id=3, start_date=past, completed=1, positions_paid=10, status="COMPLETED")
+    insert_contest(contest_db, dk_id=3, start_date=past, completed=1, positions_paid=10, status="COMPLETED")
     # not started yet → excluded
-    _insert_contest(contest_db, dk_id=4, start_date=future, completed=0, positions_paid=None, status="UPCOMING")
+    insert_contest(contest_db, dk_id=4, start_date=future, completed=0, positions_paid=None, status="UPCOMING")
 
     rows = contest_db.get_incomplete_contests()
     ids = sorted(r[0] for r in rows)
@@ -364,7 +364,7 @@ def test_get_incomplete_contests_error_returns_none(boom_conn):
 
 
 def test_update_contest_writes_fields(contest_db):
-    _insert_contest(contest_db, dk_id=1, positions_paid=None, status="LIVE", completed=0)
+    insert_contest(contest_db, dk_id=1, positions_paid=None, status="LIVE", completed=0)
 
     contest_db.update_contest(1, positions_paid=42, status="COMPLETED", completed=1, now=_T0)
 
@@ -491,7 +491,7 @@ def _complete(db: ContestDatabase, dk_id: int, at: datetime.datetime, status: st
 
 
 def test_completed_contest_is_selected_inside_the_window(contest_db):
-    _insert_contest(contest_db, dk_id=1, name="Main", start_date="2024-01-01 00:00:00")
+    insert_contest(contest_db, dk_id=1, name="Main", start_date="2024-01-01 00:00:00")
     _complete(contest_db, 1, _T0)
 
     row = contest_db.get_recently_completed_contest("NBA", now=_T0 + datetime.timedelta(hours=17))
@@ -501,14 +501,14 @@ def test_completed_contest_is_selected_inside_the_window(contest_db):
 
 
 def test_completed_contest_leaves_the_window_after_eighteen_hours(contest_db):
-    _insert_contest(contest_db, dk_id=1)
+    insert_contest(contest_db, dk_id=1)
     _complete(contest_db, 1, _T0)
 
     assert contest_db.get_recently_completed_contest("NBA", now=_T0 + datetime.timedelta(hours=19)) is None
 
 
 def test_completed_stamp_is_written_once_and_survives_repeated_updates(contest_db):
-    _insert_contest(contest_db, dk_id=1)
+    insert_contest(contest_db, dk_id=1)
     _complete(contest_db, 1, _T0)
     _complete(contest_db, 1, _T0 + datetime.timedelta(hours=10))
 
@@ -518,28 +518,28 @@ def test_completed_stamp_is_written_once_and_survives_repeated_updates(contest_d
 
 
 def test_cancelled_contest_is_never_selected_as_completed(contest_db):
-    _insert_contest(contest_db, dk_id=1)
+    insert_contest(contest_db, dk_id=1)
     _complete(contest_db, 1, _T0, status="CANCELLED")
 
     assert contest_db.get_recently_completed_contest("NBA", now=_T0) is None
 
 
 def test_contest_completed_before_the_column_existed_is_never_selected(contest_db):
-    _insert_contest(contest_db, dk_id=1, completed=1, status="COMPLETED")
+    insert_contest(contest_db, dk_id=1, completed=1, status="COMPLETED")
 
     assert contest_db.get_recently_completed_contest("NBA", now=_T0) is None
 
 
 def test_non_completed_status_does_not_stamp(contest_db):
-    _insert_contest(contest_db, dk_id=1)
+    insert_contest(contest_db, dk_id=1)
     contest_db.update_contest(1, positions_paid=1, status="LIVE", completed=0, now=_T0)
 
     assert contest_db.get_recently_completed_contest("NBA", now=_T0) is None
 
 
 def test_recently_completed_prefers_entry_fee_at_or_above_minimum(contest_db):
-    _insert_contest(contest_db, dk_id=1, entry_fee=10, entries=900)
-    _insert_contest(contest_db, dk_id=2, entry_fee=30, entries=100)
+    insert_contest(contest_db, dk_id=1, entry_fee=10, entries=900)
+    insert_contest(contest_db, dk_id=2, entry_fee=30, entries=100)
     _complete(contest_db, 1, _T0)
     _complete(contest_db, 2, _T0)
 
@@ -550,8 +550,8 @@ def test_recently_completed_prefers_entry_fee_at_or_above_minimum(contest_db):
 
 
 def test_recently_completed_falls_back_below_minimum_and_orders_by_entries(contest_db):
-    _insert_contest(contest_db, dk_id=1, entry_fee=10, entries=100)
-    _insert_contest(contest_db, dk_id=2, entry_fee=10, entries=500)
+    insert_contest(contest_db, dk_id=1, entry_fee=10, entries=100)
+    insert_contest(contest_db, dk_id=2, entry_fee=10, entries=500)
     _complete(contest_db, 1, _T0)
     _complete(contest_db, 2, _T0)
 
@@ -562,8 +562,8 @@ def test_recently_completed_falls_back_below_minimum_and_orders_by_entries(conte
 
 
 def test_recently_completed_is_per_sport_and_honours_keyword(contest_db):
-    _insert_contest(contest_db, dk_id=1, sport="NBA", name="Double Up")
-    _insert_contest(contest_db, dk_id=2, sport="NFL", name="Double Up")
+    insert_contest(contest_db, dk_id=1, sport="NBA", name="Double Up")
+    insert_contest(contest_db, dk_id=2, sport="NFL", name="Double Up")
     _complete(contest_db, 1, _T0)
     _complete(contest_db, 2, _T0)
 
@@ -574,7 +574,7 @@ def test_recently_completed_is_per_sport_and_honours_keyword(contest_db):
 
 
 def test_recently_completed_returns_live_row_shape(contest_db):
-    _insert_contest(contest_db, dk_id=1, name="Main", draft_group=77, start_date="2024-01-01 00:00:00")
+    insert_contest(contest_db, dk_id=1, name="Main", draft_group=77, start_date="2024-01-01 00:00:00")
     _complete(contest_db, 1, _T0)
 
     assert contest_db.get_recently_completed_contest("NBA", now=_T0) == (
@@ -627,7 +627,7 @@ def test_ensure_schema_adds_completed_at_to_preexisting_database_file(tmp_path):
 
 
 def test_contest_completed_at_reads_the_stored_stamp_in_snapshot_format(contest_db):
-    _insert_contest(contest_db, dk_id=1)
+    insert_contest(contest_db, dk_id=1)
     _complete(contest_db, 1, _T0)
 
     assert contest_db.get_contest_completed_at(1) == "2026-10-10T12:00:00Z"
@@ -635,7 +635,7 @@ def test_contest_completed_at_reads_the_stored_stamp_in_snapshot_format(contest_
 
 @pytest.mark.parametrize("status", ["LIVE", "CANCELLED"])
 def test_contest_completed_at_is_none_without_a_stamp(contest_db, status):
-    _insert_contest(contest_db, dk_id=1)
+    insert_contest(contest_db, dk_id=1)
     _complete(contest_db, 1, _T0, status=status)
 
     assert contest_db.get_contest_completed_at(1) is None

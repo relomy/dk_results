@@ -1,6 +1,7 @@
 """Tests for the !live command: contest blocks, VIP cash bullets and VIP presence."""
 
 import pytest
+from persistence.builders import insert_contest
 
 from dk_results.bot import discord_bot
 from dk_results.persistence.contestdatabase import ContestDatabase, StandingsCashSnapshot, VipCashStatus
@@ -17,8 +18,7 @@ def test_live_contest_block_keeps_draftkings_link_separate_from_dashboard_and_sh
         "Contest",
         "2000-01-01",
         "NBA",
-        None,
-        [],
+        StandingsCashSnapshot((None, None), []),
         None,
     )
 
@@ -169,13 +169,14 @@ async def test_live_projects_cashing_from_real_database_poll_snapshots(
     db_path = str(tmp_path / "live.db")
     db = ContestDatabase(db_path)
     db.ensure_schema()
-    db.conn.execute(
-        "INSERT INTO contests "
-        "(dk_id, sport, name, start_date, draft_group, total_prizes, entries, positions_paid, entry_fee, "
-        "entry_count, max_entry_count, completed, status) "
-        "VALUES (1, 'NBA', 'ContestA', '2000-01-01', 1, 1000, 100, 10, 25, 0, 1, 0, 'LIVE')"
+    insert_contest(
+        db,
+        dk_id=1,
+        sport="NBA",
+        name="ContestA",
+        start_date="2000-01-01",
+        positions_paid=10,
     )
-    db.conn.commit()
     db.persist_standings_cash_snapshot(1, 5, 100.0, [VipCashStatus("VipA", 10, 90.0)])
     db.close()
     monkeypatch.setattr(discord_bot, "_db_path", lambda: db_path)

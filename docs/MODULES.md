@@ -197,8 +197,8 @@ to a deep module, as the sheet pipeline did with `SportProcessor`.
   (ADR-0009).
 - **Contest persistence:** `ContestDatabase` is the deep SQLite boundary for
   contest rows and is injected into workflows. It owns reads for live, upcoming,
-  incomplete, and completion state, plus contest synchronization and VIP cash
-  status writes. `get_contest_by_id` returns a `ContestRow` (ADR-0006); other
+  incomplete, and completion state, plus contest synchronization and standings
+  cash snapshot writes. `get_contest_by_id` returns a `ContestRow` (ADR-0006); other
   queries return tuples. The cash line and VIP rows are written as one
   **Standings cash snapshot** and consumed through one consistent read
   (`get_standings_cash_snapshot`); `!live` must not issue separate reads for
