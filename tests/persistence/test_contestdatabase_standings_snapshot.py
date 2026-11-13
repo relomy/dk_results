@@ -129,15 +129,15 @@ def test_snapshot_read_returns_empty_values_for_never_polled_contest(contest_db_
 def test_snapshot_read_returns_vips_in_name_order_with_stored_values(contest_db_with_contest):
     contest_db = contest_db_with_contest
     statuses = [
-        VipCashStatus("Zoe", 9, 81.5),
-        VipCashStatus("Alice", 3, 142.25),
-        VipCashStatus("Mia", 6, 111.0),
+        VipCashStatus("Zoe", 1, 200.0),
+        VipCashStatus("Alice", 9, 50.0),
+        VipCashStatus("Mia", 5, 120.0),
     ]
     contest_db.persist_standings_cash_snapshot(1, 12, 105.5, statuses)
 
     assert contest_db.get_standings_cash_snapshot(1) == StandingsCashSnapshot(
         (12, 105.5),
-        [VipCashStatus("Alice", 3, 142.25), VipCashStatus("Mia", 6, 111.0), VipCashStatus("Zoe", 9, 81.5)],
+        [VipCashStatus("Alice", 9, 50.0), VipCashStatus("Mia", 5, 120.0), VipCashStatus("Zoe", 1, 200.0)],
     )
 
 
