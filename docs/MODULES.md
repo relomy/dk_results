@@ -32,9 +32,9 @@ sheet → announce bonuses" pipeline behind one call.
 - **Seams / adapters:** `DkPort` (DraftKings HTTP), `SheetPort` (Google Sheets,
   built via injected `sheet_factory: Callable[[str], SheetPort]`), and
   `BonusSenderPort` (Discord). `ContestDatabase` is injected directly and is
-  locally substitutable: it reads the live contest and is written each run with
-  the parsed standings' cash line and `VipCashStatus` rows, its only write path
-  into that table (ADR-0011).
+  locally substitutable: it reads the live contest and publishes the parsed
+  standings' cash line and full `VipCashStatus` set together through
+  `persist_standings_cash_snapshot` (ADR-0011).
 - **Error modes as control flow:** `NoLiveContestError`,
   `StandingsUnavailableError`, and `StandsParseError` signal "skip this sport";
   frozen `SportProcessorConfig` carries filesystem and limit config.
@@ -197,12 +197,16 @@ to a deep module, as the sheet pipeline did with `SportProcessor`.
   (ADR-0009).
 - **Contest persistence:** `ContestDatabase` is the deep SQLite boundary for
   contest rows and is injected into workflows. It owns reads for live, upcoming,
-  incomplete, and completion state, plus contest synchronization and VIP cash
-  status writes. `get_contest_by_id` returns a `ContestRow` (ADR-0006); other
-  queries return tuples. `persistence/sqlite_guard.py` holds `_sqlite_guard`,
-  the decorator behind the cash-line and VIP-status methods: it logs and
-  swallows `sqlite3.Error` (ADR-0011), returning `None` unless given a
-  `default_factory`. `ContestDatabase` re-imports it. `NotificationStore`
+  incomplete, and completion state, plus contest synchronization and standings
+  cash snapshot writes. `get_contest_by_id` returns a `ContestRow` (ADR-0006); other
+  queries return tuples. The cash line and VIP rows are written as one
+  **Standings cash snapshot** and consumed through one consistent read
+  (`get_standings_cash_snapshot`); `!live` must not issue separate reads for
+  these facts (ADR-0011). `persistence/sqlite_guard.py` holds `_sqlite_guard`,
+  the decorator behind `persist_standings_cash_snapshot` and
+  `get_standings_cash_snapshot`: it logs and swallows `sqlite3.Error`
+  (ADR-0011), returning `None` unless given a `default_factory`.
+  `ContestDatabase` re-imports it. `NotificationStore`
   separately owns notification and VIP-presence state.
 - **Snapshot storage:** `ObjectStore` exposes `get_json(key)` and
   `put_json(key, body, content_type)`; `R2ObjectStore` is its boto3 adapter

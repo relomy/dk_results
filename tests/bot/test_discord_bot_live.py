@@ -1,9 +1,10 @@
 """Tests for the !live command: contest blocks, VIP cash bullets and VIP presence."""
 
 import pytest
+from persistence.builders import insert_contest
 
 from dk_results.bot import discord_bot
-from dk_results.persistence.contestdatabase import VipCashStatus
+from dk_results.persistence.contestdatabase import ContestDatabase, StandingsCashSnapshot, VipCashStatus
 
 
 def test_live_contest_block_keeps_draftkings_link_separate_from_dashboard_and_sheet(monkeypatch, make_settings):
@@ -17,8 +18,7 @@ def test_live_contest_block_keeps_draftkings_link_separate_from_dashboard_and_sh
         "Contest",
         "2000-01-01",
         "NBA",
-        None,
-        [],
+        StandingsCashSnapshot((None, None), []),
         None,
     )
 
@@ -49,11 +49,8 @@ async def test_live_lists_all_live_contests(monkeypatch, ctx, as_context, make_s
                 (2, "ContestB", None, None, "2000-01-02", "NFL"),
             ]
 
-        def get_cash_line(self, dk_id):
+        def get_standings_cash_snapshot(self, dk_id):
             return None
-
-        def get_vip_cash_status(self, dk_id):
-            return []
 
         def close(self):
             captured["closed"] = True
@@ -99,11 +96,8 @@ async def test_live_shows_vip_presence_per_contest(
                 (2, "ContestB", None, None, "2000-01-02", "NFL"),
             ]
 
-        def get_cash_line(self, dk_id):
+        def get_standings_cash_snapshot(self, dk_id):
             return None
-
-        def get_vip_cash_status(self, dk_id):
-            return []
 
         def close(self):
             pass
@@ -141,14 +135,14 @@ async def test_live_shows_vip_cash_bullets(monkeypatch, ctx, as_context, make_se
         def get_live_contests(self, sports=None, entry_fee=25, keyword="%"):
             return [(1, "ContestA", None, 20, "2000-01-01", "NBA")]
 
-        def get_cash_line(self, dk_id):
-            return (5, 100.0)
-
-        def get_vip_cash_status(self, dk_id):
-            return [
-                VipCashStatus(vip_name="VipA", rank=3, points=150.0),
-                VipCashStatus(vip_name="VipB", rank=10, points=50.0),
-            ]
+        def get_standings_cash_snapshot(self, dk_id):
+            return StandingsCashSnapshot(
+                cash_line=(5, 100.0),
+                vip_statuses=[
+                    VipCashStatus(vip_name="VipA", rank=3, points=150.0),
+                    VipCashStatus(vip_name="VipB", rank=10, points=50.0),
+                ],
+            )
 
         def close(self):
             pass
@@ -169,6 +163,51 @@ async def test_live_shows_vip_cash_bullets(monkeypatch, ctx, as_context, make_se
 
 
 @pytest.mark.asyncio
+async def test_live_projects_cashing_from_real_database_poll_snapshots(
+    monkeypatch, ctx, as_context, make_settings, dummy_sport, tmp_path
+):
+    db_path = str(tmp_path / "live.db")
+    db = ContestDatabase(db_path)
+    db.ensure_schema()
+    insert_contest(
+        db,
+        dk_id=1,
+        sport="NBA",
+        name="ContestA",
+        start_date="2000-01-01",
+        positions_paid=10,
+    )
+    db.persist_standings_cash_snapshot(1, 5, 100.0, [VipCashStatus("VipA", 10, 90.0)])
+    db.close()
+    monkeypatch.setattr(discord_bot, "_db_path", lambda: db_path)
+    monkeypatch.setattr(discord_bot, "_sport_choices", lambda: {"nba": dummy_sport})
+    monkeypatch.setattr(discord_bot, "_sheet_link", lambda _settings, _sport: None)
+    monkeypatch.setattr(discord_bot, "_format_time_since", lambda _start_date: None)
+    monkeypatch.setattr(discord_bot, "_vip_presence_for_contest", lambda _dk_id: None)
+
+    await discord_bot.live(make_settings(), as_context(ctx))
+    assert ctx.sent == [
+        "Live: 🏀 NBA — ContestA\n"
+        + "• 🕒 2000-01-01\n"
+        + "• 🔗 DK: [1](<https://www.draftkings.com/contest/gamecenter/1#/>) | 📊 Sheet: n/a\n"
+        + "• ☠️ VipA: 90.0 pts (-10.0 pts), rank 10 (cash: top 10)"
+    ]
+
+    next_poll = ContestDatabase(db_path)
+    next_poll.persist_standings_cash_snapshot(1, 15, 80.0, [VipCashStatus("VipA", 10, 90.0)])
+    next_poll.close()
+    ctx.sent.clear()
+
+    await discord_bot.live(make_settings(), as_context(ctx))
+    assert ctx.sent == [
+        "Live: 🏀 NBA — ContestA\n"
+        + "• 🕒 2000-01-01\n"
+        + "• 🔗 DK: [1](<https://www.draftkings.com/contest/gamecenter/1#/>) | 📊 Sheet: n/a\n"
+        + "• 🤑 VipA: 90.0 pts (+10.0 pts), rank 10 (cash: top 10)"
+    ]
+
+
+@pytest.mark.asyncio
 async def test_live_shows_elapsed_time_since_start(monkeypatch, ctx, as_context, make_settings, dummy_sport):
     monkeypatch.setattr(discord_bot, "_sport_choices", lambda: {"nba": dummy_sport})
     monkeypatch.setattr(discord_bot, "_sheet_link", lambda _settings, _sport: None)
@@ -182,11 +221,8 @@ async def test_live_shows_elapsed_time_since_start(monkeypatch, ctx, as_context,
         def get_live_contests(self, sports=None, entry_fee=25, keyword="%"):
             return [(1, "ContestA", None, None, "2000-01-01", "NBA")]
 
-        def get_cash_line(self, dk_id):
+        def get_standings_cash_snapshot(self, dk_id):
             return None
-
-        def get_vip_cash_status(self, dk_id):
-            return []
 
         def close(self):
             pass
@@ -242,11 +278,8 @@ async def test_live_no_contests(monkeypatch, ctx, as_context, make_settings, dum
         def get_live_contests(self, sports=None, entry_fee=25, keyword="%"):
             return []
 
-        def get_cash_line(self, dk_id):
+        def get_standings_cash_snapshot(self, dk_id):
             return None
-
-        def get_vip_cash_status(self, dk_id):
-            return []
 
         def close(self):
             pass

@@ -18,7 +18,7 @@ from dk_results.domain.sport import Sport, get_sport_choices
 from dk_results.logging import configure_logging
 from dk_results.notifications.vip_presence import VIP_ABSENT, VIP_PRESENT
 from dk_results.paths import repo_file
-from dk_results.persistence.contestdatabase import ContestDatabase
+from dk_results.persistence.contestdatabase import ContestDatabase, StandingsCashSnapshot
 from dk_results.persistence.notification_store import NotificationStore
 
 logger = logging.getLogger(__name__)
@@ -259,12 +259,14 @@ def _format_vip_cash_bullets(
 
 def _fetch_live_contests_with_cash_status(
     contest_db: ContestDatabase, allowed_sports: list[str]
-) -> tuple[list[tuple], dict[int, tuple[int | None, float | None] | None], dict[int, list]]:
-    """Fetch live contest rows plus each one's persisted cash line and VIP statuses."""
+) -> tuple[list[tuple], dict[int, StandingsCashSnapshot]]:
+    """Fetch live contest rows plus each one's cash line and VIP rows as one snapshot."""
     rows = contest_db.get_live_contests(sports=allowed_sports)
-    cash_lines = {dk_id: contest_db.get_cash_line(dk_id) for dk_id, *_rest in rows}
-    vip_statuses = {dk_id: contest_db.get_vip_cash_status(dk_id) for dk_id, *_rest in rows}
-    return rows, cash_lines, vip_statuses
+    snapshots = {}
+    for dk_id, *_rest in rows:
+        snapshot = contest_db.get_standings_cash_snapshot(dk_id)
+        snapshots[dk_id] = snapshot if snapshot is not None else StandingsCashSnapshot((None, None), [])
+    return rows, snapshots
 
 
 def _format_live_contest_block(
@@ -273,8 +275,7 @@ def _format_live_contest_block(
     name: str,
     start_date: str,
     sport: str,
-    cash_line: tuple[int | None, float | None] | None,
-    vip_statuses: list,
+    snapshot: StandingsCashSnapshot,
     positions_paid: int | None,
 ) -> str:
     """Format one contest's `!live` block.
@@ -287,7 +288,7 @@ def _format_live_contest_block(
     suppressed once they're available (contest-level redundancy: a VIP with a
     cash-status bullet is already known to be present).
     """
-    cash_bullets = _format_vip_cash_bullets(vip_statuses, cash_line, positions_paid)
+    cash_bullets = _format_vip_cash_bullets(snapshot.vip_statuses, snapshot.cash_line, positions_paid)
     sheet_link = _sheet_link(settings, sport)
     dk_part, sheet_part = _shared_dk_and_sheet_parts(dk_id, sport, sheet_link, settings.dashboard_base_url)
     header = f"Live: {_shared_sport_emoji(sport)} {sport} — {name}"
@@ -312,7 +313,7 @@ async def live(settings: RuntimeSettings, ctx: commands.Context) -> None:
 
     contest_db = ContestDatabase(_db_path(), logger=logger)
     try:
-        rows, cash_lines, vip_statuses = _fetch_live_contests_with_cash_status(contest_db, allowed_sports)
+        rows, snapshots = _fetch_live_contests_with_cash_status(contest_db, allowed_sports)
     finally:
         contest_db.close()
 
@@ -322,7 +323,13 @@ async def live(settings: RuntimeSettings, ctx: commands.Context) -> None:
 
     blocks = [
         _format_live_contest_block(
-            settings, dk_id, name, start_date, sport, cash_lines[dk_id], vip_statuses[dk_id], positions_paid
+            settings,
+            dk_id,
+            name,
+            start_date,
+            sport,
+            snapshots[dk_id],
+            positions_paid,
         )
         for dk_id, name, _, positions_paid, start_date, sport in rows
     ]

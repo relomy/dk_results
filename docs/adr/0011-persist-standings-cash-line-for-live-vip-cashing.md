@@ -1,5 +1,12 @@
 # Persist the standings cash line for mid-contest VIP-cashing visibility
 
+> **Superseded in part by the poll consistency update below.** The original
+> `set_cash_line` / `replace_vip_cash_status` write pair and the separate
+> `get_cash_line` / `get_vip_cash_status` reads described below are historical
+> design. The implementation publishes and reads one `StandingsCashSnapshot`;
+> callers must use `persist_standings_cash_snapshot` and
+> `get_standings_cash_snapshot`.
+
 Issue #134 asked whether "is a tracked VIP currently cashing" can be answered mid-contest without a new per-command DraftKings call. Today that question is only ever answered by `CompletionProcessor._maybe_send_soft_finish_announcement`, which calls the authenticated leaderboard endpoint and only runs once `_soft_finish_eligible` holds — effectively at/near the very end of the contest. The bot process itself (`bot/discord_bot.py`) makes zero DraftKings calls and reads only `ContestDatabase`.
 
 `SportProcessor` already parses the full standings CSV for every live (started, not-yet-completed) contest on its own independent poll (currently every 5 minutes), and `_update_cash_stats` (`domain/contest_standings.py`) already derives, in memory, the last paid position and its score (`min_rank`/`min_cash_pts`) from `positions_paid` and each row's rank/points — the exact "cash line" the issue's theory describes. It also already retains every user's own rank/points, including a `vip_list` pre-filtered to tracked VIP names. None of this required a new network call; it was already being computed and thrown away except for a write to the Google Sheet.
@@ -17,3 +24,9 @@ Alternatives considered and rejected:
 No migration mechanism previously existed for `ContestDatabase`'s schema (`create_table` is a single `CREATE TABLE IF NOT EXISTS`, so new columns only land on a fresh database file). This change adds a small guarded migration — checking `PRAGMA table_info(contests)` and issuing `ALTER TABLE contests ADD COLUMN` for the two new cash-line columns if not already present — rather than requiring an out-of-band manual step against already-deployed database files. The new `vip_cash_status` table needs no such migration: it's a `CREATE TABLE IF NOT EXISTS` in its own right, which is safe against both a fresh and an already-deployed database.
 
 Out of scope: `dfs-common`'s mirrored `contests` table, which carries only contest lifecycle metadata (no standings/leaderboard data) and is unrelated to this feature; unifying the two independent VIP-list loaders (`vip_lineups.load_vips` vs. `update_contests._load_vips`), which predates this change and isn't touched by it.
+
+## Update: poll consistency (issue #285)
+
+The standings facts must be published as one poll. `ContestDatabase.persist_standings_cash_snapshot(dk_id, rank, points, statuses)` updates the cash line and replaces the full VIP row set in one SQLite transaction, including when `statuses` is empty. A failure rolls back both changes. `get_standings_cash_snapshot(dk_id)` reads the cash line and all VIP rows in one SQL statement, so a poll commit cannot land between logically separate reads. `!live` compares each VIP's own rank against that snapshot's cash-line rank at read time; the per-VIP *verdict* is still computed at read time and never persisted.
+
+A transaction around the writer alone is insufficient when a reader performs separate queries, because the next poll can commit between them. `SportProcessor` publishes through the snapshot method and `!live` consumes the snapshot read method. Related PR #258's `VipPresence` consumer must use this read method as well before it merges, or migrate to it if it merged first. This does not change the announcement presence cache, entrant-scan fallback, verdict caching, or suppression policies.

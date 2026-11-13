@@ -174,10 +174,8 @@ class _FakeContestDb:
             "2026-02-14 01:00:00",
         )
 
-    def set_cash_line(self, dk_id, rank, points):
+    def persist_standings_cash_snapshot(self, dk_id, rank, points, statuses):
         self.cash_lines[dk_id] = (rank, points)
-
-    def replace_vip_cash_status(self, dk_id, statuses):
         self.vip_statuses[dk_id] = statuses
 
 

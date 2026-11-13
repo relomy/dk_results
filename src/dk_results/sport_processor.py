@@ -231,14 +231,12 @@ class SportProcessor:
         """
         cash_line_rank = results.min_rank or None
         cash_line_points = results.min_cash_pts if cash_line_rank is not None else None
-        self._db.set_cash_line(dk_id, cash_line_rank, cash_line_points)
-
         statuses = (
             [VipCashStatus(vip_name=vip.name, rank=vip.rank, points=vip.pts) for vip in results.vip_list]
             if cash_line_rank is not None
             else []
         )
-        self._db.replace_vip_cash_status(dk_id, statuses)
+        self._db.persist_standings_cash_snapshot(dk_id, cash_line_rank, cash_line_points, statuses)
 
     def _maybe_write_optimal_lineup(
         self,

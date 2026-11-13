@@ -70,14 +70,22 @@ class ContestRow:
 class VipCashStatus:
     """One tracked VIP's standings row in one contest (ADR-0011).
 
-    Persisted via :meth:`ContestDatabase.replace_vip_cash_status` and read via
-    :meth:`ContestDatabase.get_vip_cash_status`, following the named-shape
-    precedent set by :class:`ContestRow` (ADR-0006).
+    Published with its poll via :meth:`ContestDatabase.persist_standings_cash_snapshot`
+    and read with the cash line via :meth:`ContestDatabase.get_standings_cash_snapshot`
+    (ADR-0011), following the named-shape precedent set by :class:`ContestRow` (ADR-0006).
     """
 
     vip_name: Any
     rank: Any
     points: Any
+
+
+@dataclass(frozen=True)
+class StandingsCashSnapshot:
+    """The persisted cash line and VIP rows from one standings poll (ADR-0011)."""
+
+    cash_line: tuple[int | None, float | None]
+    vip_statuses: list[VipCashStatus]
 
 
 class ContestDatabase:
@@ -646,16 +654,38 @@ class ContestDatabase:
             self.logger.exception("sqlite error in get_live_contest_candidates()")
             return []
 
-    @_sqlite_guard()
-    def set_cash_line(self, dk_id: int, rank: int | None, points: float | None) -> None:
-        """
-        Persist the cash line (ADR-0011) for a contest: the rank and score of
-        its last paid position, as computed by the most recent standings poll.
-        """
+    @_sqlite_guard(rollback=True)
+    def persist_standings_cash_snapshot(
+        self, dk_id: int, rank: int | None, points: float | None, statuses: list[VipCashStatus]
+    ) -> None:
+        """Publish one complete standings poll atomically, including an empty VIP set."""
         cur = self.conn.cursor()
-        sql = 'UPDATE "contests" SET "cash_line_rank"=?, "cash_line_points"=? WHERE "dk_id"=?'
-        cur.execute(sql, (rank, points, dk_id))
+        cur.execute(
+            'UPDATE "contests" SET "cash_line_rank"=?, "cash_line_points"=? WHERE "dk_id"=?', (rank, points, dk_id)
+        )
+        cur.execute('DELETE FROM "vip_cash_status" WHERE "dk_id"=?', (dk_id,))
+        cur.executemany(
+            'INSERT INTO "vip_cash_status" ("dk_id", "vip_name", "rank", "points") VALUES (?, ?, ?, ?)',
+            [(dk_id, status.vip_name, status.rank, status.points) for status in statuses],
+        )
         self.conn.commit()
+
+    @_sqlite_guard()
+    def get_standings_cash_snapshot(self, dk_id: int) -> StandingsCashSnapshot | None:
+        """Read the cash line and VIP rows in one SQLite statement snapshot."""
+        cur = self.conn.cursor()
+        cur.execute(
+            'SELECT c."cash_line_rank", c."cash_line_points", v."vip_name", v."rank", v."points" '
+            'FROM "contests" AS c LEFT JOIN "vip_cash_status" AS v ON v."dk_id"=c."dk_id" '
+            'WHERE c."dk_id"=? ORDER BY v."vip_name"',
+            (dk_id,),
+        )
+        rows = cur.fetchall()
+        if not rows:
+            return None
+        first = rows[0]
+        statuses = [VipCashStatus(vip_name=row[2], rank=row[3], points=row[4]) for row in rows if row[2] is not None]
+        return StandingsCashSnapshot(cash_line=(first[0], first[1]), vip_statuses=statuses)
 
     @_sqlite_guard()
     def get_contest_completed_at(self, dk_id: int) -> str | None:
@@ -671,41 +701,3 @@ class ContestDatabase:
         cur.execute('SELECT "completed_at" FROM "contests" WHERE "dk_id"=? LIMIT 1', (dk_id,))
         row = cur.fetchone()
         return row[0] if row is not None and row[0] else None
-
-    @_sqlite_guard()
-    def get_cash_line(self, dk_id: int) -> tuple[int | None, float | None] | None:
-        """
-        Fetch the persisted cash line for a contest.
-
-        Returns:
-            tuple[int | None, float | None] | None: (rank, points) if the
-                contest exists, else None. On SQLite error, also None.
-        """
-        cur = self.conn.cursor()
-        sql = 'SELECT "cash_line_rank", "cash_line_points" FROM "contests" WHERE "dk_id"=? LIMIT 1'
-        cur.execute(sql, (dk_id,))
-        row = cur.fetchone()
-        return (row[0], row[1]) if row is not None else None
-
-    @_sqlite_guard(rollback=True)
-    def replace_vip_cash_status(self, dk_id: int, statuses: list[VipCashStatus]) -> None:
-        """
-        Atomically replace the full set of VIP cash-status rows for a
-        contest, matching how ``SportProcessor`` re-parses the whole VIP
-        list on every poll rather than updating it incrementally.
-        """
-        cur = self.conn.cursor()
-        cur.execute('DELETE FROM "vip_cash_status" WHERE "dk_id"=?', (dk_id,))
-        cur.executemany(
-            'INSERT INTO "vip_cash_status" ("dk_id", "vip_name", "rank", "points") VALUES (?, ?, ?, ?)',
-            [(dk_id, status.vip_name, status.rank, status.points) for status in statuses],
-        )
-        self.conn.commit()
-
-    @_sqlite_guard(default_factory=list[VipCashStatus])
-    def get_vip_cash_status(self, dk_id: int) -> list[VipCashStatus]:
-        """Fetch the persisted VIP cash-status rows for a contest."""
-        cur = self.conn.cursor()
-        sql = 'SELECT "vip_name", "rank", "points" FROM "vip_cash_status" WHERE "dk_id"=? ORDER BY "vip_name"'
-        cur.execute(sql, (dk_id,))
-        return [VipCashStatus(vip_name=row[0], rank=row[1], points=row[2]) for row in cur.fetchall()]
