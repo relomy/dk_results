@@ -5,7 +5,7 @@ import logging
 from argparse import Namespace
 from collections import OrderedDict
 
-import dk_results.cli.db_main as db_main
+from dk_results.cli import db_main
 from dk_results.sport_processor import (
     NoLiveContestError,
 )
@@ -17,7 +17,7 @@ def test_main_snapshot_out_writes_opt_in_envelope(monkeypatch, tmp_path):
     monkeypatch.setattr(db_main.state, "contests_db_path", lambda: tmp_path / "contests.db")
     monkeypatch.setattr(db_main, "ContestDatabase", lambda _path: object())
     monkeypatch.setattr(db_main, "DraftKings", lambda: object())
-    monkeypatch.setattr(db_main, "load_vips", lambda: [])
+    monkeypatch.setattr(db_main, "load_vips", list)
     monkeypatch.setattr(
         db_main.argparse.ArgumentParser,
         "parse_args",
@@ -72,7 +72,7 @@ def test_main_snapshot_out_skips_and_preserves_existing_output_when_no_contests(
     monkeypatch.setattr(db_main.state, "contests_db_path", lambda: tmp_path / "contests.db")
     monkeypatch.setattr(db_main, "ContestDatabase", lambda _path: object())
     monkeypatch.setattr(db_main, "DraftKings", lambda: object())
-    monkeypatch.setattr(db_main, "load_vips", lambda: [])
+    monkeypatch.setattr(db_main, "load_vips", list)
     monkeypatch.setattr(
         db_main.argparse.ArgumentParser,
         "parse_args",
@@ -104,7 +104,7 @@ def test_main_verbose_enables_debug_without_mutating_log_level_env(monkeypatch, 
     monkeypatch.setattr(db_main.state, "contests_db_path", lambda: tmp_path / "contests.db")
     monkeypatch.setattr(db_main, "ContestDatabase", lambda _path: object())
     monkeypatch.setattr(db_main, "DraftKings", lambda: object())
-    monkeypatch.setattr(db_main, "load_vips", lambda: [])
+    monkeypatch.setattr(db_main, "load_vips", list)
 
     class _FakeSportProcessor:
         def __init__(self, **kwargs):
@@ -141,7 +141,7 @@ def test_main_verbose_flag_is_boolean(monkeypatch, tmp_path):
     monkeypatch.setattr(db_main.state, "contests_db_path", lambda: tmp_path / "contests.db")
     monkeypatch.setattr(db_main, "ContestDatabase", lambda _path: object())
     monkeypatch.setattr(db_main, "DraftKings", lambda: object())
-    monkeypatch.setattr(db_main, "load_vips", lambda: [])
+    monkeypatch.setattr(db_main, "load_vips", list)
 
     class _FakeSportProcessor:
         def __init__(self, **kwargs):
@@ -183,7 +183,7 @@ def test_main_verbose_uses_explicit_logging_override(monkeypatch, tmp_path):
     monkeypatch.setattr(db_main.state, "contests_db_path", lambda: tmp_path / "contests.db")
     monkeypatch.setattr(db_main, "ContestDatabase", lambda _path: object())
     monkeypatch.setattr(db_main, "DraftKings", lambda: object())
-    monkeypatch.setattr(db_main, "load_vips", lambda: [])
+    monkeypatch.setattr(db_main, "load_vips", list)
 
     class _FakeSportProcessor:
         def __init__(self, **kwargs):
@@ -234,7 +234,6 @@ def test_main_loads_vips_once_per_invocation(monkeypatch, tmp_path):
 
         def run(self, sport_name, sport_cls):
             run_sports.append(sport_name)
-            return None
 
     monkeypatch.setattr(db_main, "load_vips", _load_vips_once)
     monkeypatch.setattr(db_main, "SportProcessor", _FakeSportProcessor)

@@ -87,7 +87,7 @@ PAID_60 = {"cutoff_type": "positions_paid", "rank": 60, "points": 250.5}
 class TestNonCashingCannotExceedEntriesMinusPositionsPaid:
     def test_count_above_the_bound_fails_the_build(self) -> None:
         # 100 entries, 60 paid: at most 40 can be non-cashing.
-        with pytest.raises(ValueError, match="non_cashing.users_not_cashing"):
+        with pytest.raises(ValueError, match=r"non_cashing\.users_not_cashing"):
             _build(_non_cashing_bundle(41, positions_paid=60))
 
     def test_count_at_the_bound_passes(self) -> None:
@@ -97,7 +97,7 @@ class TestNonCashingCannotExceedEntriesMinusPositionsPaid:
 
     def test_bound_uses_positions_paid_not_the_cash_line_rank(self) -> None:
         # The cash line seen so far is rank 60, but 90 positions are paid: at most 10 can be non-cashing.
-        with pytest.raises(ValueError, match="non_cashing.users_not_cashing"):
+        with pytest.raises(ValueError, match=r"non_cashing\.users_not_cashing"):
             _build(_non_cashing_bundle(11, positions_paid=90))
 
     def test_positions_paid_is_emitted_on_the_contest(self) -> None:
@@ -301,7 +301,7 @@ class TestProducerOmitsWhatItCannotKnow:
 
 
 def _build_error(bundle: dict[str, Any]) -> str:
-    with pytest.raises(ValueError) as excinfo:
+    with pytest.raises(ValueError, match="Snapshot v3 validation failed: ") as excinfo:
         _build(bundle)
     return str(excinfo.value)
 

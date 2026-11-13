@@ -36,7 +36,7 @@ def to_utc_iso(value: datetime.datetime | str | None) -> str | None:
 
     if value.tzinfo is None:
         value = value.replace(tzinfo=ZoneInfo("America/New_York"))
-    value = value.astimezone(datetime.timezone.utc)
+    value = value.astimezone(datetime.UTC)
     return value.replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 

@@ -16,6 +16,18 @@ from dk_results.cli.find_new_double_ups import (
 from dk_results.domain.contest import Contest
 from dk_results.domain.sport import NFLSport, Sport
 from dk_results.lobby.formatting import format_discord_messages
+from dk_results.persistence.contestdatabase import ContestDatabase
+
+
+class FakeBot(WebhookSender):
+    """WebhookSender that records messages instead of posting them."""
+
+    def __init__(self) -> None:
+        super().__init__("https://example.test/hook")
+        self.sent: list[str] = []
+
+    def send_message(self, message: str) -> None:
+        self.sent.append(message)
 
 
 def test_find_new_double_ups_exposes_webhook_sender():
@@ -69,21 +81,22 @@ def test_process_sport_syncs_draft_group_start_dates(monkeypatch):
         response = {"DraftGroups": draft_groups}
         return [contest], [111, 222], response
 
-    class FakeDB:
-        def __init__(self):
-            self.start_map = None
+    class FakeDB(ContestDatabase):
+        def __init__(self) -> None:
+            super().__init__(":memory:")
+            self.start_map: dict[int, datetime.datetime] | None = None
 
-        def ensure_schema(self):
+        def ensure_schema(self) -> None:
             return None
 
-        def sync_draft_group_start_dates(self, start_map):
-            self.start_map = start_map
+        def sync_draft_group_start_dates(self, draft_group_start_dates: dict[int, datetime.datetime]) -> int:
+            self.start_map = draft_group_start_dates
             return 1
 
-        def compare_contests(self, contests):
+        def compare_contests(self, contests: list[Contest]) -> list[int]:
             return [c.id for c in contests]
 
-        def insert_contests(self, _contests):
+        def insert_contests(self, contests: list[Contest]) -> None:
             return None
 
     monkeypatch.setattr("dk_results.cli.find_new_double_ups.get_dk_lobby", fake_get_dk_lobby)
@@ -113,7 +126,8 @@ def test_upsert_contests_uses_dfs_common(monkeypatch):
     find_mod._upsert_contests([contest])
 
     assert calls["db_path"] == "/tmp/contests.db"
-    assert calls["rows"] and calls["rows"][0]["dk_id"] == 303
+    assert calls["rows"]
+    assert calls["rows"][0]["dk_id"] == 303
 
 
 def _contest_payload(dk_id: int):
@@ -139,13 +153,6 @@ def test_send_discord_notification_no_bot():
 
 
 def test_send_discord_notification_formats_message():
-    class FakeBot:
-        def __init__(self):
-            self.sent = []
-
-        def send_message(self, message: str):
-            self.sent.append(message)
-
     bot = FakeBot()
     contest = Contest.from_lobby(_contest_payload(1), "NBA")
     send_discord_notification(bot, "NBA", [contest])
@@ -156,13 +163,6 @@ def test_send_discord_notification_formats_message():
 
 def test_send_discord_notification_gates_unmapped_sport():
     """A sport absent from the role map gets no double-up announcement at all."""
-
-    class FakeBot:
-        def __init__(self):
-            self.sent = []
-
-        def send_message(self, message: str):
-            self.sent.append(message)
 
     bot = FakeBot()
     contest = Contest.from_lobby(_contest_payload(1), "MLB")
@@ -181,8 +181,12 @@ def test_format_discord_messages():
 
 
 def test_process_sport_invalid_name(monkeypatch):
-    with pytest.raises(Exception):
-        process_sport("BAD", {}, None, None)
+    db = ContestDatabase(":memory:")
+    try:
+        with pytest.raises(Exception, match="Could not find matching Sport subclass"):
+            process_sport("BAD", {}, db, None)
+    finally:
+        db.close()
 
 
 def test_process_sport_sends_notification(monkeypatch):
@@ -200,28 +204,22 @@ def test_process_sport_sends_notification(monkeypatch):
         }
         return [contest], draft_groups, response
 
-    class FakeDB:
-        def __init__(self):
-            self.inserted = []
+    class FakeDB(ContestDatabase):
+        def __init__(self) -> None:
+            super().__init__(":memory:")
+            self.inserted: list[Contest] = []
 
-        def ensure_schema(self):
+        def ensure_schema(self) -> None:
             return None
 
-        def sync_draft_group_start_dates(self, _start_map):
+        def sync_draft_group_start_dates(self, draft_group_start_dates: dict[int, datetime.datetime]) -> int:
             return 0
 
-        def compare_contests(self, _contests):
+        def compare_contests(self, contests: list[Contest]) -> list[int]:
             return [1]
 
-        def insert_contests(self, contests):
+        def insert_contests(self, contests: list[Contest]) -> None:
             self.inserted.extend(contests)
-
-    class FakeBot:
-        def __init__(self):
-            self.sent = []
-
-        def send_message(self, message: str):
-            self.sent.append(message)
 
     monkeypatch.setattr("dk_results.cli.find_new_double_ups.get_dk_lobby", fake_get_dk_lobby)
 

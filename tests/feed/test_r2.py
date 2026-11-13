@@ -23,9 +23,9 @@ class FakeS3Client:
         self.blobs[kwargs["Key"]] = kwargs["Body"]
         return {}
 
-    def get_object(self, Bucket: str, Key: str) -> dict:  # noqa: N803 - boto3 kwargs
+    def get_object(self, Bucket: str, Key: str) -> dict:  # boto3 kwargs
         if Key not in self.blobs:
-            raise _MissingKey()
+            raise _MissingKey
         return {"Body": io.BytesIO(self.blobs[Key])}
 
 

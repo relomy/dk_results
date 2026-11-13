@@ -91,7 +91,7 @@ def test_the_goldens_exercise_the_unlocked_vip_slot_presence_rule() -> None:
         if not slot.get("is_locked")
     ]
 
-    assert unlocked_slots and all(slot.get("player_key") for slot in unlocked_slots)
+    assert all((unlocked_slots, all(slot.get("player_key") for slot in unlocked_slots)))
 
 
 def test_golf_golden_has_no_game_status_and_omits_every_remaining_figure() -> None:
@@ -165,7 +165,7 @@ def test_nfl_mid_slate_golden_emits_vip_rank_points_and_pmr_as_numbers() -> None
     contest = _committed_contest("nfl_mid_slate")
 
     for vip in contest["vip_lineups"]:
-        assert type(vip["rank"]) is int and type(vip["points"]) is float and type(vip["pmr"]) is float
+        assert (type(vip["rank"]), type(vip["points"]), type(vip["pmr"])) == (int, float, float)
         assert "pts" not in vip
     below_a = next(vip for vip in contest["vip_lineups"] if vip["display_name"] == "vip_below_a")
     assert (below_a["rank"], below_a["points"], below_a["pmr"]) == (13, 116.0, 540.0)
@@ -187,7 +187,7 @@ def test_nfl_mid_slate_golden_trims_names_in_every_other_section_and_matches_the
     non_cashing = [row["player_name"] for row in contest["metrics"]["non_cashing"]["top_remaining_players"]]
     players = [player["name"] for player in next(iter(envelope["sports"].values()))["players"]]
     assert all(name == name.strip() for name in swing + non_cashing + players)
-    assert "Rams" in swing and "Rams" in players
+    assert all("Rams" in names for names in (swing, players))
 
 
 def test_nfl_mid_slate_golden_carries_locked_slots_next_to_revealed_ones() -> None:
@@ -196,7 +196,7 @@ def test_nfl_mid_slate_golden_carries_locked_slots_next_to_revealed_ones() -> No
     for vip in contest["vip_lineups"]:
         locked = [slot for slot in vip["players_live"] if slot.get("is_locked")]
         revealed = [slot for slot in vip["players_live"] if not slot.get("is_locked")]
-        assert locked and revealed
+        assert all((locked, revealed))
         assert all(slot["player_name"] == "LOCKED \N{LOCK}" for slot in locked)
         assert all({"player_key", "salary"} & slot.keys() == set() for slot in locked)
         assert all(slot["is_live"] in (True, False) and slot["salary"] > 0 for slot in revealed)
@@ -219,7 +219,7 @@ def test_nfl_mid_slate_golden_does_not_count_ties_at_or_inside_the_cash_line_as_
     assert non_cashing["users_not_cashing"] == NFL_ENTRIES - NFL_CASHING_ROWS
     assert non_cashing["avg_pmr_remaining"] == round(sum(NFL_NON_CASHING_PMRS) / len(NFL_NON_CASHING_PMRS), 2)
     tied_inside = [row for row in contest["standings"] if row["rank"] in (2, 5)]
-    assert len(tied_inside) == 4 and all(row["is_cashing"] for row in tied_inside)
+    assert all((len(tied_inside) == 4, all(row["is_cashing"] for row in tied_inside)))
     assert contest["live_metrics"]["cash_line"]["points_cutoff"] == 128.02
     assert {row["display_name"]: row["rank_delta"] for row in contest["metrics"]["distance_to_cash"]["per_vip"]} == {
         "EmpireMaker2": 2,

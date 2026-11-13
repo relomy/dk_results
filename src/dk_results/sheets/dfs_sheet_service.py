@@ -1,7 +1,8 @@
 """Service layer for DFS sheet operations."""
 
 import datetime
-from typing import Any, Sequence
+from collections.abc import Sequence
+from typing import Any
 
 from dfs_common.sheets import NumberFormat
 
@@ -51,8 +52,10 @@ class DfsSheetService:
         start_col_index = self._column_letters_to_index(origin.start_col)
         formats: list[tuple[str, NumberFormat]] = [
             (
-                f"{self._column_index_to_letters(start_col_index + cell_format.col)}"
-                f"{origin.start_row + cell_format.row}",
+                (
+                    f"{self._column_index_to_letters(start_col_index + cell_format.col)}"
+                    f"{origin.start_row + cell_format.row}"
+                ),
                 cell_format.number_format,
             )
             for cell_format in format_plan
@@ -85,7 +88,7 @@ class DfsSheetService:
         values = [[positions_paid, contest_name]]
         self.repo.write_range(values, cell_range)
 
-    def add_min_cash(self, min_cash: int | float) -> None:
+    def add_min_cash(self, min_cash: float) -> None:
         cell_range = f"{self.sport}!W1:W1"
         values = [[min_cash]]
         self.repo.write_range(values, cell_range)

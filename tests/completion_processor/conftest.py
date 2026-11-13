@@ -16,6 +16,7 @@ from dataclasses import dataclass
 import pytest
 
 from dk_results.completion_processor import CompletionProcessor, CompletionProcessorConfig
+from dk_results.domain.sport import Sport
 from dk_results.persistence.contestdatabase import ContestDatabase
 from dk_results.persistence.notification_store import NotificationStore
 
@@ -39,10 +40,10 @@ CREATE TABLE contests (
 """
 
 # The clock when a test does not pick one: long after every started contest below.
-DEFAULT_MOMENT = datetime.datetime(2030, 1, 1, 12, 0, tzinfo=datetime.timezone.utc)
+DEFAULT_MOMENT = datetime.datetime(2030, 1, 1, 12, 0, tzinfo=datetime.UTC)
 
 
-class DummySport:
+class DummySport(Sport):
     name = "NBA"
     sheet_min_entry_fee = 25
     keyword = "%"

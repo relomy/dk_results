@@ -259,8 +259,6 @@ class GolfSport(Sport):
 
     suffixes = (r"\(PGA\)", r"\(PGA TOUR\)")
 
-    lineup_range = "L8:Z56"
-
     # optimizer — a DraftKings golf roster is six G slots.
     positions = ("G", "G", "G", "G", "G", "G")
     allow_optimizer = True

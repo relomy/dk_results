@@ -9,12 +9,16 @@ import pickle
 import time
 import zipfile
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 from urllib.parse import urlsplit, urlunsplit
 
 import requests
 
 from .session import AuthSession
+
+
+class SalaryDownloadError(Exception):
+    """Raised when the DraftKings salary CSV request returns a non-200 status."""
 
 
 class DraftKings:
@@ -27,9 +31,9 @@ class DraftKings:
         self,
         *,
         timeout_sec: int = 15,
-        cookies_dump_file: Optional[str] = None,
+        cookies_dump_file: str | None = None,
         contest_dir: str = "contests",
-        session: Optional[requests.Session] = None,
+        session: requests.Session | None = None,
     ) -> None:
         self.session = session or AuthSession().get_session()
         self.timeout_sec = timeout_sec
@@ -57,11 +61,11 @@ class DraftKings:
         target_session.headers.update(self.session.headers)
         try:
             target_session.cookies.update(self.session.cookies.get_dict())
-        except Exception:
+        except (AttributeError, TypeError):
             for c in getattr(self.session, "cookies", []):
                 try:
                     target_session.cookies.set(c.name, c.value, domain=c.domain, path=c.path)
-                except Exception:
+                except (AttributeError, TypeError):
                     pass
 
     # -----------------------
@@ -71,8 +75,8 @@ class DraftKings:
     def get_leaderboard(
         self,
         contest_id: int,
-        timeout: Optional[int] = None,
-        session: Optional[requests.Session] = None,
+        timeout: int | None = None,
+        session: requests.Session | None = None,
     ) -> dict[str, Any]:
         """
         Fetch the leaderboard JSON for a contest id.
@@ -84,7 +88,7 @@ class DraftKings:
         r.raise_for_status()
         return r.json()
 
-    def get_contest_detail(self, dk_id: int, timeout: Optional[int] = None) -> dict[str, Any]:
+    def get_contest_detail(self, dk_id: int, timeout: int | None = None) -> dict[str, Any]:
         """
         Fetch contest detail JSON for a given contest id.
         """
@@ -95,7 +99,7 @@ class DraftKings:
         return r.json()
 
     def get_lobby_contests(
-        self, sport: str, *, live: bool = False, timeout: Optional[int] = None
+        self, sport: str, *, live: bool = False, timeout: int | None = None
     ) -> dict[str, Any] | list[dict[str, Any]]:
         """
         Fetch lobby contests listing for a sport. If live=True, hits the live endpoint.
@@ -108,7 +112,7 @@ class DraftKings:
         r.raise_for_status()
         return r.json()
 
-    def get_draftables(self, draft_group: int, timeout: Optional[int] = None) -> dict[str, Any]:
+    def get_draftables(self, draft_group: int, timeout: int | None = None) -> dict[str, Any]:
         """
         Fetch the draftables JSON for a draft group (players and Competitions).
         The endpoint is anonymous (ADR-0009), so the GET goes through a fresh
@@ -125,8 +129,8 @@ class DraftKings:
         self,
         draft_group: int,
         entry_key: str,
-        timeout: Optional[int] = None,
-        session: Optional[requests.Session] = None,  # <-- NEW
+        timeout: int | None = None,
+        session: requests.Session | None = None,  # <-- NEW
     ) -> dict[str, Any]:
         """
         Fetch a single entry (scorecard/roster) JSON by draft group and entry key.
@@ -142,8 +146,8 @@ class DraftKings:
         self,
         contest_id: int,
         page_no: int,
-        timeout: Optional[int] = None,
-        session: Optional[requests.Session] = None,
+        timeout: int | None = None,
+        session: requests.Session | None = None,
     ) -> str:
         """
         Fetch a single entrants page HTML fragment for a contest.
@@ -173,7 +177,7 @@ class DraftKings:
             self.logger.debug("Skipping cookies dump; non-fatal.", exc_info=True)
 
     def _parse_plain_csv_response(
-        self, r: requests.Response, contest_id: int, cdir: Optional[str], cdf: Optional[str]
+        self, r: requests.Response, contest_id: int, cdir: str | None, cdf: str | None
     ) -> list[list[str]]:
         if cdir:
             self._write_standings_csv_to_disk(cdir, contest_id, r.content)
@@ -183,9 +187,13 @@ class DraftKings:
         return list(csv.reader(csvfile.splitlines(), delimiter=","))
 
     def _extract_csv_from_zip(self, content: bytes, cdir: str) -> list[list[str]] | None:
+        zip_obj: zipfile.ZipFile | None = None
         try:
             zip_obj = zipfile.ZipFile(io.BytesIO(content))
         except zipfile.BadZipFile:
+            pass
+
+        if zip_obj is None:
             self.logger.error("Response was neither CSV nor valid ZIP.")
             return None
 
@@ -204,8 +212,8 @@ class DraftKings:
         contest_id: int,
         *,
         timeout: int = 30,
-        cookies_dump_file: Optional[str] = None,
-        contest_dir: Optional[str] = None,
+        cookies_dump_file: str | None = None,
+        contest_dir: str | None = None,
     ) -> list[list[str]] | None:
         """
         Download the full standings CSV (possibly as a ZIP) and return parsed rows.
@@ -264,16 +272,14 @@ class DraftKings:
         if sport in contest_types:
             self.logger.debug("contest_types sport=%s type_id=%s", sport, contest_types[sport])
 
-        csv_url = (
-            "https://www.draftkings.com/lineup/getavailableplayerscsv?contestTypeId={0}&draftGroupId={1}"
-        ).format(contest_types[sport], draft_group)
+        csv_url = f"https://www.draftkings.com/lineup/getavailableplayerscsv?contestTypeId={contest_types[sport]}&draftGroupId={draft_group}"
 
         # send GET request
-        response = self.session.get(csv_url)
+        response = self.session.get(csv_url, timeout=self.timeout_sec)
 
         # if not successful, raise an exception
         if response.status_code != 200:
-            raise Exception("Requests status != 200. It is: {0}".format(response.status_code))
+            raise SalaryDownloadError(f"Requests status != 200. It is: {response.status_code}")
 
         # dump html to file to avoid multiple requests
         Path(filename).parent.mkdir(parents=True, exist_ok=True)

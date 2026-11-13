@@ -93,7 +93,7 @@ def load_vips() -> list[str]:
     """Load VIP usernames from vips.yaml located next to this file."""
     vip_path = repo_file("vips.yaml")
     try:
-        with open(vip_path, "r") as f:
+        with open(vip_path) as f:
             vips = yaml.safe_load(f) or []
         if not isinstance(vips, list):
             logger.warning("vips.yaml did not contain a list; treating as empty.")
@@ -102,7 +102,7 @@ def load_vips() -> list[str]:
     except FileNotFoundError:
         logger.warning("vips.yaml not found at %s; proceeding with empty VIP list.", vip_path)
         return []
-    except Exception as e:
+    except (OSError, ValueError, yaml.YAMLError, KeyError, AttributeError, RecursionError) as e:
         logger.warning("Failed to load vips.yaml: %s; proceeding with empty VIP list.", e)
         return []
 
@@ -339,6 +339,14 @@ def _resolve_users_to_fetch(
     return [u for u in lb.get("leaderBoard", []) if u.get("userName") in vip_set]
 
 
+def _log_fetch_failure(user: str, error: Exception) -> None:
+    """Log one VIP's failed fetch without a traceback (one bad VIP is normal); never raises."""
+    try:
+        logger.error("Failed fetching lineup for %s: %s", user, error)
+    except Exception:
+        pass
+
+
 def _run_vip_fetches(
     http: DkHttpPort,
     users_to_fetch: list[dict[str, Any]],
@@ -358,6 +366,7 @@ def _run_vip_fetches(
         }
         for fut in as_completed(futures):
             user = futures[fut].get("userName", "<unknown>")
+            fetch_error: Exception | None = None
             try:
                 result = fut.result()
                 if result is None:
@@ -367,10 +376,10 @@ def _run_vip_fetches(
                     lineups.append(result)
             except Exception as e:
                 failures += 1
-                try:
-                    logger.error("Failed fetching lineup for %s: %s", user, e)
-                except Exception:
-                    pass
+                fetch_error = e
+
+            if fetch_error is not None:
+                _log_fetch_failure(user, fetch_error)
 
     return lineups, missing_roster, failures
 

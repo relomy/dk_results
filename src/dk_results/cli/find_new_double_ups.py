@@ -4,7 +4,6 @@ import argparse
 import logging
 from collections.abc import Mapping
 from os import getenv
-from typing import Type
 
 from dfs_common import contests, state
 from dfs_common.discord import WebhookSender
@@ -21,6 +20,10 @@ from dk_results.logging import configure_logging
 from dk_results.persistence.contestdatabase import ContestDatabase
 
 logger = logging.getLogger(__name__)
+
+
+class UnknownSportError(Exception):
+    """Raised when a requested sport has no matching Sport subclass."""
 
 
 def _contest_to_row(contest: Contest) -> dict:
@@ -67,7 +70,7 @@ def set_quiet_verbosity() -> None:
     logger.setLevel(logging.INFO)
 
 
-def parse_args(choices: Mapping[str, Type[Sport]]) -> argparse.Namespace:
+def parse_args(choices: Mapping[str, type[Sport]]) -> argparse.Namespace:
     """Parse command-line arguments."""
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -84,7 +87,7 @@ def parse_args(choices: Mapping[str, Type[Sport]]) -> argparse.Namespace:
 
 def process_sport(
     sport_name: str,
-    choices: Mapping[str, Type[Sport]],
+    choices: Mapping[str, type[Sport]],
     db: ContestDatabase,
     bot: WebhookSender | None,
     *,
@@ -92,7 +95,7 @@ def process_sport(
 ) -> None:
     """Process contests for a given sport and send Discord notifications."""
     if sport_name not in choices:
-        raise Exception("Could not find matching Sport subclass")
+        raise UnknownSportError("Could not find matching Sport subclass")
 
     sport_obj = choices[sport_name]
     primary_sport = sport_obj.get_primary_sport()
@@ -151,7 +154,7 @@ def main() -> None:
     """Main function to find new double ups and send notifications."""
     _init_runtime()
 
-    choices: Mapping[str, Type[Sport]] = get_sport_choices()
+    choices: Mapping[str, type[Sport]] = get_sport_choices()
 
     webhook = getenv("DISCORD_WEBHOOK")
     if not webhook:

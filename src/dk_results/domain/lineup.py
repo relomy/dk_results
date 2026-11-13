@@ -1,7 +1,6 @@
 import copy
 import unicodedata
 from dataclasses import dataclass
-from typing import Type
 
 from dk_results.domain.sport import Sport
 
@@ -36,7 +35,7 @@ def normalize_name(name: str) -> str:
 
 
 def parse_lineup_string(
-    sport_obj: Sport | Type[Sport],
+    sport_obj: Sport | type[Sport],
     players: dict[str, Player],
     lineup_str: str,
 ) -> list[LineupSlot]:
@@ -82,27 +81,25 @@ def parse_lineup_string(
                 raise LineupParseError(f"Unresolved lineup slot {position}: {name}")
 
     # sort by DraftKings roster order (RB, RB, WR, WR, etc.), then name
-    sorted_list = sorted(
+    return sorted(
         player_list,
         key=lambda x: (sport_obj.positions.index(x.pos), x.name),
     )
-
-    return sorted_list
 
 
 class Lineup:
     """A representation of a list of Players"""
 
-    def __init__(self, sport_obj: Sport | Type[Sport], players: dict[str, Player], lineup_str: str) -> None:
+    def __init__(self, sport_obj: Sport | type[Sport], players: dict[str, Player], lineup_str: str) -> None:
         self.sport_obj = sport_obj
         self.players = players
 
         self.lineup: list[LineupSlot] = parse_lineup_string(self.sport_obj, self.players, lineup_str)
 
     def __str__(self) -> str:
-        str = ""
+        text = ""
 
         for player in self.lineup:
-            str += f"{player.pos} {player.name} "
+            text += f"{player.pos} {player.name} "
 
-        return str
+        return text

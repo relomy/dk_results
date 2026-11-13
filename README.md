@@ -7,12 +7,9 @@ notifications (see `db_main.py:main`, `update_contests.py:check_contests_for_com
 ## Tooling
 
 - Setup: `uv sync`
-- Format: `uv run --group quality ruff format .`
-- Lint: `uv run --group quality ruff check .`
-- Types: `uv run --group quality ty check`
 - Tests: `uv run pytest`
-- Complexity floor: `uv run --group quality xenon --max-absolute B src`
-- Complexity ratchet: `uv run --group quality complexity-ratchet --base origin/main --worktree`
+- Quality (format check, lint, types, complexity): `scripts/check-quality.sh`
+- Apply formatting fixes: `uv run --group quality ruff format .`
 
 ## Shared Infrastructure
 

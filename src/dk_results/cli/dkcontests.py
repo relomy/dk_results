@@ -39,8 +39,10 @@ import argparse
 import contextlib
 import datetime
 import io
+import sys
 from collections.abc import Mapping, Sequence
-from typing import Any, Type
+from typing import Any
+from zoneinfo import ZoneInfo
 
 from dfs_common import state
 
@@ -60,12 +62,12 @@ def get_contests(sport: str, live: bool = False):
     return get_contests_from_response(response)
 
 
-def get_sport_class_choices() -> Mapping[str, Type[Sport]]:
+def get_sport_class_choices() -> Mapping[str, type[Sport]]:
     return get_sport_choices()
 
 
 def format_sport_class_game_type_help(
-    choices: Mapping[str, Type[Sport]],
+    choices: Mapping[str, type[Sport]],
 ) -> str:
     lines = ["Sport-class gameTypeId constraints:"]
     constrained = [
@@ -390,7 +392,7 @@ def print_stats(
 
 def _load_contests_for_args(
     args: argparse.Namespace,
-    sport_class_choices: Mapping[str, Type[Sport]],
+    sport_class_choices: Mapping[str, type[Sport]],
 ) -> tuple[list[dict], str, set[int] | None]:
     featured_draft_group_ids = None
     if args.sport_class:
@@ -448,7 +450,6 @@ def _print_selected_contest(contest: Contest) -> None:
 
 
 def main():
-    """"""
     load_and_apply_settings()
 
     supported_sports = [
@@ -500,7 +501,7 @@ def main():
         "-d",
         "--date",
         help="The Start Date - format YYYY-MM-DD",
-        default=datetime.datetime.today(),
+        default=datetime.datetime.now(ZoneInfo("America/New_York")).replace(tzinfo=None),
         type=valid_date,
     )
     parser.add_argument("--time", help="Optional start time - format HH:MM", type=valid_time)
@@ -535,7 +536,7 @@ def main():
             scope=report_scope,
         )
         print(diagnostics, end="")
-        exit("No contests found.")
+        sys.exit("No contests found.")
 
     assert contest is not None
     # Keep the report before the selection diagnostics while deriving its marker

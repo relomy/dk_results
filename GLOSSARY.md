@@ -83,6 +83,9 @@ A tracked VIP's standings row sits at or above the current **cash line** (`rank 
 **VipCashStatus**:
 One tracked VIP's own standings row (name, rank, points) in one contest, as of the last poll. See ADR-0011.
 
+**Standings cash snapshot**:
+The cash line and complete `VipCashStatus` set published by one `SportProcessor` poll and read together by `ContestDatabase`. Its write is one transaction and its read is one SQL statement, so consumers cannot combine polls. See ADR-0011.
+
 **Non-cashing**:
 A standings row ranked below the **cash line** (`rank > positions_paid`), as of the last standings parse. Decided by rank alone: rows tied with, or scoring above, the cash line's score but inside the paid positions are never non-cashing. A positional fact, the counterpart of the cash line; it is *not* the negation of **Cashing** (an entry can be non-cashing without any payout data existing).
 _Avoid_: "not cashing" as a payout claim.

@@ -46,7 +46,7 @@ def _load_vips() -> list[str]:
         return []
     try:
         data = yaml.safe_load(path.read_text()) or []
-    except Exception:
+    except (OSError, ValueError, yaml.YAMLError, KeyError, AttributeError, RecursionError):
         logger.warning("failed to load vips.yaml from %s", path)
         return []
     if not isinstance(data, list):
@@ -164,8 +164,8 @@ def main(argv: list[str] | None = None):
             schema_db.close()
         conn = sqlite3.connect(db_path)
         check_contests_for_completion(conn, settings)
-    except sqlite3.Error as sql_error:
-        logger.error("SQLite error: %s", sql_error)
+    except sqlite3.Error:
+        logger.exception("SQLite error")
     except Exception:
         logger.exception("An unexpected error occurred")
 

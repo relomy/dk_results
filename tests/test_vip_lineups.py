@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+import json
+import logging
 from types import SimpleNamespace
 from typing import Any
+
+import pytest
 
 import dk_results.vip_lineups as vip_mod
 from dk_results.vip_lineups import (
@@ -85,7 +89,7 @@ def test_normalize_name_strips_accents():
 
 
 def test_normalize_name_non_string_returns_empty():
-    assert _normalize_name(123) == ""  # type: ignore[arg-type]
+    assert _normalize_name(json.loads("123")) == ""
 
 
 # ── _lookup_salary ────────────────────────────────────────────────────────────
@@ -127,6 +131,33 @@ def test_load_vips_missing_file_returns_empty(tmp_path, monkeypatch):
 
 def test_load_vips_non_list_yaml_returns_empty(tmp_path, monkeypatch):
     (tmp_path / "vips.yaml").write_text("not_a_list: true\n", encoding="utf-8")
+    monkeypatch.setattr(vip_mod, "repo_file", lambda *parts: tmp_path.joinpath(*parts))
+    assert load_vips() == []
+
+
+@pytest.mark.parametrize("content", [b"bad: yaml: :", b"\xff\xfe\x00bad"])
+def test_load_vips_unreadable_content_returns_empty(tmp_path, monkeypatch, content):
+    (tmp_path / "vips.yaml").write_bytes(content)
+    monkeypatch.setattr(vip_mod, "repo_file", lambda *parts: tmp_path.joinpath(*parts))
+    assert load_vips() == []
+
+
+@pytest.mark.parametrize(
+    "content", [b"!!bool foo", b"!!timestamp abc", b"[" * 5000], ids=["bool-tag", "timestamp-tag", "deep-nesting"]
+)
+def test_load_vips_loader_internal_errors_return_empty(tmp_path, monkeypatch, caplog, content):
+    # Explicit-tag and deep-nesting YAML raise KeyError, AttributeError and RecursionError.
+    (tmp_path / "vips.yaml").write_bytes(content)
+    monkeypatch.setattr(vip_mod, "repo_file", lambda *parts: tmp_path.joinpath(*parts))
+
+    assert load_vips() == []
+    assert len(caplog.messages) == 1
+    assert caplog.messages[0].startswith("Failed to load vips.yaml: ")
+    assert caplog.messages[0].endswith("; proceeding with empty VIP list.")
+
+
+def test_load_vips_directory_in_place_of_file_returns_empty(tmp_path, monkeypatch):
+    (tmp_path / "vips.yaml").mkdir()
     monkeypatch.setattr(vip_mod, "repo_file", lambda *parts: tmp_path.joinpath(*parts))
     assert load_vips() == []
 
@@ -253,15 +284,20 @@ def test_fetch_vip_lineups_no_roster_data_excluded():
     assert result == []
 
 
-def test_fetch_vip_lineups_worker_exception_swallowed():
+def test_fetch_vip_lineups_worker_exception_swallowed(caplog):
     http = _FakeHttp(raise_on_entry=RuntimeError("network error"))
-    result = fetch_vip_lineups(
-        1,
-        2,
-        http,
-        vip_entries={"Alice": {"entry_key": "ek1"}},
-    )
+    with caplog.at_level(logging.ERROR):
+        result = fetch_vip_lineups(
+            1,
+            2,
+            http,
+            vip_entries={"Alice": {"entry_key": "ek1"}},
+        )
     assert result == []
+    (record,) = caplog.records
+    assert record.levelno == logging.ERROR
+    assert record.getMessage() == "Failed fetching lineup for Alice: network error"
+    assert record.exc_info is None
 
 
 # ── fetch_vip_lineups — leaderboard path ─────────────────────────────────────

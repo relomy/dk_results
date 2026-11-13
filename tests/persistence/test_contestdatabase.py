@@ -3,69 +3,15 @@ import logging
 import sqlite3
 
 import pytest
+from persistence.builders import insert_contest
 
 from dk_results.domain.contest import Contest
-from dk_results.persistence.contestdatabase import ContestDatabase, ContestRow, VipCashStatus
-
-
-@pytest.fixture
-def contest_db():
-    db = ContestDatabase(":memory:")
-    db.ensure_schema()
-    try:
-        yield db
-    finally:
-        db.close()
-
-
-def _insert_contest(
-    db: ContestDatabase,
-    *,
-    dk_id: int,
-    sport: str = "NBA",
-    name: str = "Contest",
-    start_date: str = "2024-01-01 00:00:00",
-    draft_group: int = 1,
-    total_prizes: int = 1000,
-    entries: int = 100,
-    positions_paid: int | None = None,
-    entry_fee: int = 25,
-    entry_count: int = 0,
-    max_entry_count: int = 1,
-    completed: int = 0,
-    status: str | None = "LIVE",
-):
-    db.conn.execute(
-        """
-        INSERT INTO contests (
-            dk_id, sport, name, start_date, draft_group, total_prizes,
-            entries, positions_paid, entry_fee, entry_count, max_entry_count,
-            completed, status
-        )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """,
-        (
-            dk_id,
-            sport,
-            name,
-            start_date,
-            draft_group,
-            total_prizes,
-            entries,
-            positions_paid,
-            entry_fee,
-            entry_count,
-            max_entry_count,
-            completed,
-            status,
-        ),
-    )
-    db.conn.commit()
+from dk_results.persistence.contestdatabase import ContestDatabase, ContestRow
 
 
 def test_get_live_contest_prefers_entry_fee_at_or_above_min(contest_db):
-    _insert_contest(contest_db, dk_id=1, entry_fee=30, entries=150)
-    _insert_contest(contest_db, dk_id=2, entry_fee=10, entries=500)
+    insert_contest(contest_db, dk_id=1, entry_fee=30, entries=150)
+    insert_contest(contest_db, dk_id=2, entry_fee=10, entries=500)
 
     row = contest_db.get_live_contest("NBA", entry_fee=25)
 
@@ -73,8 +19,8 @@ def test_get_live_contest_prefers_entry_fee_at_or_above_min(contest_db):
 
 
 def test_get_live_contest_falls_back_to_highest_below_min(contest_db):
-    _insert_contest(contest_db, dk_id=3, entry_fee=10, entries=200)
-    _insert_contest(contest_db, dk_id=4, entry_fee=5, entries=400)
+    insert_contest(contest_db, dk_id=3, entry_fee=10, entries=200)
+    insert_contest(contest_db, dk_id=4, entry_fee=5, entries=400)
 
     row = contest_db.get_live_contest("NBA", entry_fee=25)
 
@@ -87,14 +33,14 @@ def test_get_live_contest_returns_none_when_no_rows(contest_db):
 
 def test_get_live_contest_is_deterministic_on_ties(contest_db):
     base_time = datetime.datetime(2024, 1, 1, 12, 0, 0)
-    _insert_contest(
+    insert_contest(
         contest_db,
         dk_id=5,
         entry_fee=20,
         entries=100,
         start_date=(base_time - datetime.timedelta(hours=1)).strftime("%Y-%m-%d %H:%M:%S"),
     )
-    _insert_contest(
+    insert_contest(
         contest_db,
         dk_id=6,
         entry_fee=20,
@@ -108,8 +54,8 @@ def test_get_live_contest_is_deterministic_on_ties(contest_db):
 
 
 def test_get_live_contests_uses_fallback_per_sport(contest_db):
-    _insert_contest(contest_db, dk_id=10, sport="NBA", entry_fee=10, entries=200)
-    _insert_contest(contest_db, dk_id=11, sport="NFL", entry_fee=30, entries=100)
+    insert_contest(contest_db, dk_id=10, sport="NBA", entry_fee=10, entries=200)
+    insert_contest(contest_db, dk_id=11, sport="NFL", entry_fee=30, entries=100)
 
     rows = contest_db.get_live_contests(sports=["NBA", "NFL"], entry_fee=25)
 
@@ -120,7 +66,7 @@ def test_get_live_contests_uses_fallback_per_sport(contest_db):
 
 
 def test_get_live_contests_discovers_sports_when_not_provided(contest_db):
-    _insert_contest(contest_db, dk_id=12, sport="NBA", entry_fee=20, entries=50)
+    insert_contest(contest_db, dk_id=12, sport="NBA", entry_fee=20, entries=50)
 
     rows = contest_db.get_live_contests(entry_fee=25)
 
@@ -130,9 +76,9 @@ def test_get_live_contests_discovers_sports_when_not_provided(contest_db):
 
 
 def test_sync_draft_group_start_dates_updates_only_changed_groups(contest_db):
-    _insert_contest(contest_db, dk_id=1, draft_group=10, start_date="2024-01-01 00:00:00")
-    _insert_contest(contest_db, dk_id=2, draft_group=10, start_date="2024-01-01 00:00:00")
-    _insert_contest(contest_db, dk_id=3, draft_group=20, start_date="2024-01-02 00:00:00")
+    insert_contest(contest_db, dk_id=1, draft_group=10, start_date="2024-01-01 00:00:00")
+    insert_contest(contest_db, dk_id=2, draft_group=10, start_date="2024-01-01 00:00:00")
+    insert_contest(contest_db, dk_id=3, draft_group=20, start_date="2024-01-02 00:00:00")
 
     updates = contest_db.sync_draft_group_start_dates(
         {
@@ -201,7 +147,7 @@ def test_sync_draft_group_start_dates_no_rows(contest_db):
 
 
 def test_sync_draft_group_start_dates_skips_none(contest_db):
-    _insert_contest(
+    insert_contest(
         contest_db,
         dk_id=1,
         draft_group=10,
@@ -229,39 +175,23 @@ def test_sync_draft_group_start_dates_handles_invalid_existing_date(contest_db):
     assert updates == 1
 
 
-def test_get_live_contest_sqlite_error(monkeypatch):
+def test_get_live_contest_sqlite_error(monkeypatch, boom_conn):
     db = ContestDatabase(":memory:")
     original_conn = db.conn
 
-    class BoomCursor:
-        def execute(self, *_args, **_kwargs):
-            raise sqlite3.Error("boom")
-
-    class BoomConn:
-        def cursor(self):
-            return BoomCursor()
-
     try:
-        db.conn = BoomConn()
+        db.conn = boom_conn
         assert db.get_live_contest("NBA") is None
     finally:
         original_conn.close()
 
 
-def test_get_live_contests_sqlite_error(monkeypatch):
+def test_get_live_contests_sqlite_error(monkeypatch, boom_conn):
     db = ContestDatabase(":memory:")
     original_conn = db.conn
 
-    class BoomCursor:
-        def execute(self, *_args, **_kwargs):
-            raise sqlite3.Error("boom")
-
-    class BoomConn:
-        def cursor(self):
-            return BoomCursor()
-
     try:
-        db.conn = BoomConn()
+        db.conn = boom_conn
         assert db.get_live_contests() == []
     finally:
         original_conn.close()
@@ -301,46 +231,30 @@ def test_get_next_upcoming_contest_any_returns_row(contest_db):
     assert row[0] == 2
 
 
-def test_get_next_upcoming_contest_sqlite_error(monkeypatch):
+def test_get_next_upcoming_contest_sqlite_error(monkeypatch, boom_conn):
     db = ContestDatabase(":memory:")
     original_conn = db.conn
 
-    class BoomCursor:
-        def execute(self, *_args, **_kwargs):
-            raise sqlite3.Error("boom")
-
-    class BoomConn:
-        def cursor(self):
-            return BoomCursor()
-
     try:
-        db.conn = BoomConn()
+        db.conn = boom_conn
         assert db.get_next_upcoming_contest("NBA") is None
     finally:
         original_conn.close()
 
 
-def test_get_next_upcoming_contest_any_sqlite_error(monkeypatch):
+def test_get_next_upcoming_contest_any_sqlite_error(monkeypatch, boom_conn):
     db = ContestDatabase(":memory:")
     original_conn = db.conn
 
-    class BoomCursor:
-        def execute(self, *_args, **_kwargs):
-            raise sqlite3.Error("boom")
-
-    class BoomConn:
-        def cursor(self):
-            return BoomCursor()
-
     try:
-        db.conn = BoomConn()
+        db.conn = boom_conn
         assert db.get_next_upcoming_contest_any("NBA") is None
     finally:
         original_conn.close()
 
 
 def test_get_contest_by_id_returns_row(contest_db):
-    _insert_contest(contest_db, dk_id=55, sport="NBA", entry_fee=25, entries=123)
+    insert_contest(contest_db, dk_id=55, sport="NBA", entry_fee=25, entries=123)
     row = contest_db.get_contest_by_id(55)
 
     assert row == ContestRow(
@@ -353,11 +267,12 @@ def test_get_contest_by_id_returns_row(contest_db):
         entries=123,
     )
     # The four detail-only fields default to None for a by-id DB read.
-    assert row.contest_state is None and row.prize_pool is None
+    assert row.contest_state is None
+    assert row.prize_pool is None
 
 
 def test_get_live_contest_logs_key_value(contest_db, caplog):
-    _insert_contest(
+    insert_contest(
         contest_db,
         dk_id=190402321,
         sport="GOLF",
@@ -377,7 +292,7 @@ def test_get_live_contest_logs_key_value(contest_db, caplog):
 
 
 def test_get_live_contest_candidates_returns_stable_order(contest_db):
-    _insert_contest(
+    insert_contest(
         contest_db,
         dk_id=101,
         sport="NBA",
@@ -385,7 +300,7 @@ def test_get_live_contest_candidates_returns_stable_order(contest_db):
         entries=200,
         start_date="2024-01-01 01:00:00",
     )
-    _insert_contest(
+    insert_contest(
         contest_db,
         dk_id=102,
         sport="NBA",
@@ -393,7 +308,7 @@ def test_get_live_contest_candidates_returns_stable_order(contest_db):
         entries=100,
         start_date="2024-01-01 01:00:00",
     )
-    _insert_contest(
+    insert_contest(
         contest_db,
         dk_id=103,
         sport="NBA",
@@ -417,7 +332,7 @@ def test_from_connection_shares_the_connection():
         assert db.conn is conn
         db.ensure_schema()
         # A write through the wrapper is visible on the same connection.
-        _insert_contest(db, dk_id=1, status="LIVE")
+        insert_contest(db, dk_id=1, status="LIVE")
         assert conn.execute("SELECT COUNT(*) FROM contests").fetchone()[0] == 1
     finally:
         conn.close()
@@ -427,200 +342,59 @@ def test_get_incomplete_contests_returns_started_and_pending(contest_db):
     past = "2024-01-01 00:00:00"
     future = (datetime.datetime.now() + datetime.timedelta(days=1)).strftime("%Y-%m-%d %H:%M:%S")
     # started + not completed → included
-    _insert_contest(contest_db, dk_id=1, start_date=past, completed=0, positions_paid=None, status="UPCOMING")
+    insert_contest(contest_db, dk_id=1, start_date=past, completed=0, positions_paid=None, status="UPCOMING")
     # started + completed but positions_paid NULL → included
-    _insert_contest(contest_db, dk_id=2, start_date=past, completed=1, positions_paid=None, status="COMPLETED")
+    insert_contest(contest_db, dk_id=2, start_date=past, completed=1, positions_paid=None, status="COMPLETED")
     # started + completed + positions_paid set → excluded
-    _insert_contest(contest_db, dk_id=3, start_date=past, completed=1, positions_paid=10, status="COMPLETED")
+    insert_contest(contest_db, dk_id=3, start_date=past, completed=1, positions_paid=10, status="COMPLETED")
     # not started yet → excluded
-    _insert_contest(contest_db, dk_id=4, start_date=future, completed=0, positions_paid=None, status="UPCOMING")
+    insert_contest(contest_db, dk_id=4, start_date=future, completed=0, positions_paid=None, status="UPCOMING")
 
     rows = contest_db.get_incomplete_contests()
     ids = sorted(r[0] for r in rows)
     assert ids == [1, 2]
     # tuple shape: (dk_id, draft_group, entries, positions_paid, status, completed, name, start_date, sport)
     row1 = next(r for r in rows if r[0] == 1)
-    assert row1[4] == "UPCOMING" and row1[8] == "NBA"
+    assert (row1[4], row1[8]) == ("UPCOMING", "NBA")
 
 
-def test_get_incomplete_contests_error_returns_none():
-    class BoomConn:
-        def cursor(self):
-            raise sqlite3.Error("boom")
-
-    db = ContestDatabase.from_connection(BoomConn())  # type: ignore[arg-type]
+def test_get_incomplete_contests_error_returns_none(boom_conn):
+    db = ContestDatabase.from_connection(boom_conn)
     assert db.get_incomplete_contests() is None
 
 
 def test_update_contest_writes_fields(contest_db):
-    _insert_contest(contest_db, dk_id=1, positions_paid=None, status="LIVE", completed=0)
+    insert_contest(contest_db, dk_id=1, positions_paid=None, status="LIVE", completed=0)
 
     contest_db.update_contest(1, positions_paid=42, status="COMPLETED", completed=1, now=_T0)
 
     assert contest_db.get_contest_state(1) == ("COMPLETED", 1)
     row = contest_db.get_contest_by_id(1)
-    assert row is not None and row.positions_paid == 42
+    assert row is not None
+    assert row.positions_paid == 42
 
 
-def test_update_contest_handles_error(caplog):
-    class BoomCursor:
-        def execute(self, *_a, **_k):
-            raise sqlite3.Error("boom")
-
-    class BoomConn:
-        def cursor(self):
-            return BoomCursor()
-
-        def commit(self):  # pragma: no cover - not reached
-            return None
-
-    db = ContestDatabase.from_connection(BoomConn())  # type: ignore[arg-type]
+def test_update_contest_handles_error(caplog, boom_conn):
+    db = ContestDatabase.from_connection(boom_conn)
     with caplog.at_level(logging.ERROR):
         db.update_contest(1, positions_paid=1, status="LIVE", completed=0, now=_T0)
     assert any("update_contest" in rec.message for rec in caplog.records)
 
 
-def test_set_and_get_cash_line_round_trip(contest_db):
-    _insert_contest(contest_db, dk_id=1)
-
-    contest_db.set_cash_line(1, rank=25, points=142.5)
-
-    assert contest_db.get_cash_line(1) == (25, 142.5)
-
-
-def test_get_cash_line_returns_none_for_missing_contest(contest_db):
-    assert contest_db.get_cash_line(999) is None
+_GUARDED_ON_ERROR = {
+    "get_standings_cash_snapshot": (lambda db: db.get_standings_cash_snapshot(1), None, False),
+    "get_contest_completed_at": (lambda db: db.get_contest_completed_at(1), None, False),
+    "persist_standings_cash_snapshot": (lambda db: db.persist_standings_cash_snapshot(1, 1, 1.0, []), None, True),
+}
 
 
-def test_get_cash_line_sqlite_error(caplog):
-    class BoomCursor:
-        def execute(self, *_a, **_k):
-            raise sqlite3.Error("boom")
+@pytest.mark.parametrize("method", list(_GUARDED_ON_ERROR))
+def test_guarded_methods_return_their_default_and_roll_back_only_when_asked(method, boom_conn):
+    call, default, rolls_back = _GUARDED_ON_ERROR[method]
 
-    class BoomConn:
-        def cursor(self):
-            return BoomCursor()
-
-    db = ContestDatabase.from_connection(BoomConn())  # type: ignore[arg-type]
-    with caplog.at_level(logging.ERROR):
-        assert db.get_cash_line(1) is None
-    assert any("get_cash_line" in rec.message for rec in caplog.records)
-
-
-def test_set_cash_line_sqlite_error(caplog):
-    class BoomCursor:
-        def execute(self, *_a, **_k):
-            raise sqlite3.Error("boom")
-
-    class BoomConn:
-        def cursor(self):
-            return BoomCursor()
-
-    db = ContestDatabase.from_connection(BoomConn())  # type: ignore[arg-type]
-    with caplog.at_level(logging.ERROR):
-        db.set_cash_line(1, rank=1, points=1.0)
-    assert any("set_cash_line" in rec.message for rec in caplog.records)
-
-
-def test_replace_and_get_vip_cash_status_round_trip(contest_db):
-    _insert_contest(contest_db, dk_id=1)
-
-    contest_db.replace_vip_cash_status(
-        1,
-        [
-            VipCashStatus(vip_name="Alice", rank=10, points=150.0),
-            VipCashStatus(vip_name="Bob", rank=40, points=90.0),
-        ],
-    )
-
-    assert contest_db.get_vip_cash_status(1) == [
-        VipCashStatus(vip_name="Alice", rank=10, points=150.0),
-        VipCashStatus(vip_name="Bob", rank=40, points=90.0),
-    ]
-
-
-def test_replace_vip_cash_status_drops_stale_rows(contest_db):
-    _insert_contest(contest_db, dk_id=1)
-    contest_db.replace_vip_cash_status(
-        1,
-        [
-            VipCashStatus(vip_name="Alice", rank=10, points=150.0),
-            VipCashStatus(vip_name="Bob", rank=40, points=90.0),
-        ],
-    )
-
-    contest_db.replace_vip_cash_status(1, [VipCashStatus(vip_name="Alice", rank=5, points=200.0)])
-
-    assert contest_db.get_vip_cash_status(1) == [VipCashStatus(vip_name="Alice", rank=5, points=200.0)]
-
-
-def test_replace_vip_cash_status_scoped_to_contest(contest_db):
-    _insert_contest(contest_db, dk_id=1)
-    _insert_contest(contest_db, dk_id=2)
-    contest_db.replace_vip_cash_status(1, [VipCashStatus(vip_name="Alice", rank=10, points=150.0)])
-    contest_db.replace_vip_cash_status(2, [VipCashStatus(vip_name="Carol", rank=3, points=210.0)])
-
-    assert contest_db.get_vip_cash_status(1) == [VipCashStatus(vip_name="Alice", rank=10, points=150.0)]
-    assert contest_db.get_vip_cash_status(2) == [VipCashStatus(vip_name="Carol", rank=3, points=210.0)]
-
-
-def test_get_vip_cash_status_returns_empty_for_missing_contest(contest_db):
-    assert contest_db.get_vip_cash_status(999) == []
-
-
-def test_replace_vip_cash_status_sqlite_error(caplog):
-    class BoomCursor:
-        def execute(self, *_a, **_k):
-            raise sqlite3.Error("boom")
-
-    class BoomConn:
-        def cursor(self):
-            return BoomCursor()
-
-        def rollback(self):
-            pass
-
-    db = ContestDatabase.from_connection(BoomConn())  # type: ignore[arg-type]
-    with caplog.at_level(logging.ERROR):
-        db.replace_vip_cash_status(1, [VipCashStatus(vip_name="Alice", rank=1, points=1.0)])
-    assert any("replace_vip_cash_status" in rec.message for rec in caplog.records)
-
-
-def test_replace_vip_cash_status_rolls_back_on_error(caplog):
-    class BoomCursor:
-        def execute(self, *_a, **_k):
-            raise sqlite3.Error("boom")
-
-    class BoomConn:
-        def __init__(self):
-            self.rolled_back = False
-
-        def cursor(self):
-            return BoomCursor()
-
-        def rollback(self):
-            self.rolled_back = True
-
-    conn = BoomConn()
-    db = ContestDatabase.from_connection(conn)  # type: ignore[arg-type]
-    with caplog.at_level(logging.ERROR):
-        db.replace_vip_cash_status(1, [VipCashStatus(vip_name="Alice", rank=1, points=1.0)])
-    assert conn.rolled_back is True
-
-
-def test_get_vip_cash_status_sqlite_error(caplog):
-    class BoomCursor:
-        def execute(self, *_a, **_k):
-            raise sqlite3.Error("boom")
-
-    class BoomConn:
-        def cursor(self):
-            return BoomCursor()
-
-    db = ContestDatabase.from_connection(BoomConn())  # type: ignore[arg-type]
-    with caplog.at_level(logging.ERROR):
-        assert db.get_vip_cash_status(1) == []
-    assert any("get_vip_cash_status" in rec.message for rec in caplog.records)
+    assert call(ContestDatabase.from_connection(boom_conn)) == default
+    assert boom_conn.rolled_back is rolls_back
+    assert getattr(ContestDatabase, method).__name__ == method
 
 
 def test_ensure_schema_migrates_preexisting_database_file(tmp_path):
@@ -660,8 +434,10 @@ def test_ensure_schema_migrates_preexisting_database_file(tmp_path):
     db = ContestDatabase(db_path)
     try:
         db.ensure_schema()
-        db.set_cash_line(1, rank=25, points=142.5)
-        assert db.get_cash_line(1) == (25, 142.5)
+        db.persist_standings_cash_snapshot(1, rank=25, points=142.5, statuses=[])
+        snapshot = db.get_standings_cash_snapshot(1)
+        assert snapshot is not None
+        assert snapshot.cash_line == (25, 142.5)
     finally:
         db.close()
 
@@ -685,28 +461,14 @@ _SQLITE_ERROR_CALLS = {
     "get_contest_state": lambda db: db.get_contest_state(1),
     "get_contest_contract_metadata": lambda db: db.get_contest_contract_metadata(1),
     "get_live_contest_candidates": lambda db: db.get_live_contest_candidates("NBA"),
-    "get_cash_line": lambda db: db.get_cash_line(1),
+    "get_standings_cash_snapshot": lambda db: db.get_standings_cash_snapshot(1),
     "get_contest_completed_at": lambda db: db.get_contest_completed_at(1),
 }
 
 
 @pytest.mark.parametrize("method", list(_SQLITE_ERROR_CALLS))
-def test_sqlite_errors_are_logged_once_with_a_traceback(method, caplog):
-    class BoomCursor:
-        def execute(self, *_a, **_k):
-            raise sqlite3.Error("boom")
-
-    class BoomConn:
-        def cursor(self):
-            return BoomCursor()
-
-        def rollback(self):
-            return None
-
-        def commit(self):
-            return None
-
-    db = ContestDatabase.from_connection(BoomConn())  # type: ignore[arg-type]
+def test_sqlite_errors_are_logged_once_with_a_traceback(method, caplog, boom_conn):
+    db = ContestDatabase.from_connection(boom_conn)
     with caplog.at_level(logging.ERROR):
         _SQLITE_ERROR_CALLS[method](db)
 
@@ -721,7 +483,7 @@ def test_sqlite_errors_are_logged_once_with_a_traceback(method, caplog):
 
 # ── Completed contests and the completion window ─────────────────────────────
 
-_T0 = datetime.datetime(2026, 10, 10, 12, 0, tzinfo=datetime.timezone.utc)
+_T0 = datetime.datetime(2026, 10, 10, 12, 0, tzinfo=datetime.UTC)
 
 
 def _complete(db: ContestDatabase, dk_id: int, at: datetime.datetime, status: str = "COMPLETED") -> None:
@@ -729,7 +491,7 @@ def _complete(db: ContestDatabase, dk_id: int, at: datetime.datetime, status: st
 
 
 def test_completed_contest_is_selected_inside_the_window(contest_db):
-    _insert_contest(contest_db, dk_id=1, name="Main", start_date="2024-01-01 00:00:00")
+    insert_contest(contest_db, dk_id=1, name="Main", start_date="2024-01-01 00:00:00")
     _complete(contest_db, 1, _T0)
 
     row = contest_db.get_recently_completed_contest("NBA", now=_T0 + datetime.timedelta(hours=17))
@@ -739,14 +501,14 @@ def test_completed_contest_is_selected_inside_the_window(contest_db):
 
 
 def test_completed_contest_leaves_the_window_after_eighteen_hours(contest_db):
-    _insert_contest(contest_db, dk_id=1)
+    insert_contest(contest_db, dk_id=1)
     _complete(contest_db, 1, _T0)
 
     assert contest_db.get_recently_completed_contest("NBA", now=_T0 + datetime.timedelta(hours=19)) is None
 
 
 def test_completed_stamp_is_written_once_and_survives_repeated_updates(contest_db):
-    _insert_contest(contest_db, dk_id=1)
+    insert_contest(contest_db, dk_id=1)
     _complete(contest_db, 1, _T0)
     _complete(contest_db, 1, _T0 + datetime.timedelta(hours=10))
 
@@ -756,60 +518,63 @@ def test_completed_stamp_is_written_once_and_survives_repeated_updates(contest_d
 
 
 def test_cancelled_contest_is_never_selected_as_completed(contest_db):
-    _insert_contest(contest_db, dk_id=1)
+    insert_contest(contest_db, dk_id=1)
     _complete(contest_db, 1, _T0, status="CANCELLED")
 
     assert contest_db.get_recently_completed_contest("NBA", now=_T0) is None
 
 
 def test_contest_completed_before_the_column_existed_is_never_selected(contest_db):
-    _insert_contest(contest_db, dk_id=1, completed=1, status="COMPLETED")
+    insert_contest(contest_db, dk_id=1, completed=1, status="COMPLETED")
 
     assert contest_db.get_recently_completed_contest("NBA", now=_T0) is None
 
 
 def test_non_completed_status_does_not_stamp(contest_db):
-    _insert_contest(contest_db, dk_id=1)
+    insert_contest(contest_db, dk_id=1)
     contest_db.update_contest(1, positions_paid=1, status="LIVE", completed=0, now=_T0)
 
     assert contest_db.get_recently_completed_contest("NBA", now=_T0) is None
 
 
 def test_recently_completed_prefers_entry_fee_at_or_above_minimum(contest_db):
-    _insert_contest(contest_db, dk_id=1, entry_fee=10, entries=900)
-    _insert_contest(contest_db, dk_id=2, entry_fee=30, entries=100)
+    insert_contest(contest_db, dk_id=1, entry_fee=10, entries=900)
+    insert_contest(contest_db, dk_id=2, entry_fee=30, entries=100)
     _complete(contest_db, 1, _T0)
     _complete(contest_db, 2, _T0)
 
     row = contest_db.get_recently_completed_contest("NBA", entry_fee=25, now=_T0)
 
-    assert row is not None and row[0] == 2
+    assert row is not None
+    assert row[0] == 2
 
 
 def test_recently_completed_falls_back_below_minimum_and_orders_by_entries(contest_db):
-    _insert_contest(contest_db, dk_id=1, entry_fee=10, entries=100)
-    _insert_contest(contest_db, dk_id=2, entry_fee=10, entries=500)
+    insert_contest(contest_db, dk_id=1, entry_fee=10, entries=100)
+    insert_contest(contest_db, dk_id=2, entry_fee=10, entries=500)
     _complete(contest_db, 1, _T0)
     _complete(contest_db, 2, _T0)
 
     row = contest_db.get_recently_completed_contest("NBA", entry_fee=25, now=_T0)
 
-    assert row is not None and row[0] == 2
+    assert row is not None
+    assert row[0] == 2
 
 
 def test_recently_completed_is_per_sport_and_honours_keyword(contest_db):
-    _insert_contest(contest_db, dk_id=1, sport="NBA", name="Double Up")
-    _insert_contest(contest_db, dk_id=2, sport="NFL", name="Double Up")
+    insert_contest(contest_db, dk_id=1, sport="NBA", name="Double Up")
+    insert_contest(contest_db, dk_id=2, sport="NFL", name="Double Up")
     _complete(contest_db, 1, _T0)
     _complete(contest_db, 2, _T0)
 
     nfl = contest_db.get_recently_completed_contest("NFL", now=_T0)
-    assert nfl is not None and nfl[0] == 2
+    assert nfl is not None
+    assert nfl[0] == 2
     assert contest_db.get_recently_completed_contest("NBA", keyword="%Nope%", now=_T0) is None
 
 
 def test_recently_completed_returns_live_row_shape(contest_db):
-    _insert_contest(contest_db, dk_id=1, name="Main", draft_group=77, start_date="2024-01-01 00:00:00")
+    insert_contest(contest_db, dk_id=1, name="Main", draft_group=77, start_date="2024-01-01 00:00:00")
     _complete(contest_db, 1, _T0)
 
     assert contest_db.get_recently_completed_contest("NBA", now=_T0) == (
@@ -862,7 +627,7 @@ def test_ensure_schema_adds_completed_at_to_preexisting_database_file(tmp_path):
 
 
 def test_contest_completed_at_reads_the_stored_stamp_in_snapshot_format(contest_db):
-    _insert_contest(contest_db, dk_id=1)
+    insert_contest(contest_db, dk_id=1)
     _complete(contest_db, 1, _T0)
 
     assert contest_db.get_contest_completed_at(1) == "2026-10-10T12:00:00Z"
@@ -870,7 +635,7 @@ def test_contest_completed_at_reads_the_stored_stamp_in_snapshot_format(contest_
 
 @pytest.mark.parametrize("status", ["LIVE", "CANCELLED"])
 def test_contest_completed_at_is_none_without_a_stamp(contest_db, status):
-    _insert_contest(contest_db, dk_id=1)
+    insert_contest(contest_db, dk_id=1)
     _complete(contest_db, 1, _T0, status=status)
 
     assert contest_db.get_contest_completed_at(1) is None
@@ -881,12 +646,12 @@ def test_contest_completed_at_is_none_for_an_unknown_contest(contest_db):
 
 
 def test_update_contest_rejects_naive_now(contest_db):
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="completed_at moments must be timezone-aware"):
         contest_db.update_contest(
             1, positions_paid=1, status="COMPLETED", completed=1, now=datetime.datetime(2026, 10, 5, 4, 0)
         )
 
 
 def test_get_recently_completed_contest_rejects_naive_now(contest_db):
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="completed_at moments must be timezone-aware"):
         contest_db.get_recently_completed_contest("NBA", entry_fee=5, now=datetime.datetime(2026, 10, 5, 4, 0))

@@ -58,7 +58,7 @@ def build_snapshot_payload(
     producer_commit: str | None = None,
 ) -> dict[str, Any]:
     return build_snapshot_v3_envelope(
-        {sport: contest_id for sport, contest_id in selected_contests.items()},
+        dict(selected_contests),
         standings_limit=standings_limit,
         producer_commit=producer_commit,
     )
@@ -147,7 +147,7 @@ def _recently_completed_contest_ids(
     now: datetime.datetime | None,
 ) -> dict[str, int]:
     """Map each idle sport to its primary contest completed inside the completion window."""
-    now = now or datetime.datetime.now(datetime.timezone.utc)
+    now = now or datetime.datetime.now(datetime.UTC)
     filled: dict[str, int] = {}
     for sport_name in idle:
         sport_cls = choices[sport_name]

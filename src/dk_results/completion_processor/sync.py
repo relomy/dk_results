@@ -28,33 +28,45 @@ logger = logging.getLogger(__package__)
 COMPLETED_STATUSES = ("COMPLETED", "CANCELLED")
 
 
+def _normalize_contest_state(response_json: dict) -> dict | None:
+    cd = response_json["contestDetail"]
+    payout_summary = cd["payoutSummary"]
+
+    positions_paid = payout_summary[0]["maxPosition"]
+    status = cd["contestStateDetail"]
+    entries = cd["maximumEntries"]
+
+    status = status.upper()
+
+    if status in ["COMPLETED", "LIVE", "CANCELLED"]:
+        # set completed status
+        completed = 1 if status in COMPLETED_STATUSES else 0
+        return {
+            "completed": completed,
+            "status": status,
+            "entries": entries,
+            "positions_paid": positions_paid,
+        }
+    return None
+
+
 def fetch_contest_state(results: ContestResultsPort, dk_id) -> dict | None:
+    decode_error: ValueError | None = None
+    missing_key: KeyError | None = None
     try:
-        response_json = results.get_contest_detail(dk_id)
-        cd = response_json["contestDetail"]
-        payout_summary = cd["payoutSummary"]
-
-        positions_paid = payout_summary[0]["maxPosition"]
-        status = cd["contestStateDetail"]
-        entries = cd["maximumEntries"]
-
-        status = status.upper()
-
-        if status in ["COMPLETED", "LIVE", "CANCELLED"]:
-            # set completed status
-            completed = 1 if status in COMPLETED_STATUSES else 0
-            return {
-                "completed": completed,
-                "status": status,
-                "entries": entries,
-                "positions_paid": positions_paid,
-            }
+        return _normalize_contest_state(results.get_contest_detail(dk_id))
     except ValueError as val_err:
-        logger.error("JSON decoding error: %s", val_err)
+        decode_error = val_err
     except KeyError as key_err:
-        logger.error("Key error: %s", key_err)
+        missing_key = key_err
     except Exception:
         logger.exception("Request error")
+
+    # Logged outside the handlers: these failures are expected, so no traceback.
+    if decode_error is not None:
+        logger.error("JSON decoding error: %s", decode_error)
+    elif missing_key is not None:
+        logger.error("Key error: %s", missing_key)
 
     return None
 

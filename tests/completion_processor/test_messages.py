@@ -8,7 +8,7 @@ import datetime
 
 import pytest
 
-from dk_results.completion_processor.messages import relative_time
+from dk_results.completion_processor.messages import _parse_start_date, relative_time
 from dk_results.notifications.vip_presence import VIP_PRESENT
 
 LINKED = {
@@ -69,7 +69,7 @@ def test_announcement_without_sheet_or_dashboard_says_sheet_is_unavailable(run_l
         ("2024-01-01 12:00:00", datetime.datetime(2024, 1, 1, 12, 0, 1), None),
         (
             "2024-01-01T12:00:00+00:00",
-            datetime.datetime(2024, 1, 1, 10, 30, tzinfo=datetime.timezone.utc),
+            datetime.datetime(2024, 1, 1, 10, 30, tzinfo=datetime.UTC),
             "1h30m",
         ),
     ],
@@ -103,8 +103,10 @@ def test_warning_shows_whole_minutes_left_and_links_the_sheet_and_dashboard(run_
                 "Contest starting soon (25m): 🏀 NBA — Main Slate",
                 f"• 🕒 {scenario.far_start} (⏳ 13m)",
                 DK_LINE,
-                "• 📈 Dashboard: [NBA](<https://dashboard.example/live/nba>)"
-                " | 📊 Sheet: [NBA](<https://docs.google.com/spreadsheets/d/test-sheet/edit#gid=123>)",
+                (
+                    "• 📈 Dashboard: [NBA](<https://dashboard.example/live/nba>)"
+                    " | 📊 Sheet: [NBA](<https://docs.google.com/spreadsheets/d/test-sheet/edit#gid=123>)"
+                ),
             ]
         )
     ]
@@ -116,10 +118,16 @@ def test_announcement_for_a_sport_without_an_emoji_uses_the_default_marker(run_l
     assert sender.messages == [expected.replace("🏀", "🏟️")]
 
 
-def test_time_left_is_read_from_a_datetime_or_an_iso_string_and_absent_for_anything_else(clock_at):
+def test_start_date_is_read_from_a_datetime_or_an_iso_string_and_absent_for_anything_else():
     start = datetime.datetime(2026, 1, 1, 12, 0, 0)
-    now = clock_at(start - datetime.timedelta(minutes=90))
-    assert relative_time(start, now) == "1h30m"
+    assert _parse_start_date(start) == start
+    assert _parse_start_date("2026-01-01 12:00:00") == start
+    assert _parse_start_date("bad-date") is None
+    assert _parse_start_date(None) is None
+
+
+def test_time_left_is_read_from_a_datetime_or_an_iso_string_and_absent_for_anything_else(clock_at):
+    now = clock_at(datetime.datetime(2026, 1, 1, 12, 0, 0) - datetime.timedelta(minutes=90))
     assert relative_time("2026-01-01 12:00:00", now) == "1h30m"
     assert relative_time("bad-date", now) is None
-    assert relative_time(None, now) is None
+    assert relative_time("", now) is None

@@ -1,3 +1,4 @@
+import dataclasses
 import json
 from types import SimpleNamespace
 
@@ -134,7 +135,11 @@ def test_sheet_gid_map_resolves_relative_path_against_repo(monkeypatch, tmp_path
     assert config.load_runtime_settings().sheet_gid_map == {"NBA": 7}
 
 
-@pytest.mark.parametrize("content", [None, "- 1\n", "bad: yaml: :"])
+@pytest.mark.parametrize(
+    "content",
+    [None, "- 1\n", "bad: yaml: :", "!!bool foo", "!!timestamp abc", "[" * 5000],
+    ids=["missing", "non-dict", "bad-yaml", "bool-tag", "timestamp-tag", "deep-nesting"],
+)
 def test_sheet_gid_map_missing_non_dict_or_invalid_yaml_is_empty(monkeypatch, tmp_path, content):
     path = tmp_path / "gids.yaml"
     if content is not None:
@@ -142,6 +147,24 @@ def test_sheet_gid_map_missing_non_dict_or_invalid_yaml_is_empty(monkeypatch, tm
     _runtime_env(monkeypatch, tmp_path, SHEET_GIDS_FILE=str(path))
 
     assert config.load_runtime_settings().sheet_gid_map == {}
+
+
+@pytest.mark.parametrize(
+    "content", ["!!bool foo", "!!timestamp abc", "[" * 5000], ids=["bool-tag", "timestamp-tag", "deep-nesting"]
+)
+def test_yaml_loader_internal_errors_log_failed_to_load(monkeypatch, tmp_path, caplog, content):
+    # Explicit-tag and deep-nesting YAML raise KeyError, AttributeError and RecursionError.
+    path = tmp_path / "gids.yaml"
+    path.write_text(content)
+    _runtime_env(monkeypatch, tmp_path, SHEET_GIDS_FILE=str(path))
+    # Pin the capture level: the INFO "not found" line otherwise depends on logger state left by other tests.
+    caplog.set_level("INFO", logger="dk_results.config")
+
+    assert config.load_runtime_settings().sheet_gid_map == {}
+    assert caplog.messages == [
+        f"Failed to load Sheet gid map from {path}",
+        f"Warning schedules not found at {tmp_path / 'contest_warning_schedules.yaml'}.",
+    ]
 
 
 def test_warning_schedules_normalize_and_drop_invalid_entries(monkeypatch, tmp_path, caplog):
@@ -168,7 +191,11 @@ def test_warning_schedules_invalid_keys_and_missing_default(monkeypatch, tmp_pat
     assert schedules == {"nba": [10], "default": [30]}
 
 
-@pytest.mark.parametrize("content", [None, "- 1\n", "bad: yaml: :"])
+@pytest.mark.parametrize(
+    "content",
+    [None, "- 1\n", "bad: yaml: :", "!!bool foo", "!!timestamp abc", "[" * 5000],
+    ids=["missing", "non-dict", "bad-yaml", "bool-tag", "timestamp-tag", "deep-nesting"],
+)
 def test_warning_schedules_missing_non_dict_or_invalid_yaml_use_default(monkeypatch, tmp_path, content):
     path = tmp_path / "sched.yaml"
     if content is not None:
@@ -178,12 +205,8 @@ def test_warning_schedules_missing_non_dict_or_invalid_yaml_use_default(monkeypa
     assert config.load_runtime_settings().warning_schedules == {"default": [25]}
 
 
-_SETTINGS_ENV_KEYS = (
-    "SPREADSHEET_ID",
-    "DFS_STATE_DIR",
-    "SHEET_GIDS_FILE",
-    "DISCORD_NOTIFICATIONS_ENABLED",
-    "CONTEST_WARNING_MINUTES",
+_SETTINGS_ENV_KEYS = tuple(
+    field.metadata["env"] for field in dataclasses.fields(config.ResolvedSettings) if "env" in field.metadata
 )
 
 

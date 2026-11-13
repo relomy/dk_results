@@ -277,7 +277,8 @@ class _Comparison:
         old_branches, new_branches = _branches(old, type_name), _branches(new, type_name)
         if not new_branches:
             return
-        for position, (branch, counterpart) in enumerate(zip(old_branches, self._pair(old_branches, new_branches)), 1):
+        counterparts = self._pair(old_branches, new_branches)
+        for position, (branch, counterpart) in enumerate(zip(old_branches, counterparts, strict=True), 1):
             if counterpart is not None:
                 compare_pair(path, branch, counterpart)
                 continue

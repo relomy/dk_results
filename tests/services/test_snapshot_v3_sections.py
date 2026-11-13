@@ -8,39 +8,39 @@ from dk_results.services.snapshot_v3 import sections
 
 
 def _user(**kwargs):
-    base = dict(rank=None, pts=None, pmr=None, player_id=None, name=None, salary=0, lineupobj=None)
+    base = {"rank": None, "pts": None, "pmr": None, "player_id": None, "name": None, "salary": 0, "lineupobj": None}
     base.update(kwargs)
     return SimpleNamespace(**base)
 
 
 def _player(**kwargs):
-    base = dict(
-        name="",
-        pos="",
-        roster_pos=(),
-        salary=0,
-        team_abbv="",
-        game_info="",
-        matchup_info="",
-        draftable_id=None,
-        ownership=0.0,
-        fpts=0.0,
-        value=0.0,
-    )
+    base = {
+        "name": "",
+        "pos": "",
+        "roster_pos": (),
+        "salary": 0,
+        "team_abbv": "",
+        "game_info": "",
+        "matchup_info": "",
+        "draftable_id": None,
+        "ownership": 0.0,
+        "fpts": 0.0,
+        "value": 0.0,
+    }
     base.update(kwargs)
     return SimpleNamespace(**base)
 
 
 def _results(**kwargs):
-    base = dict(
-        users=[],
-        players={},
-        min_rank=0,
-        min_cash_pts=0.0,
-        non_cashing_users=0,
-        non_cashing_players={},
-        non_cashing_avg_pmr=None,
-    )
+    base = {
+        "users": [],
+        "players": {},
+        "min_rank": 0,
+        "min_cash_pts": 0.0,
+        "non_cashing_users": 0,
+        "non_cashing_players": {},
+        "non_cashing_avg_pmr": None,
+    }
     base.update(kwargs)
     return SimpleNamespace(**base)
 

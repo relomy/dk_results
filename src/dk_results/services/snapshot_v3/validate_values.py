@@ -19,7 +19,7 @@ def _is_valid_timestamp(value: Any) -> bool:
     if not _is_non_empty_string(value):
         return False
     try:
-        datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+        datetime.fromisoformat(str(value))
     except ValueError:
         return False
     return True

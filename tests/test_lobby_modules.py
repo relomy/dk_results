@@ -4,8 +4,12 @@ import sys
 import types
 
 import pytest
+import requests
+from requests.cookies import RequestsCookieJar
+from requests.sessions import Session
 
 from dk_results.domain.sport import Sport
+from dk_results.draftkings import DraftKings
 from dk_results.lobby.fetch import (
     get_dk_lobby,
     get_lobby_response,
@@ -34,21 +38,27 @@ def _contest_payload(dk_id: int, *, entries: int = 200, fee: int = 10):
 def test_import_find_new_double_ups_has_no_runtime_side_effects(monkeypatch):
     calls = {"dotenv": 0, "logging": 0, "cookies": 0}
 
-    fake_cookies = types.ModuleType("dk_results.draftkings.cookies")
+    class FakeCookiesModule(types.ModuleType):
+        def __init__(self):
+            super().__init__("dk_results.draftkings.cookies")
+            self.get_dk_cookies = self._get_dk_cookies
 
-    def fake_get_dk_cookies(*_args, **_kwargs):
-        calls["cookies"] += 1
-        return ({}, {})
-
-    fake_cookies.get_dk_cookies = fake_get_dk_cookies
-
-    fake_contestdatabase = types.ModuleType("dk_results.persistence.contestdatabase")
+        @staticmethod
+        def _get_dk_cookies(*_args, **_kwargs):
+            calls["cookies"] += 1
+            return ({}, {})
 
     class FakeContestDatabase:
         def __init__(self, *_args, **_kwargs):
             pass
 
-    fake_contestdatabase.ContestDatabase = FakeContestDatabase
+    class FakeContestDatabaseModule(types.ModuleType):
+        def __init__(self):
+            super().__init__("dk_results.persistence.contestdatabase")
+            self.ContestDatabase = FakeContestDatabase
+
+    fake_cookies = FakeCookiesModule()
+    fake_contestdatabase = FakeContestDatabaseModule()
 
     monkeypatch.setitem(sys.modules, "dk_results.draftkings.cookies", fake_cookies)
     monkeypatch.setitem(sys.modules, "dk_results.persistence.contestdatabase", fake_contestdatabase)
@@ -79,17 +89,20 @@ def test_get_dk_lobby_uses_injected_fetch_json():
         captured["cookies"] = cookies
         return {"Contests": [{"id": 10}], "DraftGroups": []}
 
+    cookies = RequestsCookieJar()
+    cookies.set("session", "abc")
+
     contests, draft_groups, response = get_dk_lobby(
         DummySport,
         "https://www.draftkings.com/lobby/getcontests?sport=NFL",
         fetch_json=fake_fetch_json,
         headers={"X-Requested-With": "XMLHttpRequest"},
-        cookies={"session": "abc"},
+        cookies=cookies,
     )
 
     assert captured["url"].endswith("sport=NFL")
     assert captured["headers"]["X-Requested-With"] == "XMLHttpRequest"
-    assert captured["cookies"] == {"session": "abc"}
+    assert captured["cookies"] is cookies
     assert contests == [{"id": 10}]
     assert draft_groups == []
     assert response == {"Contests": [{"id": 10}], "DraftGroups": []}
@@ -102,7 +115,7 @@ def test_requests_fetch_json_passes_headers_and_cookies(monkeypatch):
         def json(self):
             return {"ok": True}
 
-    def fake_get(url, headers=None, cookies=None):
+    def fake_get(url, headers=None, cookies=None, timeout=None):
         captured["url"] = url
         captured["headers"] = headers
         captured["cookies"] = cookies
@@ -110,24 +123,56 @@ def test_requests_fetch_json_passes_headers_and_cookies(monkeypatch):
 
     monkeypatch.setattr("dk_results.lobby.fetch.requests.get", fake_get)
 
+    cookies = RequestsCookieJar()
+    cookies.set("session", "abc")
+
     result = requests_fetch_json(
         "https://www.example.com/lobby",
         {"X-Requested-With": "XMLHttpRequest"},
-        {"session": "abc"},
+        cookies,
     )
 
     assert result == {"ok": True}
     assert captured["url"] == "https://www.example.com/lobby"
     assert captured["headers"]["X-Requested-With"] == "XMLHttpRequest"
-    assert captured["cookies"] == {"session": "abc"}
+    assert captured["cookies"] is cookies
+
+
+def test_requests_fetch_json_sets_timeout(monkeypatch):
+    captured = {}
+
+    class FakeResponse:
+        def json(self):
+            return {}
+
+    def fake_get(url, headers=None, cookies=None, timeout=None):
+        captured["timeout"] = timeout
+        return FakeResponse()
+
+    monkeypatch.setattr("dk_results.lobby.fetch.requests.get", fake_get)
+
+    requests_fetch_json("https://www.example.com/lobby", {}, None)
+
+    assert captured["timeout"] == 15
+
+
+def test_requests_fetch_json_propagates_timeout(monkeypatch):
+    def fake_get(url, headers=None, cookies=None, timeout=None):
+        raise requests.Timeout("slow")
+
+    monkeypatch.setattr("dk_results.lobby.fetch.requests.get", fake_get)
+
+    with pytest.raises(requests.Timeout):
+        requests_fetch_json("https://www.example.com/lobby", {}, None)
 
 
 def test_get_lobby_response_uses_injected_client():
-    class FakeClient:
+    class FakeClient(DraftKings):
         def __init__(self):
+            super().__init__(session=Session())
             self.calls = []
 
-        def get_lobby_contests(self, sport, live=False):
+        def get_lobby_contests(self, sport, *, live=False, timeout=None):
             self.calls.append((sport, live))
             return {"Contests": []}
 

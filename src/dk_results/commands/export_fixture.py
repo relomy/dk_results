@@ -86,7 +86,7 @@ def run_export_bundle(args: Any) -> int:
         raise ValueError("At least one --item SPORT:CONTEST_ID is required for bundle export.")
 
     parsed_items = [_parse_bundle_item(item) for item in items]
-    selected_contests: dict[str, int | None] = {sport: contest_id for sport, contest_id in parsed_items}
+    selected_contests: dict[str, int | None] = dict(parsed_items)
     payload = build_snapshot_v3_envelope(
         selected_contests,
         standings_limit=standings_limit,
@@ -126,7 +126,7 @@ def _coerce_iso(value: Any, field_name: str) -> str:
     text = str(value or "").strip()
     if not text:
         raise ValueError(f"Snapshot payload missing required field: {field_name}")
-    datetime.fromisoformat(text.replace("Z", "+00:00"))
+    datetime.fromisoformat(text)
     return text
 
 
@@ -137,7 +137,7 @@ def _build_latest_payload(
 ) -> dict[str, Any]:
     snapshot_at = _coerce_iso(payload.get("snapshot_at"), "snapshot_at")
     generated_at = _coerce_iso(payload.get("generated_at"), "generated_at")
-    available_sports = sorted(str(key) for key in (payload.get("sports") or {}).keys())
+    available_sports = sorted(str(key) for key in (payload.get("sports") or {}))
     date_utc = snapshot_at[:10]
     yesterday_utc = (datetime.fromisoformat(f"{date_utc}T00:00:00+00:00") - timedelta(days=1)).date().isoformat()
     return {
@@ -184,7 +184,7 @@ def _build_manifest_entry(
     snapshot_path: pathlib.Path,
 ) -> dict[str, Any]:
     sports = payload.get("sports") or {}
-    sports_present = sorted(str(key) for key in sports.keys())
+    sports_present = sorted(str(key) for key in sports)
     contest_counts_by_sport: dict[str, int] = {}
     state_counts: dict[str, int] = {}
     sports_status: dict[str, dict[str, Any]] = {}

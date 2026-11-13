@@ -89,5 +89,9 @@ class Repo(Tree):
 
     def check(self, base: str = "main") -> subprocess.CompletedProcess[str]:
         return subprocess.run(
-            [sys.executable, str(SCRIPT), "--base", base], cwd=self.root, capture_output=True, text=True
+            [sys.executable, str(SCRIPT), "--base", base],
+            cwd=self.root,
+            capture_output=True,
+            text=True,
+            check=False,
         )

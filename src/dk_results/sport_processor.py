@@ -7,9 +7,9 @@ import os
 import sqlite3
 import time
 from collections import OrderedDict
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
-from typing import Any, Callable, Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
 import requests
 from dfs_common import state
@@ -57,12 +57,12 @@ class SheetPort(Protocol):
     def clear_lineups(self) -> None: ...
     def write_players(self, values: Any, format_plan: Any = ()) -> None: ...
     def add_contest_details(self, contest_name: str, positions_paid: int | None) -> None: ...
-    def add_last_updated(self, dt: datetime.datetime) -> None: ...
-    def add_min_cash(self, pts: float) -> None: ...
-    def write_vip_lineups(self, lineups: list[dict[str, Any]]) -> None: ...
-    def add_non_cashing_info(self, info: list[list[Any]]) -> None: ...
-    def add_train_info(self, info: list[list[Any]]) -> None: ...
-    def add_optimal_lineup(self, info: list[list[Any]]) -> None: ...
+    def add_last_updated(self, dt: datetime.datetime, /) -> None: ...
+    def add_min_cash(self, pts: float, /) -> None: ...
+    def write_vip_lineups(self, lineups: list[dict[str, Any]], /) -> None: ...
+    def add_non_cashing_info(self, info: list[list[Any]], /) -> None: ...
+    def add_train_info(self, info: list[list[Any]], /) -> None: ...
+    def add_optimal_lineup(self, info: list[list[Any]], /) -> None: ...
 
 
 @runtime_checkable
@@ -113,7 +113,7 @@ class SportProcessor:
     Coordinates the full "process one sport → write sheet" workflow.
 
     Construction-time dependencies are injected; nothing is constructed inline.
-    One instance may be reused across multiple sports in a single run.
+    One instance may be reused across sports in a run.
 
     Ordering guarantee (enforced internally):
       1. DB lookup → NoLiveContestError if no contest
@@ -184,9 +184,9 @@ class SportProcessor:
                 positions_paid=positions_paid,
                 standings_rows=contest_list,
             )
-        except Exception:
+        except Exception as err:
             logger.exception("Failed to parse contest standings: sport=%s contest_id=%s", sport_name, dk_id)
-            raise StandsParseError(sport_name)
+            raise StandsParseError(sport_name) from err
 
         self._persist_cash_status(int(dk_id), results)
         self._maybe_write_optimal_lineup(sheet=sheet, results=results, sport_cls=sport_cls, sport_name=sport_name)
@@ -209,7 +209,7 @@ class SportProcessor:
         standings_rows: list[list[str]],
     ) -> ContestStandings:
         logger.debug("standings_parse sport=%s contest_id=%s", sport_cls.name, contest_id)
-        with open(salary_csv, mode="r", encoding="utf-8-sig", newline="") as fp:
+        with open(salary_csv, encoding="utf-8-sig", newline="") as fp:
             salary_rows = list(csv.reader(fp, delimiter=","))
         return parse_contest_standings(
             sport_cls,
@@ -231,14 +231,12 @@ class SportProcessor:
         """
         cash_line_rank = results.min_rank or None
         cash_line_points = results.min_cash_pts if cash_line_rank is not None else None
-        self._db.set_cash_line(dk_id, cash_line_rank, cash_line_points)
-
         statuses = (
             [VipCashStatus(vip_name=vip.name, rank=vip.rank, points=vip.pts) for vip in results.vip_list]
             if cash_line_rank is not None
             else []
         )
-        self._db.replace_vip_cash_status(dk_id, statuses)
+        self._db.persist_standings_cash_snapshot(dk_id, cash_line_rank, cash_line_points, statuses)
 
     def _maybe_write_optimal_lineup(
         self,
@@ -378,8 +376,8 @@ class SportProcessor:
                     sender=self._bonus_sender,
                     logger=logger,
                 )
-        except sqlite3.Error as err:
-            logger.error("Failed bonus announcement DB flow for %s (%s): %s", sport_name, dk_id, err)
+        except sqlite3.Error:
+            logger.exception("Failed bonus announcement DB flow for %s (%s)", sport_name, dk_id)
 
     def _write_vip_lineups_to_sheet(
         self, sheet: SheetPort, sport_name: str, dk_id: int, vip_lineups: list[dict[str, Any]]
@@ -452,9 +450,9 @@ class SportProcessor:
             ]
             if results.non_cashing_players:
                 info.append(["Top 10 Own% Remaining", ""])
-                sorted_non_cashing: dict[str, int] = {
-                    k: v for k, v in sorted(results.non_cashing_players.items(), key=lambda item: item[1], reverse=True)
-                }
+                sorted_non_cashing: dict[str, int] = dict(
+                    sorted(results.non_cashing_players.items(), key=lambda item: item[1], reverse=True)
+                )
                 for p, count in list(sorted_non_cashing.items())[:10]:
                     info.append([p, float(count / results.non_cashing_users)])
             sheet.add_non_cashing_info(info)

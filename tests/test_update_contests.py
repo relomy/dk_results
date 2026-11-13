@@ -6,6 +6,7 @@ module covers what remains here: config loading, sender wiring, processor
 assembly, and ``main()``.
 """
 
+import dataclasses
 import logging
 import runpy
 import sqlite3
@@ -13,28 +14,32 @@ import sys
 
 import pytest
 
-import dk_results.cli.update_contests as update_contests
+from dk_results.cli import update_contests
 from dk_results.config import RuntimeSettings
 
 
-def _settings(**overrides) -> RuntimeSettings:
-    values = {
-        "spreadsheet_id": "sheet",
-        "dfs_state_dir": None,
-        "sheet_gids_file": "sheet_gids.yaml",
-        "sheet_gid_map": {"NBA": 10},
-        "discord_notifications_enabled": True,
-        "contest_warning_minutes": 25,
-        "warning_schedule_file": "contest_warning_schedules.yaml",
-        "warning_schedules": {"default": [25], "nba": [60]},
-        "default_warning_schedule": [25],
-        "dashboard_base_url": None,
-        "bot_token": None,
-        "discord_log_file": None,
-        "discord_channel_id": None,
-    }
-    values.update(overrides)
-    return RuntimeSettings(**values)
+def _assert_traceback_is(record: logging.LogRecord, exc_type: type[BaseException]) -> None:
+    assert isinstance(record.exc_info, tuple), "expected the error record to carry a traceback"
+    assert record.exc_info[0] is exc_type
+
+
+def _settings(**overrides: object) -> RuntimeSettings:
+    base = RuntimeSettings(
+        spreadsheet_id="sheet",
+        dfs_state_dir=None,
+        sheet_gids_file="sheet_gids.yaml",
+        sheet_gid_map={"NBA": 10},
+        discord_notifications_enabled=True,
+        contest_warning_minutes=25,
+        warning_schedule_file="contest_warning_schedules.yaml",
+        warning_schedules={"default": [25], "nba": [60]},
+        default_warning_schedule=[25],
+        dashboard_base_url=None,
+        bot_token=None,
+        discord_log_file=None,
+        discord_channel_id=None,
+    )
+    return dataclasses.replace(base, **overrides)
 
 
 @pytest.fixture
@@ -98,6 +103,36 @@ def test_load_vips_reads_names(tmp_path, monkeypatch):
 
 def test_load_vips_missing_file(tmp_path, monkeypatch):
     monkeypatch.setattr(update_contests, "repo_file", lambda *_parts: tmp_path / "missing.yaml")
+    assert update_contests._load_vips() == []
+
+
+def test_load_vips_unparsable_yaml_returns_empty(tmp_path, monkeypatch, caplog):
+    path = tmp_path / "vips.yaml"
+    path.write_text("bad: yaml: :")
+    monkeypatch.setattr(update_contests, "repo_file", lambda *_parts: path)
+
+    assert update_contests._load_vips() == []
+    assert caplog.messages == [f"failed to load vips.yaml from {path}"]
+
+
+@pytest.mark.parametrize(
+    "content", ["!!bool foo", "!!timestamp abc", "[" * 5000], ids=["bool-tag", "timestamp-tag", "deep-nesting"]
+)
+def test_load_vips_loader_internal_errors_return_empty(tmp_path, monkeypatch, caplog, content):
+    # Explicit-tag and deep-nesting YAML raise KeyError, AttributeError and RecursionError.
+    path = tmp_path / "vips.yaml"
+    path.write_text(content)
+    monkeypatch.setattr(update_contests, "repo_file", lambda *_parts: path)
+
+    assert update_contests._load_vips() == []
+    assert caplog.messages == [f"failed to load vips.yaml from {path}"]
+
+
+def test_load_vips_undecodable_bytes_returns_empty(tmp_path, monkeypatch):
+    path = tmp_path / "vips.yaml"
+    path.write_bytes(b"\xff\xfe\x00bad")
+    monkeypatch.setattr(update_contests, "repo_file", lambda *_parts: path)
+
     assert update_contests._load_vips() == []
 
 
@@ -343,7 +378,21 @@ def test_main_logs_unexpected_error_with_traceback(monkeypatch, caplog):
 
     errors = [r for r in caplog.records if r.levelno == logging.ERROR]
     assert len(errors) == 1
-    assert errors[0].exc_info is not None and errors[0].exc_info[0] is RuntimeError
+    _assert_traceback_is(errors[0], RuntimeError)
+
+
+def test_main_logs_sqlite_error_with_traceback_and_constant_message(monkeypatch, caplog):
+    def boom(_path):
+        raise sqlite3.OperationalError("disk I/O error")
+
+    monkeypatch.setattr(update_contests.state, "contests_db_path", lambda: "unused.db")
+    monkeypatch.setattr(update_contests.contests, "init_schema", boom)
+    with caplog.at_level(logging.ERROR):
+        update_contests.main()
+
+    errors = [r for r in caplog.records if r.levelno == logging.ERROR]
+    assert [r.getMessage() for r in errors] == ["SQLite error"]
+    _assert_traceback_is(errors[0], sqlite3.OperationalError)
 
 
 def test_main_migrates_a_legacy_contests_table_to_have_completed_at(monkeypatch, tmp_path):

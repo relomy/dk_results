@@ -37,3 +37,24 @@ def test_serialize_payload_is_stably_sorted() -> None:
         }
     )
     assert first == second
+
+
+@pytest.mark.parametrize(
+    ("stamp", "expected"),
+    [
+        ("2026-02-25T10:11:12Z", "2026-02-25T10:11:12Z"),
+        ("2026-02-25T10:11:12.987Z", "2026-02-25T10:11:12Z"),
+        ("2026-02-25T10:11:12+00:00", "2026-02-25T10:11:12Z"),
+        ("2026-02-25T05:11:12-05:00", "2026-02-25T10:11:12Z"),
+        ("2026-02-25T10:11:12", "2026-02-25T10:11:12Z"),
+    ],
+)
+def test_serialize_payload_accepts_each_supported_generated_at_form(stamp: str, expected: str) -> None:
+    payload = json.loads(serialize_payload({"schema_version": 3, "sports": {}}, generated_at=stamp))
+    assert payload["generated_at"] == expected
+
+
+@pytest.mark.parametrize("stamp", ["2026-02-25Z", "2026-02-25ZZ", "2026-02-25T10Z:00:00", "nope"])
+def test_serialize_payload_rejects_malformed_generated_at(stamp: str) -> None:
+    with pytest.raises(ValueError, match="Invalid isoformat string"):
+        serialize_payload({"schema_version": 3, "sports": {}}, generated_at=stamp)

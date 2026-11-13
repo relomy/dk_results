@@ -14,7 +14,7 @@ from dk_results.services.snapshot_v3 import collector
 from dk_results.services.snapshot_v3.collector import collect_snapshot
 from dk_results.services.snapshot_v3.pipeline import build_snapshot_v3_envelope
 from dk_results.vip_lineups import VipLineup
-from tests.services.snapshot_v3_collector_fakes import _FakeContestDB, _FakeDK
+from tests.services.collector_edges import _FakeDK
 
 
 class _RemainingMetricsDK(_FakeDK):
@@ -48,8 +48,8 @@ class _RemainingMetricsDK(_FakeDK):
         )
         self.statuses = [*statuses, statuses[1]]
 
-    def download_salary_csv(self, _name, _draft_group, path):
-        with open(path, "w", newline="", encoding="utf-8") as handle:
+    def download_salary_csv(self, sport, draft_group, filename, /):
+        with open(filename, "w", newline="", encoding="utf-8") as handle:
             writer = csv.writer(handle)
             writer.writerow(["Position", "Name", "Roster Position", "Salary", "Game Info", "TeamAbbrev"])
             for name, pos, salary, status in zip(
@@ -62,9 +62,9 @@ class _RemainingMetricsDK(_FakeDK):
                 writer.writerow([pos, name, pos, salary, status, "AAA"])
 
 
-def _remaining_metrics_contest(monkeypatch, tmp_path, statuses):
+def _remaining_metrics_contest(monkeypatch, tmp_path, make_contest_db, statuses):
     monkeypatch.setattr(collector, "SALARY_DIR", str(tmp_path))
-    monkeypatch.setattr(collector, "load_vips", lambda: [])
+    monkeypatch.setattr(collector, "load_vips", list)
     monkeypatch.setattr(collector, "fetch_vip_lineups", lambda *a, **k: [])
     row = ContestRow(
         dk_id=321,
@@ -81,7 +81,9 @@ def _remaining_metrics_contest(monkeypatch, tmp_path, statuses):
     monkeypatch.setattr(
         collector,
         "_collect_source_snapshot",
-        lambda **kwargs: real_collect(dk=_RemainingMetricsDK(statuses), contest_db=_FakeContestDB(by_id=row), **kwargs),
+        lambda **kwargs: real_collect(
+            dk=_RemainingMetricsDK(statuses), contest_db=make_contest_db(by_id=row), **kwargs
+        ),
     )
     envelope = build_snapshot_v3_envelope(
         {"NBA": 321},
@@ -93,9 +95,9 @@ def _remaining_metrics_contest(monkeypatch, tmp_path, statuses):
 
 
 @pytest.mark.parametrize("finished", ["Final", "Postponed", "Cancelled", "Canceled"])
-def test_collector_omits_finished_players_from_all_remaining_outputs(monkeypatch, tmp_path, finished):
+def test_collector_omits_finished_players_from_all_remaining_outputs(monkeypatch, tmp_path, make_contest_db, finished):
     contest = _remaining_metrics_contest(
-        monkeypatch, tmp_path, [finished, "Delayed", "Suspended", "AAA@BBB 07:00PM ET", finished]
+        monkeypatch, tmp_path, make_contest_db, [finished, "Delayed", "Suspended", "AAA@BBB 07:00PM ET", finished]
     )
 
     assert contest["live_metrics"]["avg_salary_per_player_remaining"] == 6571.43
@@ -115,8 +117,8 @@ def test_collector_omits_finished_players_from_all_remaining_outputs(monkeypatch
     ]
 
 
-def test_collector_no_status_pool_omits_remaining_outputs_but_keeps_non_cashing(monkeypatch, tmp_path):
-    contest = _remaining_metrics_contest(monkeypatch, tmp_path, ["Masters Tournament"] * 5)
+def test_collector_no_status_pool_omits_remaining_outputs_but_keeps_non_cashing(monkeypatch, tmp_path, make_contest_db):
+    contest = _remaining_metrics_contest(monkeypatch, tmp_path, make_contest_db, ["Masters Tournament"] * 5)
 
     assert "ownership_remaining_total_pct" not in contest["standings"][0]
     assert "ownership_watchlist" not in contest
@@ -125,7 +127,9 @@ def test_collector_no_status_pool_omits_remaining_outputs_but_keeps_non_cashing(
     assert contest["metrics"]["non_cashing"] == {"users_not_cashing": 1, "avg_pmr_remaining": 100.0}
 
 
-def test_users_not_cashing_is_entries_minus_positions_paid_for_a_fully_parsed_standings_file(monkeypatch, tmp_path):
+def test_users_not_cashing_is_entries_minus_positions_paid_for_a_fully_parsed_standings_file(
+    monkeypatch, tmp_path, make_contest_db
+):
     lineup = "PG Alpha SG Bravo SF Charlie PF Delta C Echo G Foxtrot F LOCKED UTIL LOCKED"
     header = ["rank", "entry", "name", "pmr", "points", "lineup"]
     dk = _RemainingMetricsDK(["Delayed"] * 5)
@@ -140,7 +144,7 @@ def test_users_not_cashing_is_entries_minus_positions_paid_for_a_fully_parsed_st
         ["6", "e6", "below_b", "60", "60", lineup],
     ]
     monkeypatch.setattr(collector, "SALARY_DIR", str(tmp_path))
-    monkeypatch.setattr(collector, "load_vips", lambda: [])
+    monkeypatch.setattr(collector, "load_vips", list)
     monkeypatch.setattr(collector, "fetch_vip_lineups", lambda *a, **k: [])
     row = ContestRow(
         dk_id=321,
@@ -157,7 +161,7 @@ def test_users_not_cashing_is_entries_minus_positions_paid_for_a_fully_parsed_st
     monkeypatch.setattr(
         collector,
         "_collect_source_snapshot",
-        lambda **kwargs: real_collect(dk=dk, contest_db=_FakeContestDB(by_id=row), **kwargs),
+        lambda **kwargs: real_collect(dk=dk, contest_db=make_contest_db(by_id=row), **kwargs),
     )
     envelope = build_snapshot_v3_envelope(
         {"NBA": 321}, generated_at="2026-10-04T12:00:00Z", standings_limit=10, collector=collect_snapshot
@@ -168,9 +172,11 @@ def test_users_not_cashing_is_entries_minus_positions_paid_for_a_fully_parsed_st
     assert contest["metrics"]["non_cashing"]["avg_pmr_remaining"] == 50.0
 
 
-def test_field_remaining_marks_included_locked_lineups_partial_before_truncation(monkeypatch, tmp_path):
+def test_field_remaining_marks_included_locked_lineups_partial_before_truncation(
+    monkeypatch, tmp_path, make_contest_db
+):
     contest = _remaining_metrics_contest(
-        monkeypatch, tmp_path, ["Final", "Delayed", "Suspended", "AAA@BBB 07:00PM ET", "Final"]
+        monkeypatch, tmp_path, make_contest_db, ["Final", "Delayed", "Suspended", "AAA@BBB 07:00PM ET", "Final"]
     )
 
     assert len(contest["standings"]) == 1
@@ -188,9 +194,9 @@ class _LeverageMetricsDK(_RemainingMetricsDK):
             ]
         )
 
-    def download_salary_csv(self, name, draft_group, path):
-        super().download_salary_csv(name, draft_group, path)
-        with open(path, "a", newline="", encoding="utf-8") as handle:
+    def download_salary_csv(self, sport, draft_group, filename, /):
+        super().download_salary_csv(sport, draft_group, filename)
+        with open(filename, "a", newline="", encoding="utf-8") as handle:
             csv.writer(handle).writerows(
                 [
                     ["F", "George", "F", 3000, "In Progress", "AAA"],
@@ -199,7 +205,7 @@ class _LeverageMetricsDK(_RemainingMetricsDK):
             )
 
 
-def test_collector_keeps_each_vips_own_completeness_beyond_standings_limit(monkeypatch, tmp_path):
+def test_collector_keeps_each_vips_own_completeness_beyond_standings_limit(monkeypatch, tmp_path, make_contest_db):
     monkeypatch.setattr(collector, "SALARY_DIR", str(tmp_path))
     monkeypatch.setattr(collector, "load_vips", lambda: ["hidden-vip", "complete-vip"])
     monkeypatch.setattr(
@@ -232,7 +238,7 @@ def test_collector_keeps_each_vips_own_completeness_beyond_standings_limit(monke
     )
 
     raw = collector._collect_source_snapshot(
-        sport="NBA", contest_id=321, standings_limit=1, dk=dk, contest_db=_FakeContestDB(by_id=row)
+        sport="NBA", contest_id=321, standings_limit=1, dk=dk, contest_db=make_contest_db(by_id=row)
     )
 
     assert [row["entry_key"] for row in raw["standings"]] == ["e1"]
@@ -244,7 +250,7 @@ def test_collector_keeps_each_vips_own_completeness_beyond_standings_limit(monke
     monkeypatch.setattr(
         collector,
         "_collect_source_snapshot",
-        lambda **kwargs: real_collect(dk=dk, contest_db=_FakeContestDB(by_id=row), **kwargs),
+        lambda **kwargs: real_collect(dk=dk, contest_db=make_contest_db(by_id=row), **kwargs),
     )
     envelope = build_snapshot_v3_envelope(
         {"NBA": 321}, generated_at="2026-10-04T12:00:00Z", standings_limit=1, collector=collect_snapshot
@@ -260,7 +266,7 @@ def test_collector_keeps_each_vips_own_completeness_beyond_standings_limit(monke
     ]
 
 
-def test_collector_excludes_unusable_empty_lineup_from_field_and_vip_remaining(monkeypatch, tmp_path):
+def test_collector_excludes_unusable_empty_lineup_from_field_and_vip_remaining(monkeypatch, tmp_path, make_contest_db):
     monkeypatch.setattr(collector, "SALARY_DIR", str(tmp_path))
     monkeypatch.setattr(collector, "load_vips", lambda: ["empty-vip"])
     monkeypatch.setattr(collector, "fetch_vip_lineups", lambda *a, **k: [])
@@ -274,7 +280,7 @@ def test_collector_excludes_unusable_empty_lineup_from_field_and_vip_remaining(m
     )
 
     raw = collector._collect_source_snapshot(
-        sport="NBA", contest_id=321, standings_limit=1, dk=dk, contest_db=_FakeContestDB(by_id=row)
+        sport="NBA", contest_id=321, standings_limit=1, dk=dk, contest_db=make_contest_db(by_id=row)
     )
 
     assert raw["ownership"]["field_remaining_pct"] == 195.0
@@ -283,7 +289,9 @@ def test_collector_excludes_unusable_empty_lineup_from_field_and_vip_remaining(m
     assert raw["ownership"]["vip_remaining_is_partial_by_entry_key"] == {}
 
 
-def test_collector_keeps_known_ownership_when_included_vip_slot_has_no_ownership(monkeypatch, tmp_path):
+def test_collector_keeps_known_ownership_when_included_vip_slot_has_no_ownership(
+    monkeypatch, tmp_path, make_contest_db, make_dk
+):
     monkeypatch.setattr(collector, "SALARY_DIR", str(tmp_path))
     monkeypatch.setattr(collector, "load_vips", lambda: ["partial-vip"])
     monkeypatch.setattr(
@@ -317,7 +325,7 @@ def test_collector_keeps_known_ownership_when_included_vip_slot_has_no_ownership
     real_collect = collector._collect_source_snapshot
 
     def collect_with_standings(**kwargs):
-        return real_collect(**kwargs, dk=_FakeDK(), contest_db=_FakeContestDB(by_id=row), standings=standings)
+        return real_collect(**kwargs, dk=make_dk(), contest_db=make_contest_db(by_id=row), standings=standings)
 
     monkeypatch.setattr(collector, "_collect_source_snapshot", collect_with_standings)
     envelope = build_snapshot_v3_envelope({"NBA": 321}, generated_at="2026-10-04T12:00:00Z", collector=collect_snapshot)

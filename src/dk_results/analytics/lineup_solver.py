@@ -128,9 +128,9 @@ class PulpCbcSolver:
         players: dict[str, Player],
         variables: dict[tuple[str, str], pl.LpVariable],
     ) -> None:
-        for player_key in players:
+        for player_key, player in players.items():
             prob += (
-                pl.lpSum(variables[(player_key, pos)] for pos in players[player_key].roster_pos) <= 1,
+                pl.lpSum(variables[(player_key, pos)] for pos in player.roster_pos) <= 1,
                 f"Only one position for player {player_key}",
             )
 

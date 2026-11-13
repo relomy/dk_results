@@ -26,7 +26,7 @@ def _derive_composite_player_key(sport: str, row: dict[str, Any]) -> str | None:
     team_slug = slug(row.get("team") or row.get("team_abbv")) or "na"
     pos_slug = slug(row.get("position") or row.get("pos")) or "na"
     salary_num = to_float(row.get("salary"))
-    salary_part = str(int(round(salary_num))) if salary_num is not None else "na"
+    salary_part = str(round(salary_num)) if salary_num is not None else "na"
     return f"{sport.lower()}:{name_slug}:{team_slug}:{salary_part}:{pos_slug}"
 
 
@@ -206,7 +206,7 @@ def _normalize_revealed_vip_slot(
         live_slot["player_key"] = str(player_key)
     salary = to_float(slot.get("salary"))
     if salary is not None:
-        live_slot["salary"] = int(round(salary))
+        live_slot["salary"] = round(salary)
     live_slot["is_live"] = is_live_from_slot(slot)
     return live_slot
 

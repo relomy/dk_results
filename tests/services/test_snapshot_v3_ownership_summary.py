@@ -188,7 +188,9 @@ class TestPartialSummary:
         }
         bundle = _bundle(players, [_vip("v1", locked)])
 
-        row = derive_ownership_summary(bundle)["per_vip"][0]
+        summary = derive_ownership_summary(bundle)
+        assert summary is not None
+        row = summary["per_vip"][0]
 
         assert row["is_partial"] is True
         assert row["total_ownership_pct"] == 0.0

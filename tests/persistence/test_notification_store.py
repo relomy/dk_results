@@ -65,7 +65,10 @@ def test_record_notification_swallows_sqlite_errors(store, caplog):
     store._conn.close()
     # Closed connection would raise; record_notification must log, not raise.
     store.record_notification(101, "live")
-    assert "sqlite" in caplog.text.lower()
+    assert caplog.messages == ["sqlite error inserting notification"]
+    exc_info = caplog.records[0].exc_info
+    assert isinstance(exc_info, tuple)
+    assert exc_info[0] is sqlite3.ProgrammingError
 
 
 def test_presence_round_trips(store):

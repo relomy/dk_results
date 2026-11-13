@@ -61,11 +61,11 @@ class Measurement:
 
 
 def _run(args: list[str], cwd: Path, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(args, cwd=cwd, env=env, capture_output=True, text=True)
+    return subprocess.run(args, cwd=cwd, env=env, capture_output=True, text=True, check=False)
 
 
 def _extract(ref: str, root: Path, dest: Path) -> None:
-    archive = subprocess.run(["git", "archive", "--format=tar", ref], cwd=root, capture_output=True)
+    archive = subprocess.run(["git", "archive", "--format=tar", ref], cwd=root, capture_output=True, check=False)
     if archive.returncode != 0:
         raise CheckError(f"cannot read {ref}: {archive.stderr.decode().strip()}")
     with tarfile.open(fileobj=io.BytesIO(archive.stdout)) as tar:
