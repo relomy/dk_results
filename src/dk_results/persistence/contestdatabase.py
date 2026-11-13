@@ -184,7 +184,15 @@ class ContestDatabase:
         self.conn.execute(sql)
 
     def compare_contests(self, contests: list[Contest]) -> list[int]:
-        """Return IDs from ``contests`` that are not already stored."""
+        """
+        Compare given contests with those in the database and return new contest IDs.
+
+        Args:
+            contests (list[Contest]): List of Contest objects.
+
+        Returns:
+            list[int]: List of new contest IDs not found in the database.
+        """
         dk_ids = [c.id for c in contests]
         if not dk_ids:
             return []
@@ -196,7 +204,12 @@ class ContestDatabase:
         return [dk_id for dk_id in dk_ids if dk_id not in found_ids]
 
     def insert_contests(self, contests: list[Contest]) -> None:
-        """Insert contests, ignoring duplicate IDs."""
+        """
+        Insert contests into the database, ignoring duplicates.
+
+        Args:
+            contests (list[Contest]): List of Contest objects.
+        """
         columns = [
             "sport",
             "dk_id",
@@ -236,7 +249,16 @@ class ContestDatabase:
         self.conn.close()
 
     def sync_draft_group_start_dates(self, draft_group_start_dates: dict[int, datetime.datetime]) -> int:
-        """Apply changed start times, returning the number of groups updated."""
+        """
+        Update start_date for contests in draft groups when the start time changes.
+
+        Args:
+            draft_group_start_dates (dict[int, datetime.datetime]): Draft group IDs
+                mapped to their latest start datetime (naive, seconds precision).
+
+        Returns:
+            int: Number of draft groups updated (not rows updated).
+        """
         if not draft_group_start_dates:
             return 0
 
@@ -275,7 +297,19 @@ class ContestDatabase:
         return updates
 
     def get_live_contest(self, sport: str, entry_fee: int = 25, keyword: str = "%") -> tuple | None:
-        """Select a live contest, preferring entry fees at/above the minimum."""
+        """
+        Get a live contest matching the criteria. Prefer contests at or above the
+        minimum entry fee; if none exist, fall back to the highest entry fee
+        below the minimum.
+
+        Args:
+            sport (str): Sport name.
+            entry_fee (int, optional): Minimum entry fee. Defaults to 25.
+            keyword (str, optional): Name keyword pattern. Defaults to "%".
+
+        Returns:
+            tuple | None: (dk_id, name, draft_group, positions_paid, start_date) if found, else None.
+        """
         cur = self.conn.cursor()
         try:
             base_sql = (
@@ -320,7 +354,19 @@ class ContestDatabase:
     def get_live_contests(
         self, sports: list[str] | None = None, entry_fee: int = 25, keyword: str = "%"
     ) -> list[tuple]:
-        """Return one live contest per sport using ``get_live_contest``'s fee fallback."""
+        """
+        Get one live contest per sport, using the same fallback as get_live_contest:
+        prefer contests at or above the minimum entry fee; if none exist for a sport,
+        fall back to the highest entry fee below the minimum.
+
+        Args:
+            sports (list[str] | None): Sport names to include; if None, include all.
+            entry_fee (int, optional): Minimum entry fee. Defaults to 25.
+            keyword (str, optional): Name keyword pattern. Defaults to "%".
+
+        Returns:
+            list[tuple]: Each tuple is (dk_id, name, draft_group, positions_paid, start_date, sport).
+        """
         cur = self.conn.cursor()
         try:
             sport_list = list(sports) if sports else []
@@ -608,17 +654,6 @@ class ContestDatabase:
             self.logger.exception("sqlite error in get_live_contest_candidates()")
             return []
 
-    @_sqlite_guard()
-    def set_cash_line(self, dk_id: int, rank: int | None, points: float | None) -> None:
-        """
-        Persist the cash line (ADR-0011) for a contest: the rank and score of
-        its last paid position, as computed by the most recent standings poll.
-        """
-        cur = self.conn.cursor()
-        sql = 'UPDATE "contests" SET "cash_line_rank"=?, "cash_line_points"=? WHERE "dk_id"=?'
-        cur.execute(sql, (rank, points, dk_id))
-        self.conn.commit()
-
     @_sqlite_guard(rollback=True)
     def persist_standings_cash_snapshot(
         self, dk_id: int, rank: int | None, points: float | None, statuses: list[VipCashStatus]
@@ -666,41 +701,3 @@ class ContestDatabase:
         cur.execute('SELECT "completed_at" FROM "contests" WHERE "dk_id"=? LIMIT 1', (dk_id,))
         row = cur.fetchone()
         return row[0] if row is not None and row[0] else None
-
-    @_sqlite_guard()
-    def get_cash_line(self, dk_id: int) -> tuple[int | None, float | None] | None:
-        """
-        Fetch the persisted cash line for a contest.
-
-        Returns:
-            tuple[int | None, float | None] | None: (rank, points) if the
-                contest exists, else None. On SQLite error, also None.
-        """
-        cur = self.conn.cursor()
-        sql = 'SELECT "cash_line_rank", "cash_line_points" FROM "contests" WHERE "dk_id"=? LIMIT 1'
-        cur.execute(sql, (dk_id,))
-        row = cur.fetchone()
-        return (row[0], row[1]) if row is not None else None
-
-    @_sqlite_guard(rollback=True)
-    def replace_vip_cash_status(self, dk_id: int, statuses: list[VipCashStatus]) -> None:
-        """
-        Atomically replace the full set of VIP cash-status rows for a
-        contest, matching how ``SportProcessor`` re-parses the whole VIP
-        list on every poll rather than updating it incrementally.
-        """
-        cur = self.conn.cursor()
-        cur.execute('DELETE FROM "vip_cash_status" WHERE "dk_id"=?', (dk_id,))
-        cur.executemany(
-            'INSERT INTO "vip_cash_status" ("dk_id", "vip_name", "rank", "points") VALUES (?, ?, ?, ?)',
-            [(dk_id, status.vip_name, status.rank, status.points) for status in statuses],
-        )
-        self.conn.commit()
-
-    @_sqlite_guard(default_factory=list[VipCashStatus])
-    def get_vip_cash_status(self, dk_id: int) -> list[VipCashStatus]:
-        """Fetch the persisted VIP cash-status rows for a contest."""
-        cur = self.conn.cursor()
-        sql = 'SELECT "vip_name", "rank", "points" FROM "vip_cash_status" WHERE "dk_id"=? ORDER BY "vip_name"'
-        cur.execute(sql, (dk_id,))
-        return [VipCashStatus(vip_name=row[0], rank=row[1], points=row[2]) for row in cur.fetchall()]

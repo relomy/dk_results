@@ -1,104 +1,12 @@
 import datetime
 import logging
 import sqlite3
-from collections.abc import Callable, Iterator
-from typing import TypeVar, overload
 
 import pytest
+from persistence.builders import insert_contest as _insert_contest
 
 from dk_results.domain.contest import Contest
-from dk_results.persistence.contestdatabase import ContestDatabase, ContestRow, VipCashStatus
-
-
-@pytest.fixture
-def contest_db():
-    db = ContestDatabase(":memory:")
-    db.ensure_schema()
-    try:
-        yield db
-    finally:
-        db.close()
-
-
-_CursorT = TypeVar("_CursorT", bound=sqlite3.Cursor)
-
-
-class _BoomCursor(sqlite3.Cursor):
-    """A cursor whose statements always fail with ``sqlite3.Error``."""
-
-    def execute(self, *_args, **_kwargs):
-        raise sqlite3.Error("boom")
-
-
-class _BoomConn(sqlite3.Connection):
-    """A real connection that hands out failing cursors and notes whether it was rolled back."""
-
-    rolled_back = False
-
-    @overload
-    def cursor(self, factory: None = None) -> _BoomCursor: ...
-    @overload
-    def cursor(self, factory: Callable[[sqlite3.Connection], _CursorT]) -> _CursorT: ...
-    def cursor(self, factory=None):
-        return (factory or _BoomCursor)(self)
-
-    def rollback(self):
-        self.rolled_back = True
-        super().rollback()
-
-
-@pytest.fixture
-def boom_conn() -> Iterator[_BoomConn]:
-    conn = sqlite3.connect(":memory:", factory=_BoomConn)
-    try:
-        yield conn
-    finally:
-        conn.close()
-
-
-def _insert_contest(
-    db: ContestDatabase,
-    *,
-    dk_id: int,
-    sport: str = "NBA",
-    name: str = "Contest",
-    start_date: str = "2024-01-01 00:00:00",
-    draft_group: int = 1,
-    total_prizes: int = 1000,
-    entries: int = 100,
-    positions_paid: int | None = None,
-    entry_fee: int = 25,
-    entry_count: int = 0,
-    max_entry_count: int = 1,
-    completed: int = 0,
-    status: str | None = "LIVE",
-):
-    db.conn.execute(
-        """
-        INSERT INTO contests (
-            dk_id, sport, name, start_date, draft_group, total_prizes,
-            entries, positions_paid, entry_fee, entry_count, max_entry_count,
-            completed, status
-        )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """,
-        (
-            dk_id,
-            sport,
-            name,
-            start_date,
-            draft_group,
-            total_prizes,
-            entries,
-            positions_paid,
-            entry_fee,
-            entry_count,
-            max_entry_count,
-            completed,
-            status,
-        ),
-    )
-    db.conn.commit()
+from dk_results.persistence.contestdatabase import ContestDatabase, ContestRow
 
 
 def test_get_live_contest_prefers_entry_fee_at_or_above_min(contest_db):
@@ -473,105 +381,10 @@ def test_update_contest_handles_error(caplog, boom_conn):
     assert any("update_contest" in rec.message for rec in caplog.records)
 
 
-def test_set_and_get_cash_line_round_trip(contest_db):
-    _insert_contest(contest_db, dk_id=1)
-
-    contest_db.set_cash_line(1, rank=25, points=142.5)
-
-    assert contest_db.get_cash_line(1) == (25, 142.5)
-
-
-def test_get_cash_line_returns_none_for_missing_contest(contest_db):
-    assert contest_db.get_cash_line(999) is None
-
-
-def test_get_cash_line_sqlite_error(caplog, boom_conn):
-    db = ContestDatabase.from_connection(boom_conn)
-    with caplog.at_level(logging.ERROR):
-        assert db.get_cash_line(1) is None
-    assert any("get_cash_line" in rec.message for rec in caplog.records)
-
-
-def test_set_cash_line_sqlite_error(caplog, boom_conn):
-    db = ContestDatabase.from_connection(boom_conn)
-    with caplog.at_level(logging.ERROR):
-        db.set_cash_line(1, rank=1, points=1.0)
-    assert any("set_cash_line" in rec.message for rec in caplog.records)
-
-
-def test_replace_and_get_vip_cash_status_round_trip(contest_db):
-    _insert_contest(contest_db, dk_id=1)
-
-    contest_db.replace_vip_cash_status(
-        1,
-        [
-            VipCashStatus(vip_name="Alice", rank=10, points=150.0),
-            VipCashStatus(vip_name="Bob", rank=40, points=90.0),
-        ],
-    )
-
-    assert contest_db.get_vip_cash_status(1) == [
-        VipCashStatus(vip_name="Alice", rank=10, points=150.0),
-        VipCashStatus(vip_name="Bob", rank=40, points=90.0),
-    ]
-
-
-def test_replace_vip_cash_status_drops_stale_rows(contest_db):
-    _insert_contest(contest_db, dk_id=1)
-    contest_db.replace_vip_cash_status(
-        1,
-        [
-            VipCashStatus(vip_name="Alice", rank=10, points=150.0),
-            VipCashStatus(vip_name="Bob", rank=40, points=90.0),
-        ],
-    )
-
-    contest_db.replace_vip_cash_status(1, [VipCashStatus(vip_name="Alice", rank=5, points=200.0)])
-
-    assert contest_db.get_vip_cash_status(1) == [VipCashStatus(vip_name="Alice", rank=5, points=200.0)]
-
-
-def test_replace_vip_cash_status_scoped_to_contest(contest_db):
-    _insert_contest(contest_db, dk_id=1)
-    _insert_contest(contest_db, dk_id=2)
-    contest_db.replace_vip_cash_status(1, [VipCashStatus(vip_name="Alice", rank=10, points=150.0)])
-    contest_db.replace_vip_cash_status(2, [VipCashStatus(vip_name="Carol", rank=3, points=210.0)])
-
-    assert contest_db.get_vip_cash_status(1) == [VipCashStatus(vip_name="Alice", rank=10, points=150.0)]
-    assert contest_db.get_vip_cash_status(2) == [VipCashStatus(vip_name="Carol", rank=3, points=210.0)]
-
-
-def test_get_vip_cash_status_returns_empty_for_missing_contest(contest_db):
-    assert contest_db.get_vip_cash_status(999) == []
-
-
-def test_replace_vip_cash_status_sqlite_error(caplog, boom_conn):
-    db = ContestDatabase.from_connection(boom_conn)
-    with caplog.at_level(logging.ERROR):
-        db.replace_vip_cash_status(1, [VipCashStatus(vip_name="Alice", rank=1, points=1.0)])
-    assert any("replace_vip_cash_status" in rec.message for rec in caplog.records)
-
-
-def test_replace_vip_cash_status_rolls_back_on_error(caplog, boom_conn):
-    db = ContestDatabase.from_connection(boom_conn)
-    with caplog.at_level(logging.ERROR):
-        db.replace_vip_cash_status(1, [VipCashStatus(vip_name="Alice", rank=1, points=1.0)])
-    assert boom_conn.rolled_back is True
-
-
-def test_get_vip_cash_status_sqlite_error(caplog, boom_conn):
-    db = ContestDatabase.from_connection(boom_conn)
-    with caplog.at_level(logging.ERROR):
-        assert db.get_vip_cash_status(1) == []
-    assert any("get_vip_cash_status" in rec.message for rec in caplog.records)
-
-
 _GUARDED_ON_ERROR = {
-    "set_cash_line": (lambda db: db.set_cash_line(1, rank=1, points=1.0), None, False),
-    "get_cash_line": (lambda db: db.get_cash_line(1), None, False),
+    "get_standings_cash_snapshot": (lambda db: db.get_standings_cash_snapshot(1), None, False),
     "get_contest_completed_at": (lambda db: db.get_contest_completed_at(1), None, False),
-    "replace_vip_cash_status": (lambda db: db.replace_vip_cash_status(1, []), None, True),
-    "get_vip_cash_status": (lambda db: db.get_vip_cash_status(1), [], False),
+    "persist_standings_cash_snapshot": (lambda db: db.persist_standings_cash_snapshot(1, 1, 1.0, []), None, True),
 }
 
 
@@ -582,13 +395,6 @@ def test_guarded_methods_return_their_default_and_roll_back_only_when_asked(meth
     assert call(ContestDatabase.from_connection(boom_conn)) == default
     assert boom_conn.rolled_back is rolls_back
     assert getattr(ContestDatabase, method).__name__ == method
-
-
-def test_guarded_default_is_built_fresh_for_each_failure(boom_conn):
-    db = ContestDatabase.from_connection(boom_conn)
-    db.get_vip_cash_status(1).append(VipCashStatus(vip_name="Alice", rank=1, points=1.0))
-
-    assert db.get_vip_cash_status(1) == []
 
 
 def test_ensure_schema_migrates_preexisting_database_file(tmp_path):
@@ -628,8 +434,10 @@ def test_ensure_schema_migrates_preexisting_database_file(tmp_path):
     db = ContestDatabase(db_path)
     try:
         db.ensure_schema()
-        db.set_cash_line(1, rank=25, points=142.5)
-        assert db.get_cash_line(1) == (25, 142.5)
+        db.persist_standings_cash_snapshot(1, rank=25, points=142.5, statuses=[])
+        snapshot = db.get_standings_cash_snapshot(1)
+        assert snapshot is not None
+        assert snapshot.cash_line == (25, 142.5)
     finally:
         db.close()
 
@@ -653,7 +461,7 @@ _SQLITE_ERROR_CALLS = {
     "get_contest_state": lambda db: db.get_contest_state(1),
     "get_contest_contract_metadata": lambda db: db.get_contest_contract_metadata(1),
     "get_live_contest_candidates": lambda db: db.get_live_contest_candidates("NBA"),
-    "get_cash_line": lambda db: db.get_cash_line(1),
+    "get_standings_cash_snapshot": lambda db: db.get_standings_cash_snapshot(1),
     "get_contest_completed_at": lambda db: db.get_contest_completed_at(1),
 }
 

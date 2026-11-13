@@ -6,6 +6,7 @@ import pytest
 from discord.ext import commands
 
 from dk_results.bot import discord_bot
+from dk_results.persistence.contestdatabase import StandingsCashSnapshot
 
 
 def test_module_main_executes(monkeypatch, tmp_path):
@@ -144,8 +145,7 @@ async def test_create_bot_registered_commands_use_the_injected_settings(
         "_fetch_live_contests_with_cash_status",
         lambda _db, _sports: (
             [(1, "Live NBA Contest", None, 3, "2000-01-01", "NBA")],
-            {1: None},
-            {1: []},
+            {1: StandingsCashSnapshot((None, None), [])},
         ),
     )
 

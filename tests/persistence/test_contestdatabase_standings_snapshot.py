@@ -2,76 +2,67 @@
 
 import logging
 import sqlite3
+import threading
 from collections.abc import Callable
 from typing import TypeVar, cast, overload
 
-import pytest
+from persistence.builders import insert_contest
 
 from dk_results.persistence.contestdatabase import ContestDatabase, StandingsCashSnapshot, VipCashStatus
 
 _CursorT = TypeVar("_CursorT", bound=sqlite3.Cursor)
 
 
-class _FailingCursor(sqlite3.Cursor):
-    def execute(self, *_args, **_kwargs):
-        raise sqlite3.Error("boom")
+class _PausedWriterCursor(sqlite3.Cursor):
+    def execute(self, sql, parameters=()):
+        result = super().execute(sql, parameters)
+        connection = cast(_PausedWriterConnection, self.connection)
+        if sql.lstrip().upper().startswith('UPDATE "CONTESTS"'):
+            connection.after_cash_line_update()
+        return result
 
 
-class _FailingConnection(sqlite3.Connection):
-    rolled_back = False
-
-    @overload
-    def cursor(self, factory: None = None) -> _FailingCursor: ...
-    @overload
-    def cursor(self, factory: Callable[[sqlite3.Connection], _CursorT]) -> _CursorT: ...
-    def cursor(self, factory=None):
-        return (factory or _FailingCursor)(self)
-
-    def rollback(self):
-        self.rolled_back = True
-        super().rollback()
-
-
-@pytest.fixture
-def contest_db():
-    db = ContestDatabase(":memory:")
-    db.ensure_schema()
-    db.conn.execute(
-        "INSERT INTO contests "
-        "(dk_id, sport, name, start_date, draft_group, total_prizes, entries, entry_fee, entry_count, max_entry_count) "
-        "VALUES (1, 'NBA', 'Contest', '2024-01-01', 1, 1000, 100, 25, 0, 1)"
-    )
-    db.conn.commit()
-    try:
-        yield db
-    finally:
-        db.close()
-
-
-class _CommitOnFetchCursor(sqlite3.Cursor):
-    """Commit a writer after a SELECT starts but before its rows are collected."""
-
-    def fetchall(self):
-        connection = cast("_CommitOnFetchConnection", self.connection)
-        callback = connection.before_fetch
-        if callback is not None:
-            connection.before_fetch = None
-            callback()
-        return super().fetchall()
-
-
-class _CommitOnFetchConnection(sqlite3.Connection):
-    before_fetch: Callable[[], None] | None = None
+class _PausedWriterConnection(sqlite3.Connection):
+    after_cash_line_update: Callable[[], None] = staticmethod(lambda: None)
 
     @overload
-    def cursor(self, factory: None = None) -> _CommitOnFetchCursor: ...
+    def cursor(self, factory: None = None) -> _PausedWriterCursor: ...
     @overload
     def cursor(self, factory: Callable[[sqlite3.Connection], _CursorT]) -> _CursorT: ...
     def cursor(self, factory=None):
-        return super().cursor(factory or _CommitOnFetchCursor)
+        return super().cursor(factory or _PausedWriterCursor)
 
 
-def test_cash_line_and_vips_are_replaced_as_one_poll(contest_db):
+class _InterleavingReaderCursor(sqlite3.Cursor):
+    statement: str | None = None
+
+    def execute(self, sql, parameters=()):
+        self.statement = sql
+        return super().execute(sql, parameters)
+
+    def fetchone(self):
+        row = super().fetchone()
+        connection = cast(_InterleavingReaderConnection, self.connection)
+        sql = self.statement
+        if sql is not None and 'FROM "CONTESTS"' in sql.upper() and "JOIN" not in sql.upper():
+            self.close()
+            connection.after_cash_line_read()
+        return row
+
+
+class _InterleavingReaderConnection(sqlite3.Connection):
+    after_cash_line_read: Callable[[], None] = staticmethod(lambda: None)
+
+    @overload
+    def cursor(self, factory: None = None) -> _InterleavingReaderCursor: ...
+    @overload
+    def cursor(self, factory: Callable[[sqlite3.Connection], _CursorT]) -> _CursorT: ...
+    def cursor(self, factory=None):
+        return super().cursor(factory or _InterleavingReaderCursor)
+
+
+def test_cash_line_and_vips_are_replaced_as_one_poll(contest_db_with_contest):
+    contest_db = contest_db_with_contest
     old_status = VipCashStatus(vip_name="Alice", rank=10, points=100.0)
     new_status = VipCashStatus(vip_name="Alice", rank=20, points=200.0)
     contest_db.persist_standings_cash_snapshot(1, 10, 100.0, [old_status])
@@ -83,7 +74,8 @@ def test_cash_line_and_vips_are_replaced_as_one_poll(contest_db):
     assert contest_db.get_standings_cash_snapshot(1) == StandingsCashSnapshot((20, 200.0), [new_status])
 
 
-def test_failed_poll_rolls_back_cash_line_and_vip_rows(caplog, contest_db):
+def test_failed_poll_rolls_back_cash_line_and_vip_rows(caplog, contest_db_with_contest):
+    contest_db = contest_db_with_contest
     old_status = VipCashStatus(vip_name="Alice", rank=10, points=100.0)
     contest_db.persist_standings_cash_snapshot(1, 10, 100.0, [old_status])
 
@@ -94,10 +86,11 @@ def test_failed_poll_rolls_back_cash_line_and_vip_rows(caplog, contest_db):
         )
 
     assert contest_db.get_standings_cash_snapshot(1) == StandingsCashSnapshot((10, 100.0), [old_status])
-    assert any("persist_standings_cash_snapshot" in record.message for record in caplog.records)
+    assert caplog.messages == ["sqlite error in persist_standings_cash_snapshot()"]
 
 
-def test_empty_poll_clears_vips_with_new_cash_line(contest_db):
+def test_empty_poll_clears_vips_with_new_cash_line(contest_db_with_contest):
+    contest_db = contest_db_with_contest
     contest_db.persist_standings_cash_snapshot(1, 10, 100.0, [VipCashStatus("Alice", 10, 100.0)])
 
     contest_db.persist_standings_cash_snapshot(1, 20, 200.0, [])
@@ -109,12 +102,7 @@ def test_snapshot_read_returns_complete_old_or_new_poll_across_commit(tmp_path):
     path = str(tmp_path / "polls.db")
     writer = ContestDatabase(path)
     writer.ensure_schema()
-    writer.conn.execute(
-        "INSERT INTO contests "
-        "(dk_id, sport, name, start_date, draft_group, total_prizes, entries, entry_fee, entry_count, max_entry_count) "
-        "VALUES (1, 'NBA', 'Contest', '2024-01-01', 1, 1000, 100, 25, 0, 1)"
-    )
-    writer.conn.commit()
+    insert_contest(writer, dk_id=1)
     reader = ContestDatabase(path)
     try:
         old_status = VipCashStatus("Alice", 10, 100.0)
@@ -131,50 +119,69 @@ def test_snapshot_read_returns_complete_old_or_new_poll_across_commit(tmp_path):
         writer.close()
 
 
-def test_snapshot_read_stays_consistent_when_writer_commits_mid_query(tmp_path):
-    path = str(tmp_path / "concurrent-poll.db")
-    writer = ContestDatabase(path)
-    writer.conn.execute("PRAGMA journal_mode=WAL")
+def test_reader_sees_old_complete_poll_while_default_journal_writer_is_paused(tmp_path):
+    path = str(tmp_path / "paused-poll.db")
+    writer_conn = sqlite3.connect(path, factory=_PausedWriterConnection, check_same_thread=False)
+    writer = ContestDatabase.from_connection(writer_conn)
     writer.ensure_schema()
-    writer.conn.execute(
-        "INSERT INTO contests "
-        "(dk_id, sport, name, start_date, draft_group, total_prizes, entries, entry_fee, entry_count, max_entry_count) "
-        "VALUES (1, 'NBA', 'Contest', '2024-01-01', 1, 1000, 100, 25, 0, 1)"
-    )
-    writer.conn.commit()
+    insert_contest(writer, dk_id=1)
     old_status = VipCashStatus("Alice", 10, 100.0)
     new_status = VipCashStatus("Alice", 20, 200.0)
     writer.persist_standings_cash_snapshot(1, 10, 100.0, [old_status])
-    reader_conn = sqlite3.connect(path, factory=_CommitOnFetchConnection)
+    reader_conn = sqlite3.connect(path, factory=_InterleavingReaderConnection)
     reader = ContestDatabase.from_connection(reader_conn)
-    reader_conn.before_fetch = lambda: writer.persist_standings_cash_snapshot(1, 20, 200.0, [new_status])
-    try:
-        during_commit = reader.get_standings_cash_snapshot(1)
+    update_finished = threading.Event()
+    continue_writer = threading.Event()
+    writer_finished = threading.Event()
 
-        assert during_commit == StandingsCashSnapshot((10, 100.0), [old_status])
+    def pause_after_update() -> None:
+        update_finished.set()
+        continue_writer.wait(timeout=5)
+
+    writer_conn.after_cash_line_update = pause_after_update
+    writer_result = []
+
+    def publish_new_poll() -> None:
+        writer_result.append(writer.persist_standings_cash_snapshot(1, 20, 200.0, [new_status]))
+        writer_finished.set()
+
+    writer_thread = threading.Thread(target=publish_new_poll)
+    try:
+        assert reader.conn.execute("PRAGMA journal_mode").fetchone()[0].lower() == "delete"
+
+        def let_writer_commit_between_legacy_reads() -> None:
+            continue_writer.set()
+            assert writer_finished.wait(timeout=5)
+
+        reader_conn.after_cash_line_read = let_writer_commit_between_legacy_reads
+        writer_thread.start()
+        assert update_finished.wait(timeout=5)
+        during_write = reader.get_standings_cash_snapshot(1)
+        continue_writer.set()
+        writer_thread.join(timeout=5)
+
+        assert not writer_thread.is_alive()
+        assert during_write == StandingsCashSnapshot((10, 100.0), [old_status])
+        assert writer_result == [None]
         assert reader.get_standings_cash_snapshot(1) == StandingsCashSnapshot((20, 200.0), [new_status])
     finally:
+        continue_writer.set()
+        writer_thread.join(timeout=5)
         reader.close()
         writer.close()
 
 
-@pytest.mark.parametrize(
-    ("method", "expected", "rolls_back"),
-    [
-        ("get_standings_cash_snapshot", None, False),
-        ("persist_standings_cash_snapshot", None, True),
-    ],
-)
-def test_snapshot_database_methods_guard_sqlite_errors(method, expected, rolls_back):
-    conn = sqlite3.connect(":memory:", factory=_FailingConnection)
+def test_snapshot_read_guard_returns_none_on_sqlite_error(boom_conn):
+    db = ContestDatabase.from_connection(boom_conn)
+    assert db.get_standings_cash_snapshot(1) is None
+    assert boom_conn.rolled_back is False
+
+
+def test_snapshot_write_guard_rolls_back_on_sqlite_error(boom_conn):
+    conn = boom_conn
     try:
         db = ContestDatabase.from_connection(conn)
-        if method == "get_standings_cash_snapshot":
-            result = db.get_standings_cash_snapshot(1)
-        else:
-            result = db.persist_standings_cash_snapshot(1, 1, 1.0, [])
-
-        assert result == expected
-        assert conn.rolled_back is rolls_back
+        assert db.persist_standings_cash_snapshot(1, 1, 1.0, []) is None
+        assert conn.rolled_back is True
     finally:
-        conn.close()
+        conn.rollback()

@@ -203,9 +203,10 @@ to a deep module, as the sheet pipeline did with `SportProcessor`.
   **Standings cash snapshot** and consumed through one consistent read
   (`get_standings_cash_snapshot`); `!live` must not issue separate reads for
   these facts (ADR-0011). `persistence/sqlite_guard.py` holds `_sqlite_guard`,
-  the decorator behind the cash-line and VIP-status methods: it logs and
-  swallows `sqlite3.Error` (ADR-0011), returning `None` unless given a
-  `default_factory`. `ContestDatabase` re-imports it. `NotificationStore`
+  the decorator behind `persist_standings_cash_snapshot` and
+  `get_standings_cash_snapshot`: it logs and swallows `sqlite3.Error`
+  (ADR-0011), returning `None` unless given a `default_factory`.
+  `ContestDatabase` re-imports it. `NotificationStore`
   separately owns notification and VIP-presence state.
 - **Snapshot storage:** `ObjectStore` exposes `get_json(key)` and
   `put_json(key, body, content_type)`; `R2ObjectStore` is its boto3 adapter

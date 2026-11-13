@@ -1,5 +1,12 @@
 # Persist the standings cash line for mid-contest VIP-cashing visibility
 
+> **Superseded in part by the poll consistency update below.** The original
+> `set_cash_line` / `replace_vip_cash_status` write pair and the separate
+> `get_cash_line` / `get_vip_cash_status` reads described below are historical
+> design. The implementation publishes and reads one `StandingsCashSnapshot`;
+> callers must use `persist_standings_cash_snapshot` and
+> `get_standings_cash_snapshot`.
+
 Issue #134 asked whether "is a tracked VIP currently cashing" can be answered mid-contest without a new per-command DraftKings call. Today that question is only ever answered by `CompletionProcessor._maybe_send_soft_finish_announcement`, which calls the authenticated leaderboard endpoint and only runs once `_soft_finish_eligible` holds — effectively at/near the very end of the contest. The bot process itself (`bot/discord_bot.py`) makes zero DraftKings calls and reads only `ContestDatabase`.
 
 `SportProcessor` already parses the full standings CSV for every live (started, not-yet-completed) contest on its own independent poll (currently every 5 minutes), and `_update_cash_stats` (`domain/contest_standings.py`) already derives, in memory, the last paid position and its score (`min_rank`/`min_cash_pts`) from `positions_paid` and each row's rank/points — the exact "cash line" the issue's theory describes. It also already retains every user's own rank/points, including a `vip_list` pre-filtered to tracked VIP names. None of this required a new network call; it was already being computed and thrown away except for a write to the Google Sheet.

@@ -3,7 +3,7 @@
 import pytest
 
 from dk_results.bot import discord_bot
-from dk_results.persistence.contestdatabase import StandingsCashSnapshot, VipCashStatus
+from dk_results.persistence.contestdatabase import ContestDatabase, StandingsCashSnapshot, VipCashStatus
 
 
 def test_live_contest_block_keeps_draftkings_link_separate_from_dashboard_and_sheet(monkeypatch, make_settings):
@@ -159,6 +159,50 @@ async def test_live_shows_vip_cash_bullets(monkeypatch, ctx, as_context, make_se
             "• 🤑 VipA: 150.0 pts (+50.0 pts), rank 3 (cash: top 20)\n"
             "• ☠️ VipB: 50.0 pts (-50.0 pts), rank 10 (cash: top 20)"
         )
+    ]
+
+
+@pytest.mark.asyncio
+async def test_live_projects_cashing_from_real_database_poll_snapshots(
+    monkeypatch, ctx, as_context, make_settings, dummy_sport, tmp_path
+):
+    db_path = str(tmp_path / "live.db")
+    db = ContestDatabase(db_path)
+    db.ensure_schema()
+    db.conn.execute(
+        "INSERT INTO contests "
+        "(dk_id, sport, name, start_date, draft_group, total_prizes, entries, positions_paid, entry_fee, "
+        "entry_count, max_entry_count, completed, status) "
+        "VALUES (1, 'NBA', 'ContestA', '2000-01-01', 1, 1000, 100, 10, 25, 0, 1, 0, 'LIVE')"
+    )
+    db.conn.commit()
+    db.persist_standings_cash_snapshot(1, 5, 100.0, [VipCashStatus("VipA", 10, 90.0)])
+    db.close()
+    monkeypatch.setattr(discord_bot, "_db_path", lambda: db_path)
+    monkeypatch.setattr(discord_bot, "_sport_choices", lambda: {"nba": dummy_sport})
+    monkeypatch.setattr(discord_bot, "_sheet_link", lambda _settings, _sport: None)
+    monkeypatch.setattr(discord_bot, "_format_time_since", lambda _start_date: None)
+    monkeypatch.setattr(discord_bot, "_vip_presence_for_contest", lambda _dk_id: None)
+
+    await discord_bot.live(make_settings(), as_context(ctx))
+    assert ctx.sent == [
+        "Live: 🏀 NBA — ContestA\n"
+        + "• 🕒 2000-01-01\n"
+        + "• 🔗 DK: [1](<https://www.draftkings.com/contest/gamecenter/1#/>) | 📊 Sheet: n/a\n"
+        + "• ☠️ VipA: 90.0 pts (-10.0 pts), rank 10 (cash: top 10)"
+    ]
+
+    next_poll = ContestDatabase(db_path)
+    next_poll.persist_standings_cash_snapshot(1, 15, 80.0, [VipCashStatus("VipA", 10, 90.0)])
+    next_poll.close()
+    ctx.sent.clear()
+
+    await discord_bot.live(make_settings(), as_context(ctx))
+    assert ctx.sent == [
+        "Live: 🏀 NBA — ContestA\n"
+        + "• 🕒 2000-01-01\n"
+        + "• 🔗 DK: [1](<https://www.draftkings.com/contest/gamecenter/1#/>) | 📊 Sheet: n/a\n"
+        + "• 🤑 VipA: 90.0 pts (+10.0 pts), rank 10 (cash: top 10)"
     ]
 
 
