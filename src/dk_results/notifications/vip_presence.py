@@ -29,7 +29,7 @@ from typing import Any, Protocol
 
 import requests
 
-from dk_results.persistence.contestdatabase import VipCashStatus
+from dk_results.persistence.contestdatabase import StandingsCashSnapshot
 from dk_results.persistence.notification_store import NotificationStore
 
 logger = logging.getLogger(__name__)
@@ -70,10 +70,9 @@ class ContestResultsPort(Protocol):
 
 
 class StandingsPresencePort(Protocol):
-    """The persisted standings-poll readouts `VipPresence` consults (ADR-0018)."""
+    """The consistent persisted standings snapshot `VipPresence` consults (ADR-0018)."""
 
-    def get_cash_line(self, dk_id: int) -> tuple[int | None, float | None] | None: ...
-    def get_vip_cash_status(self, dk_id: int) -> list[VipCashStatus]: ...
+    def get_standings_cash_snapshot(self, dk_id: int) -> StandingsCashSnapshot | None: ...
 
 
 def vip_key(name: Any) -> str:
@@ -185,17 +184,17 @@ class VipPresence:
         return [name for name in vip_names if vip_key(name) in polled]
 
     def _polled_vip_keys(self, dk_id: int) -> set[str] | None:
-        """VIP keys in the last standings poll, or ``None`` when the poll says nothing.
+        """VIP keys in the last usable standings poll, or ``None`` when unusable.
 
         `SportProcessor` clears VIP rows while the cash line is unknown, so an
         empty result before a cash line exists is not evidence of absence.
         """
         if self._standings is None:
             return None
-        cash_line = self._standings.get_cash_line(dk_id)
-        if cash_line is None or cash_line[0] is None:
+        snapshot = self._standings.get_standings_cash_snapshot(dk_id)
+        if snapshot is None or snapshot.cash_line[0] is None:
             return None
-        return {vip_key(status.vip_name) for status in self._standings.get_vip_cash_status(dk_id)}
+        return {vip_key(status.vip_name) for status in snapshot.vip_statuses}
 
     def _standings_verdict(self, dk_id: int, vip_keys: set[str]) -> str | None:
         """``present`` / ``absent`` from the standings poll, or ``None`` when it is unusable."""
