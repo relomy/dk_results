@@ -11,7 +11,7 @@ updates, and Discord notifications.
   complexity-ratchet) needs `--group quality`.
 - `dfs-common` is a private git dependency; read `docs/TESTING.md` when a `uv`
   command fails while building the venv.
-- Changes under `src/dk_results/services/snapshot_v3/` update `docs/SNAPSHOT_SCHEMA.md`, the exported `contract/snapshot.schema.json` and the goldens in `contract/goldens/` in the same PR; relomy/dk_dashboard checks itself against the feed.
+- Changes under `src/dk_results/services/snapshot_v3/` update `docs/SNAPSHOT_SCHEMA.md` (and the per-metric pages in `docs/snapshot-schema/`), the exported `contract/snapshot.schema.json` and the goldens in `contract/goldens/` in the same PR; relomy/dk_dashboard checks itself against the feed.
 
 ## Boundaries
 
