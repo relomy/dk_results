@@ -1,0 +1,7 @@
+{
+  "setup": ["uv sync --locked --all-groups"],
+  "checks": [
+    "QUALITY_BASE_REF=2eb9c58230cb57693a9994265a34e6b496742dfe scripts/check-quality.sh",
+    "uv run --locked pytest"
+  ]
+}
