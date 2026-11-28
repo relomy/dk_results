@@ -28,6 +28,7 @@ test = [
     "pytest>=9.0.3",
     "pytest-asyncio",
     "pytest-cov",
+    "coverage>=7.13.4",
 ]
 quality = [
     "complexity-ratchet",
